@@ -410,6 +410,7 @@
     var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs);
     var y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys);
     if (opts.zero) { y0 = Math.min(y0, 0); y1 = Math.max(y1, 0); }
+    if (x1 - x0 < 1e-9) x1 = x0 + 1; // a single point, e.g. the first frame of the convergence chart
     if (y1 - y0 < 1e-9) { y0 -= 1; y1 += 1; }
     var pad = (y1 - y0) * 0.08; y0 -= pad; y1 += pad;
     function X(v) { return m.l + (v - x0) / (x1 - x0) * (W - m.l - m.r); }
