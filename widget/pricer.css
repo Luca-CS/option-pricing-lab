@@ -1,0 +1,48 @@
+/* Scoped to .pricer-widget. Inherits the host page's tokens (--bg, --text, --muted, --line,
+   --accent, --serif, --sans, --mono) and falls back to the site's light palette. */
+.pricer-widget {
+  --pw-bg: var(--bg, #fbfaf7);
+  --pw-text: var(--text, #17191e);
+  --pw-muted: var(--muted, #5d6370);
+  --pw-line: var(--line, #e3e0d7);
+  --pw-accent: var(--accent, #1f3a8a);
+  color: var(--pw-text);
+  background: var(--pw-bg);
+  font-family: var(--sans, system-ui, sans-serif);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.pricer-widget .pw-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 0.6rem 0.9rem;
+  margin: 0.6rem 0 1rem;
+}
+.pricer-widget .pw-field { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.85rem; color: var(--pw-muted); }
+.pricer-widget input,
+.pricer-widget select {
+  font: inherit;
+  font-family: var(--mono, ui-monospace, monospace);
+  color: var(--pw-text);
+  background: var(--pw-bg);
+  border: 1px solid var(--pw-line);
+  border-radius: 4px;
+  padding: 0.35rem 0.5rem;
+  min-width: 0;
+}
+.pricer-widget input:focus-visible,
+.pricer-widget select:focus-visible { outline: 2px solid var(--pw-accent); outline-offset: 1px; }
+.pricer-widget .pw-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.pricer-widget .pw-table th,
+.pricer-widget .pw-table td { text-align: left; padding: 0.35rem 0.5rem 0.35rem 0; border-bottom: 1px solid var(--pw-line); vertical-align: top; }
+.pricer-widget .pw-table thead th { color: var(--pw-muted); font-weight: 500; font-size: 0.8rem; }
+.pricer-widget .pw-table tbody th { font-weight: 500; }
+.pricer-widget .pw-table .pw-num { font-family: var(--mono, ui-monospace, monospace); text-align: right; white-space: nowrap; }
+.pricer-widget .pw-table thead th.pw-num { font-family: inherit; }
+.pricer-widget .pw-note,
+.pricer-widget .pw-greeks { color: var(--pw-muted); font-size: 0.85rem; }
+.pricer-widget .pw-greeks { margin: 0.6rem 0 0; }
+.pricer-widget .pw-slv { margin-top: 1.4rem; }
+.pricer-widget h4 { font-family: var(--serif, Georgia, serif); font-weight: 600; font-size: 1.05rem; margin: 0 0 0.2rem; }
+.pricer-widget .pw-scroll { overflow-x: auto; }
+.pricer-widget .pw-sub { display: block; color: var(--pw-muted); font-weight: 400; font-size: 0.8rem; }

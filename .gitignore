@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+
+# Yahoo Finance quotes are for personal use: snapshots stay local, never versioned
+data/
+*.csv
+logs/
+build/

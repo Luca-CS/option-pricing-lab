@@ -1,0 +1,14 @@
+[project]
+name = "optlab"
+version = "0.1.0"
+description = "Option pricing under Black-Scholes, Heston, Dupire local volatility and Heston SLV"
+requires-python = ">=3.10"
+dependencies = ["numpy>=2.0", "scipy>=1.13"]
+license = "MIT"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
