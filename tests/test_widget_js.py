@@ -1,8 +1,9 @@
-"""The JavaScript pricer of the demo page (docs/pricer.js) against the Python library. Needs node."""
+"""The JavaScript pricers of the demo page (docs/lab.js) against the Python library. Needs node."""
 
 import json
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -10,7 +11,7 @@ import pytest
 
 from optlab import barrier_price, barrier_shift_discrete, binomial_price, bs_price, geometric_asian_price
 
-JS = Path(__file__).resolve().parent.parent / "docs" / "pricer.js"
+JS = Path(__file__).resolve().parent.parent / "docs" / "lab.js"
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 
@@ -24,7 +25,10 @@ BARRIERS = [("down-out", 80), ("down-in", 85), ("up-out", 120), ("up-in", 130)]
 def run_js(expr):
     script = f"global.window = {{}};\n{JS.read_text(encoding='utf-8')}\nconst W = window.PricerWidget;\n" \
              f"console.log(JSON.stringify({expr}));"
-    out = subprocess.run([NODE, "-e", script], capture_output=True, text=True, check=True, timeout=60)
+    with tempfile.TemporaryDirectory() as tmp:  # too long for a Windows command line
+        path = Path(tmp) / "run.js"
+        path.write_text(script, encoding="utf-8")
+        out = subprocess.run([NODE, str(path)], capture_output=True, text=True, check=True, timeout=60)
     return json.loads(out.stdout)
 
 
@@ -74,3 +78,24 @@ def test_asian_monte_carlo_is_unbiased():
 
     ref = asian_mc(BlackScholesModel(v), Market.flat(S, r, q), K, T, 12, "call", n_paths=400_000, rng=1)
     assert abs(res["price"] - ref.price) < 4 * np.hypot(res["se"], ref.stderr)
+
+
+def test_levy_asian_approximation_is_close():
+    from optlab import BlackScholesModel, Market, asian_mc
+
+    for K, call in ((90, True), (100, True), (110, False)):
+        js = run_js(f"W.levyAsian(100,{K},1.0,0.04,0.01,0.2,12,{str(call).lower()})")
+        ref = asian_mc(BlackScholesModel(0.2), Market.flat(100, 0.04, 0.01), K, 1.0, 12, "call" if call else "put",
+                       n_paths=200_000, rng=2)
+        assert abs(js - ref.price) < 0.005 * ref.price + 4 * ref.stderr  # moment matching: within 0.5 %
+
+
+def test_longstaff_schwartz_matches_tree():
+    expr = ("(() => { const out = []; for (const [r, q, call] of [[0.04, 0.01, false], [0.04, 0.06, true]]) {"
+            " const st = {product: 'american', call, model: 'bs', K: 100, T: 1, v: 0.2, r, q};"
+            " const c = W.convergence(W.payoffs(st, W.simulate(st, 20000, 50, 3)).pay, 100);"
+            " out.push([c[c.length - 1][1], c[c.length - 1][2], W.american(100, 100, 1, r, q, 0.2, call, 600)]); }"
+            " return out; })()")
+    for lsm, se, tree in run_js(expr):
+        # 50 exercise dates against continuous exercise: LSM may sit slightly below the tree
+        assert tree - 0.05 - 4 * se < lsm < tree + 4 * se

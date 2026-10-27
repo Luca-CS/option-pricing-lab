@@ -4,105 +4,162 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Option pricing lab · Luca Birtas</title>
-  <meta name="description" content="Option pricer in the browser, and exotics under Black-Scholes, Heston, Dupire local vol and a particle-calibrated Heston SLV fitted to SPX.">
+  <meta name="description" content="Price European, American, Asian and barrier options in the browser, watch the Monte Carlo diffuse, and see how much the model matters once the SPX smile is fixed.">
   <meta name="theme-color" content="#12151b" media="(prefers-color-scheme: dark)">
   <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)">
   <script>
     // Same key as luca-cs.github.io: the theme picked on the site carries over.
     try { var t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
   </script>
-  <style>
-    :root {
-      color-scheme: light;
-      --bg: #fbfaf7; --text: #17191e; --muted: #5d6370; --line: #e3e0d7; --accent: #1f3a8a;
-      --serif: "Iowan Old Style", Charter, "Source Serif Pro", "Source Serif 4", Cambria, Georgia, serif;
-      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
-      --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root:not([data-theme="light"]) { color-scheme: dark; --bg: #12151b; --text: #e9e7e2; --muted: #9ba2ae; --line: #272c36; --accent: #a3b8ff; }
-    }
-    :root[data-theme="dark"] { color-scheme: dark; --bg: #12151b; --text: #e9e7e2; --muted: #9ba2ae; --line: #272c36; --accent: #a3b8ff; }
-    *, *::before, *::after { box-sizing: border-box; }
-    html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
-    body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--sans); line-height: 1.55; }
-    main { max-width: 52rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
-    header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; border-bottom: 1px solid var(--line); padding-bottom: 0.6rem; }
-    header a { color: var(--muted); text-decoration: none; font-size: 0.9rem; }
-    header a:hover { color: var(--accent); }
-    h1 { font-family: var(--serif); font-weight: 600; font-size: 2rem; line-height: 1.15; margin: 1.6rem 0 0.4rem; }
-    h2 { font-family: var(--serif); font-weight: 600; font-size: 1.35rem; margin: 2.4rem 0 0.3rem; }
-    p { margin: 0.5rem 0; }
-    a { color: var(--accent); }
-    .lead { color: var(--muted); font-size: 1.05rem; max-width: 44rem; }
-    .links { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin: 0.8rem 0 0; font-size: 0.95rem; }
-    figure { margin: 1.4rem 0 0; }
-    figure img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 4px; background: #fbfaf7; }
-    figcaption { color: var(--muted); font-size: 0.85rem; margin-top: 0.3rem; }
-    .theme-toggle { font: inherit; font-size: 0.85rem; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 4px; padding: 0.15rem 0.6rem; cursor: pointer; }
-    .theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
-    footer { margin-top: 3rem; padding-top: 0.8rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.85rem; }
-    ul.method { padding-left: 1.2rem; margin: 0.5rem 0; }
-    ul.method li { margin: 0.25rem 0; }
-  </style>
-  <link rel="stylesheet" href="pricer.css">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <main>
-  <header>
+  <header class="site-head">
     <a href="https://luca-cs.github.io/">Luca Birtas</a>
     <button class="theme-toggle" type="button" aria-label="Switch theme" hidden>Theme</button>
   </header>
 
   <h1>Option pricing lab</h1>
-  <p class="lead">European, American, Asian and barrier options under Black-Scholes, Heston, Dupire local
-    volatility and a Heston stochastic-local-volatility model whose leverage function is calibrated by the
-    particle method, all fitted to the SPX smile.</p>
+  <p class="lede">Price vanilla and exotic options, watch the Monte Carlo diffuse, and see how much the model
+    matters once the smile is fixed: Heston, local volatility and a stochastic-local-volatility model, all
+    calibrated to the SPX.</p>
+  <ul class="facts">
+    <li><strong>4 models</strong><span>Black-Scholes, Heston, Dupire, SLV</span></li>
+    <li><strong>SPX</strong><span>smile of 27 October 2026</span></li>
+    <li><strong>4–10 bp</strong><span>surface fit, 8 of 9 expiries</span></li>
+    <li><strong>76 tests</strong><span>against closed forms and trees</span></li>
+  </ul>
   <p class="links">
-    <a href="https://github.com/Luca-CS/option-pricing-lab">Code and tests on GitHub</a>
-    <a href="https://github.com/Luca-CS/option-pricing-lab/blob/main/reports/calibration.md">Calibration report</a>
+    <a href="https://github.com/Luca-CS/option-pricing-lab">Code on GitHub</a>
+    <a href="#appendix">Calibration and methods</a>
   </p>
 
-  <h2>Price an option</h2>
-  <div class="pricer-widget" id="pricer"></div>
+  <h2>The desk</h2>
+  <p class="section-intro">Spot 100, Black-Scholes pricers with their Greeks. The Monte Carlo below can switch to
+    the Heston dynamics calibrated on SPX. Everything runs in your browser.</p>
+  <div id="desk"></div>
+
+  <h2>Which model for which product</h2>
+  <p class="section-intro">Once the vanillas are fitted, what still differs between models is the dynamics. The
+    product decides how much that matters.</p>
+  <div class="guide">
+    <article>
+      <h3>European</h3>
+      <p class="driver">Driven by the smile at one expiry.</p>
+      <p class="pick"><strong>No model needed:</strong> read the arbitrage-free implied surface; a model only
+        interpolates it.</p>
+      <p class="refs">Gatheral (2004); Gatheral and Jacquier (2014). Here: SVI fit within 4 to 10 bp.</p>
+    </article>
+    <article>
+      <h3>American</h3>
+      <p class="driver">Driven by early exercise, rates and dividends.</p>
+      <p class="pick"><strong>Tree or PDE</strong> on local vol for one factor; <strong>Longstaff-Schwartz</strong>
+        once the model has more.</p>
+      <p class="refs">Cox, Ross and Rubinstein (1979); Longstaff and Schwartz (2001). Here: both, cross-checked.</p>
+    </article>
+    <article>
+      <h3>Asian</h3>
+      <p class="driver">Averaging damps the path: mostly the term structure of vol.</p>
+      <p class="pick"><strong>Local vol</strong> is usually enough; the geometric Asian is a near-perfect control
+        variate.</p>
+      <p class="refs">Kemna and Vorst (1990); Lévy (1992). Here: the four models agree within 1.2 %.</p>
+    </article>
+    <article>
+      <h3>Barrier</h3>
+      <p class="driver">Driven by the spot-vol dynamics and the forward skew, not just today's smile.</p>
+      <p class="pick"><strong>Stochastic-local vol:</strong> the leverage fits the smile, the vol of vol sets the
+        dynamics.</p>
+      <p class="refs">Lipton (2002); Ren, Madan and Qian (2007); Guyon and Henry-Labordère (2012). Here: the
+        up-and-out call ranges from 3.5 to 4.7.</p>
+    </article>
+    <article class="beyond">
+      <h3>Beyond this lab</h3>
+      <p class="driver">Forward-start options and cliquets live on the forward smile; variance swaps on the whole
+        strip.</p>
+      <p class="pick"><strong>Stochastic vol or SLV</strong> for cliquets; <strong>static replication</strong>
+        for variance swaps.</p>
+      <p class="refs">Bergomi (2016); Demeterfi, Derman, Kamal and Zou (1999).</p>
+    </article>
+  </div>
 
   <h2>Same smile, different exotics</h2>
-  <p>Four models calibrated to the same SPX option snapshot (27 October 2026, spot rescaled to 100) agree on
-    vanillas and disagree on path-dependent payoffs. These prices come from the Python library, by Monte Carlo.</p>
-  <div class="pricer-widget" id="spx"></div>
+  <p class="section-intro">Four models calibrated to the same SPX smile (spot rescaled to 100), one-year
+    products, priced by Monte Carlo in the Python library. Each dot is a model; prices are shown relative to the
+    SLV model.</p>
+  <div id="risk"></div>
+  <div class="lab-pair" id="mix"></div>
+  <p class="section-intro">In the SLV model the mixing fraction moves from pure local vol (0) to the full
+    calibrated Heston vol of vol (1). Each point has its own leverage calibration: the vanillas stay on the
+    market while the barriers move. At 1 the leverage no longer fits the at-the-money vol (44 bp off), so that
+    point is not a valid calibration.</p>
 
-  <figure>
-    <img src="figures/spx_smiles.png" alt="SPX implied vol smiles for nine maturities: market quotes, fitted SVI surface, Heston, and SLV repriced by Monte Carlo" loading="lazy" width="1350" height="1170">
-    <figcaption>Market quotes with bid-ask, the arbitrage-free SVI surface, the calibrated Heston model (which
-      cannot follow the short-dated skew) and the SLV model repriced by Monte Carlo.</figcaption>
-  </figure>
-  <figure>
-    <img src="figures/spx_surfaces.png" alt="Dupire local volatility and SLV leverage function as heat maps over log-moneyness and maturity" loading="lazy" width="1350" height="510">
-    <figcaption>Dupire local volatility from the surface, and the leverage function that turns Heston into
-      the SLV model.</figcaption>
-  </figure>
+  <section class="appendix" id="appendix">
+    <h2>Appendix</h2>
+    <details>
+      <summary>Calibration on SPX</summary>
+      <p>Snapshot of 27 October 2026, 13:37 New York, 9 expiries from two weeks to two years, 1,694
+        out-of-the-money quotes. Discount factors and forwards from put-call parity. Three steps: the implied
+        surface, Heston on the same quotes, then the SLV leverage by particles. Errors in basis points of implied
+        vol; local vol and SLV are repriced by Monte Carlo (300,000 paths, standard error 3 to 4 bp) against the
+        surface they are built on.</p>
+      <div class="scroll" id="errors"></div>
+      <figure>
+        <img src="figures/spx_smiles.png" alt="SPX implied vol smiles for nine expiries: quotes, SVI surface, Heston and SLV" loading="lazy" width="1350" height="1170">
+        <figcaption>Quotes with bid-ask, the arbitrage-free SVI surface, Heston (which cannot follow the
+          short-dated skew) and the SLV model repriced by Monte Carlo.</figcaption>
+      </figure>
+      <figure>
+        <img src="figures/spx_surfaces.png" alt="Dupire local volatility and SLV leverage function as heat maps" loading="lazy" width="1350" height="510">
+        <figcaption>Dupire local volatility from the surface, and the leverage that turns Heston into the SLV model.</figcaption>
+      </figure>
+      <p><a href="https://github.com/Luca-CS/option-pricing-lab/blob/main/reports/calibration.md">Full calibration report</a></p>
+    </details>
+    <details>
+      <summary>Methods</summary>
+      <ul>
+        <li><strong>Implied surface</strong>: extended SSVI as an arbitrage-free start, then raw SVI slices by
+          the quasi-explicit method, with Lee's bound and calendar ordering as linear constraints and butterflies
+          penalised; total variance interpolated in the ATM variance between expiries.</li>
+        <li><strong>Heston</strong>: Lewis formula with the "little trap" characteristic function; least squares
+          on vega-scaled price errors, weighted by the bid-ask.</li>
+        <li><strong>Local vol</strong>: Dupire in total implied variance, every derivative analytic.</li>
+        <li><strong>SLV</strong>: L(t, S)² E[v | S] = σ<sub>loc</sub>²(t, S), the conditional expectation
+          estimated by kernel regression on 200,000 particles (Guyon and Henry-Labordère).</li>
+        <li><strong>Monte Carlo</strong>: log-Euler in the forward coordinate (forwards matched exactly), graded
+          time grid, antithetic variates, full truncation for the variance; Longstaff-Schwartz with independent
+          paths for the exercise rule in the Python library.</li>
+        <li><strong>In this page</strong>: the same closed forms in JavaScript; the American price is the exact
+          European plus the tree's early-exercise premium; Asian curves and Greeks by Lévy moment matching, the
+          Asian headline price by Monte Carlo with a geometric control variate; the Longstaff-Schwartz here
+          also fits its exercise rule on independent paths; the exercise boundary drawn on the paths comes from
+          the CRR tree, made monotone and lightly smoothed.</li>
+      </ul>
+    </details>
+    <details>
+      <summary>Tests and data</summary>
+      <ul>
+        <li>76 tests: put-call parity, Monte Carlo convergence, American at least European and the American call
+          without dividends equal to the European, geometric Asian and barriers against their closed forms,
+          parameter recovery for SSVI, SVI and Heston, vanillas reproduced by local vol and SLV, and the
+          JavaScript of this page against the Python library (to 1e-9).</li>
+        <li>SPX quotes from Yahoo Finance, for calibration only: the raw quotes are not published, only the
+          parameters, curves rescaled to a spot of 100, and charts.</li>
+        <li>Limits: one snapshot, mid prices; Heston misses the short-dated skew by about 50 bp; the SLV
+          reprices the surface within a few bp beyond three months and about 10 bp below one month.</li>
+      </ul>
+    </details>
+  </section>
 
-  <h2>How it is built</h2>
-  <ul class="method">
-    <li><strong>Surface</strong>: extended SSVI as an arbitrage-free start, then raw SVI slices by the
-      quasi-explicit method, with Lee's bound and calendar ordering as linear constraints and butterflies
-      penalised.</li>
-    <li><strong>Heston</strong>: Lewis formula with the "little trap" characteristic function, least squares on
-      vega-scaled errors.</li>
-    <li><strong>SLV</strong>: L(t, S)² E[v | S] = σ<sub>loc</sub>²(t, S), the conditional expectation estimated by
-      kernel regression on 200,000 particles (Guyon and Henry-Labordère).</li>
-    <li><strong>Checks</strong>: 74 tests against closed forms, Fourier prices and trees; the JavaScript on this
-      page is tested against the same Python library.</li>
-  </ul>
-
-  <footer>Market data: SPX options from Yahoo Finance, used for calibration only; raw quotes are not published.
-    Code under the MIT license.</footer>
+  <footer>Luca Birtas · <a href="https://github.com/Luca-CS/option-pricing-lab">github.com/Luca-CS/option-pricing-lab</a> · MIT license</footer>
 </main>
 <script src="pricer-data.js"></script>
-<script src="pricer.js"></script>
+<script src="lab.js"></script>
 <script>
-  PricerWidget.mount("pricer");
-  PricerWidget.mountResults("spx");
+  PricerWidget.mountDesk("desk");
+  PricerWidget.mountRisk("risk");
+  PricerWidget.mountMix("mix");
+  PricerWidget.mountErrors("errors");
   // Light/dark button: follows the system until the visitor picks a theme, then remembers it.
   (function () {
     var root = document.documentElement, button = document.querySelector(".theme-toggle");
@@ -118,6 +175,7 @@
       root.dataset.theme = next;
       try { localStorage.setItem("theme", next); } catch (e) {}
       update();
+      window.dispatchEvent(new Event("themechange"));
     });
     systemDark.addEventListener("change", update);
     button.hidden = false;
