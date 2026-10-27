@@ -6,6 +6,7 @@
   --pw-muted: var(--muted, #5d6370);
   --pw-line: var(--line, #e3e0d7);
   --pw-accent: var(--accent, #1f3a8a);
+  --pw-series: #1baf7a;
   color: var(--pw-text);
   background: var(--pw-bg);
   font-family: var(--sans, system-ui, sans-serif);
@@ -43,6 +44,27 @@
 .pricer-widget .pw-greeks { color: var(--pw-muted); font-size: 0.85rem; }
 .pricer-widget .pw-greeks { margin: 0.6rem 0 0; }
 .pricer-widget .pw-slv { margin-top: 1.4rem; }
-.pricer-widget h4 { font-family: var(--serif, Georgia, serif); font-weight: 600; font-size: 1.05rem; margin: 0 0 0.2rem; }
+.pricer-widget h4 { font-family: var(--serif, Georgia, serif); font-weight: 600; font-size: 1.05rem; margin: 1.6rem 0 0.2rem; }
 .pricer-widget .pw-scroll { overflow-x: auto; }
 .pricer-widget .pw-sub { display: block; color: var(--pw-muted); font-weight: 400; font-size: 0.8rem; }
+.pricer-widget .pw-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.5rem 1.5rem; margin-top: 1.2rem; }
+.pricer-widget .pw-chart { width: 100%; height: auto; overflow: visible; }
+.pricer-widget .pw-chart .pw-ctitle { font-family: var(--serif, Georgia, serif); font-size: 13px; fill: var(--pw-text); }
+.pricer-widget .pw-chart .pw-tick { font-size: 10px; fill: var(--pw-muted); font-family: var(--sans, system-ui, sans-serif); }
+.pricer-widget .pw-chart .pw-grid { stroke: var(--pw-line); stroke-width: 1; }
+.pricer-widget .pw-chart .pw-band { fill: var(--pw-line); opacity: 0.8; }
+.pricer-widget .pw-chart .pw-line { fill: none; stroke: var(--pw-series, #1baf7a); stroke-width: 2; stroke-linejoin: round; }
+.pricer-widget .pw-chart .pw-dot { fill: var(--pw-series, #1baf7a); stroke: var(--pw-bg); stroke-width: 2; }
+.pricer-widget .pw-chart .pw-hit { fill: transparent; }
+.pricer-widget .pw-chart .pw-pt:hover .pw-dot,
+.pricer-widget .pw-chart .pw-pt:focus .pw-dot { r: 6; }
+.pricer-widget .pw-chart .pw-pt:focus { outline: none; }
+.pricer-widget .pw-chart .pw-pt:focus-visible .pw-dot { stroke: var(--pw-accent); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .pricer-widget { --pw-series: #199e70; }
+}
+:root[data-theme="dark"] .pricer-widget { --pw-series: #199e70; }
+.pricer-widget .pw-table tbody th { min-width: 7.5rem; }
+.pricer-widget .pw-table thead th,
+.pricer-widget .pw-table td { white-space: nowrap; }
+.pricer-widget .pw-results .pw-table tbody th { white-space: normal; }

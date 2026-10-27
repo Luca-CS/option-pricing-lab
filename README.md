@@ -5,8 +5,9 @@ Heston, Dupire local volatility and a Heston stochastic-local-volatility (SLV) m
 function is calibrated by the particle method. Calibrated on an SPX option snapshot and on a simulated
 market, with a test suite that checks every pricer against an independent reference.
 
-**Demo**: [huggingface.co/spaces/Luca-CS/option-pricing-lab](https://huggingface.co/spaces/Luca-CS/option-pricing-lab)
-(free CPU Space: the first load after a quiet period takes about a minute).
+**Demo**: [luca-cs.github.io/option-pricing-lab](https://luca-cs.github.io/option-pricing-lab/): a pricer that
+runs in the browser (Black-Scholes, barriers, CRR tree, Asian Monte Carlo) and the SPX results of the
+Python library (model-risk table, mixing-fraction sweep, fit errors).
 
 ## Results
 
@@ -43,11 +44,12 @@ v0 0.0250 (true 0.0250), kappa 1.801 (1.8), theta 0.0398 (0.04), xi 0.748 (0.75)
 
 Full tables and charts: [`reports/calibration.md`](reports/calibration.md).
 
-**Tests**: 70, covering put-call parity (closed forms, Fourier, Monte Carlo), Monte Carlo convergence
+**Tests**: 74, covering put-call parity (closed forms, Fourier, Monte Carlo), Monte Carlo convergence
 (1/sqrt(N) error, closed forms within 4 standard errors), American >= European and the American call
 without dividend equal to the European, the geometric Asian against its closed form, barriers against
 Reiner-Rubinstein with the Broadie-Glasserman-Kou correction, parameter recovery for SSVI, SVI and
-Heston, and the vanillas reproduced by Dupire local vol and by the SLV model.
+Heston, the vanillas reproduced by Dupire local vol and by the SLV model, and the JavaScript of the
+demo page against the Python library (to 1e-9 on the closed forms).
 
 ## Method
 
@@ -131,9 +133,10 @@ model = HestonModel(HestonParams(v0=0.04, kappa=1.5, theta=0.04, xi=0.5, rho=-0.
 price, stderr = barrier_mc(model, market, K=100, H=80, T=1.0, kind="down-out", cp="call")
 ```
 
-The Gradio demo runs locally with `pip install gradio` then `python space/app.py`. `widget/` holds a
-dependency-free JavaScript version of the fast pricers (Black-Scholes, CRR tree, Asian Monte Carlo) with
-the SLV results precomputed.
+`docs/` is the demo page (GitHub Pages): dependency-free JavaScript for the closed forms, the tree and the
+Asian Monte Carlo, checked against the Python library by `tests/test_widget_js.py` (needs node), plus the SPX
+results written by `scripts/build_widget_data.py`. The full library, with live SLV recalibration, also has a
+Gradio app that runs locally: `pip install gradio`, then `python space/app.py`.
 
 ## Layout
 
@@ -149,6 +152,8 @@ the SLV results precomputed.
 | `optlab/slv.py` | leverage function by the particle method |
 | `optlab/data.py` | SPX chain download and cleaning |
 | `optlab/pipeline.py`, `scripts/` | calibration runs, report and charts |
+| `docs/` | demo page (GitHub Pages) |
+| `space/` | Gradio app, run locally |
 | `tests/` | pytest suite |
 
 ## Limitations

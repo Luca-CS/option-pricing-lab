@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Option pricing lab · Luca Birtas</title>
+  <meta name="description" content="Option pricer in the browser, and exotics under Black-Scholes, Heston, Dupire local vol and a particle-calibrated Heston SLV fitted to SPX.">
+  <meta name="theme-color" content="#12151b" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)">
+  <script>
+    // Same key as luca-cs.github.io: the theme picked on the site carries over.
+    try { var t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #fbfaf7; --text: #17191e; --muted: #5d6370; --line: #e3e0d7; --accent: #1f3a8a;
+      --serif: "Iowan Old Style", Charter, "Source Serif Pro", "Source Serif 4", Cambria, Georgia, serif;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
+      --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) { color-scheme: dark; --bg: #12151b; --text: #e9e7e2; --muted: #9ba2ae; --line: #272c36; --accent: #a3b8ff; }
+    }
+    :root[data-theme="dark"] { color-scheme: dark; --bg: #12151b; --text: #e9e7e2; --muted: #9ba2ae; --line: #272c36; --accent: #a3b8ff; }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--sans); line-height: 1.55; }
+    main { max-width: 52rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+    header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; border-bottom: 1px solid var(--line); padding-bottom: 0.6rem; }
+    header a { color: var(--muted); text-decoration: none; font-size: 0.9rem; }
+    header a:hover { color: var(--accent); }
+    h1 { font-family: var(--serif); font-weight: 600; font-size: 2rem; line-height: 1.15; margin: 1.6rem 0 0.4rem; }
+    h2 { font-family: var(--serif); font-weight: 600; font-size: 1.35rem; margin: 2.4rem 0 0.3rem; }
+    p { margin: 0.5rem 0; }
+    a { color: var(--accent); }
+    .lead { color: var(--muted); font-size: 1.05rem; max-width: 44rem; }
+    .links { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin: 0.8rem 0 0; font-size: 0.95rem; }
+    figure { margin: 1.4rem 0 0; }
+    figure img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 4px; background: #fbfaf7; }
+    figcaption { color: var(--muted); font-size: 0.85rem; margin-top: 0.3rem; }
+    .theme-toggle { font: inherit; font-size: 0.85rem; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 4px; padding: 0.15rem 0.6rem; cursor: pointer; }
+    .theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+    footer { margin-top: 3rem; padding-top: 0.8rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.85rem; }
+    ul.method { padding-left: 1.2rem; margin: 0.5rem 0; }
+    ul.method li { margin: 0.25rem 0; }
+  </style>
+  <link rel="stylesheet" href="pricer.css">
+</head>
+<body>
+<main>
+  <header>
+    <a href="https://luca-cs.github.io/">Luca Birtas</a>
+    <button class="theme-toggle" type="button" aria-label="Switch theme" hidden>Theme</button>
+  </header>
+
+  <h1>Option pricing lab</h1>
+  <p class="lead">European, American, Asian and barrier options under Black-Scholes, Heston, Dupire local
+    volatility and a Heston stochastic-local-volatility model whose leverage function is calibrated by the
+    particle method, all fitted to the SPX smile.</p>
+  <p class="links">
+    <a href="https://github.com/Luca-CS/option-pricing-lab">Code and tests on GitHub</a>
+    <a href="https://github.com/Luca-CS/option-pricing-lab/blob/main/reports/calibration.md">Calibration report</a>
+  </p>
+
+  <h2>Price an option</h2>
+  <div class="pricer-widget" id="pricer"></div>
+
+  <h2>Same smile, different exotics</h2>
+  <p>Four models calibrated to the same SPX option snapshot (27 October 2026, spot rescaled to 100) agree on
+    vanillas and disagree on path-dependent payoffs. These prices come from the Python library, by Monte Carlo.</p>
+  <div class="pricer-widget" id="spx"></div>
+
+  <figure>
+    <img src="figures/spx_smiles.png" alt="SPX implied vol smiles for nine maturities: market quotes, fitted SVI surface, Heston, and SLV repriced by Monte Carlo" loading="lazy" width="1350" height="1170">
+    <figcaption>Market quotes with bid-ask, the arbitrage-free SVI surface, the calibrated Heston model (which
+      cannot follow the short-dated skew) and the SLV model repriced by Monte Carlo.</figcaption>
+  </figure>
+  <figure>
+    <img src="figures/spx_surfaces.png" alt="Dupire local volatility and SLV leverage function as heat maps over log-moneyness and maturity" loading="lazy" width="1350" height="510">
+    <figcaption>Dupire local volatility from the surface, and the leverage function that turns Heston into
+      the SLV model.</figcaption>
+  </figure>
+
+  <h2>How it is built</h2>
+  <ul class="method">
+    <li><strong>Surface</strong>: extended SSVI as an arbitrage-free start, then raw SVI slices by the
+      quasi-explicit method, with Lee's bound and calendar ordering as linear constraints and butterflies
+      penalised.</li>
+    <li><strong>Heston</strong>: Lewis formula with the "little trap" characteristic function, least squares on
+      vega-scaled errors.</li>
+    <li><strong>SLV</strong>: L(t, S)² E[v | S] = σ<sub>loc</sub>²(t, S), the conditional expectation estimated by
+      kernel regression on 200,000 particles (Guyon and Henry-Labordère).</li>
+    <li><strong>Checks</strong>: 74 tests against closed forms, Fourier prices and trees; the JavaScript on this
+      page is tested against the same Python library.</li>
+  </ul>
+
+  <footer>Market data: SPX options from Yahoo Finance, used for calibration only; raw quotes are not published.
+    Code under the MIT license.</footer>
+</main>
+<script src="pricer-data.js"></script>
+<script src="pricer.js"></script>
+<script>
+  PricerWidget.mount("pricer");
+  PricerWidget.mountResults("spx");
+  // Light/dark button: follows the system until the visitor picks a theme, then remembers it.
+  (function () {
+    var root = document.documentElement, button = document.querySelector(".theme-toggle");
+    var systemDark = window.matchMedia("(prefers-color-scheme: dark)");
+    function current() { return root.dataset.theme || (systemDark.matches ? "dark" : "light"); }
+    function update() {
+      var dark = current() === "dark";
+      button.textContent = dark ? "Light" : "Dark";
+      button.setAttribute("aria-label", dark ? "Switch to light theme" : "Switch to dark theme");
+    }
+    button.addEventListener("click", function () {
+      var next = current() === "dark" ? "light" : "dark";
+      root.dataset.theme = next;
+      try { localStorage.setItem("theme", next); } catch (e) {}
+      update();
+    });
+    systemDark.addEventListener("change", update);
+    button.hidden = false;
+    update();
+  })();
+</script>
+</body>
+</html>
