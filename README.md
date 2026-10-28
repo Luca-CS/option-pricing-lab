@@ -45,7 +45,7 @@ v0 0.0250 (true 0.0250), kappa 1.801 (1.8), theta 0.0398 (0.04), xi 0.748 (0.75)
 
 Full tables and charts: [`reports/calibration.md`](reports/calibration.md).
 
-**Tests**: 79, covering put-call parity (closed forms, Fourier, Monte Carlo), Monte Carlo convergence
+**Tests**: 80, covering put-call parity (closed forms, Fourier, Monte Carlo), Monte Carlo convergence
 (1/sqrt(N) error, closed forms within 4 standard errors), American >= European and the American call
 without dividend equal to the European, the geometric Asian against its closed form, barriers against
 Reiner-Rubinstein with the Broadie-Glasserman-Kou correction, parameter recovery for SSVI, SVI and
@@ -134,12 +134,13 @@ model = HestonModel(HestonParams(v0=0.04, kappa=1.5, theta=0.04, xi=0.5, rho=-0.
 price, stderr = barrier_mc(model, market, K=100, H=80, T=1.0, kind="down-out", cp="call")
 ```
 
-`docs/` is the demo page (GitHub Pages): dependency-free JavaScript (`docs/lab.js`) for the closed forms, the
-tree, Lévy's Asian approximation, Heston by Fourier, Monte Carlo (Andersen's QE scheme for Heston) and
-Longstaff-Schwartz, checked against the Python library by
-`tests/test_widget_js.py` (needs node), plus the SPX results written by `scripts/build_widget_data.py`. Deep
-links open a given product: `?product=american&type=put&model=heston`. The full library, with live SLV recalibration, also has a
-Gradio app that runs locally: `pip install gradio`, then `python space/app.py`.
+`docs/` is the demo page (GitHub Pages): dependency-free JavaScript (`docs/lab.js`) for the closed forms, an
+American PDE (Crank-Nicolson with projected SOR on a strike-centred grid, so that the Greeks are smooth in the
+spot), the tree, Lévy's Asian approximation, Heston by Fourier, Monte Carlo (Andersen's QE scheme for Heston)
+and Longstaff-Schwartz, checked against the Python library by `tests/test_widget_js.py` (needs node), plus the
+SPX results written by `scripts/build_widget_data.py`. Deep links open a given case, for instance
+`?product=barrier&K=119&model=heston`. The full library, with live SLV recalibration, also has a Gradio app that
+runs locally: `pip install gradio`, then `python space/app.py`.
 
 ## Layout
 

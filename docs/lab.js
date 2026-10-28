@@ -1,6 +1,6 @@
 /* Option pricing lab, browser side.
-   Pricers: Black-Scholes, Reiner-Rubinstein barriers with the Broadie-Glasserman-Kou shift, CRR tree with the
-   European as control variate, Levy moment matching for arithmetic Asians. Monte Carlo under Black-Scholes or
+   Pricers: Black-Scholes, Reiner-Rubinstein barriers with the Broadie-Glasserman-Kou shift, American options by
+   a Crank-Nicolson PDE with projected SOR (European as control variate), Levy moment matching for arithmetic Asians. Monte Carlo under Black-Scholes or
    the SPX-calibrated Heston model, with Longstaff-Schwartz for American options. The SPX results come from the
    Python library (pricer-data.js). Every closed form here is tested against the Python library. */
 (function () {
@@ -101,28 +101,96 @@
     return vals[0];
   }
 
-  // American price: the exact European plus the tree's early-exercise premium (control variate).
-  function american(S, K, T, r, q, v, call, n) {
-    var e = bs(S, K, T, r, q, v, call).price;
-    return e + Math.max(crr(S, K, T, r, q, v, call, n, true) - crr(S, K, T, r, q, v, call, n, false), 0);
-  }
-
-  function exerciseBoundary(S, K, T, r, q, v, call, n) {
-    var b = new Float64Array(n);
-    crr(S, K, T, r, q, v, call, n, true, b);
-    // the lattice makes the raw boundary saw-toothed: force the monotonicity of the true boundary
-    // (rising towards the strike for a put, falling for a call), then average over a few steps
-    var pts = [], i, j;
-    for (i = 0; i < n; i++) if (!isNaN(b[i])) pts.push([i * T / n, b[i]]);
-    for (i = 1; i < pts.length; i++) pts[i][1] = call ? Math.min(pts[i][1], pts[i - 1][1]) : Math.max(pts[i][1], pts[i - 1][1]);
-    var out = [];
-    for (i = 0; i < pts.length; i++) {
-      var s = 0, c = 0;
-      for (j = Math.max(0, i - 4); j <= Math.min(pts.length - 1, i + 4); j++) { s += pts[j][1]; c++; }
-      out.push([pts[i][0], s / c]);
-    }
+  // ---- American options: the Black-Scholes PDE on one fixed grid
+  // A tree rebuilt around each spot moves its nodes with the spot, so its discretised exercise boundary jumps
+  // from node to node as the spot moves: the price is then a slightly jagged function of the spot, and finite-
+  // difference Greeks (gamma above all) amplify the jags. Here the grid is fixed by the strike: x = ln(S/K),
+  // Crank-Nicolson after a Rannacher start (four implicit half steps, against the payoff kink), early exercise
+  // by projected SOR. One solve gives the price at every spot, delta and gamma read off the same grid, and the
+  // exercise boundary. The European is solved on the same grid and used as a control variate.
+  var pdeCache = {}, pdeCacheSize = 0;
+  function pdeSolve(K, T, r, q, v, call, isAmerican) {
+    var key = [K, T, r, q, v, call, isAmerican].join(",");
+    if (pdeCache[key]) return pdeCache[key];
+    if (pdeCacheSize > 300) { pdeCache = {}; pdeCacheSize = 0; }
+    var L = Math.max(6 * v * Math.sqrt(T), 1.6), nx = 400, dx = 2 * L / nx, nt = 200, dt = T / nt;
+    var mu = r - q - v * v / 2, phi = call ? 1 : -1, i, n;
+    var A = 0.5 * v * v / (dx * dx) - mu / (2 * dx), B = -v * v / (dx * dx) - r, C = 0.5 * v * v / (dx * dx) + mu / (2 * dx);
+    var x = new Float64Array(nx + 1), g = new Float64Array(nx + 1), V = new Float64Array(nx + 1);
+    for (i = 0; i <= nx; i++) { x[i] = -L + i * dx; g[i] = Math.max(phi * (K * Math.exp(x[i]) - K), 0); V[i] = g[i]; }
+    var rhs = new Float64Array(nx + 1), cp = new Float64Array(nx + 1), dp = new Float64Array(nx + 1), boundary = [];
+    var tau = 0, steps = [];
+    for (n = 0; n < 4; n++) steps.push([1, dt / 2]);            // Rannacher: implicit half steps
+    for (n = 2; n < nt; n++) steps.push([0.5, dt]);              // then Crank-Nicolson
+    steps.forEach(function (sp) {
+      var th = sp[0], h = sp[1];
+      tau += h;
+      var lo = -th * h * A, di = 1 - th * h * B, up = -th * h * C;
+      for (i = 1; i < nx; i++) rhs[i] = V[i] + (1 - th) * h * (A * V[i - 1] + B * V[i] + C * V[i + 1]);
+      var S0 = K * Math.exp(x[0]), SN = K * Math.exp(x[nx]);
+      var fwd0 = S0 * Math.exp(-q * tau) - K * Math.exp(-r * tau), fwdN = SN * Math.exp(-q * tau) - K * Math.exp(-r * tau);
+      var b0 = call ? 0 : (isAmerican ? K - S0 : -fwd0), bN = call ? (isAmerican ? Math.max(SN - K, fwdN) : fwdN) : 0;
+      if (!isAmerican) { // Thomas algorithm
+        cp[1] = up / di; dp[1] = (rhs[1] - lo * b0) / di;
+        for (i = 2; i < nx; i++) {
+          var den = di - lo * cp[i - 1];
+          cp[i] = up / den;
+          dp[i] = (rhs[i] - lo * dp[i - 1] - (i === nx - 1 ? up * bN : 0)) / den;
+        }
+        V[nx - 1] = dp[nx - 1];
+        for (i = nx - 2; i >= 1; i--) V[i] = dp[i] - cp[i] * V[i + 1];
+        V[0] = b0; V[nx] = bN;
+      } else { // projected SOR on the linear complementarity problem
+        V[0] = b0; V[nx] = bN;
+        for (i = 1; i < nx; i++) V[i] = Math.max(V[i], g[i]);
+        for (var it = 0; it < 500; it++) {
+          var err = 0;
+          for (i = 1; i < nx; i++) {
+            var y = (rhs[i] - lo * V[i - 1] - up * V[i + 1]) / di;
+            var nv = Math.max(g[i], V[i] + 1.3 * (y - V[i]));
+            err = Math.max(err, Math.abs(nv - V[i]));
+            V[i] = nv;
+          }
+          if (err < 1e-10) break;
+        }
+        // exercise boundary: the edge of the region where the option is worth its payoff
+        var crit = NaN;
+        if (call) { for (i = nx - 1; i > 0; i--) if (g[i] > 0 && V[i] - g[i] < 1e-9) crit = K * Math.exp(x[i]); else if (g[i] > 0) break; }
+        else { for (i = 1; i < nx; i++) if (g[i] > 0 && V[i] - g[i] < 1e-9) crit = K * Math.exp(x[i]); else if (g[i] > 0) break; }
+        if (isFinite(crit)) boundary.push([T - tau, crit]);
+      }
+    });
+    var out = { x: x, V: V, dx: dx, K: K, boundary: boundary.reverse() };
+    pdeCache[key] = out; pdeCacheSize++;
     return out;
   }
+
+  // value, delta and gamma at spot S, interpolated between the grid nodes
+  function pdeAt(sol, S) {
+    var x = Math.log(S / sol.K), i = Math.floor((x - sol.x[0]) / sol.dx), w;
+    i = Math.max(1, Math.min(sol.x.length - 3, i));
+    w = (x - sol.x[i]) / sol.dx;
+    function at(j) {
+      var V = sol.V, h = sol.dx, vx = (V[j + 1] - V[j - 1]) / (2 * h), vxx = (V[j + 1] - 2 * V[j] + V[j - 1]) / (h * h);
+      return [V[j], vx, vxx];
+    }
+    var a = at(i), b = at(i + 1), v = a[0] + w * (b[0] - a[0]), vx = a[1] + w * (b[1] - a[1]), vxx = a[2] + w * (b[2] - a[2]);
+    return { price: v, delta: vx / S, gamma: (vxx - vx) / (S * S) };
+  }
+
+  function americanGreeks(S, K, T, r, q, v, call) {
+    var e = bs(S, K, T, r, q, v, call), phi = call ? 1 : -1, intrinsic = Math.max(phi * (S - K), 0);
+    var am = pdeAt(pdeSolve(K, T, r, q, v, call, true), S), eu = pdeAt(pdeSolve(K, T, r, q, v, call, false), S);
+    // inside the exercise region the option is its payoff, exactly: no control-variate residue there
+    if (intrinsic > 0 && am.price - intrinsic < 1e-9) return { price: intrinsic, delta: phi, gamma: 0 };
+    var prem = Math.max(am.price - eu.price, 0);
+    return { price: Math.max(e.price + prem, intrinsic), delta: e.delta + (prem > 0 ? am.delta - eu.delta : 0),
+      gamma: e.gamma + (prem > 0 ? am.gamma - eu.gamma : 0) };
+  }
+
+  function american(S, K, T, r, q, v, call) { return americanGreeks(S, K, T, r, q, v, call).price; }
+
+  function exerciseBoundary(S, K, T, r, q, v, call) { return pdeSolve(K, T, r, q, v, call, true).boundary; }
 
   function geoAsian(S, K, T, r, q, v, n, call) {
     var mt = 0, vv = 0, i, j;
@@ -257,7 +325,7 @@
   // =====================================================================================  products
   var PRODUCTS = {
     european: { label: "European", method: "Black-Scholes closed form" },
-    american: { label: "American", method: "CRR tree, European as control variate" },
+    american: { label: "American", method: "Crank-Nicolson PDE with projected SOR, European as control variate" },
     asian: { label: "Asian", method: "Monte Carlo with a geometric control variate; curves by Lévy moment matching" },
     barrier: { label: "Barrier", method: "Reiner-Rubinstein, Broadie-Glasserman-Kou shift for daily monitoring" }
   };
@@ -266,7 +334,7 @@
   function value(st, over) {
     var p = Object.assign({}, st, over || {});
     var T = Math.max(p.T, 1 / 365);
-    if (p.product === "american") return american(p.S, p.K, T, p.r, p.q, p.v, p.call, p.treeSteps || 150);
+    if (p.product === "american") return american(p.S, p.K, T, p.r, p.q, p.v, p.call);
     if (p.product === "asian") return levyAsian(p.S, p.K, T, p.r, p.q, p.v, 12, p.call);
     if (p.product === "barrier") return barrier(p.S, p.K, p.H, T, p.r, p.q, p.v, p.kind, p.call, true);
     return bs(p.S, p.K, T, p.r, p.q, p.v, p.call).price;
@@ -274,12 +342,18 @@
 
   function greeks(st) {
     if (st.product === "european") return bs(st.S, st.K, st.T, st.r, st.q, st.v, st.call);
-    var h = 0.01 * st.S, f0 = value(st);
-    var up = value(st, { S: st.S + h }), dn = value(st, { S: st.S - h });
+    var h = 0.01 * st.S, f0 = value(st), up, dn, delta, gamma;
+    if (st.product === "american") { // delta and gamma read off the PDE grid
+      var ag = americanGreeks(st.S, st.K, Math.max(st.T, 1 / 365), st.r, st.q, st.v, st.call);
+      delta = ag.delta; gamma = ag.gamma;
+    } else {
+      up = value(st, { S: st.S + h }); dn = value(st, { S: st.S - h });
+      delta = (up - dn) / (2 * h); gamma = (up - 2 * f0 + dn) / (h * h);
+    }
     return {
       price: f0,
-      delta: (up - dn) / (2 * h),
-      gamma: (up - 2 * f0 + dn) / (h * h),
+      delta: delta,
+      gamma: gamma,
       vega: (value(st, { v: st.v + 0.01 }) - value(st, { v: Math.max(st.v - 0.01, 0.005) })) / 2,
       theta: st.T > 2 / 365 ? value(st, { T: st.T - 1 / 365 }) - f0 : NaN,
       rho: (value(st, { r: st.r + 0.01 }) - value(st, { r: st.r - 0.01 })) / 2
@@ -287,7 +361,7 @@
   }
 
   function headline(st) {
-    if (st.product === "american") return { price: american(100, st.K, st.T, st.r, st.q, st.v, st.call, 600) };
+    if (st.product === "american") return { price: american(100, st.K, st.T, st.r, st.q, st.v, st.call) };
     if (st.product === "asian") {
       var a = asianMC(100, st.K, st.T, st.r, st.q, st.v, 12, st.call, 40000, 11);
       return { price: a.price, se: a.se };
@@ -728,6 +802,7 @@
       if (qs.get("model") === "heston") st.model = "heston";
       SLIDERS.forEach(function (sl) { var x = parseFloat(qs.get(sl[0])); if (isFinite(x)) st[sl[0]] = Math.min(sl[3], Math.max(sl[2], x)); });
       if (["down-out", "down-in", "up-out", "up-in"].indexOf(qs.get("kind")) >= 0) st.kind = qs.get("kind");
+      if (["value", "delta", "gamma", "vega", "theta"].indexOf(qs.get("curve")) >= 0) greekView = qs.get("curve");
     } catch (e) {}
     root.textContent = "";
 
@@ -774,7 +849,7 @@
       cardEls[g[0]] = v;
     });
     quote.appendChild(cards);
-    quote.appendChild(el("p", { "class": "lab-note" }, "Greeks per unit of spot, per vol point, per day and per rate point; finite differences on the pricer except for the European (closed form)."));
+    quote.appendChild(el("p", { "class": "lab-note" }, "Greeks per unit of spot, per vol point, per day and per rate point. European: closed form; American: delta and gamma read off the PDE grid; otherwise finite differences on the pricer."));
     grid.appendChild(quote);
     root.appendChild(grid);
 
@@ -802,7 +877,7 @@
     var spHead = el("div", { "class": "lab-panel-head" });
     spHead.appendChild(el("h3", {}, "Across spot"));
     spHead.appendChild(segmented("Curve", [["value", "Value"], ["delta", "Delta"], ["gamma", "Gamma"], ["vega", "Vega"], ["theta", "Theta"]],
-      "value", function (v) { greekView = v; drawSpot(); }));
+      greekView, function (v) { greekView = v; drawSpot(); }));
     sp.appendChild(spHead);
     var spChart = el("div", { "class": "lab-chart" });
     sp.appendChild(spChart);
@@ -829,7 +904,7 @@
       var xs = [], i, base = st.S;
       for (i = 0; i <= 80; i++) xs.push(50 + i * 1.25);
       var payoff = [], cur = [], phi = st.call ? 1 : -1;
-      var light = Object.assign({}, st, { treeSteps: 100 });
+      var light = st;
       xs.forEach(function (s) {
         var pt = Object.assign({}, light, { S: s });
         var y;
@@ -882,25 +957,25 @@
         dispEv[j] = res.event[src];
       });
       var disp = { S: dispS, n: nShow, steps: steps };
-      var boundary = st.product === "american" && st.model === "bs" ? exerciseBoundary(100, st.K, st.T, st.r, st.q, st.v, st.call, 200) : null;
+      var boundary = st.product === "american" && st.model === "bs" ? exerciseBoundary(100, st.K, st.T, st.r, st.q, st.v, st.call) : null;
       var extras = { lo: lo, hi: hi, bins: bins, ghost: ghost, ghostName: other.model === "bs" ? "Black-Scholes" : "Heston",
         nShow: nShow, boundary: boundary };
       var path = convergence(res.pay, 100);
       var refs, ivK, ivATM;
       if (st.model === "bs") {
         var ref = st.product === "asian" ? asianMC(100, st.K, st.T, st.r, st.q, st.v, 12, st.call, 40000, 11).price
-          : value(Object.assign({}, st, { treeSteps: 600 }));
+          : value(st);
         refs = [{ axis: "y", value: ref, cls: "lab-ref lab-ref-k",
-          label: { european: "closed form", american: "CRR tree", asian: "40,000 paths, control variate", barrier: "closed form" }[st.product] }];
+          label: { european: "closed form", american: "PDE", asian: "40,000 paths, control variate", barrier: "closed form" }[st.product] }];
       } else {
         // Heston's own smile at this strike: Black-Scholes at that vol carries the smile effect, and is the
         // exact Heston price for a European
         ivK = impliedVol(hestonPrice(100, st.K, st.T, st.r, st.q, st.heston, st.call), 100, st.K, st.T, st.r, st.q, st.call);
         ivATM = impliedVol(hestonPrice(100, 100, st.T, st.r, st.q, st.heston, true), 100, 100, st.T, st.r, st.q, true);
         refs = [
-          { axis: "y", value: value(Object.assign({}, st, { treeSteps: 600 })), cls: "lab-ref",
+          { axis: "y", value: value(st), cls: "lab-ref",
             label: "Black-Scholes, " + fmt(100 * st.v, 1) + " % (slider)" },
-          { axis: "y", value: value(Object.assign({}, st, { v: ivK, treeSteps: 600 })), cls: "lab-ref lab-ref-k",
+          { axis: "y", value: value(Object.assign({}, st, { v: ivK })), cls: "lab-ref lab-ref-k",
             label: st.product === "european" ? "Heston, Fourier" : "Black-Scholes at Heston's vol for K, " + fmt(100 * ivK, 1) + " %" }
         ];
       }

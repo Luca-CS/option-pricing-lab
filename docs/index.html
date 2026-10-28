@@ -28,7 +28,7 @@
     <li><strong>4 models</strong><span>Black-Scholes, Heston, Dupire, SLV</span></li>
     <li><strong>SPX</strong><span>smile of 27 October 2026</span></li>
     <li><strong>4–10 bp</strong><span>surface fit, 8 of 9 expiries</span></li>
-    <li><strong>79 tests</strong><span>against closed forms and trees</span></li>
+    <li><strong>80 tests</strong><span>against closed forms and trees</span></li>
   </ul>
   <p class="links">
     <a href="https://github.com/Luca-CS/option-pricing-lab">Code on GitHub</a>
@@ -129,19 +129,20 @@
         <li><strong>Monte Carlo</strong>: log-Euler in the forward coordinate (forwards matched exactly), graded
           time grid, antithetic variates, full truncation for the variance; Longstaff-Schwartz with independent
           paths for the exercise rule in the Python library.</li>
-        <li><strong>In this page</strong>: the same closed forms in JavaScript; the American price is the exact
-          European plus the tree's early-exercise premium; Heston paths by Andersen's QE scheme with its martingale
+        <li><strong>In this page</strong>: the same closed forms in JavaScript; American options by a Crank-Nicolson PDE
+          on a grid fixed by the strike (projected SOR for early exercise, European as control variate), so that
+          the Greeks are smooth in the spot; Heston paths by Andersen's QE scheme with its martingale
           correction (the calibrated parameters violate the Feller condition, and a truncated Euler step would leave
           the variance at zero for weeks, with flat paths); Asian curves and Greeks by Lévy moment matching, the
           Asian headline price by Monte Carlo with a geometric control variate; the Longstaff-Schwartz here
           also fits its exercise rule on independent paths; the exercise boundary drawn on the paths comes from
-          the CRR tree, made monotone and lightly smoothed.</li>
+          the same PDE.</li>
       </ul>
     </details>
     <details>
       <summary>Tests and data</summary>
       <ul>
-        <li>79 tests: put-call parity, Monte Carlo convergence, American at least European and the American call
+        <li>80 tests: put-call parity, Monte Carlo convergence, American at least European and the American call
           without dividends equal to the European, geometric Asian and barriers against their closed forms,
           parameter recovery for SSVI, SVI and Heston, vanillas reproduced by local vol and SLV, and the
           JavaScript of this page against the Python library (to 1e-9).</li>

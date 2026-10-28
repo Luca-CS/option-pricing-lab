@@ -141,3 +141,17 @@ def test_heston_paths_have_no_flat_stretches():
     worst, mean = run_js(expr)
     assert worst <= 10
     assert mean == pytest.approx(100 * np.exp(0.03), rel=0.005)  # martingale correction keeps the forward
+
+
+def test_american_greeks_are_smooth_in_spot():
+    # Greeks across spot from one PDE grid: no jags beyond 1e-5 (a tree rebuilt around each spot gave ~20 sign
+    # changes in delta and ~50 in gamma), and the at-the-money gamma close to the European one, not half of it.
+    expr = ("(() => { const base = {product: 'american', call: false, model: 'bs', K: 100, T: 1, v: 0.2,"
+            " r: 0.04, q: 0.01}; const g = [];"
+            " for (let i = 0; i <= 80; i++) g.push(W.greeks(Object.assign({}, base, {S: 50 + 1.25 * i})));"
+            " let flips = 0; for (let i = 2; i < g.length; i++) { const d1 = g[i].delta - g[i - 1].delta,"
+            " d0 = g[i - 1].delta - g[i - 2].delta; if (d1 * d0 < 0 && Math.abs(d1) > 1e-5) flips++; }"
+            " return [flips, g[40].gamma, W.bs(100, 100, 1, 0.04, 0.01, 0.2, false).gamma]; })()")
+    flips, gamma_am, gamma_eu = run_js(expr)
+    assert flips == 0
+    assert 0.95 * gamma_eu < gamma_am < 1.3 * gamma_eu
