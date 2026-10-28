@@ -45,7 +45,7 @@ v0 0.0250 (true 0.0250), kappa 1.801 (1.8), theta 0.0398 (0.04), xi 0.748 (0.75)
 
 Full tables and charts: [`reports/calibration.md`](reports/calibration.md).
 
-**Tests**: 78, covering put-call parity (closed forms, Fourier, Monte Carlo), Monte Carlo convergence
+**Tests**: 79, covering put-call parity (closed forms, Fourier, Monte Carlo), Monte Carlo convergence
 (1/sqrt(N) error, closed forms within 4 standard errors), American >= European and the American call
 without dividend equal to the European, the geometric Asian against its closed form, barriers against
 Reiner-Rubinstein with the Broadie-Glasserman-Kou correction, parameter recovery for SSVI, SVI and
@@ -135,7 +135,8 @@ price, stderr = barrier_mc(model, market, K=100, H=80, T=1.0, kind="down-out", c
 ```
 
 `docs/` is the demo page (GitHub Pages): dependency-free JavaScript (`docs/lab.js`) for the closed forms, the
-tree, Lévy's Asian approximation, Monte Carlo and Longstaff-Schwartz, checked against the Python library by
+tree, Lévy's Asian approximation, Heston by Fourier, Monte Carlo (Andersen's QE scheme for Heston) and
+Longstaff-Schwartz, checked against the Python library by
 `tests/test_widget_js.py` (needs node), plus the SPX results written by `scripts/build_widget_data.py`. Deep
 links open a given product: `?product=american&type=put&model=heston`. The full library, with live SLV recalibration, also has a
 Gradio app that runs locally: `pip install gradio`, then `python space/app.py`.
@@ -169,8 +170,12 @@ Gradio app that runs locally: `pip install gradio`, then `python space/app.py`.
 - **Heston** cannot produce the steep short-dated SPX skew: about 50 bp of RMSE below six months, 25 to
   35 bp beyond. That is a property of the model, and the reason for the local and SLV models. The fitted
   parameters violate the Feller condition, as is usual on equity indices.
-- **Discretisation.** Euler schemes (full truncation for the variance) rather than Andersen's QE scheme;
-  the graded grid keeps the bias below the Monte Carlo noise in the tests, not at zero. Barriers are priced
+- **Discretisation.** The Python library uses Euler schemes (full truncation for the variance) rather than
+  Andersen's QE scheme; the graded grid keeps the price bias below the Monte Carlo noise in the tests, not at
+  zero. The paths themselves are another matter: with the SPX parameters (Feller ratio 0.19) the truncated
+  variance sits at or below zero on about 30 % of the steps, so Heston paths go flat for days. The demo page
+  uses the QE scheme, which removes this; porting it to the library (where the SLV step needs it too) is
+  the next step. Barriers are priced
   with daily monitoring only; the continuous case is reached through the Broadie-Glasserman-Kou shift.
 - **SLV.** The leverage reprices the surface within a few basis points from three months on, and about
   10 bp at two to four weeks, where the local volatility is steepest; more particles and a finer grid

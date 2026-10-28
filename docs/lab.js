@@ -296,12 +296,26 @@
   }
 
   // =====================================================================================  Monte Carlo
-  // Paths on a grid of nSteps, under Black-Scholes (exact log steps) or Heston (full-truncation Euler).
+  // Paths on a grid of nSteps, under Black-Scholes (exact log steps) or Heston (Andersen's QE-M scheme).
+  //
+  // The SPX-calibrated Heston model violates the Feller condition badly (2 kappa theta / xi^2 = 0.19): with a
+  // full-truncation Euler step the variance spends about a quarter of the steps below zero, where the path
+  // gets no diffusion at all and drifts flat for days. The quadratic-exponential scheme of Andersen (2008)
+  // matches the first two moments of the variance step, never goes negative, and leaves zero at once, as the
+  // true process does. The log-spot step is Andersen's, with his martingale correction (E[S_T] = F_T).
   function simulate(st, nPaths, nSteps, seed) {
     var z = rng(seed), T = st.T, dt = T / nSteps, sq = Math.sqrt(dt), mu = st.r - st.q;
     var S = new Float64Array(nPaths * (nSteps + 1)), half = nPaths / 2, p, i;
     var hp = st.model === "heston" ? st.heston : null;
     var buf1 = new Float64Array(nSteps), buf2 = new Float64Array(nSteps);
+    if (hp) {
+      var E = Math.exp(-hp.kappa * dt), rho = hp.rho, xi2 = hp.xi * hp.xi;
+      var c1 = xi2 * E * (1 - E) / hp.kappa, c2 = hp.theta * xi2 * (1 - E) * (1 - E) / (2 * hp.kappa);
+      var K1 = 0.5 * dt * (hp.kappa * rho / hp.xi - 0.5) - rho / hp.xi;
+      var K2 = 0.5 * dt * (hp.kappa * rho / hp.xi - 0.5) + rho / hp.xi;
+      var K3 = 0.5 * dt * (1 - rho * rho), K4 = K3, A = K2 + 0.5 * K4;
+      var K0plain = -rho * hp.kappa * hp.theta * dt / hp.xi;
+    }
     for (p = 0; p < half; p++) {
       for (i = 0; i < nSteps; i++) { buf1[i] = z(); buf2[i] = hp ? z() : 0; }
       for (var a = 0; a < 2; a++) {
@@ -309,9 +323,18 @@
         S[row] = 100;
         for (i = 0; i < nSteps; i++) {
           if (hp) {
-            var vp = Math.max(vv, 0), z2 = sgn * buf2[i], zx = hp.rho * z2 + Math.sqrt(1 - hp.rho * hp.rho) * sgn * buf1[i];
-            x += (mu - vp / 2) * dt + Math.sqrt(vp) * sq * zx;
-            vv += hp.kappa * (hp.theta - vp) * dt + hp.xi * Math.sqrt(vp) * sq * z2;
+            var m = hp.theta + (vv - hp.theta) * E, psi = (vv * c1 + c2) / (m * m), zv = sgn * buf2[i], vn, K0;
+            if (psi <= 1.5) { // quadratic branch: v' = a (b + Z)^2
+              var b2 = 2 / psi - 1 + Math.sqrt(2 / psi) * Math.sqrt(2 / psi - 1), aa = m / (1 + b2), b = Math.sqrt(b2);
+              vn = aa * (b + zv) * (b + zv);
+              K0 = A < 1 / (2 * aa) ? -A * b2 * aa / (1 - 2 * A * aa) + 0.5 * Math.log(1 - 2 * A * aa) - (K1 + 0.5 * K3) * vv : K0plain;
+            } else { // exponential branch: a mass at zero, then an exponential tail
+              var pz = (psi - 1) / (psi + 1), beta = (1 - pz) / m, U = ncdf(zv);
+              vn = U <= pz ? 0 : Math.log((1 - pz) / (1 - U)) / beta;
+              K0 = A < beta ? -Math.log(pz + beta * (1 - pz) / (beta - A)) - (K1 + 0.5 * K3) * vv : K0plain;
+            }
+            x += mu * dt + K0 + K1 * vv + K2 * vn + Math.sqrt(Math.max(K3 * vv + K4 * vn, 0)) * sgn * buf1[i];
+            vv = vn;
           } else {
             x += (mu - st.v * st.v / 2) * dt + st.v * sq * sgn * buf1[i];
           }
@@ -905,7 +928,9 @@
         ? "Heston with the parameters calibrated on SPX (v0 " + fmt(st.heston.v0, 4) + ", κ " + fmt(st.heston.kappa, 2) + ", θ " + fmt(st.heston.theta, 4) +
           ", ξ " + fmt(st.heston.xi, 2) + ", ρ " + fmt(st.heston.rho, 2) + "). Its smile gives a vol of " + fmt(100 * ivK, 1) + " % at K = " + st.K +
           " (" + fmt(100 * ivATM, 1) + " % at K = 100) against " + fmt(100 * st.v, 1) + " % on the slider: Black-Scholes at that vol carries the smile, " +
-          "and what remains between it and the estimate is the dynamics. "
+          "and what remains between it and the estimate is the dynamics. To produce the SPX skew, Heston needs a large vol of vol: " +
+          "its variance then sits near zero much of the time (in the long run the instantaneous vol is below 5 % about 44 % of the time, " +
+          "median 7 %, mean 23 %), so calm stretches alternate with bursts. Paths by Andersen's QE scheme. "
         : "") + "Estimate " + fmt(last[1], 4) + " ± " + fmt(1.96 * last[2], 4) + " (95 %) with " + last[0].toLocaleString("en") + " antithetic paths, " + what + ". " +
         (st.product === "barrier" ? "Orange dots: barrier hits." : st.product === "american" ? "Orange dots: exercise under the regression rule." : "");
     }

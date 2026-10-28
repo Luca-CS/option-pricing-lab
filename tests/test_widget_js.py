@@ -126,3 +126,18 @@ def test_heston_monte_carlo_converges_to_fourier():
     mc, se, exact = run_js(expr)
     # full-truncation Euler at daily steps: small bias on top of the noise
     assert abs(mc - exact) < 4 * se + 0.02
+
+
+def test_heston_paths_have_no_flat_stretches():
+    # The calibrated parameters violate Feller (2 kappa theta / xi^2 = 0.19). A truncated Euler scheme then
+    # leaves the variance below zero for weeks and the paths drift flat; the QE scheme must not.
+    expr = ("(() => { const h = " + json.dumps(SPX_HESTON) + ";"
+            " const st = {product: 'european', call: true, model: 'heston', K: 100, T: 1, v: 0.2,"
+            " r: 0.04, q: 0.01, heston: h}; const sim = W.simulate(st, 2000, 252, 3); let worst = 0, mean = 0;"
+            " for (let p = 0; p < 2000; p++) { let run = 0; mean += sim.S[p * 253 + 252] / 2000;"
+            "  for (let i = 0; i < 252; i++) { const r = Math.log(sim.S[p * 253 + i + 1] / sim.S[p * 253 + i]);"
+            "   run = Math.abs(r - 0.03 / 252) < 2e-4 ? run + 1 : 0; worst = Math.max(worst, run); } }"
+            " return [worst, mean]; })()")
+    worst, mean = run_js(expr)
+    assert worst <= 10
+    assert mean == pytest.approx(100 * np.exp(0.03), rel=0.005)  # martingale correction keeps the forward
