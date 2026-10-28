@@ -145,6 +145,70 @@
     return black(m1, K, Math.sqrt(Math.log(m2 / (m1 * m1))), Math.exp(-r * T), call);
   }
 
+  // ---- Heston: semi-closed form by the Lewis formula, the reference for the Heston Monte Carlo
+  function cx(re, im) { return { re: re, im: im }; }
+  function cadd(a, b) { return cx(a.re + b.re, a.im + b.im); }
+  function csub(a, b) { return cx(a.re - b.re, a.im - b.im); }
+  function cmul(a, b) { return cx(a.re * b.re - a.im * b.im, a.re * b.im + a.im * b.re); }
+  function cdiv(a, b) { var d = b.re * b.re + b.im * b.im; return cx((a.re * b.re + a.im * b.im) / d, (a.im * b.re - a.re * b.im) / d); }
+  function cexp(a) { var e = Math.exp(a.re); return cx(e * Math.cos(a.im), e * Math.sin(a.im)); }
+  function clog(a) { return cx(Math.log(Math.hypot(a.re, a.im)), Math.atan2(a.im, a.re)); }
+  function csqrt(a) {
+    var r = Math.hypot(a.re, a.im), im = Math.sqrt(Math.max((r - a.re) / 2, 0));
+    return cx(Math.sqrt((r + a.re) / 2), a.im < 0 ? -im : im);
+  }
+  function cscale(a, k) { return cx(a.re * k, a.im * k); }
+
+  // E[exp(i u X_T)] with X_T = ln(S_T / F_T), "little trap" form (Albrecher et al.), u complex
+  function hestonCF(u, T, h) {
+    var iu = cx(-u.im, u.re), one = cx(1, 0), xi2 = h.xi * h.xi;
+    var beta = csub(cx(h.kappa, 0), cscale(iu, h.rho * h.xi));
+    var d = csqrt(cadd(cmul(beta, beta), cscale(cadd(iu, cmul(u, u)), xi2)));
+    var bm = csub(beta, d), g = cdiv(bm, cadd(beta, d)), e = cexp(cscale(d, -T)), ge = cmul(g, e);
+    var C = cscale(csub(cscale(bm, T), cscale(clog(cdiv(csub(one, ge), csub(one, g))), 2)), h.kappa * h.theta / xi2);
+    var Dv = cmul(cscale(bm, 1 / xi2), cdiv(csub(one, e), csub(one, ge)));
+    return cexp(cadd(C, cscale(Dv, h.v0)));
+  }
+
+  var GL = (function (n) { // Gauss-Legendre nodes and weights on [-1, 1]
+    var x = [], w = [];
+    for (var i = 1; i <= n; i++) {
+      var z = Math.cos(Math.PI * (i - 0.25) / (n + 0.5)), z1, pp;
+      do {
+        var p1 = 1, p2 = 0;
+        for (var j = 1; j <= n; j++) { var p3 = p2; p2 = p1; p1 = ((2 * j - 1) * z * p2 - (j - 1) * p3) / j; }
+        pp = n * (z * p1 - p2) / (z * z - 1); z1 = z; z = z1 - p1 / pp;
+      } while (Math.abs(z - z1) > 1e-15);
+      x.push(z); w.push(2 / ((1 - z * z) * pp * pp));
+    }
+    return { x: x, w: w };
+  })(64);
+
+  // Lewis (2001): C = D [F - sqrt(F K) / pi * integral of Re(e^{iu ln(F/K)} phi(u - i/2)) / (u^2 + 1/4)]
+  function hestonPrice(S, K, T, r, q, h, call) {
+    var F = S * Math.exp((r - q) * T), D = Math.exp(-r * T), lk = Math.log(F / K), s = 0;
+    var uMax = Math.min(Math.max(40 / Math.sqrt(Math.max(h.v0, h.theta, 1e-4) * T), 60), 5000), panels = 8;
+    for (var p = 0; p < panels; p++) {
+      var a = uMax * p / panels, b = uMax * (p + 1) / panels;
+      for (var i = 0; i < GL.x.length; i++) {
+        var u = 0.5 * (b - a) * GL.x[i] + 0.5 * (b + a);
+        var ph = cmul(cx(Math.cos(u * lk), Math.sin(u * lk)), hestonCF(cx(u, -0.5), T, h));
+        s += 0.5 * (b - a) * GL.w[i] * ph.re / (u * u + 0.25);
+      }
+    }
+    var c = D * (F - Math.sqrt(F * K) / Math.PI * s);
+    return call ? c : c - D * (F - K);
+  }
+
+  function impliedVol(price, S, K, T, r, q, call) { // bisection
+    var lo = 1e-4, hi = 4;
+    for (var i = 0; i < 100; i++) {
+      var mid = 0.5 * (lo + hi);
+      if (bs(S, K, T, r, q, mid, call).price > price) hi = mid; else lo = mid;
+    }
+    return 0.5 * (lo + hi);
+  }
+
   function rng(seed) { // mulberry32 + Marsaglia polar: reproducible across browsers
     var a = seed >>> 0, spare = null;
     function u() {
@@ -424,7 +488,7 @@
       s.appendChild(svg("text", { x: X(v), y: H - m.b + 16, "class": "lab-tick", "text-anchor": "middle" }, opts.xFmt ? opts.xFmt(v) : String(v)));
     });
     if (opts.xLabel) s.appendChild(svg("text", { x: W - m.r, y: H - 3, "class": "lab-tick", "text-anchor": "end" }, opts.xLabel));
-    var xRefs = 0;
+    var xRefs = 0, lastLabelY = null;
     (opts.refLines || []).forEach(function (rl) {
       if (rl.axis === "x" && rl.value >= x0 && rl.value <= x1) {
         s.appendChild(svg("line", { x1: X(rl.value), x2: X(rl.value), y1: m.t, y2: H - m.b, "class": rl.cls }));
@@ -432,7 +496,10 @@
       }
       if (rl.axis === "y") {
         s.appendChild(svg("line", { x1: m.l, x2: W - m.r, y1: Y(rl.value), y2: Y(rl.value), "class": rl.cls }));
-        s.appendChild(svg("text", { x: W - m.r, y: Y(rl.value) - 5, "class": "lab-ref-label", "text-anchor": "end" }, rl.label));
+        var ly = Y(rl.value) - 5;
+        if (lastLabelY !== null && Math.abs(ly - lastLabelY) < 13) ly = Y(rl.value) + 14; // keep labels apart
+        lastLabelY = ly;
+        s.appendChild(svg("text", { x: W - m.r, y: ly, "class": "lab-ref-label", "text-anchor": "end" }, rl.label));
       }
     });
     if (opts.band && opts.band.length) {
@@ -496,7 +563,8 @@
     var histW = Math.min(110, W * 0.2), m = { l: 40, r: histW + 10, t: 12, b: 26 };
     var lo = extras.lo, hi = extras.hi;
     function X(i) { return m.l + i / sim.steps * (W - m.l - m.r); }
-    function Y(v) { return H - m.b - (Math.log(v) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)) * (H - m.t - m.b); }
+    // linear price axis, shared by both models so that the shapes compare
+    function Y(v) { return H - m.b - (v - lo) / (hi - lo) * (H - m.t - m.b); }
     var ink = css("--text"), muted = css("--muted"), line = css("--line"), series = css("--lab-series"), warn = css("--lab-warn");
     ctx.font = "11px " + css("--sans");
     ctx.lineWidth = 1;
@@ -509,7 +577,9 @@
     ctx.fillText("0", X(0), H - 8);
     ctx.fillText(fmt(st.T, 2) + " y", X(sim.steps), H - 8);
     var upto = Math.max(1, Math.floor(progress * sim.steps));
-    // paths
+    // paths, clipped to the plot area
+    ctx.save();
+    ctx.beginPath(); ctx.rect(m.l, m.t, W - m.l - m.r, H - m.t - m.b); ctx.clip();
     var nShow = extras.nShow;
     for (var p = 0; p < nShow; p++) {
       var row = p * (sim.steps + 1), ev = events[p], dead = st.product === "barrier" && st.kind.slice(-3) === "out";
@@ -533,6 +603,7 @@
         ctx.beginPath(); ctx.arc(X(ev), Y(sim.S[row + ev]), 2.2, 0, 2 * Math.PI); ctx.fill();
       }
     }
+    ctx.restore();
     ctx.globalAlpha = 1;
     // strike, barrier, exercise boundary
     function hline(v, color, dash, label) {
@@ -555,29 +626,47 @@
       ctx.fillStyle = warn; ctx.textAlign = "right";
       ctx.fillText("exercise boundary", W - m.r - 4, H - m.b - 6);
     }
-    // terminal histogram, revealed with the paths
-    var x0 = W - m.r + 8, bins = extras.bins, maxc = 0, b;
-    for (b = 0; b < bins.length; b++) maxc = Math.max(maxc, bins[b].count);
-    var reveal = Math.min(1, progress * 1.2);
+    // terminal distribution (densities, so both models share one scale), revealed with the paths;
+    // the other model's distribution stays behind as a ghost outline
+    var x0 = W - m.r + 8, bins = extras.bins, ghost = extras.ghost, maxd = 0, b;
+    for (b = 0; b < bins.length; b++) maxd = Math.max(maxd, bins[b].density, ghost ? ghost[b].density : 0);
+    var reveal = Math.min(1, progress * 1.2), scale = (histW - 6) / maxd;
     for (b = 0; b < bins.length; b++) {
-      var bn = bins[b], y1 = Y(bn.lo), y2 = Y(bn.hi), w = bn.count / maxc * (histW - 6) * reveal;
+      var bn = bins[b], y1 = Y(bn.lo), y2 = Y(bn.hi), w = bn.density * scale * reveal;
       var itm = st.call ? bn.lo >= st.K : bn.hi <= st.K;
       ctx.fillStyle = itm ? series : line; ctx.globalAlpha = itm ? 0.75 : 1;
       ctx.fillRect(x0, y2 + 0.5, w, Math.max(y1 - y2 - 1, 0.5));
     }
     ctx.globalAlpha = 1;
+    if (ghost) {
+      ctx.strokeStyle = ink; ctx.globalAlpha = 0.45; ctx.lineWidth = 1.2; ctx.beginPath();
+      ctx.moveTo(x0, Y(ghost[0].lo));
+      for (b = 0; b < ghost.length; b++) {
+        var gx = x0 + ghost[b].density * scale;
+        ctx.lineTo(gx, Y(ghost[b].lo)); ctx.lineTo(gx, Y(ghost[b].hi));
+      }
+      ctx.lineTo(x0, Y(ghost[ghost.length - 1].hi));
+      ctx.stroke(); ctx.globalAlpha = 1;
+    }
     ctx.fillStyle = muted; ctx.textAlign = "left";
     ctx.fillText("at maturity", x0, m.t + 2);
+    if (ghost) ctx.fillText("outline: " + extras.ghostName, x0, m.t + 15);
   }
 
-  function histogram(values, lo, hi, nb) {
-    var bins = [], i, step = (Math.log(hi) - Math.log(lo)) / nb;
-    for (i = 0; i < nb; i++) bins.push({ lo: lo * Math.exp(i * step), hi: lo * Math.exp((i + 1) * step), count: 0 });
+  function histogram(values, lo, hi, nb) { // linear bins, density = share of all paths
+    var bins = [], i, step = (hi - lo) / nb;
+    for (i = 0; i < nb; i++) bins.push({ lo: lo + i * step, hi: lo + (i + 1) * step, count: 0, density: 0 });
     for (i = 0; i < values.length; i++) {
-      var k = Math.floor((Math.log(values[i]) - Math.log(lo)) / step);
+      var k = Math.floor((values[i] - lo) / step);
       if (k >= 0 && k < nb) bins[k].count++;
     }
+    bins.forEach(function (bn) { bn.density = bn.count / values.length; });
     return bins;
+  }
+
+  function quantile(values, q) {
+    var s = Array.prototype.slice.call(values).sort(function (a, b) { return a - b; });
+    return s[Math.min(s.length - 1, Math.max(0, Math.floor(q * s.length)))];
   }
 
   // =====================================================================================  the desk
@@ -614,6 +703,8 @@
       if (PRODUCTS[qs.get("product")]) st.product = qs.get("product");
       if (qs.get("type") === "put") st.call = false;
       if (qs.get("model") === "heston") st.model = "heston";
+      SLIDERS.forEach(function (sl) { var x = parseFloat(qs.get(sl[0])); if (isFinite(x)) st[sl[0]] = Math.min(sl[3], Math.max(sl[2], x)); });
+      if (["down-out", "down-in", "up-out", "up-in"].indexOf(qs.get("kind")) >= 0) st.kind = qs.get("kind");
     } catch (e) {}
     root.textContent = "";
 
@@ -629,9 +720,9 @@
       var wrap = el("label", { "class": "lab-slider", "data-k": s[0] });
       var head = el("span", { "class": "lab-slider-head" });
       head.appendChild(el("span", {}, s[1]));
-      var out = el("output", {}, s[6](s[5]));
+      var out = el("output", {}, s[6](st[s[0]]));
       head.appendChild(out);
-      var inp = el("input", { type: "range", min: s[2], max: s[3], step: s[4], value: s[5], "aria-label": s[1] });
+      var inp = el("input", { type: "range", min: s[2], max: s[3], step: s[4], value: st[s[0]], "aria-label": s[1] });
       inp.addEventListener("input", function () { st[s[0]] = +inp.value; out.textContent = s[6](+inp.value); update(false); });
       wrap.appendChild(head); wrap.appendChild(inp);
       controls.appendChild(wrap);
@@ -751,11 +842,14 @@
       var res = payoffs(st, sim);
       var term = new Float64Array(nPrice);
       for (var p = 0; p < nPrice; p++) term[p] = sim.S[p * (steps + 1) + steps];
-      var sorted = Array.prototype.slice.call(term).sort(function (a, b) { return a - b; });
-      var lo = Math.min(sorted[Math.floor(0.005 * nPrice)], st.K * 0.97, st.product === "barrier" ? st.H * 0.97 : Infinity);
-      var hi = Math.max(sorted[Math.floor(0.995 * nPrice)], st.K * 1.03, st.product === "barrier" ? st.H * 1.03 : 0);
-      lo = Math.max(lo, 1); hi = Math.max(hi, lo * 1.2);
-      var bins = histogram(term, lo, hi, 36);
+      // the other model, on fewer paths: it sets the common scale and draws the ghost distribution
+      var other = Object.assign({}, st, { model: st.model === "bs" ? "heston" : "bs" });
+      var simO = simulate(other, 4000, steps, seed + 101), termO = new Float64Array(4000);
+      for (p = 0; p < 4000; p++) termO[p] = simO.S[p * (steps + 1) + steps];
+      var lo = Math.min(quantile(term, 0.005), quantile(termO, 0.005), st.K * 0.97, st.product === "barrier" ? st.H * 0.97 : Infinity);
+      var hi = Math.max(quantile(term, 0.995), quantile(termO, 0.995), st.K * 1.03, st.product === "barrier" ? st.H * 1.03 : 0);
+      lo = Math.max(0, lo - 0.03 * (hi - lo)); hi = hi + 0.03 * (hi - lo);
+      var bins = histogram(term, lo, hi, 40), ghost = histogram(termO, lo, hi, 40);
       // display: the first 120 paths, mixing both halves of the antithetic pairs
       var nShow = 120, showIdx = [];
       for (var k = 0; k < nShow / 2; k++) { showIdx.push(k); showIdx.push(k + nPrice / 2); }
@@ -766,11 +860,27 @@
       });
       var disp = { S: dispS, n: nShow, steps: steps };
       var boundary = st.product === "american" && st.model === "bs" ? exerciseBoundary(100, st.K, st.T, st.r, st.q, st.v, st.call, 200) : null;
-      var extras = { lo: lo, hi: hi, bins: bins, nShow: nShow, boundary: boundary };
+      var extras = { lo: lo, hi: hi, bins: bins, ghost: ghost, ghostName: other.model === "bs" ? "Black-Scholes" : "Heston",
+        nShow: nShow, boundary: boundary };
       var path = convergence(res.pay, 100);
-      var ref = st.model === "bs" ? (st.product === "asian" ? asianMC(100, st.K, st.T, st.r, st.q, st.v, 12, st.call, 40000, 11).price : value(Object.assign({}, st, { treeSteps: 600 }))) : NaN;
-      var refName = { european: "closed form", american: "CRR tree", asian: "40,000 paths, control variate", barrier: "closed form" }[st.product];
-      if (st.model === "heston") { ref = value(Object.assign({}, st, { treeSteps: 600 })); refName = "Black-Scholes at " + fmt(100 * st.v, 1) + " % vol"; }
+      var refs, ivK, ivATM;
+      if (st.model === "bs") {
+        var ref = st.product === "asian" ? asianMC(100, st.K, st.T, st.r, st.q, st.v, 12, st.call, 40000, 11).price
+          : value(Object.assign({}, st, { treeSteps: 600 }));
+        refs = [{ axis: "y", value: ref, cls: "lab-ref lab-ref-k",
+          label: { european: "closed form", american: "CRR tree", asian: "40,000 paths, control variate", barrier: "closed form" }[st.product] }];
+      } else {
+        // Heston's own smile at this strike: Black-Scholes at that vol carries the smile effect, and is the
+        // exact Heston price for a European
+        ivK = impliedVol(hestonPrice(100, st.K, st.T, st.r, st.q, st.heston, st.call), 100, st.K, st.T, st.r, st.q, st.call);
+        ivATM = impliedVol(hestonPrice(100, 100, st.T, st.r, st.q, st.heston, true), 100, 100, st.T, st.r, st.q, true);
+        refs = [
+          { axis: "y", value: value(Object.assign({}, st, { treeSteps: 600 })), cls: "lab-ref",
+            label: "Black-Scholes, " + fmt(100 * st.v, 1) + " % (slider)" },
+          { axis: "y", value: value(Object.assign({}, st, { v: ivK, treeSteps: 600 })), cls: "lab-ref lab-ref-k",
+            label: st.product === "european" ? "Heston, Fourier" : "Black-Scholes at Heston's vol for K, " + fmt(100 * ivK, 1) + " %" }
+        ];
+      }
       var t0 = null, dur = reduceMotion ? 0 : 1600;
       function frame(ts) {
         if (t0 === null) t0 = ts;
@@ -781,7 +891,7 @@
         lineChart(conv, {
           height: 300, series: [{ points: shown.map(function (c) { return [c[0], c[1]]; }), cls: "lab-s1", label: "estimate" }],
           band: shown.map(function (c) { return [c[0], c[1] - 1.96 * c[2], c[1] + 1.96 * c[2]]; }),
-          refLines: isFinite(ref) ? [{ axis: "y", value: ref, cls: "lab-ref lab-ref-k", label: refName }] : [],
+          refLines: refs,
           xName: "paths", xLabel: "paths", xFmt: function (v) { return v >= 1000 ? fmt(v / 1000, 0) + "k" : fmt(v, 0); },
           yFmt: function (v) { return String(+v.toFixed(3)); }, label: "Running Monte Carlo estimate"
         });
@@ -793,7 +903,9 @@
         barrier: "barrier, " + (st.T * 252 < 24 ? "" : "daily ") + "monitored on the simulation grid" }[st.product];
       mcNote.textContent = (st.model === "heston"
         ? "Heston with the parameters calibrated on SPX (v0 " + fmt(st.heston.v0, 4) + ", κ " + fmt(st.heston.kappa, 2) + ", θ " + fmt(st.heston.theta, 4) +
-          ", ξ " + fmt(st.heston.xi, 2) + ", ρ " + fmt(st.heston.rho, 2) + "): fatter left tail and clustered volatility; the dashed line is Black-Scholes. "
+          ", ξ " + fmt(st.heston.xi, 2) + ", ρ " + fmt(st.heston.rho, 2) + "). Its smile gives a vol of " + fmt(100 * ivK, 1) + " % at K = " + st.K +
+          " (" + fmt(100 * ivATM, 1) + " % at K = 100) against " + fmt(100 * st.v, 1) + " % on the slider: Black-Scholes at that vol carries the smile, " +
+          "and what remains between it and the estimate is the dynamics. "
         : "") + "Estimate " + fmt(last[1], 4) + " ± " + fmt(1.96 * last[2], 4) + " (95 %) with " + last[0].toLocaleString("en") + " antithetic paths, " + what + ". " +
         (st.product === "barrier" ? "Orange dots: barrier hits." : st.product === "american" ? "Orange dots: exercise under the regression rule." : "");
     }
@@ -936,6 +1048,6 @@
   window.PricerWidget = {
     mountDesk: mountDesk, mountRisk: mountRisk, mountMix: mountMix, mountErrors: mountErrors,
     bs: bs, barrier: barrier, crr: crr, american: american, exerciseBoundary: exerciseBoundary, geoAsian: geoAsian,
-    levyAsian: levyAsian, asianMC: asianMC, simulate: simulate, payoffs: payoffs, convergence: convergence, greeks: greeks
+    levyAsian: levyAsian, asianMC: asianMC, hestonPrice: hestonPrice, impliedVol: impliedVol, simulate: simulate, payoffs: payoffs, convergence: convergence, greeks: greeks
   };
 })();

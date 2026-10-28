@@ -45,7 +45,7 @@ v0 0.0250 (true 0.0250), kappa 1.801 (1.8), theta 0.0398 (0.04), xi 0.748 (0.75)
 
 Full tables and charts: [`reports/calibration.md`](reports/calibration.md).
 
-**Tests**: 76, covering put-call parity (closed forms, Fourier, Monte Carlo), Monte Carlo convergence
+**Tests**: 78, covering put-call parity (closed forms, Fourier, Monte Carlo), Monte Carlo convergence
 (1/sqrt(N) error, closed forms within 4 standard errors), American >= European and the American call
 without dividend equal to the European, the geometric Asian against its closed form, barriers against
 Reiner-Rubinstein with the Broadie-Glasserman-Kou correction, parameter recovery for SSVI, SVI and

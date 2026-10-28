@@ -99,3 +99,30 @@ def test_longstaff_schwartz_matches_tree():
     for lsm, se, tree in run_js(expr):
         # 50 exercise dates against continuous exercise: LSM may sit slightly below the tree
         assert tree - 0.05 - 4 * se < lsm < tree + 4 * se
+
+
+SPX_HESTON = {"v0": 0.0228466, "kappa": 3.0892636, "theta": 0.0537246, "xi": 1.3077452, "rho": -0.6879607}
+
+
+def test_heston_fourier_matches_python():
+    from optlab import HestonParams, heston_price
+
+    h = HestonParams(**SPX_HESTON)
+    cases = [(100, 1.0, True), (119, 1.0, True), (85, 0.5, False), (110, 2.0, False)]
+    js = run_js("[" + ",".join(f"W.hestonPrice(100,{K},{T},0.04,0.01,{json.dumps(SPX_HESTON)},{str(c).lower()})"
+                               for K, T, c in cases) + "]")
+    for (K, T, call), price in zip(cases, js):
+        F, D = 100 * np.exp(0.03 * T), np.exp(-0.04 * T)
+        ref = float(heston_price(F, K, T, h, D, "call" if call else "put")[0])
+        assert price == pytest.approx(ref, abs=1e-6)
+
+
+def test_heston_monte_carlo_converges_to_fourier():
+    expr = ("(() => { const h = " + json.dumps(SPX_HESTON) + ";"
+            " const st = {product: 'european', call: true, model: 'heston', K: 119, T: 1, v: 0.2,"
+            " r: 0.04, q: 0.01, heston: h};"
+            " const c = W.convergence(W.payoffs(st, W.simulate(st, 40000, 252, 5)).pay, 100);"
+            " return [c[c.length - 1][1], c[c.length - 1][2], W.hestonPrice(100, 119, 1, 0.04, 0.01, h, true)]; })()")
+    mc, se, exact = run_js(expr)
+    # full-truncation Euler at daily steps: small bias on top of the noise
+    assert abs(mc - exact) < 4 * se + 0.02
