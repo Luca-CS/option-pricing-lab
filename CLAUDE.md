@@ -55,6 +55,11 @@ python -m venv .venv
   Keep path math free of double literals (`R(0.5)`), as FP64 runs at 1/32 rate on this card. Production defaults
   (float, Kahan float sums, `-prec-div=false -prec-sqrt=false -ftz=true`, block 512) come from the measured
   ablation; `__expf`/`__logf` stay off because they bias the Heston barrier by 0.13 SE.
+- **`optlab/gpu.py`** calls the CUDA engine from Python through `ctypes` (`build/Release/optlab_cuda_c.dll`, C API in
+  `cuda/src/capi.cpp`; the `_Request`/`_Result` structures mirror `capi.h` field by field) and falls back to the
+  NumPy pricers without the library, without a GPU, or outside the engine's cases. Engine errors are C++
+  exceptions turned into an error code, never `exit`: the engine runs inside the Python process.
+  `tests/test_gpu.py` skips the engine tests when the library or the GPU is missing.
 - **`space/app.py`** is a local Gradio front-end (needs `pip install gradio`), not deployed.
 
 ## Conventions

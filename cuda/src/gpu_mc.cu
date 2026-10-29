@@ -17,13 +17,16 @@
 
 #include "optlab_cuda/schemes.hpp"
 
-#define CUDA_CHECK(call)                                                                                 \
-    do {                                                                                                 \
-        const cudaError_t err_ = (call);                                                                 \
-        if (err_ != cudaSuccess) {                                                                       \
-            std::fprintf(stderr, "CUDA error %s:%d: %s\n", __FILE__, __LINE__, cudaGetErrorString(err_)); \
-            std::exit(1);                                                                                \
-        }                                                                                                \
+// Throws rather than exits: the engine also runs inside the Python process, through the C API (capi.cpp).
+#define CUDA_CHECK(call)                                                                                    \
+    do {                                                                                                    \
+        const cudaError_t err_ = (call);                                                                    \
+        if (err_ != cudaSuccess) {                                                                          \
+            char msg_[512];                                                                                 \
+            std::snprintf(msg_, sizeof msg_, "CUDA error %s:%d: %s", __FILE__, __LINE__,                    \
+                          cudaGetErrorString(err_));                                                        \
+            throw std::runtime_error(msg_);                                                                 \
+        }                                                                                                   \
     } while (0)
 
 namespace optlab {
@@ -366,6 +369,11 @@ std::string gpu_device_name() {
     char buf[256];
     std::snprintf(buf, sizeof(buf), "%s (sm_%d%d, %d SM)", p.name, p.major, p.minor, p.multiProcessorCount);
     return buf;
+}
+
+int gpu_count() {
+    int n = 0;
+    return cudaGetDeviceCount(&n) == cudaSuccess ? n : 0;  // no driver or no device: 0, not an error
 }
 
 }  // namespace optlab

@@ -43,4 +43,7 @@ McResult gpu_price_stored(const McRequest& rq, const GpuConfig& cfg = {}, GpuLau
 
 std::string gpu_device_name();
 
+// Number of CUDA devices; 0 when there is no device or no driver (never throws).
+int gpu_count();
+
 }  // namespace optlab

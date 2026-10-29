@@ -158,6 +158,24 @@ build/Release/ablation.exe                            # optimisation study (also
 To profile, run `ncu --set full -k regex:mc_kernel -o build/ncu_profile build/Release/profile.exe` from an
 administrator shell, unless GPU counters are open to all users.
 
+From Python, `optlab.gpu` loads the shared library `optlab_cuda_c` (built with the rest, found in `build/Release/`
+or through `$OPTLAB_CUDA_LIB`) with `ctypes`. It takes the library's own `Model` and `Market` objects and falls
+back to the NumPy pricers when there is no library, no GPU, or a case the engine does not cover: a curved
+market, a barrier other than down-and-out, or a Heston Asian. The result says which backend ran.
+
+```python
+from optlab import HestonModel, HestonParams, Market, gpu
+
+model = HestonModel(HestonParams(v0=0.0228, kappa=3.09, theta=0.0537, xi=1.31, rho=-0.688))
+res = gpu.barrier(model, Market.flat(100.0, r=0.04, q=0.01), K=100, H=80, T=1.0, n_paths=10_000_000, seed=1)
+res.price, res.stderr, res.backend     # backend "gpu", or "numpy" without a GPU; also "cpu": the C++ reference
+```
+
+The call adds about 0.4 ms to the kernel time. Note that a Heston price from the engine (QE) and one from NumPy
+(full-truncation Euler) differ by a scheme effect: 8.08 against 8.11 on this barrier. `tests/test_gpu.py` checks
+the bridge against closed forms, Fourier and the NumPy library (31 tests, 9 s), and skips the engine tests
+without the library or a GPU.
+
 ```cpp
 #include "optlab_cuda/gpu_mc.cuh"
 
@@ -180,6 +198,7 @@ optlab::McResult r = optlab::gpu_price(rq);         // r.out[0]: barrier, r.out[
 | `include/optlab_cuda/schemes.hpp` | path schemes and payoffs, shared by CPU and GPU |
 | `src/gpu_mc.cu`, `include/optlab_cuda/gpu_mc.cuh` | kernels, reduction, launch logic, study variants |
 | `src/cpu_mc.cpp` | double-precision multithreaded reference |
+| `src/capi.cpp`, `include/optlab_cuda/capi.h` | C interface of the shared library, for `optlab/gpu.py` |
 | `src/closed_forms.cpp` | Black-Scholes, geometric Asian, Reiner-Rubinstein barrier, BGK shift |
 | `tests/test_prices.cpp` | validation table, float against double, QE bias at 10^8 paths |
 | `bench/` | benchmark, optimisation study, NumPy timings, Nsight Compute target |

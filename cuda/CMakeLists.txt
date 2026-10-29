@@ -18,6 +18,12 @@ if(MSVC)  # cudart_static pulls LIBCMT while the targets use the /MD runtime
   target_link_options(optlab_cuda INTERFACE /NODEFAULTLIB:LIBCMT)
 endif()
 
+set_target_properties(optlab_cuda PROPERTIES POSITION_INDEPENDENT_CODE ON)  # linked into the shared library
+
+# C interface for Python (optlab/gpu.py, ctypes): a self-contained DLL / .so, the CUDA runtime linked statically.
+add_library(optlab_cuda_c SHARED src/capi.cpp)
+target_link_libraries(optlab_cuda_c PRIVATE optlab_cuda)
+
 add_executable(test_prices tests/test_prices.cpp)
 target_link_libraries(test_prices optlab_cuda)
 add_executable(bench bench/bench.cpp)

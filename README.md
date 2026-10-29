@@ -45,12 +45,13 @@ v0 0.0250 (true 0.0250), kappa 1.801 (1.8), theta 0.0398 (0.04), xi 0.748 (0.75)
 
 Full tables and charts: [`reports/calibration.md`](reports/calibration.md).
 
-**Tests**: 80, covering put-call parity (closed forms, Fourier, Monte Carlo), Monte Carlo convergence
+**Tests**: 111, covering put-call parity (closed forms, Fourier, Monte Carlo), Monte Carlo convergence
 (1/sqrt(N) error, closed forms within 4 standard errors), American >= European and the American call
 without dividend equal to the European, the geometric Asian against its closed form, barriers against
 Reiner-Rubinstein with the Broadie-Glasserman-Kou correction, parameter recovery for SSVI, SVI and
-Heston, the vanillas reproduced by Dupire local vol and by the SLV model, and the JavaScript of the
-demo page against the Python library (to 1e-9 on the closed forms).
+Heston, the vanillas reproduced by Dupire local vol and by the SLV model, the JavaScript of the
+demo page against the Python library (to 1e-9 on the closed forms), and the CUDA engine called from Python
+against the same references (skipped without a GPU).
 
 ## GPU Monte Carlo
 
@@ -60,7 +61,8 @@ within 4 standard errors. On an RTX 2070 Super, a Heston down-and-out call with 
 takes 91 ms, 165 times faster than the same code in double-precision C++ on 12 CPU threads. Float paths agree
 with double to 0.006 standard errors. The engine comes with a measured optimisation study (FP64, fast-math
 intrinsics rejected for a 0.13 SE bias, Kahan float sums, stored against fused paths) and a Nsight Compute
-profile: it found warps half idle in the QE step, and the fix cut the Heston kernel time by 31 %.
+profile: it found warps half idle in the QE step, and the fix cut the Heston kernel time by 31 %. From Python,
+`optlab.gpu` calls the engine through `ctypes` and falls back to the NumPy pricers without a GPU.
 
 ## Method
 
@@ -164,6 +166,7 @@ runs locally: `pip install gradio`, then `python space/app.py`.
 | `optlab/models.py` | path simulation for the four models |
 | `optlab/products.py` | Monte Carlo pricers, Longstaff-Schwartz |
 | `optlab/slv.py` | leverage function by the particle method |
+| `optlab/gpu.py` | Python bridge to the CUDA engine, NumPy fallback |
 | `optlab/data.py` | SPX chain download and cleaning |
 | `optlab/pipeline.py`, `scripts/` | calibration runs, report and charts |
 | `cuda/` | C++/CUDA Monte Carlo engine, benchmarks and optimisation study |
