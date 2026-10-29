@@ -155,23 +155,32 @@ template <typename R, bool Fast = false>
 OPTLAB_HD void qe_step(const PathConsts<R>& c, R& y, R& v, R zv, R zx) {
     const R m = c.theta + (v - c.theta) * c.E;
     const R psi = (v * c.c1 + c.c2) / (m * m);
-    R vn, K0;
+    // Martingale correction K0 = lin + w log(arg) - (K1 + K3/2) v when it exists (`finite`), K0p otherwise. The
+    // log is taken once after the branch: a warp whose lanes split between the branches would otherwise pay for
+    // both logs (Nsight Compute: 16 active threads of 32 on average in this kernel).
+    R vn, lin, w, arg;
+    bool finite;
     if (psi <= R(1.5)) {  // quadratic branch: v' = a (b + Zv)^2
         const R inv = R(2) / psi;
         const R b2 = inv - R(1) + m_sqrt(inv) * m_sqrt(m_max(inv - R(1), R(0)));
         const R a = m / (R(1) + b2), b = m_sqrt(b2);
         vn = a * (b + zv) * (b + zv);
-        K0 = c.A < R(1) / (R(2) * a)
-                 ? -c.A * b2 * a / (R(1) - R(2) * c.A * a) + R(0.5) * m_log<Fast>(R(1) - R(2) * c.A * a) -
-                       (c.K1 + R(0.5) * c.K3) * v
-                 : c.K0p;
+        arg = R(1) - R(2) * c.A * a;
+        finite = c.A < R(1) / (R(2) * a);
+        lin = -c.A * b2 * a / arg;
+        w = R(0.5);
     } else {  // exponential branch: mass p at zero, exponential tail
         const R p = (psi - R(1)) / (psi + R(1)), beta = (R(1) - p) / m;
-        // 1 - U computed as Phi(-Zv), exact in both tails (no 1 - U cancellation; |Z| <= 6.7 with Box-Muller)
-        const R U = m_ncdf(zv), one_minus_u = m_ncdf(-zv);
-        vn = U <= p ? R(0) : m_log<Fast>((R(1) - p) / one_minus_u) / beta;
-        K0 = c.A < beta ? -m_log<Fast>(p + beta * (R(1) - p) / (beta - c.A)) - (c.K1 + R(0.5) * c.K3) * v : c.K0p;
+        // 1 - U computed as Phi(-Zv), exact in both tails (no 1 - U cancellation; |Z| <= 6.7 with Box-Muller);
+        // U <= p is tested as 1 - U >= 1 - p, which saves the second normal cdf
+        const R one_minus_u = m_ncdf(-zv);
+        vn = one_minus_u >= R(1) - p ? R(0) : m_log<Fast>((R(1) - p) / one_minus_u) / beta;
+        arg = p + beta * (R(1) - p) / (beta - c.A);
+        finite = c.A < beta;
+        lin = R(0);
+        w = R(-1);
     }
+    const R K0 = finite ? lin + w * m_log<Fast>(arg) - (c.K1 + R(0.5) * c.K3) * v : c.K0p;
     y += c.mu_dt + K0 + c.K1 * v + c.K2 * vn + m_sqrt(m_max(c.K3 * v + c.K4 * vn, R(0))) * zx;
     v = vn;
 }

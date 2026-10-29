@@ -24,6 +24,9 @@ python -m venv .venv
   Benchmarks, from the repo root: `cuda/bench/bench_numpy.py` (venv) then `build\Release\bench.exe`;
   `build\Release\ablation.exe` (plus `ablation_ieee`, `ablation_fastmath`: same library, other nvcc math flags).
   Time the GPU only after a sustained warm-up (seconds of CPU work drop it to the 300 MHz idle clock).
+  Profiling: `ncu --set full -k regex:mc_kernel -o build/ncu_profile build\Release\profile.exe` from an
+  administrator shell (GPU counters are admin-only on this machine); read it with
+  `ncu -i build/ncu_profile.ncu-rep --page raw --csv --metrics ...` (`--page details` fails under the French locale).
 - Lint config: ruff, line length 120 (`pyproject.toml`). No build step for `docs/` (static, dependency-free JS).
 
 ## Architecture

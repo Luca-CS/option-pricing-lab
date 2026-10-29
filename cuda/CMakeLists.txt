@@ -22,6 +22,8 @@ add_executable(test_prices tests/test_prices.cpp)
 target_link_libraries(test_prices optlab_cuda)
 add_executable(bench bench/bench.cpp)
 target_link_libraries(bench optlab_cuda)
+add_executable(profile bench/profile.cpp)  # Nsight Compute target
+target_link_libraries(profile optlab_cuda)
 
 # Optimisation study: the same library compiled a second time with --use_fast_math, for one row of the ablation.
 add_library(optlab_cuda_fastmath STATIC src/cpu_mc.cpp src/gpu_mc.cu src/closed_forms.cpp)
