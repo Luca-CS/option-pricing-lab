@@ -32,7 +32,8 @@ struct Sums {
 };
 
 template <Model M, Product P>
-void run_block(const PathConsts<double>& c, std::uint64_t seed, int block, long long n_pairs, Sums& acc) {
+void run_block(const PathConsts<double>& c, std::uint64_t seed, int block, long long n_pairs, Sums& result) {
+    Sums acc;  // local, written back once: the per-thread results share cache lines (false sharing)
     std::seed_seq ss{static_cast<std::uint32_t>(seed), static_cast<std::uint32_t>(seed >> 32),
                      static_cast<std::uint32_t>(block)};
     StdNormals src{std::mt19937_64(ss), std::normal_distribution<double>()};
@@ -47,6 +48,7 @@ void run_block(const PathConsts<double>& c, std::uint64_t seed, int block, long 
             acc.s2[k] += out[k] * out[k];
         }
     }
+    result = acc;
 }
 
 using BlockFn = void (*)(const PathConsts<double>&, std::uint64_t, int, long long, Sums&);
