@@ -21,6 +21,9 @@ python -m venv .venv
 - CUDA engine (`cuda/`, needs CUDA 12.x and VS 2022 Build Tools; RTX 2070 Super, `sm_75`):
   `cmake -S cuda -B build -G "Visual Studio 17 2022" -A x64`, `cmake --build build --config Release`,
   `ctest --test-dir build -C Release`. `build\Release\test_prices.exe cpu|gpu|double|closed|qe-bias` runs one suite.
+  Benchmarks, from the repo root: `cuda/bench/bench_numpy.py` (venv) then `build\Release\bench.exe`;
+  `build\Release\ablation.exe` (plus `ablation_ieee`, `ablation_fastmath`: same library, other nvcc math flags).
+  Time the GPU only after a sustained warm-up (seconds of CPU work drop it to the 300 MHz idle clock).
 - Lint config: ruff, line length 120 (`pyproject.toml`). No build step for `docs/` (static, dependency-free JS).
 
 ## Architecture
@@ -46,7 +49,9 @@ python -m venv .venv
   steps, Andersen QE-M for Heston, in the log-return y = ln(S/S0)) as `__host__ __device__` templates on the real
   type, shared by the double CPU reference (`cpu_mc.cpp`) and the float/double GPU kernels (`gpu_mc.cu`). Philox
   subsequence = pair index, so prices depend only on (seed, N), not on grid, block size or launch chunking.
-  Keep path math free of double literals (`R(0.5)`), as FP64 runs at 1/32 rate on this card.
+  Keep path math free of double literals (`R(0.5)`), as FP64 runs at 1/32 rate on this card. Production defaults
+  (float, Kahan float sums, `-prec-div=false -prec-sqrt=false -ftz=true`, block 512) come from the measured
+  ablation; `__expf`/`__logf` stay off because they bias the Heston barrier by 0.13 SE.
 - **`space/app.py`** is a local Gradio front-end (needs `pip install gradio`), not deployed.
 
 ## Conventions

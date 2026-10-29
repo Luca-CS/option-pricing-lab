@@ -1,6 +1,10 @@
 // Path schemes shared by the CPU reference (double) and the GPU kernels (float or double), so that both run the
 // same algorithm by construction. Every path is simulated in the log-return y = ln(S_t / S0), which starts at 0:
 // in float this keeps about three more significant bits than x = ln S_t (about 4.6 at S0 = 100).
+//
+// Opt is a traits class with two compile-time switches used here:
+//   Opt::fast_math  hardware approximations __expf / __logf on the GPU (float only)
+//   Opt::legs       2 for antithetic pairs (Z, -Z), 1 for plain paths
 #pragma once
 
 #include <cmath>
@@ -15,21 +19,26 @@
 
 namespace optlab {
 
+struct SchemeOpt {
+    static constexpr bool fast_math = false;
+    static constexpr int legs = 2;
+};
+
 // Math functions dispatched on the real type, so that a template never promotes float to double by accident
-// (FP64 runs at 1/32 of FP32 on Turing). OPTLAB_FAST_INTRINSICS selects the hardware approximations on the GPU.
+// (FP64 runs at 1/32 of FP32 on Turing).
+template <bool Fast = false>
 OPTLAB_HD float m_exp(float x) {
-#if defined(__CUDA_ARCH__) && defined(OPTLAB_FAST_INTRINSICS)
-    return __expf(x);
-#elif defined(__CUDA_ARCH__)
+#ifdef __CUDA_ARCH__
+    if constexpr (Fast) return __expf(x);
     return expf(x);
 #else
     return std::exp(x);
 #endif
 }
+template <bool Fast = false>
 OPTLAB_HD float m_log(float x) {
-#if defined(__CUDA_ARCH__) && defined(OPTLAB_FAST_INTRINSICS)
-    return __logf(x);
-#elif defined(__CUDA_ARCH__)
+#ifdef __CUDA_ARCH__
+    if constexpr (Fast) return __logf(x);
     return logf(x);
 #else
     return std::log(x);
@@ -49,6 +58,7 @@ OPTLAB_HD float m_ncdf(float x) {
     return 0.5f * std::erfc(-x * 0.70710678f);
 #endif
 }
+template <bool Fast = false>
 OPTLAB_HD double m_exp(double x) {
 #ifdef __CUDA_ARCH__
     return ::exp(x);
@@ -56,6 +66,7 @@ OPTLAB_HD double m_exp(double x) {
     return std::exp(x);
 #endif
 }
+template <bool Fast = false>
 OPTLAB_HD double m_log(double x) {
 #ifdef __CUDA_ARCH__
     return ::log(x);
@@ -140,7 +151,7 @@ OPTLAB_HD R leg_payoff(int leg, R S, R K) {
 }
 
 // One QE-M step of (y, v) with independent normals zv (variance) and zx (log-spot).
-template <typename R>
+template <typename R, bool Fast = false>
 OPTLAB_HD void qe_step(const PathConsts<R>& c, R& y, R& v, R zv, R zx) {
     const R m = c.theta + (v - c.theta) * c.E;
     const R psi = (v * c.c1 + c.c2) / (m * m);
@@ -151,64 +162,69 @@ OPTLAB_HD void qe_step(const PathConsts<R>& c, R& y, R& v, R zv, R zx) {
         const R a = m / (R(1) + b2), b = m_sqrt(b2);
         vn = a * (b + zv) * (b + zv);
         K0 = c.A < R(1) / (R(2) * a)
-                 ? -c.A * b2 * a / (R(1) - R(2) * c.A * a) + R(0.5) * m_log(R(1) - R(2) * c.A * a) -
+                 ? -c.A * b2 * a / (R(1) - R(2) * c.A * a) + R(0.5) * m_log<Fast>(R(1) - R(2) * c.A * a) -
                        (c.K1 + R(0.5) * c.K3) * v
                  : c.K0p;
     } else {  // exponential branch: mass p at zero, exponential tail
         const R p = (psi - R(1)) / (psi + R(1)), beta = (R(1) - p) / m;
         // 1 - U computed as Phi(-Zv), exact in both tails (no 1 - U cancellation; |Z| <= 6.7 with Box-Muller)
         const R U = m_ncdf(zv), one_minus_u = m_ncdf(-zv);
-        vn = U <= p ? R(0) : m_log((R(1) - p) / one_minus_u) / beta;
-        K0 = c.A < beta ? -m_log(p + beta * (R(1) - p) / (beta - c.A)) - (c.K1 + R(0.5) * c.K3) * v : c.K0p;
+        vn = U <= p ? R(0) : m_log<Fast>((R(1) - p) / one_minus_u) / beta;
+        K0 = c.A < beta ? -m_log<Fast>(p + beta * (R(1) - p) / (beta - c.A)) - (c.K1 + R(0.5) * c.K3) * v : c.K0p;
     }
     y += c.mu_dt + K0 + c.K1 * v + c.K2 * vn + m_sqrt(m_max(c.K3 * v + c.K4 * vn, R(0))) * zx;
     v = vn;
 }
 
-// European under Black-Scholes, one exact step: pair averages of the four outputs for one normal z.
-template <typename R>
-OPTLAB_HD void bs_european_pair(const PathConsts<R>& c, R z, R out[kOutputs]) {
-    const R yp = c.bs_drift + c.bs_vol * z, ym = c.bs_drift - c.bs_vol * z;
-    const R sp = c.S0 * m_exp(yp), sm = c.S0 * m_exp(ym);
-    for (int k = 0; k < 3; ++k)
-        out[k] = R(0.5) * c.D * (leg_payoff(c.leg[k], sp, c.K[k]) + leg_payoff(c.leg[k], sm, c.K[k]));
-    out[3] = R(0.5) * (sp + sm);
+// European under Black-Scholes, one exact step: the outputs of one unit (pair, or single path) for one normal z.
+template <typename R, typename Opt = SchemeOpt>
+OPTLAB_HD void bs_european_unit(const PathConsts<R>& c, R z, R out[kOutputs]) {
+    R o[kOutputs] = {R(0), R(0), R(0), R(0)};
+    for (int a = 0; a < Opt::legs; ++a) {
+        const R S = c.S0 * m_exp<Opt::fast_math>(c.bs_drift + c.bs_vol * (a == 0 ? z : -z));
+        for (int k = 0; k < 3; ++k) o[k] += c.D * leg_payoff(c.leg[k], S, c.K[k]);
+        o[3] += S;
+    }
+    for (int k = 0; k < kOutputs; ++k) out[k] = Opt::legs == 2 ? R(0.5) * o[k] : o[k];
 }
 
-// One antithetic pair of paths on n_steps steps. Src::next4(R z[4]) supplies normals four at a time:
-// Black-Scholes uses one per step, Heston two (zv, zx). Normals left over at the end of a path are dropped.
-template <typename R, Model M, Product P, typename Src>
-OPTLAB_HD void path_pair(const PathConsts<R>& c, Src& src, R out[kOutputs]) {
-    R y[2] = {R(0), R(0)}, v[2] = {c.v0, c.v0};
-    R sum_s[2] = {R(0), R(0)}, sum_y[2] = {R(0), R(0)};
-    bool alive[2] = {true, true};
+// One unit (antithetic pair, or single path) on n_steps steps. Src::next4(R z[4]) supplies normals four at a
+// time: Black-Scholes uses one per step, Heston two (zv, zx). Normals left over at the end of a path are dropped.
+template <typename R, Model M, Product P, typename Opt = SchemeOpt, typename Src>
+OPTLAB_HD void path_unit(const PathConsts<R>& c, Src& src, R out[kOutputs]) {
+    constexpr int L = Opt::legs;
+    constexpr bool F = Opt::fast_math;
+    R y[L];
+    [[maybe_unused]] R v[L], sum_s[L], sum_y[L];  // used or not depending on (M, P)
+    [[maybe_unused]] bool alive[L];
+    for (int a = 0; a < L; ++a) y[a] = R(0), v[a] = c.v0, sum_s[a] = R(0), sum_y[a] = R(0), alive[a] = true;
     R z[4];
-    const int per_step = M == Model::Heston ? 2 : 1;
+    constexpr int per_step = M == Model::Heston ? 2 : 1;
     for (int i = 0; i < c.n_steps;) {
         src.next4(z);
         for (int j = 0; j + per_step <= 4 && i < c.n_steps; j += per_step, ++i) {
-            for (int a = 0; a < 2; ++a) {
+            for (int a = 0; a < L; ++a) {
                 const R sg = a == 0 ? R(1) : R(-1);
-                if (M == Model::Heston)
-                    qe_step(c, y[a], v[a], sg * z[j], sg * z[j + 1]);
+                if constexpr (M == Model::Heston)
+                    qe_step<R, F>(c, y[a], v[a], sg * z[j], sg * z[j + 1]);
                 else
                     y[a] += c.bs_drift + c.bs_vol * sg * z[j];
-                if (P == Product::Asian) {
-                    sum_s[a] += m_exp(y[a]);
+                if constexpr (P == Product::Asian) {
+                    sum_s[a] += m_exp<F>(y[a]);
                     sum_y[a] += y[a];
                 }
-                if (P == Product::Barrier) alive[a] = alive[a] && !(y[a] <= c.ln_h);
+                if constexpr (P == Product::Barrier) alive[a] = alive[a] && !(y[a] <= c.ln_h);
             }
         }
     }
     R o[kOutputs] = {R(0), R(0), R(0), R(0)};
-    for (int a = 0; a < 2; ++a) {
-        const R S = c.S0 * m_exp(y[a]);
-        if (P == Product::European) {
+    for (int a = 0; a < L; ++a) {
+        const R S = c.S0 * m_exp<F>(y[a]);
+        if constexpr (P == Product::European) {
             for (int k = 0; k < 3; ++k) o[k] += c.D * leg_payoff(c.leg[k], S, c.K[k]);
-        } else if (P == Product::Asian) {
+        } else if constexpr (P == Product::Asian) {
             o[0] += c.D * leg_payoff(c.leg[0], c.S0 * sum_s[a] * c.inv_n, c.K[0]);
-            o[1] += c.D * leg_payoff(c.leg[0], c.S0 * m_exp(sum_y[a] * c.inv_n), c.K[0]);
+            o[1] += c.D * leg_payoff(c.leg[0], c.S0 * m_exp<F>(sum_y[a] * c.inv_n), c.K[0]);
         } else {
             const R pay = c.D * leg_payoff(c.leg[0], S, c.K[0]);
             o[0] += alive[a] ? pay : R(0);
@@ -216,7 +232,7 @@ OPTLAB_HD void path_pair(const PathConsts<R>& c, Src& src, R out[kOutputs]) {
         }
         o[3] += S;
     }
-    for (int k = 0; k < kOutputs; ++k) out[k] = R(0.5) * o[k];
+    for (int k = 0; k < kOutputs; ++k) out[k] = L == 2 ? R(0.5) * o[k] : o[k];
 }
 
 }  // namespace optlab
