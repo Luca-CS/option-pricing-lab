@@ -98,6 +98,19 @@ exponential branches of QE, and each branch had its own logarithm for the martin
 cdfs on the exponential side. Taking that logarithm once after the branch, and testing U ≤ p as 1 − U ≥ 1 − p
 (one cdf), cut the Heston kernel from 130.4 to 90.4 ms (×1.44) with the price unchanged to six decimals.
 
+| Heston kernel, profiled before and after (0.99×10^6 paths × 252 steps, clock locked at 1.6 GHz by ncu) | Before | After |
+|---|---|---|
+| Duration (ms) | 16.02 | 11.02 |
+| Warp instructions executed | 2.74×10^9 | 2.08×10^9 (-24 %) |
+| Active threads per warp instruction (of 32) | 16.1 | 20.3 |
+| Issue slots used | 69 % | 76 % |
+| Stall on instruction fetch (`no_instruction`, cycles per issue) | 2.19 | 0.49 |
+| Registers per thread | 63 | 59 |
+
+The fix removed a quarter of the instructions and most of the instruction-fetch stalls, since the divergent code
+is shorter. The remaining divergence (20 of 32 threads) is intrinsic to QE: the square roots of the quadratic side
+and the logarithm of the exponential side. The BS kernels profile identically before and after.
+
 ## Method
 
 - **Schemes.** Black-Scholes is simulated with exact steps in the log-return y = ln(S/S0). Heston uses Andersen's
