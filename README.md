@@ -52,6 +52,16 @@ Reiner-Rubinstein with the Broadie-Glasserman-Kou correction, parameter recovery
 Heston, the vanillas reproduced by Dupire local vol and by the SLV model, and the JavaScript of the
 demo page against the Python library (to 1e-9 on the closed forms).
 
+## GPU Monte Carlo
+
+[`cuda/`](cuda/README.md) is a C++/CUDA Monte Carlo engine for Black-Scholes and Heston (Andersen's QE scheme):
+European, Asian and daily barrier options, validated against closed forms, Fourier and the Python library
+within 4 standard errors. On an RTX 2070 Super, a Heston down-and-out call with 10^7 paths × 252 daily steps
+takes 91 ms, 165 times faster than the same code in double-precision C++ on 12 CPU threads. Float paths agree
+with double to 0.006 standard errors. The engine comes with a measured optimisation study (FP64, fast-math
+intrinsics rejected for a 0.13 SE bias, Kahan float sums, stored against fused paths) and a Nsight Compute
+profile: it found warps half idle in the QE step, and the fix cut the Heston kernel time by 31 %.
+
 ## Method
 
 ### Products and pricers
@@ -156,6 +166,7 @@ runs locally: `pip install gradio`, then `python space/app.py`.
 | `optlab/slv.py` | leverage function by the particle method |
 | `optlab/data.py` | SPX chain download and cleaning |
 | `optlab/pipeline.py`, `scripts/` | calibration runs, report and charts |
+| `cuda/` | C++/CUDA Monte Carlo engine, benchmarks and optimisation study |
 | `docs/` | demo page (GitHub Pages) |
 | `space/` | Gradio app, run locally |
 | `tests/` | pytest suite |
