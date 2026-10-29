@@ -18,6 +18,9 @@ python -m venv .venv
   `scripts/make_report.py` writes `reports/calibration.md` and figures; `scripts/build_widget_data.py`
   regenerates `docs/pricer-data.js` from `results/spx_calibration.json`. `--source spx` needs a snapshot
   from `scripts/download_spx.py` in `data/raw/`.
+- CUDA engine (`cuda/`, needs CUDA 12.x and VS 2022 Build Tools; RTX 2070 Super, `sm_75`):
+  `cmake -S cuda -B build -G "Visual Studio 17 2022" -A x64`, `cmake --build build --config Release`,
+  `ctest --test-dir build -C Release`. `build\Release\test_prices.exe cpu|gpu|double|closed|qe-bias` runs one suite.
 - Lint config: ruff, line length 120 (`pyproject.toml`). No build step for `docs/` (static, dependency-free JS).
 
 ## Architecture
@@ -39,6 +42,11 @@ python -m venv .venv
 - **`docs/`** is the GitHub Pages demo. `docs/lab.js` is an independent JavaScript re-implementation (closed
   forms, CRR, American PDE, Heston Fourier, Monte Carlo with Andersen's QE scheme for Heston in `simulate`,
   LSM) exposed as `window.PricerWidget`; changes to its pricers should keep `tests/test_widget_js.py` passing.
+- **`cuda/`** is a C++/CUDA Monte Carlo engine. `include/optlab_cuda/schemes.hpp` holds the path schemes (exact BS
+  steps, Andersen QE-M for Heston, in the log-return y = ln(S/S0)) as `__host__ __device__` templates on the real
+  type, shared by the double CPU reference (`cpu_mc.cpp`) and the float/double GPU kernels (`gpu_mc.cu`). Philox
+  subsequence = pair index, so prices depend only on (seed, N), not on grid, block size or launch chunking.
+  Keep path math free of double literals (`R(0.5)`), as FP64 runs at 1/32 rate on this card.
 - **`space/app.py`** is a local Gradio front-end (needs `pip install gradio`), not deployed.
 
 ## Conventions
