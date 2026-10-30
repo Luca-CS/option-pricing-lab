@@ -41,6 +41,11 @@ class ShiftedSurface:
     def w(self, k, T):
         return self.derivatives(k, T)[0]
 
+    def theta(self, T):
+        """ATM total implied variance (used by the SLV leverage calibration)."""
+        T = np.asarray(T, dtype=float)
+        return T * (np.sqrt(self.base.theta(T) / T) + self.shift) ** 2
+
     def iv(self, k, T):
         return np.sqrt(np.maximum(self.w(k, T), 0.0) / np.asarray(T, dtype=float))
 
@@ -49,6 +54,13 @@ class ShiftedSurface:
         w, wk, wkk, wT = self.derivatives(k, T)
         g = g_function(w, wk, wkk, np.broadcast_to(k, w.shape))
         return np.clip(wT / np.maximum(g, 1e-6), floor, cap)
+
+
+def _recalibrated_slv(ctx, surface, horizon: float, n_particles: int, seed: int):
+    from ..slv import calibrate_leverage
+    T_max = min(max(horizon, 1 / 12), ctx.t_max)
+    return calibrate_leverage(ctx.heston, surface, ctx.market, T_max, mix=ctx.slv.mix, n_particles=n_particles,
+                              rng=seed)
 
 
 @dataclass
@@ -75,10 +87,13 @@ def _diff(up, down, scale):
 
 def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, fmt=None, valuation=None,
            n_paths: int = 200_000, seed: int = 2026, batch: int | None = 25_000, smoothing: float = 0.005,
-           h_spot: float = 0.01, h_vol: float = 0.01, T_obs: float | None = None) -> Greeks:
+           h_spot: float = 0.01, h_vol: float = 0.01, T_obs: float | None = None, slv_vega: bool = False,
+           n_particles: int = 200_000) -> Greeks:
     """Delta and vega of a program under `model` ('bs', 'lv', 'slv', 'heston') or by replication on the surface
     (method 'replication'), with central differences. Monte Carlo digitals are smoothed (ramp of relative width
-    `smoothing`); the bias this adds to the price is measured on the same paths."""
+    `smoothing`); the bias this adds to the price is measured on the same paths. With `slv_vega`, the SLV
+    leverage is recalibrated (particle method, `n_particles`, same seed up and down) on each shifted surface:
+    about half a minute per calibration at 200,000 particles."""
     import time
     fmt = fmt or Note()
     valuation = valuation or ctx.valuation
@@ -101,9 +116,9 @@ def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, f
         elif model == "lv":
             m = LocalVolModel(surface)
         else:
-            if vol_shift:
+            if vol_shift and not (model == "slv" and slv_vega):
                 return None
-            m = ctx.model(model, horizon)
+            m = _recalibrated_slv(ctx, surface, horizon, n_particles, seed) if vol_shift else ctx.model(model, horizon)
         return price_many(program, m, market, [params or {}], fmt, n_paths, seed, batch, smoothing=eps,
                           valuation=valuation, initial_fixing=S0)[0]
 
@@ -124,6 +139,7 @@ def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, f
     if vu is not None:
         vega, vega_se = _diff(vu, vd, 0.01 / (2 * h_vol))
     else:
-        note = f"no vega under {model.upper()}: a vol bump needs a recalibration of the model"
+        note = f"no vega under {model.upper()}: a vol bump needs a recalibration of the model" + (
+            " (pass slv_vega=True to recalibrate the leverage)" if model == "slv" else "")
     seconds["vega"] = time.perf_counter() - t0
     return Greeks(delta, delta_se, vega, vega_se, eps, bias, bias_se, method, model, seconds, note)

@@ -21,7 +21,7 @@ from ..products import MCResult
 from .cashflows import Note, Swap, pair_averages
 from .compiler import compile_sheet
 from .context import PricingContext
-from .greeks import ShiftedSurface
+from .greeks import ShiftedSurface, _recalibrated_slv
 from .policy import RULES, decide
 from .multiasset import BasketContext, basket_scenarios
 from .pricer import basket_history
@@ -136,7 +136,7 @@ class Book:
 
     def price(self, ctx: PricingContext | None = None, model: str | None = None, n_paths: int = 200_000,
               seed: int = 2026, batch: int | None = 25_000, smoothing: float = 0.0, market=None, surface=None,
-              initial_fixing: float | dict | None = None) -> BookResult:
+              initial_fixing: float | dict | None = None, sim_model=None) -> BookResult:
         """Value of the book. `model` forces one model for every position ('bs', 'lv', 'heston', 'slv', or
         'surface' for an all-European book); `market`/`surface` override the context (bumps)."""
         t0 = time.perf_counter()
@@ -181,8 +181,9 @@ class Book:
                                          initial_fixing)
         else:
             (name,) = d_names
-            scenarios = simulated_scenarios(self._model(d.model, ctx, surface, horizon), market, name, times,
-                                            n_paths, seed, batch, initial_fixing, history.get(name, {}))
+            sim = sim_model or self._model(d.model, ctx, surface, horizon)
+            scenarios = simulated_scenarios(sim, market, name, times, n_paths, seed, batch, initial_fixing,
+                                            history.get(name, {}))
         evaluators = [Evaluator(it["program"], it["timeline"], it["pos"].params, smoothing) for it in items]
         pos_pairs = [[] for _ in items]
         for scenario in scenarios:
@@ -215,7 +216,7 @@ class Book:
 
     def greeks(self, ctx: PricingContext | None = None, model: str | None = None, n_paths: int = 200_000,
                seed: int = 2026, batch: int | None = 25_000, smoothing: float = 0.005, h_spot: float = 0.01,
-               h_vol: float = 0.01) -> dict:
+               h_vol: float = 0.01, slv_vega: bool = False, n_particles: int = 200_000) -> dict:
         """Book delta (currency per +1 % spot) and vega (per +1 vol point) by central bumps of the shared
         simulation, per position and in total, with standard errors. Products keep their initial fixing."""
         ctx = ctx or PricingContext.from_calibration()
@@ -233,12 +234,18 @@ class Book:
         down = self.price(market=ctx.market.scaled(S0 * (1 - h_spot)), **kw)
         out["delta"] = dict(zip(("positions", "positions_se", "total", "total_se"),
                                 bump(up, down, 0.01 / (2 * h_spot))))
-        if d.model in ("slv", "heston"):
+        if d.model == "heston" or (d.model == "slv" and not slv_vega):
             out["vega"] = None
             out["note"] = f"no vega under {d.model.upper()}: a vol bump needs a recalibration of the model"
         else:
-            vu = self.price(surface=ShiftedSurface(ctx.surface, h_vol), **kw)
-            vd = self.price(surface=ShiftedSurface(ctx.surface, -h_vol), **kw)
+            su, sd = ShiftedSurface(ctx.surface, h_vol), ShiftedSurface(ctx.surface, -h_vol)
+            mu = md = None
+            if d.model == "slv":
+                horizon = max(it["profile"].horizon for it in items)
+                mu = _recalibrated_slv(ctx, su, horizon, n_particles, seed)
+                md = _recalibrated_slv(ctx, sd, horizon, n_particles, seed)
+            vu = self.price(surface=su, sim_model=mu, **kw)
+            vd = self.price(surface=sd, sim_model=md, **kw)
             out["vega"] = dict(zip(("positions", "positions_se", "total", "total_se"),
                                    bump(vu, vd, 0.01 / (2 * h_vol))))
         out["names"] = [p.name for p in self.positions]

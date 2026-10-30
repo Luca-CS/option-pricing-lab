@@ -96,12 +96,13 @@ def _pricer(product: CompiledProduct, ctx: PricingContext, fmt, decision: Pricin
 
 def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None = None, control="default",
           n_paths: int = 200_000, batch: int = 25_000, seed: int = 2026, control_paths: int | None = None,
-          fixings: dict | None = None, with_greeks: bool = False) -> Quote:
+          fixings: dict | None = None, with_greeks: bool = False, slv_vega: bool = False) -> Quote:
     """Price a term sheet with the policy model. In 'coupon' mode the coupon is solved so that the note price is
     100 - margin, or the swap upfront is -margin (zero upfront paid, the margin kept by the bank); in 'upfront' mode
     the coupon is given and the result is the note price, or the swap upfront paid by the investor (leg value +
     margin). A running product (strike date before the valuation date) needs its past `fixings`. `with_greeks`
-    adds delta and vega with the policy model, on the same paths, at the solved coupon."""
+    adds delta and vega with the policy model, on the same paths, at the solved coupon (under SLV, the vega needs
+    `slv_vega=True`: the leverage is recalibrated on the shifted surfaces)."""
     t0 = time.perf_counter()
     ctx = ctx or PricingContext.from_calibration()
     product = compile_sheet(sheet, ctx.valuation)
@@ -145,6 +146,6 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
             raise ValueError("Greeks of running products are not supported yet")
         from .greeks import greeks
         g = greeks(product.program, ctx, decision.model, decision.method, params, fmt, product.valuation,
-                   decision.n_paths, decision.seed, decision.batch)
+                   decision.n_paths, decision.seed, decision.batch, slv_vega=slv_vega)
     return Quote(product, prof, decision, fmt.name, result, target, rate, rate_se, upfront, margin, ctrl,
                  time.perf_counter() - t0, warnings, g)

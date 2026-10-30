@@ -269,8 +269,9 @@ runs locally: `pip install gradio`, then `python space/app.py`.
 - **Structured products.** Deterministic rates, no holidays in the calendar, worst-of baskets under local vol
   or Black-Scholes only (no SLV across names, no correlation skew),
   maturities up to the last calibrated one (2.14 years; beyond, the surface is extrapolated and the SLV
-  leverage is not fitted, and the pricer says so). Vega is a parallel shift of the implied vols, so it is not
-  available under SLV, whose leverage would need a recalibration.
+  leverage is not fitted, and the pricer says so). Vega is a parallel shift of the implied vols; under SLV it
+  recalibrates the leverage on each shifted surface (`slv_vega=True`, a few seconds per calibration), which on a
+  European payoff gives back the smile vega (-0.3136 ± 0.0055 against -0.3106 by replication).
 - **Performance.** Pure NumPy, single-threaded: a full SPX calibration with its validation runs in
   tens of minutes, most of it in the Monte Carlo checks.
 

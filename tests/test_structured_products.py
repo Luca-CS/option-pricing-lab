@@ -367,3 +367,17 @@ def test_quote_script_carries_the_solved_coupon():
     assert cpn == pytest.approx(q.coupon_rate * q.product.coupon_scale, rel=1e-15)
     again = price(q.script, BS_CTX.model("bs"), BS_CTX.market, n_paths=2_000, seed=1, valuation=q.product.valuation)
     assert np.isfinite(again.price)
+
+
+def test_slv_vega_by_recalibration_matches_the_smile_vega_of_a_european_product():
+    # a calibrated SLV reprices vanillas, so on a European payoff its vega is the vega of the smile
+    from optlab.structured.greeks import greeks
+    p = compile_sheet(preset("reverse_convertible", **{"downside.barrier": 0.7, "wrapper.solve": "upfront"}),
+                      SPX.valuation)
+    rep = greeks(p.program, SPX, "surface", "replication")
+    slv = greeks(p.program, SPX, "slv", n_paths=N_MC, slv_vega=True, n_particles=50_000)
+    assert abs(slv.vega - rep.vega) <= 4 * slv.vega_se + 0.01
+    assert abs(slv.delta - rep.delta) <= 4 * slv.delta_se + 0.005
+    q = quote(preset("phoenix", **{"general.maturity_months": 12}), SPX, control=None, n_paths=20_000,
+              batch=10_000, with_greeks=True)
+    assert q.greeks.vega is None and "slv_vega=True" in q.greeks.note
