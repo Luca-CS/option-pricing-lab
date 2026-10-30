@@ -119,3 +119,64 @@ def test_quote_table_reads_like_a_term_sheet():
     text = q.table()
     assert "coupon solved" in text and "policy: european -> replication" in text and "2027-11-03" in text
     assert S0 == 100.0 and VOL == 0.2
+
+
+# --- test 3: barrier reverse convertible, daily knock-in ---
+
+def test_barrier_reverse_convertible_matches_bgk_shifted_closed_form():
+    from _structured_refs import FLAT, R, Q
+    from optlab import barrier_price, barrier_shift_discrete
+    sheet = preset("barrier_reverse_convertible", **{"downside.barrier": 0.8, "coupon.rate": 0.06,
+                                                     "wrapper.solve": "upfront"})
+    p = compile_sheet(sheet, BS_CTX.valuation)
+    tl, pays = times(p)
+    (fix,) = tl.windows.values()
+    T = float(tl.event_times[-1])
+    H = barrier_shift_discrete(80.0, S0, VOL, T / (len(fix) - 1))
+    dip = barrier_price(S0, 100.0, H, T, R, Q, VOL, "down-in", "put") / float(FLAT.D(T))
+    cpn = p.program.param_values["cpn"]
+    ref = 100 * cpn * sum(float(FLAT.D(t)) for t in pays) + float(FLAT.D(pays[-1])) * (100 - dip)
+    mc = price(p.program, BS_CTX.model("bs"), FLAT, n_paths=N_MC, seed=31, batch=25_000, valuation=p.valuation)
+    assert within(mc, ref, floor=0.005), (mc.price, mc.stderr, ref)
+    # the daily barrier costs more than the same barrier observed at maturity only
+    euro = rc_reference(sheet.replace(**{"downside.observation": "european"}))[2]
+    assert ref < euro
+
+
+def test_brc_policy_is_slv_with_a_local_vol_control():
+    q = quote(preset("barrier_reverse_convertible"), SPX, n_paths=40_000, batch=20_000)
+    assert (q.decision.method, q.decision.model, q.decision.control) == ("monte_carlo", "slv", "lv")
+    assert q.result.price == pytest.approx(98.0, abs=1e-10)
+    assert q.coupon_rate > 0 and q.control is not None
+
+
+# --- geared put (low strike put geared at 1 / K) ---
+
+@pytest.mark.parametrize("K", [0.8, 0.6])
+def test_geared_put_matches_closed_form(K):
+    from _structured_refs import FLAT, put_fwd
+    sheet = preset("reverse_convertible", **{"downside.type": "geared_put", "downside.strike": K,
+                                             "coupon.rate": 0.03, "wrapper.solve": "upfront"})
+    p = compile_sheet(sheet, BS_CTX.valuation)
+    tl, pays = times(p)
+    T = float(tl.event_times[-1])
+    cpn = p.program.param_values["cpn"]
+    ref = 100 * cpn * sum(float(FLAT.D(t)) for t in pays) + float(FLAT.D(pays[-1])) * (
+        100 - 100 / K * put_fwd(K * S0, T) / S0)
+    mc = price(p.program, BS_CTX.model("bs"), FLAT, n_paths=N_MC, seed=41, valuation=p.valuation)
+    assert within(mc, ref), (mc.price, mc.stderr, ref)
+    rep = replication_result(p.program, tl, BS_CTX.surface, FLAT, T)
+    assert rep.price == pytest.approx(ref, abs=1e-8)
+
+
+def test_gearing_makes_the_loss_continuous_at_the_strike():
+    sheet = preset("reverse_convertible", **{"downside.type": "geared_put", "downside.strike": 0.8})
+    p = compile_sheet(sheet, BS_CTX.valuation)
+    from optlab.structured.scenario import Scenario
+    from optlab.structured.script.evaluator import Evaluator
+    tl, _ = times(p)
+    perf = np.array([0.4, 0.79999, 0.8, 1.2])
+    paths = np.tile(100 * perf[:, None], (1, len(tl.sim_times)))
+    out = Evaluator(p.program, tl).run(Scenario("SPX", tl.sim_times, paths, 100.0))
+    red = out.flows[(tl.pay_times[-1], "redemption")]
+    np.testing.assert_allclose(red, [50.0, 100 - 100 * 0.00001 / 0.8, 100.0, 100.0])
