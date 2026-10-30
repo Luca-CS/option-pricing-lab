@@ -6,7 +6,7 @@ import datetime as dt
 from dataclasses import dataclass
 
 from .dates import add_business_days, add_months, adjust, as_date, schedule, year_fraction
-from .schema import TermSheet, TermSheetError
+from .schema import TermSheet
 from .script.nodes import Program
 from .script.parser import parse
 from .script.printer import number
@@ -54,8 +54,6 @@ def _observations(sheet: TermSheet, strike: dt.date):
 def compile_sheet(sheet: TermSheet, valuation) -> CompiledProduct:
     valuation = as_date(valuation)
     strike = sheet.get("general.strike_date") or valuation
-    if strike < valuation:
-        raise TermSheetError("the strike date is before the valuation date: past fixings are not supported yet")
     g = sheet.get
     coupon, upside, downside = g("coupon.type"), g("upside.type", "none"), g("downside.type")
     autocall = sheet.mask.name == "autocall"

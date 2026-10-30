@@ -11,7 +11,7 @@ from .cashflows import Note, Swap
 from .compiler import CompiledProduct, compile_sheet
 from .context import PricingContext
 from .policy import PricingDecision, decide
-from .pricer import StructuredResult, price_many
+from .pricer import StructuredResult, history_times, price_many
 from .profile import ProductProfile, profile
 from .replication import replication_result
 from .schema import TermSheet
@@ -48,34 +48,40 @@ class Quote:
 
 
 def _pricer(product: CompiledProduct, ctx: PricingContext, fmt, decision: PricingDecision, prof: ProductProfile,
-            model_name: str, method: str, n_paths: int | None = None):
+            model_name: str, method: str, n_paths: int | None = None, fixings: dict | None = None):
     program, valuation = product.program, product.valuation
-    timeline = build_timeline(program, Clock(valuation))
+    clock = Clock(valuation)
+    timeline = build_timeline(program, clock)
+    history = history_times(fixings, program.underlying_names[0], clock)
 
     def run(param_sets):
         if method == "replication":
             T_obs = prof.observation_times[-1] if prof.observation_times else timeline.horizon
-            return [replication_result(program, timeline, ctx.surface, ctx.market, T_obs, fmt, p) for p in param_sets]
+            return [replication_result(program, timeline, ctx.surface, ctx.market, T_obs, fmt, p, history=history)
+                    for p in param_sets]
         model = ctx.model(model_name, max(product.horizon, 1 / 365))
         return price_many(program, model, ctx.market, param_sets, fmt, n_paths or decision.n_paths, decision.seed,
-                          decision.batch, valuation=valuation)
+                          decision.batch, valuation=valuation, fixings=fixings)
     return run
 
 
 def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None = None, control="default",
-          n_paths: int = 200_000, batch: int = 25_000, seed: int = 2026, control_paths: int | None = None) -> Quote:
+          n_paths: int = 200_000, batch: int = 25_000, seed: int = 2026, control_paths: int | None = None,
+          fixings: dict | None = None) -> Quote:
     """Price a term sheet with the policy model. In 'coupon' mode the coupon is solved so that the note price is
     100 - margin, or the swap upfront is -margin (zero upfront paid, the margin kept by the bank); in 'upfront' mode
     the coupon is given and the result is the note price, or the swap upfront paid by the investor (leg value +
-    margin)."""
+    margin). A running product (strike date before the valuation date) needs its past `fixings`."""
     t0 = time.perf_counter()
     ctx = ctx or PricingContext.from_calibration()
     product = compile_sheet(sheet, ctx.valuation)
+    if product.strike_date < product.valuation and sheet.get("wrapper.solve") == "coupon":
+        raise ValueError("a running product has a fixed coupon: price it with wrapper.solve = 'upfront'")
     prof = profile(product.program, build_timeline(product.program, Clock(product.valuation)))
     decision = decide(prof, ctx.t_max, model, control, n_paths, batch, seed)
     fmt = Note(sheet.get("wrapper.issuer_spread")) if sheet.get("wrapper.format") == "note" else Swap()
     margin = 100 * sheet.get("wrapper.margin")
-    run = _pricer(product, ctx, fmt, decision, prof, decision.model, decision.method)
+    run = _pricer(product, ctx, fmt, decision, prof, decision.model, decision.method, fixings=fixings)
     cpn = product.coupon_param
     target = rate = rate_se = upfront = None
     if sheet.get("wrapper.solve") == "coupon":
@@ -92,7 +98,7 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
     ctrl = None
     if decision.control:
         ctrl_run = _pricer(product, ctx, fmt, decision, prof, decision.control, "monte_carlo",
-                           control_paths or decision.n_paths)
+                           control_paths or decision.n_paths, fixings)
         (ctrl,) = ctrl_run([params])
     warnings = list(decision.warnings)
     if rate is not None and rate < 0:

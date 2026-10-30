@@ -13,7 +13,7 @@ from ..products import MCResult
 from .cashflows import Note, pair_averages
 from .scenario import simulated_scenarios
 from .script.evaluator import Evaluator
-from .script.nodes import Program
+from .script.nodes import DateLit, Program
 from .script.parser import parse
 from .script.timeline import Clock, Timeline, build_timeline
 from .script.validate import validate
@@ -49,16 +49,20 @@ def _program(script) -> Program:
 
 def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_paths: int = 100_000, seed=0,
                batch: int | None = None, smoothing: float = 0.0, valuation=None, calendar=None, notional=None,
-               check_redemption: bool = True, initial_fixing: float | None = None,
+               check_redemption: bool = True, initial_fixing: float | None = None, fixings: dict | None = None,
                **sim_kwargs) -> list[StructuredResult]:
-    """Price one script for several parameter sets on the same paths (common random numbers)."""
+    """Price one script for several parameter sets on the same paths (common random numbers). `fixings` gives the
+    past fixings of a running product as {underlying: {date: level}}; flows paid up to the valuation date are
+    excluded from the value."""
     t_start = time.perf_counter()
     fmt = fmt or Note()
     program = _program(script)
     if len(program.underlyings) != 1:
         raise ValueError("this version prices single-underlying scripts")
     name = program.underlyings[0].name
-    timeline: Timeline = build_timeline(program, Clock(valuation, calendar))
+    clock = Clock(valuation, calendar)
+    timeline: Timeline = build_timeline(program, clock)
+    history = history_times(fixings, name, clock)
     evaluators = [Evaluator(program, timeline, p, smoothing, check_redemption) for p in param_sets]
     notionals = [float(notional if notional is not None else ev.params.get("N", 1.0)) for ev in evaluators]
     pairs = [[] for _ in evaluators]
@@ -67,7 +71,7 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
     red = [{} for _ in evaluators]
     t_sim = t_eval = 0.0
     scenarios = simulated_scenarios(model, market, name, timeline.sim_times, n_paths, seed, batch, initial_fixing,
-                                    **sim_kwargs)
+                                    history, **sim_kwargs)
     while True:
         t0 = time.perf_counter()
         scenario = next(scenarios, None)
@@ -86,6 +90,8 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
         t_eval += time.perf_counter() - t0
     seconds = time.perf_counter() - t_start
     warnings = []
+    if any(t <= 0 for t in timeline.pay_times if t is not None):
+        warnings.append("some flows are already paid (on or before the valuation date): they are not in the value")
     if smoothing:
         warnings.append(f"digital smoothing active (eps = {smoothing:.2%}): prices are biased, see the solver notes")
     results = []
@@ -104,6 +110,22 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
             redemption_probabilities={t: v / n_paths for t, v in red[i].items()}, warnings=warnings,
             pairs=d))
     return results
+
+
+def history_times(fixings: dict | None, name: str, clock: Clock) -> dict:
+    """Past fixings of one underlying as {time: level}."""
+    if not fixings:
+        return {}
+    unknown = set(fixings) - {name}
+    if unknown:
+        raise KeyError(f"fixings given for {', '.join(sorted(unknown))}, the script observes {name}")
+    out = {}
+    for d, level in fixings.get(name, {}).items():
+        t = clock.time(DateLit(str(d)))
+        if t > 0:
+            raise ValueError(f"fixing on {d} is after the valuation date {clock.valuation}")
+        out[t] = float(level)
+    return out
 
 
 def price(script, model: Model, market: Market, fmt=None, n_paths: int = 100_000, seed=0, batch: int | None = None,

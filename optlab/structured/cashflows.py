@@ -4,7 +4,8 @@
   curve D(t) exp(-s t). Price in % of N.
 - Swap (upfront): no exchange of notional; the structured leg is the coupons, the upside and (redemption - N) at
   the redemption payment date, discounted on the risk-free curve. Upfront in % of N, investor's view.
-On the same paths, Note(s=0) - Swap = 100 E[D(redemption payment time)].
+On the same paths, Note(s=0) - Swap = 100 E[D(redemption payment time)]. Flows paid on or before the valuation date
+(t <= 0, a product already running) are not part of the value.
 """
 
 from __future__ import annotations
@@ -29,6 +30,8 @@ class Note:
     def present_values(self, flows: BatchFlows, market: Market, notional: float) -> np.ndarray:
         pv = 0.0
         for (t, _tag), f in flows.flows.items():
+            if t <= 0:
+                continue
             pv = pv + market.D(t) * f if self.spread == 0 else pv + self.discount(market, t) * f
         return np.broadcast_to(pv, (flows.n_paths,)).astype(float)
 
@@ -40,9 +43,11 @@ class Swap:
     def present_values(self, flows: BatchFlows, market: Market, notional: float) -> np.ndarray:
         pv = 0.0
         for (t, _tag), f in flows.flows.items():
-            pv = pv + market.D(t) * f
+            if t > 0:
+                pv = pv + market.D(t) * f
         for t, w in flows.redemption_weights.items():
-            pv = pv - notional * market.D(t) * w
+            if t > 0:
+                pv = pv - notional * market.D(t) * w
         return np.broadcast_to(pv, (flows.n_paths,)).astype(float)
 
 
