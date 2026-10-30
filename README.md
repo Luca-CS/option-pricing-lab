@@ -45,7 +45,7 @@ v0 0.0250 (true 0.0250), kappa 1.801 (1.8), theta 0.0398 (0.04), xi 0.748 (0.75)
 
 Full tables and charts: [`reports/calibration.md`](reports/calibration.md).
 
-**Tests**: 302, covering put-call parity (closed forms, Fourier, Monte Carlo), Monte Carlo convergence
+**Tests**: 305, covering put-call parity (closed forms, Fourier, Monte Carlo), Monte Carlo convergence
 (1/sqrt(N) error, closed forms within 4 standard errors), American >= European and the American call
 without dividend equal to the European, the geometric Asian against its closed form, barriers against
 Reiner-Rubinstein with the Broadie-Glasserman-Kou correction, parameter recovery for SSVI, SVI and
@@ -117,7 +117,8 @@ Beyond single products:
 - **Book.** `Book([Position(...), ...])` prices positions (term sheets, scripts or solved quotes, long or short) on
   one shared simulation over the union of their dates, so the book error accounts for the correlation between
   positions (a reverse convertible plus the put it is short is a bond, with zero error), and bumps that
-  simulation for book Greeks.
+  simulation for book Greeks; with a basket context it mixes single names and worst-ofs, with a delta and a vega
+  per underlying.
 - **Funded swap.** A swap can carry a floating funding leg (single curve, ACT/360, plus a spread) that stops at
   the autocall; without spread or payment lag it equals the note minus par path by path.
 - **Worst-of.** Up to five correlated underlyings, each on its own model and forward curve (`worst(...)` in the
@@ -266,7 +267,7 @@ runs locally: `pip install gradio`, then `python space/app.py`.
 - **Rates and dividends** are deterministic, and dividends enter as a continuous yield implied from the
   forwards (no discrete dividends).
 - **Structured products.** Deterministic rates, no holidays in the calendar, worst-of baskets under local vol
-  or Black-Scholes only (no SLV across names, no correlation skew), books on one underlying,
+  or Black-Scholes only (no SLV across names, no correlation skew),
   maturities up to the last calibrated one (2.14 years; beyond, the surface is extrapolated and the SLV
   leverage is not fitted, and the pricer says so). Vega is a parallel shift of the implied vols, so it is not
   available under SLV, whose leverage would need a recalibration.
