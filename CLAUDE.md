@@ -12,6 +12,8 @@ python -m venv .venv
 .venv/Scripts/python -m pytest                          # full suite, ~10 min (mostly SLV in test_calibration.py)
 ```
 
+- Structured products: `.venv/Scripts/python -m pytest -q tests/test_structured_*.py` (about a minute);
+  `scripts/structured_examples.py [--quick]` prints the autocall model-risk table, timings and example quotes.
 - `tests/test_widget_js.py` runs `docs/lab.js` under `node` and compares it to the Python library; it is
   skipped when `node` is not on PATH.
 - Calibration pipeline: `scripts/run_calibration.py --source simulated|spx` writes `results/*.json`;
@@ -60,6 +62,17 @@ python -m venv .venv
   NumPy pricers without the library, without a GPU, or outside the engine's cases. Engine errors are C++
   exceptions turned into an error code, never `exit`: the engine runs inside the Python process.
   `tests/test_gpu.py` skips the engine tests when the library or the GPU is missing.
+- **`optlab/structured/`** prices structured products in three layers. Engine: a payoff script language
+  (`script/`: hand-written lexer and recursive-descent parser, AST in `nodes.py`, printer, `validate`, `timeline`,
+  vectorised `evaluator` with float masks: `x = e` under a mask m is `m*e + (1-m)*x`, `pay` adds `m*alive*e`,
+  `terminate` multiplies `alive` by `1-m`), `Scenario` batches from `simulate` (one batch = `default_rng(seed)`,
+  so scripts reproduce `products.py` bit for bit; several = `SeedSequence(seed).spawn`), `Note`/`Swap` wrappers,
+  `dates.py` (Mon-Fri calendar). Builder: `schema.py` (sections, fields with `visible_if`, masks `autocall` and
+  `bullet`, `TermSheet`, `describe()` for a front end), `compiler.py` (term sheet → script), `presets.py`.
+  Analysis: `profile.py` classifies the AST (european, path_dependent, callable), `policy.py` maps the class to a
+  model (european → `replication.py` on the SVI smile; otherwise SLV Monte Carlo with an LV control),
+  `solve.py` (coupon affine on common random numbers), `quote.py`, `greeks.py`, `report.py`. Independent
+  references for the tests are in `tests/_structured_refs.py` (closed forms, autocall backward quadrature).
 - **`space/app.py`** is a local Gradio front-end (needs `pip install gradio`), not deployed.
 
 ## Conventions

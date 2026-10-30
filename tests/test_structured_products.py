@@ -358,3 +358,12 @@ def test_quote_with_greeks_uses_the_policy_model():
     q = quote(preset("phoenix", **{"general.maturity_months": 12}), SPX, control=None, with_greeks=True,
               n_paths=20_000, batch=10_000)
     assert q.greeks.model == "slv" and q.greeks.vega is None and "recalibration" in q.table()
+
+
+def test_quote_script_carries_the_solved_coupon():
+    from optlab.structured.script.parser import parse
+    q = quote(preset("reverse_convertible"), BS_CTX, control=None)
+    cpn = parse(q.script).param_values["cpn"]
+    assert cpn == pytest.approx(q.coupon_rate * q.product.coupon_scale, rel=1e-15)
+    again = price(q.script, BS_CTX.model("bs"), BS_CTX.market, n_paths=2_000, seed=1, valuation=q.product.valuation)
+    assert np.isfinite(again.price)

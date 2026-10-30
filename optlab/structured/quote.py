@@ -15,6 +15,8 @@ from .pricer import StructuredResult, history_times, price_many
 from .profile import ProductProfile, profile
 from .replication import replication_result
 from .schema import TermSheet
+from .script.nodes import Param, Program
+from .script.printer import to_text
 from .script.timeline import Clock, build_timeline
 from .solve import combine, solve_affine
 
@@ -42,6 +44,16 @@ class Quote:
             return None
         se = np.hypot(self.result.stderr, self.control.stderr)
         return (self.result.price - self.control.price) / se if se > 0 else float("inf")
+
+    @property
+    def script(self) -> str:
+        """The product's script with the solved coupon written in."""
+        if self.coupon_rate is None or self.product.coupon_param is None:
+            return self.product.script
+        cpn = self.coupon_rate * self.product.coupon_scale
+        p = self.product.program
+        params = tuple(Param(x.name, cpn, x.line) if x.name == self.product.coupon_param else x for x in p.params)
+        return to_text(Program(p.underlyings, params, p.events))
 
     def table(self) -> str:
         from .report import quote_table

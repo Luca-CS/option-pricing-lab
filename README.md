@@ -64,6 +64,54 @@ intrinsics rejected for a 0.13 SE bias, Kahan float sums, stored against fused p
 profile: it found warps half idle in the QE step, and the fix cut the Heston kernel time by 31 %. From Python,
 `optlab.gpu` calls the engine through `ctypes` and falls back to the NumPy pricers without a GPU.
 
+## Structured products
+
+[`optlab/structured/`](optlab/structured) prices equity structured products (autocalls Athena and Phoenix,
+reverse convertibles and barrier reverse convertibles, airbags, capital-protected notes) as a note or as a swap,
+on top of a small payoff scripting language:
+
+- **Script language.** A hand-written recursive-descent parser turns a text script (`underlying`, `param`,
+  `event DATE pay DATE ... end`, `if/else`, `pay ... as coupon|upside|redemption`, `terminate`, `lowest` and
+  `highest` windows over business days) into an AST; visitors validate it (errors carry the line and column),
+  list the dates to simulate, classify the product and evaluate it on paths with float masks. On the same
+  paths the scripts reproduce `european_mc` and `barrier_mc` bit for bit under the four models.
+- **Term-sheet builder.** A declarative schema of sections (General, Wrapper, Autocall, Coupon, Upside,
+  Downside) where a product mask (`autocall` or `bullet`) exposes the relevant sections and fields that
+  depend on other choices appear only when they apply; a compiler turns the term sheet into the script, the
+  readable representation of the product. Calendar: Monday to Friday, modified following, T+5 payments,
+  ACT/365F.
+- **Pricing policy.** The model follows the product: a payoff that depends on the final fixing only is
+  replicated on the SVI smile (one-dimensional integral against the implied density, exact on linear pieces,
+  refined around strikes and barriers, no Monte Carlo noise); path-dependent and autocallable products go to
+  SLV Monte Carlo, with local vol as a model-risk control. By default the coupon is solved for a target price
+  (note at 100 - margin, swap at zero upfront); the upfront mode prices a given coupon.
+
+Validation under Black-Scholes, within 4 standard errors of independent references: closed forms for reverse
+convertibles, geared puts, airbags, digitals and call spreads (replication to 1e-8); Broadie-Glasserman-Kou
+for the daily knock-in (97.3591 ± 0.0182 against 97.3615); a backward quadrature on a log-spot grid with
+memory and knock-in states for the autocalls (Phoenix with memory 101.5366 ± 0.0161 against 101.5487).
+
+**Autocall model risk** (Phoenix 2 years, quarterly, autocall 100 %, coupon barrier 70 %, European knock-in
+60 %, no memory, note at 98 %, 200,000 paths):
+
+| | Black-Scholes (ATM vol) | Local vol | Heston | SLV |
+|---|---|---|---|---|
+| Coupon solved (% p.a.) | 2.90 ± 0.02 | 6.07 ± 0.06 | 4.22 ± 0.05 | 5.12 ± 0.05 |
+| Price at the SLV coupon (%) | 99.48 | 97.58 | 98.41 | 98.00 |
+| Called at the first date | 52.6 % | 65.3 % | 68.9 % | 65.6 % |
+| Expected life (years) | 0.72 | 0.53 | 0.53 | 0.54 |
+
+```python
+from optlab.structured import preset, quote
+
+q = quote(preset("phoenix", **{"coupon.barrier": 0.65}), with_greeks=True)   # SPX calibration by default
+print(q.table())                  # policy and reason, coupon solved ± SE, control model, flows by date
+print(q.script)                   # the generated script, with the solved coupon
+```
+
+`python scripts/structured_examples.py` prints the model-risk table, timings and example quotes (about five
+minutes at 200,000 paths).
+
 ## Method
 
 ### Products and pricers
@@ -168,6 +216,7 @@ runs locally: `pip install gradio`, then `python space/app.py`.
 | `optlab/slv.py` | leverage function by the particle method |
 | `optlab/gpu.py` | Python bridge to the CUDA engine, NumPy fallback |
 | `optlab/data.py` | SPX chain download and cleaning |
+| `optlab/structured/` | structured products: script language, term-sheet builder, policy, pricers |
 | `optlab/pipeline.py`, `scripts/` | calibration runs, report and charts |
 | `cuda/` | C++/CUDA Monte Carlo engine, benchmarks and optimisation study |
 | `docs/` | demo page (GitHub Pages) |
@@ -198,6 +247,10 @@ runs locally: `pip install gradio`, then `python space/app.py`.
   quotes on barriers or forward-start options, which free data do not provide.
 - **Rates and dividends** are deterministic, and dividends enter as a continuous yield implied from the
   forwards (no discrete dividends).
+- **Structured products.** One underlying for now, deterministic rates, no holidays in the calendar,
+  maturities up to the last calibrated one (2.14 years; beyond, the surface is extrapolated and the SLV
+  leverage is not fitted, and the pricer says so). Vega is a parallel shift of the implied vols, so it is not
+  available under SLV, whose leverage would need a recalibration.
 - **Performance.** Pure NumPy, single-threaded: a full SPX calibration with its validation runs in
   tens of minutes, most of it in the Monte Carlo checks.
 
