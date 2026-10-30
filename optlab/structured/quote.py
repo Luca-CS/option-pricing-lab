@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .cashflows import Note, Swap
+from .cashflows import FundedSwap, Note, Swap, funding_periods
 from .compiler import CompiledProduct, compile_sheet
 from .context import PricingContext
 from .policy import PricingDecision, decide
@@ -60,6 +60,19 @@ class Quote:
         return quote_table(self)
 
 
+def wrapper(sheet: TermSheet, product: CompiledProduct):
+    """Note (issuer spread), Swap (upfront only) or FundedSwap (floating leg until redemption) for a sheet."""
+    if sheet.get("wrapper.format") == "note":
+        return Note(sheet.get("wrapper.issuer_spread"))
+    if sheet.get("wrapper.funding") != "floating":
+        return Swap()
+    g = sheet.get
+    periods = funding_periods(product.strike_date, g("general.maturity_months"), g("wrapper.funding_frequency_months"),
+                              product.valuation, g("general.convention"), g("general.pay_lag"))
+    tl = build_timeline(product.program, Clock(product.valuation))
+    return FundedSwap(g("wrapper.funding_spread"), periods, tuple(float(t) for t in tl.event_times))
+
+
 def _pricer(product: CompiledProduct, ctx: PricingContext, fmt, decision: PricingDecision, prof: ProductProfile,
             model_name: str, method: str, n_paths: int | None = None, fixings: dict | None = None):
     program, valuation = product.program, product.valuation
@@ -93,7 +106,7 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
         raise ValueError("a running product has a fixed coupon: price it with wrapper.solve = 'upfront'")
     prof = profile(product.program, build_timeline(product.program, Clock(product.valuation)))
     decision = decide(prof, ctx.t_max, model, control, n_paths, batch, seed)
-    fmt = Note(sheet.get("wrapper.issuer_spread")) if sheet.get("wrapper.format") == "note" else Swap()
+    fmt = wrapper(sheet, product)
     margin = 100 * sheet.get("wrapper.margin")
     run = _pricer(product, ctx, fmt, decision, prof, decision.model, decision.method, fixings=fixings)
     cpn = product.coupon_param

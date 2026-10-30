@@ -58,9 +58,10 @@ class Position:
         else:
             sheet = None
             program = validate(parse(product) if isinstance(product, str) else product)
-        fmt = self.fmt or (sheet.get("wrapper.format") if sheet is not None else "note")
-        spread = sheet.get("wrapper.issuer_spread", 0.0) if sheet is not None else 0.0
-        return program, (Note(spread or 0.0) if fmt == "note" else Swap())
+        if sheet is not None and self.fmt is None:
+            from .quote import wrapper
+            return program, wrapper(sheet, compile_sheet(sheet, valuation))
+        return program, (Swap() if self.fmt == "swap" else Note())
 
 
 @dataclass

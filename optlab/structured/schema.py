@@ -55,6 +55,12 @@ SECTIONS = {s.name: s for s in [
         Field("format", "choice", "note", "Format", choices=("note", "swap")),
         Field("issuer_spread", "number", 0.0, "Issuer funding spread", "per annum", minimum=-0.05, maximum=0.2,
               visible_if=_v("wrapper.format", "note")),
+        Field("funding", "choice", "none", "Funding leg", choices=("none", "floating"),
+              visible_if=_v("wrapper.format", "swap")),
+        Field("funding_spread", "number", 0.0, "Funding spread", "per annum", minimum=-0.05, maximum=0.2,
+              visible_if=(("wrapper.format", ("swap",)), ("wrapper.funding", ("floating",)))),
+        Field("funding_frequency_months", "int", 3, "Funding frequency", "months", minimum=1,
+              visible_if=(("wrapper.format", ("swap",)), ("wrapper.funding", ("floating",)))),
         Field("solve", "choice", "coupon", "Solve for", choices=("coupon", "upfront")),
         Field("margin", "number", 0.02, "Margin", "of notional", minimum=-0.5, maximum=0.5),
     )),
@@ -202,7 +208,7 @@ class TermSheet:
 
     def _check(self):
         m = self.get("general.maturity_months")
-        for freq in ("coupon.frequency_months", "autocall.frequency_months"):
+        for freq in ("coupon.frequency_months", "autocall.frequency_months", "wrapper.funding_frequency_months"):
             f = self.get(freq)
             if f is not None and m % f:
                 raise TermSheetError(f"the maturity ({m} months) must be a multiple of {freq} ({f} months)")

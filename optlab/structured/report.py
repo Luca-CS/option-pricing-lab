@@ -32,10 +32,17 @@ def _price(res) -> str:
     return f"{res.price:.4f} +/- {res.stderr:.4f} % ({res.n_paths:,} paths)"
 
 
+def _format(sheet, fmt: str) -> str:
+    if fmt == "swap" and sheet.get("wrapper.funding") == "floating":
+        return (f"swap with a floating funding leg + {1e4 * sheet.get('wrapper.funding_spread'):.0f} bp every "
+                f"{sheet.get('wrapper.funding_frequency_months')}M until redemption")
+    return fmt
+
+
 def quote_table(q) -> str:
     sheet = q.product.sheet
     lines = [f"{sheet.mask.label} on {sheet.get('general.underlying')}, {sheet.get('general.maturity_months')}M, "
-             f"{q.fmt}, strike {q.product.strike_date}, maturity {q.product.maturity}",
+             f"{_format(sheet, q.fmt)}, strike {q.product.strike_date}, maturity {q.product.maturity}",
              f"policy: {q.decision.label}", f"  why: {q.profile.description}; {q.decision.reason}"]
     if q.coupon_rate is not None:
         aim = f"note price {q.target:.2f} %" if q.fmt == "note" else f"swap upfront {q.target:.2f} % (zero paid)"
