@@ -180,3 +180,51 @@ def test_gearing_makes_the_loss_continuous_at_the_strike():
     out = Evaluator(p.program, tl).run(Scenario("SPX", tl.sim_times, paths, 100.0))
     red = out.flows[(tl.pay_times[-1], "redemption")]
     np.testing.assert_allclose(red, [50.0, 100 - 100 * 0.00001 / 0.8, 100.0, 100.0])
+
+
+# --- test 4: upside (call, call spread, digital) and the airbag ---
+
+def upside_reference(sheet, T, T_pay):
+    from _structured_refs import FLAT, call_fwd, prob_below, put_fwd
+    g = sheet.get
+    up, kind = 0.0, g("upside.type")
+    if kind == "call":
+        up = g("upside.participation") * call_fwd(g("upside.strike") * S0, T) / S0
+    elif kind == "call_spread":
+        up = g("upside.participation") * (call_fwd(g("upside.strike") * S0, T) - call_fwd(g("upside.cap") * S0, T)) / S0
+    elif kind == "digital":
+        up = g("upside.digital_amount") * (1 - prob_below(g("upside.strike") * S0, T))
+    loss = 0.0
+    if g("downside.type") == "geared_put":
+        K = g("downside.strike")
+        loss = put_fwd(K * S0, T) / S0 / K
+    return 100 * float(FLAT.D(T_pay)) * (1 + up - loss)
+
+
+@pytest.mark.parametrize("name, changes", [
+    ("airbag", {}),
+    ("airbag", {"downside.strike": 0.7, "upside.participation": 0.8}),
+    ("capital_protected", {}),
+    ("capital_protected", {"upside.type": "call_spread", "upside.strike": 1.0, "upside.cap": 1.4,
+                           "upside.participation": 1.0}),
+    ("capital_protected", {"upside.type": "digital", "upside.strike": 1.05, "upside.digital_amount": 0.12}),
+])
+def test_upside_products_match_closed_forms(name, changes):
+    sheet = preset(name, **changes)
+    p = compile_sheet(sheet, BS_CTX.valuation)
+    tl, pays = times(p)
+    T = float(tl.event_times[-1])
+    ref = upside_reference(sheet, T, pays[-1])
+    mc = price(p.program, BS_CTX.model("bs"), BS_CTX.market, n_paths=N_MC, seed=51, valuation=p.valuation)
+    assert within(mc, ref), (mc.price, mc.stderr, ref)
+    q = quote(sheet, BS_CTX, control=None)
+    assert q.decision.method == "replication" and q.coupon_rate is None
+    assert q.upfront == pytest.approx(ref, abs=1e-8)
+
+
+def test_airbag_quote_on_spx_in_swap_format():
+    sheet = preset("airbag", **{"wrapper.format": "swap"})
+    q = quote(sheet, SPX, n_paths=N_MC)
+    assert q.decision.method == "replication"
+    assert q.upfront == pytest.approx(q.result.price + 2.0, abs=1e-12)  # leg value plus the margin
+    assert abs(q.control_gap_se) < 4

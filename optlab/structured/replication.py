@@ -115,7 +115,7 @@ def nodes(f, surface, market: Market, T: float, n_cells: int = 4_000, levels: in
 
 
 def replication_result(program, timeline: Timeline, surface, market: Market, T_obs: float, fmt=None, params=None,
-                       notional=None, n_cells: int = 4_000, levels: int = 4):
+                       notional=None, n_cells: int = 4_000, levels: int = 6):
     """Price on the surface. The numerical error is the change when the coarse grid is halved."""
     from .pricer import StructuredResult
 
