@@ -82,7 +82,7 @@ def test_round_trip_print_parse():
 @pytest.mark.parametrize("src", [
     "a - (b - c)", "(a - b) - c", "-(a + b) * c", "a / (b * c)", "a * -b", "--a",
     "not (a < b and c > d) or e == f", "(a < b) < c", "a < (b < c)", "not not a", "(a or b) and c",
-    "max(a, min(b, -c)) / abs(log(exp(a)))", "1e-05 * a + 0.1 + 3",
+    "max(a, min(b, -c)) / abs(log(exp(a)))", "1e-05 * a + 0.1 + 3", "worst(a, b, c) - best(a, -b)",
     "lowest(SPX, t=0, t=1.5, n=252) / highest(SPX, 2026-10-27, 2027-10-27)",
 ])
 def test_expression_round_trip(src):
@@ -104,7 +104,8 @@ def test_printer_parenthesises_by_precedence():
 @pytest.mark.parametrize("script, line, message", [
     ("underlying SPX\nevent t=1 pay t=1\n  pay x as redemption\nend\n", 3, "'x' is used before it is assigned"),
     ("underlying SPX\nevent t=1\n  pay 1 as redemption\nend\n", 3, "without a payment date"),
-    ("underlying SPX\nunderlying SX5E\nevent t=1\nend\n", 2, "only 1 underlying"),
+    ("".join(f"underlying U{i}\n" for i in range(6)) + "event t=1\nend\n", 6, "at most 5 underlyings"),
+    ("underlying SPX\nunderlying SPX\nevent t=1\nend\n", 2, "declared twice"),
     ("underlying SPX\nevent t=1\nend\nevent t=0.5\nend\n", 4, "strictly increasing"),
     ("underlying SPX\nevent t=1\nend\nevent 2027-01-01\nend\n", 4, "cannot be mixed"),
     ("underlying SPX\nevent t=1 pay t=1\n  pay 1 as bonus\nend\n", 3, "unknown flow tag"),
@@ -127,6 +128,7 @@ def test_validation_errors_have_line_numbers(script, line, message):
     ("underlying SPX\nevent t=1\n  x = 1\n", 4, 1, "missing 'end'"),
     ("underlying SPX\nevent t=1\n  x = 1 $ 2\nend\n", 3, 9, "unexpected character"),
     ("underlying SPX\nevent t=1\n  x = max(1)\nend\n", 3, 7, "takes 2 argument"),
+    ("underlying SPX\nevent t=1\n  x = worst(1)\nend\n", 3, 7, "takes at least 2 argument"),
 ])
 def test_syntax_errors_have_line_and_column(script, line, col, message):
     with pytest.raises(ScriptError, match=message) as err:
@@ -241,3 +243,10 @@ end
     out = run(script, [[110.0, 1.0], [90.0, 1.0]])
     np.testing.assert_array_equal(out.flows[(1.0, "coupon")], [0, 1])
     np.testing.assert_array_equal(out.flows[(2.0, "coupon")], [0, 5])
+
+
+def test_worst_and_best_take_any_number_of_arguments():
+    script = "underlying SPX\nevent t=1 pay t=1\n  pay worst(SPX, 95, 120) + 1000 * best(SPX, 95, 50, 101)" \
+             " as redemption\nend\n"
+    out = run(script, [[90.0], [110.0]])
+    np.testing.assert_array_equal(out.flows[(1.0, "redemption")], [90 + 101_000, 95 + 110_000])

@@ -10,6 +10,7 @@ Grammar (one statement per line, blocks closed by `end`):
     cmp       := arith [ (< <= > >= ==) arith ] ;  arith := term { (+ -) term } ;  term := unary { (* /) unary }
     unary     := - unary | primary
     primary   := NUMBER | NAME | ( expr ) | FUNC ( expr {, expr} ) | lowest|highest ( NAME , WHEN , WHEN [, n = INT] )
+    FUNC      := min | max (2 args) | abs | exp | log (1 arg) | worst | best (2 or more, e.g. worst-of baskets)
 """
 
 from __future__ import annotations
@@ -208,8 +209,10 @@ class Parser:
             while self.accept("OP", ","):
                 args.append(self.expr())
             self.expect("OP", ")")
-            if len(args) != FUNCTIONS[tok.text]:
-                raise self.error(f"{tok.text} takes {FUNCTIONS[tok.text]} argument(s), got {len(args)}", tok)
+            arity = FUNCTIONS[tok.text]
+            if (arity is None and len(args) < 2) or (arity is not None and len(args) != arity):
+                expected = "at least 2" if arity is None else arity
+                raise self.error(f"{tok.text} takes {expected} argument(s), got {len(args)}", tok)
             return Call(tok.text, tuple(args), tok.line)
         raise self.error(f"expected an expression, found {tok.text!r}" if tok.text else "expected an expression")
 

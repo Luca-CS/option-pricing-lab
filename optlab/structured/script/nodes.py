@@ -143,5 +143,5 @@ class Program(Node):
 
 
 TAGS = ("coupon", "upside", "redemption")
-FUNCTIONS = {"min": 2, "max": 2, "abs": 1, "exp": 1, "log": 1}
+FUNCTIONS = {"min": 2, "max": 2, "abs": 1, "exp": 1, "log": 1, "worst": None, "best": None}  # None: 2 or more
 WINDOWS = ("lowest", "highest")

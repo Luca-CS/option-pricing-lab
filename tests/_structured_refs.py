@@ -177,3 +177,38 @@ def autocall_reference(sheet, market=FLAT, vol=VOL, valuation="2026-10-27", dx=0
         if k > 0:
             W = propagate(W, dates[k - 1], dates[k])
     return float(propagate(W, val, dates[0], from_x=0.0)[0, 0])
+
+
+# --- worst-of of two names under Black-Scholes ---
+
+def _log_params(T, vol, r, q):
+    return (r - q - 0.5 * vol**2) * T, vol * np.sqrt(T)
+
+
+def worst_digital(b, T, vols, rho, r, qs):
+    """P(min(S1_T / S1_0, S2_T / S2_0) >= b): bivariate normal."""
+    from scipy.stats import multivariate_normal
+    d = [(m - np.log(b)) / s for m, s in (_log_params(T, v, r, q) for v, q in zip(vols, qs))]
+    return float(multivariate_normal(mean=[0, 0], cov=[[1, rho], [rho, 1]]).cdf(d))
+
+
+def worst_put(K, T, vols, rho, r, qs):
+    """E[(K - min(X1, X2))+], X = S_T / S_0, by conditioning on the first name: given x1, X2 is lognormal and
+    (K - min(x1, X2))+ is (K - x1) + (x1 - X2)+ when x1 < K, (K - X2)+ otherwise."""
+    from scipy.integrate import quad
+    (m1, s1), (m2, s2) = (_log_params(T, v, r, q) for v, q in zip(vols, qs))
+    s2c = s2 * np.sqrt(1 - rho**2)
+
+    def put2(c, z):  # E[(c - X2)+ | z1 = z]
+        fwd = np.exp(m2 + rho * s2 * z + 0.5 * s2c**2)
+        return float(black_price(fwd, c, 1.0, s2c, 1.0, "put")) if s2c > 0 else max(c - fwd, 0.0)
+
+    def f(z):
+        x1 = np.exp(m1 + s1 * z)
+        inner = (K - x1) + put2(x1, z) if x1 < K else put2(K, z)
+        return inner * norm.pdf(z)
+
+    z_star = (np.log(K) - m1) / s1
+    lo = quad(f, -12, z_star, limit=200, epsabs=1e-13)[0]
+    hi = quad(f, z_star, 12, limit=200, epsabs=1e-13)[0]
+    return lo + hi

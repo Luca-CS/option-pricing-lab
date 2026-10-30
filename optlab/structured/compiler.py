@@ -91,17 +91,20 @@ def compile_sheet(sheet: TermSheet, valuation) -> CompiledProduct:
     def trigger(j: int) -> str:
         return f"trigger - {j} * step_down" if j and "step_down" in params else "trigger"
 
-    lines = [f"underlying {g('general.underlying')}"]
+    names = sheet.underlyings
+    basket = len(names) > 1
+    lines = [f"underlying {n}" for n in names]
     lines += [f"param {k} = {number(v)}" for k, v in params.items()]
-    lines += ["", f"event {strike}", f"  S0 = {g('general.underlying')}"]
+    lines += ["", f"event {strike}"]
+    lines += [f"  S0_{n} = {n}" for n in names] if basket else [f"  S0 = {names[0]}"]
     if memory:
         lines.append("  missed = 0")
     lines.append("end")
-    und = g("general.underlying")
+    perf_expr = f"worst({', '.join(f'{n} / S0_{n}' for n in names)})" if basket else f"{names[0]} / S0"
     for o, role in obs.items():
         final, call = role.get("final", False), role.get("call")
         needs_perf = coupon == "conditional" and role.get("coupon") or call is not None or final
-        body = [f"perf = {und} / S0"] if needs_perf else []
+        body = [f"perf = {perf_expr}"] if needs_perf else []
         if role.get("coupon"):
             if coupon == "fixed":
                 body.append("pay N * cpn as coupon")
@@ -130,8 +133,11 @@ def compile_sheet(sheet: TermSheet, valuation) -> CompiledProduct:
             elif downside == "geared_put":
                 body.append("pay N - N * max(put_strike - perf, 0) / put_strike as redemption")
             else:
-                if g("downside.observation") == "daily":
-                    body.append(f"knocked_in = lowest({und}, {strike}, {o}) < ki_barrier * S0")
+                if g("downside.observation") == "daily" and basket:
+                    lows = ", ".join(f"lowest({n}, {strike}, {o}) / S0_{n}" for n in names)
+                    body.append(f"knocked_in = worst({lows}) < ki_barrier")
+                elif g("downside.observation") == "daily":
+                    body.append(f"knocked_in = lowest({names[0]}, {strike}, {o}) < ki_barrier * S0")
                 else:
                     body.append("knocked_in = perf < ki_barrier")
                 body += ["if knocked_in then", "  pay N - N * max(put_strike - perf, 0) as redemption", "else",

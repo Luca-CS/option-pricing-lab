@@ -15,9 +15,12 @@ class ProductProfile:
     has_windows: bool
     early_termination: bool
     horizon: float
+    underlyings: tuple = ()
 
     @property
     def description(self) -> str:
+        if len(self.underlyings) > 1:
+            return f"basket of {len(self.underlyings)} names ({', '.join(self.underlyings)}), {self.product_class}"
         if self.product_class == "callable":
             return "early termination (autocall): the payoff depends on the path up to the call date"
         if self.product_class == "path_dependent":
@@ -67,4 +70,4 @@ def profile(program: Program, timeline: Timeline) -> ProductProfile:
         cls = "path_dependent"
     else:
         cls = "european"
-    return ProductProfile(cls, tuple(times), windows, terminate, timeline.horizon)
+    return ProductProfile(cls, tuple(times), windows, terminate, timeline.horizon, program.underlying_names)

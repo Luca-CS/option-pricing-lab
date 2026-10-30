@@ -11,6 +11,7 @@ from .cashflows import FundedSwap, Note, Swap, funding_periods
 from .compiler import CompiledProduct, compile_sheet
 from .context import PricingContext
 from .policy import PricingDecision, decide
+from .multiasset import BasketContext
 from .pricer import StructuredResult, history_times, price_many
 from .profile import ProductProfile, profile
 from .replication import replication_result
@@ -78,14 +79,16 @@ def _pricer(product: CompiledProduct, ctx: PricingContext, fmt, decision: Pricin
     program, valuation = product.program, product.valuation
     clock = Clock(valuation)
     timeline = build_timeline(program, clock)
-    history = history_times(fixings, program.underlying_names[0], clock)
+    names = program.underlying_names
+    history = history_times(fixings, names[0], clock) if len(names) == 1 else None
 
     def run(param_sets):
         if method == "replication":
             T_obs = prof.observation_times[-1] if prof.observation_times else timeline.horizon
             return [replication_result(program, timeline, ctx.surface, ctx.market, T_obs, fmt, p, history=history)
                     for p in param_sets]
-        model = ctx.model(model_name, max(product.horizon, 1 / 365))
+        T = max(product.horizon, 1 / 365)
+        model = ctx.model(model_name, T, names) if isinstance(ctx, BasketContext) else ctx.model(model_name, T)
         return price_many(program, model, ctx.market, param_sets, fmt, n_paths or decision.n_paths, decision.seed,
                           decision.batch, valuation=valuation, fixings=fixings)
     return run
@@ -105,7 +108,11 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
     if product.strike_date < product.valuation and sheet.get("wrapper.solve") == "coupon":
         raise ValueError("a running product has a fixed coupon: price it with wrapper.solve = 'upfront'")
     prof = profile(product.program, build_timeline(product.program, Clock(product.valuation)))
-    decision = decide(prof, ctx.t_max, model, control, n_paths, batch, seed)
+    basket = len(product.program.underlyings) > 1
+    if basket != isinstance(ctx, BasketContext):
+        raise ValueError("a worst-of term sheet needs a BasketContext, a single-name one a PricingContext")
+    decision = decide(prof, ctx.t_max, model, control, n_paths, batch, seed,
+                      has_surfaces=getattr(ctx, "has_surfaces", True))
     fmt = wrapper(sheet, product)
     margin = 100 * sheet.get("wrapper.margin")
     run = _pricer(product, ctx, fmt, decision, prof, decision.model, decision.method, fixings=fixings)
@@ -131,6 +138,8 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
     if rate is not None and rate < 0:
         warnings.append("the solved coupon is negative: the product cannot reach the target price with a coupon")
     g = None
+    if with_greeks and basket:
+        raise ValueError("Greeks of baskets are not supported yet")
     if with_greeks:
         if fixings:
             raise ValueError("Greeks of running products are not supported yet")

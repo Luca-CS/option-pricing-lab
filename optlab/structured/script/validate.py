@@ -6,7 +6,7 @@ from .lexer import KEYWORDS, ScriptError
 from .nodes import (FUNCTIONS, TAGS, WINDOWS, Assign, Binary, Call, DateLit, If, Name, Num, Pay, Program, Terminate,
                     Unary, Window)
 
-MAX_UNDERLYINGS = 1  # v1: single underlying; the names are already in the language for worst-of products
+MAX_UNDERLYINGS = 5  # baskets (worst-of) of up to five names
 
 
 def _key(w):
@@ -34,7 +34,7 @@ class _Checker:
                 raise ScriptError(f"underlying {u.name!r} declared twice", u.line)
             self.underlyings.add(u.name)
         if len(p.underlyings) > MAX_UNDERLYINGS:
-            raise ScriptError(f"only {MAX_UNDERLYINGS} underlying is supported in this version, "
+            raise ScriptError(f"at most {MAX_UNDERLYINGS} underlyings are supported, "
                               f"found {len(p.underlyings)}", p.underlyings[MAX_UNDERLYINGS].line)
         for prm in p.params:
             _check_name(prm.name, prm.line, "parameter")

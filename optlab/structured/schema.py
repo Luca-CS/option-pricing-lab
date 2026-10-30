@@ -16,7 +16,7 @@ from typing import Any
 @dataclass(frozen=True)
 class Field:
     name: str
-    kind: str  # number, int, bool, choice, date
+    kind: str  # number, int, bool, choice, date, names (tuple of underlying names)
     default: Any
     label: str
     unit: str = ""
@@ -43,7 +43,11 @@ def _v(path: str, *values) -> tuple:
 
 SECTIONS = {s.name: s for s in [
     Section("general", "General", (
-        Field("underlying", "choice", "SPX", "Underlying", choices=("SPX",)),
+        Field("basket", "choice", "single", "Underlying type", choices=("single", "worst_of")),
+        Field("underlying", "choice", "SPX", "Underlying", choices=("SPX",),
+              visible_if=_v("general.basket", "single")),
+        Field("underlyings", "names", ("SPX", "SX5E"), "Basket (worst-of)",
+              visible_if=_v("general.basket", "worst_of")),
         Field("notional", "number", 100.0, "Notional", minimum=0.0),
         Field("strike_date", "date", None, "Strike date (default: valuation date)"),
         Field("maturity_months", "int", 24, "Maturity", "months", minimum=1),
@@ -140,6 +144,13 @@ def _coerce(f: Field, value, path: str):
             raise TermSheetError(f"{path} must be true or false, got {value!r}")
     elif f.kind == "date":
         value = dt.date.fromisoformat(value) if isinstance(value, str) else value
+    elif f.kind == "names":
+        value = tuple(value)
+        if not 2 <= len(value) <= 5 or len(set(value)) != len(value):
+            raise TermSheetError(f"{path} needs 2 to 5 distinct names, got {value!r}")
+        if not all(isinstance(n, str) and n.isidentifier() for n in value):
+            raise TermSheetError(f"{path}: names must be identifiers (letters, digits, _), got {value!r}")
+        return value
     if f.minimum is not None and value < f.minimum:
         raise TermSheetError(f"{path} = {value} is below the minimum {f.minimum}")
     if f.maximum is not None and value > f.maximum:
@@ -241,6 +252,12 @@ class TermSheet:
                 raise TermSheetError(f"{path} is not used by this term sheet")
         return new
 
+    @property
+    def underlyings(self) -> tuple:
+        if self.get("general.basket") == "worst_of":
+            return self.get("general.underlyings")
+        return (self.get("general.underlying"),)
+
     def to_dict(self) -> dict:
         return {"type": self.mask.name, **{s: dict(v) for s, v in self.values.items()}}
 
@@ -249,6 +266,8 @@ class TermSheet:
 
 
 def _json(v):
+    if isinstance(v, tuple):
+        return list(v)
     return v.isoformat() if isinstance(v, dt.date) else v
 
 

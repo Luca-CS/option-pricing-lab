@@ -11,6 +11,7 @@ from ..market import Market
 from ..models import Model
 from ..products import MCResult
 from .cashflows import Note, pair_averages
+from .multiasset import Basket, basket_scenarios
 from .scenario import simulated_scenarios
 from .script.evaluator import Evaluator
 from .script.nodes import DateLit, Program
@@ -57,12 +58,16 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
     t_start = time.perf_counter()
     fmt = fmt or Note()
     program = _program(script)
-    if len(program.underlyings) != 1:
-        raise ValueError("this version prices single-underlying scripts")
-    name = program.underlyings[0].name
+    names = program.underlying_names
+    basket = isinstance(model, Basket)
+    if basket and set(model.names) != set(names):
+        raise ValueError(f"the basket simulates {', '.join(model.names)}, the script observes {', '.join(names)}")
+    if not basket and len(names) != 1:
+        raise ValueError(f"the script observes {len(names)} underlyings: price it with a Basket model")
+    name = names[0]
     clock = Clock(valuation, calendar)
     timeline: Timeline = build_timeline(program, clock)
-    history = history_times(fixings, name, clock)
+    history = basket_history(fixings, names, clock) if basket else history_times(fixings, name, clock)
     evaluators = [Evaluator(program, timeline, p, smoothing, check_redemption) for p in param_sets]
     notionals = [float(notional if notional is not None else ev.params.get("N", 1.0)) for ev in evaluators]
     pairs = [[] for _ in evaluators]
@@ -70,8 +75,13 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
     flows = [{} for _ in evaluators]
     red = [{} for _ in evaluators]
     t_sim = t_eval = 0.0
-    scenarios = simulated_scenarios(model, market, name, timeline.sim_times, n_paths, seed, batch, initial_fixing,
-                                    history, **sim_kwargs)
+    if basket:
+        if initial_fixing is not None:
+            raise ValueError("initial_fixing is for single-underlying scripts")
+        scenarios = basket_scenarios(model, timeline.sim_times, n_paths, seed, batch, history, **sim_kwargs)
+    else:
+        scenarios = simulated_scenarios(model, market, name, timeline.sim_times, n_paths, seed, batch,
+                                        initial_fixing, history, **sim_kwargs)
     while True:
         t0 = time.perf_counter()
         scenario = next(scenarios, None)
@@ -111,6 +121,14 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
             redemption_probabilities={t: v / n_paths for t, v in red[i].items()}, warnings=warnings,
             pairs=d))
     return results
+
+
+def basket_history(fixings: dict | None, names, clock: Clock) -> dict:
+    """Past fixings of several underlyings as {name: {time: level}}."""
+    unknown = set(fixings or {}) - set(names)
+    if unknown:
+        raise KeyError(f"fixings given for {', '.join(sorted(unknown))}, the script observes {', '.join(names)}")
+    return {n: history_times({n: fixings[n]}, n, clock) for n in names if fixings and n in fixings}
 
 
 def history_times(fixings: dict | None, name: str, clock: Clock) -> dict:

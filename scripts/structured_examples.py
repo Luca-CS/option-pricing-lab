@@ -14,7 +14,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from optlab.structured import PricingContext, compile_sheet, preset, price_many, quote  # noqa: E402
+from optlab.structured import Book, Position, PricingContext, compile_sheet, preset, price_many, quote  # noqa: E402
+from optlab.structured.multiasset import BasketContext  # noqa: E402
 from optlab.structured.greeks import greeks  # noqa: E402
 from optlab.structured.solve import combine, solve_affine  # noqa: E402
 from optlab.validation import mc_smile  # noqa: E402
@@ -97,6 +98,35 @@ def phoenix_greeks(ctx, n_paths, batch):
               f"({sum(g.seconds.values()):.1f} s)")
 
 
+def worst_of(ctx, n_paths, batch):
+    print("
+== Worst-of Phoenix 24M on SPX (calibrated, local vol) and a synthetic second name (flat vol 22 %, "
+          "carry 0) ==")
+    print("  only SPX is calibrated here: the second name, its vol and the correlation are inputs, not market data")
+    single = quote(preset("phoenix"), ctx, control=None, n_paths=n_paths, batch=batch)
+    print(f"  single SPX (SLV)            coupon {100 * single.coupon_rate:6.3f} ± "
+          f"{100 * single.coupon_rate_se:.3f} % p.a.")
+    for rho in (0.5, 0.7, 0.9):
+        basket = BasketContext.with_spx({"SX5E": (100.0, 0.03, 0.03, 0.22)}, [[1, rho], [rho, 1]], ctx)
+        q = quote(preset("phoenix", **{"general.basket": "worst_of"}), basket, n_paths=n_paths, batch=batch)
+        print(f"  worst-of, correlation {rho:.1f}  coupon {100 * q.coupon_rate:6.3f} ± {100 * q.coupon_rate_se:.3f} "
+              f"% p.a. (LV), control BS {q.control.price:.3f} ± {q.control.stderr:.3f} % at that coupon, "
+              f"{q.seconds:.1f} s")
+
+
+def book(ctx, n_paths, batch):
+    print("
+== Book on one shared simulation ==")
+    positions = [Position("Phoenix 24M", quote(preset("phoenix"), ctx, control=None, n_paths=n_paths, batch=batch), 10),
+                 Position("RC 12M", preset("reverse_convertible", **{"wrapper.solve": "upfront"}), -5),
+                 Position("BRC 12M", preset("barrier_reverse_convertible", **{"wrapper.solve": "upfront"}), 5)]
+    b = Book(positions)
+    print(b.price(ctx, n_paths=n_paths, batch=batch).table())
+    g = b.greeks(ctx, n_paths=n_paths, batch=batch)
+    print(f"  book delta {g['delta']['total']:+.3f} ± {g['delta']['total_se']:.3f} per +1 % spot "
+          f"({g['model'].upper()}); {g.get('note', '')}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--paths", type=int, default=200_000)
@@ -113,6 +143,8 @@ def main():
     timings(ctx, n, args.batch)
     phoenix_greeks(ctx, n, args.batch)
     example_quotes(ctx, n, args.batch)
+    worst_of(ctx, n, args.batch)
+    book(ctx, n, args.batch)
     print(f"\ntotal {time.perf_counter() - t0:.0f} s")
 
 

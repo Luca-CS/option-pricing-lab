@@ -7,6 +7,7 @@ Every variable is an array over paths. Conditions are float masks (0/1, or a ram
 
 from __future__ import annotations
 
+import functools
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -124,7 +125,10 @@ class Evaluator:
             v = self.expr(e.operand)
             return -v if e.op == "-" else 1.0 - v
         if isinstance(e, Call):
-            return FUNCS[e.func](*(self.expr(a) for a in e.args))
+            args = [self.expr(a) for a in e.args]
+            if e.func in ("worst", "best"):
+                return functools.reduce(np.minimum if e.func == "worst" else np.maximum, args)
+            return FUNCS[e.func](*args)
         if isinstance(e, Window):
             fix = self.scenario.fixings(e.underlying, self.timeline.windows[e])
             return fix.min(axis=1) if e.func == "lowest" else fix.max(axis=1)

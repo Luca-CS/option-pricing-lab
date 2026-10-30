@@ -29,6 +29,10 @@ RULES = {
     "callable": Rule("monte_carlo", "slv", "lv",
                      "autocalls depend on the forward skew between observation dates, which local vol flattens: "
                      "SLV; the local vol price shows the model risk"),
+    "basket": Rule("monte_carlo", "lv", "bs",
+                   "worst-of: each name on its own smile (Dupire local vol), correlated spots; the correlation is "
+                   "an input with no skew of its own, and SLV is not extended to baskets yet; Black-Scholes as a "
+                   "smile-risk control"),
 }
 MODELS = ("bs", "heston", "lv", "slv")
 
@@ -55,12 +59,16 @@ class PricingDecision:
 
 
 def decide(prof: ProductProfile, t_max: float, model: str | None = None, control: str | None = "default",
-           n_paths: int = 200_000, batch: int = 25_000, seed: int = 2026, rules: dict | None = None) -> PricingDecision:
+           n_paths: int = 200_000, batch: int = 25_000, seed: int = 2026, rules: dict | None = None,
+           has_surfaces: bool = True) -> PricingDecision:
     """Policy decision for a profile. `model` forces a Monte Carlo model ('bs', 'heston', 'lv', 'slv') or
     'surface' (replication, European class only); `control=None` skips the control price."""
     rules = rules or RULES
-    rule = rules[prof.product_class]
+    basket = len(prof.underlyings) > 1
+    rule = rules["basket"] if basket else rules[prof.product_class]
     warnings = []
+    if basket and not has_surfaces:
+        warnings.append("some names have a flat volatility (no smile): they are simulated with Black-Scholes")
     if prof.horizon > t_max + 1e-9:
         warnings.append(f"horizon {prof.horizon:.2f}y beyond the last calibrated maturity {t_max:.2f}y: the surface "
                         "is extrapolated and the SLV leverage is not calibrated there")
@@ -68,10 +76,12 @@ def decide(prof: ProductProfile, t_max: float, model: str | None = None, control
     if model is None:
         method, model = rule.method, rule.model
     elif model == "surface":
-        if prof.product_class != "european":
+        if prof.product_class != "european" or basket:
             raise ValueError(f"replication needs a European-class product, this one is {prof.product_class}")
         method = "replication"
     elif model in MODELS:
+        if basket and model not in ("bs", "lv"):
+            raise ValueError(f"baskets are priced under bs or lv, not {model}")
         method = "monte_carlo"
     else:
         raise ValueError(f"unknown model {model!r}, expected surface or one of {', '.join(MODELS)}")
