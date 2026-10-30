@@ -228,3 +228,71 @@ def test_airbag_quote_on_spx_in_swap_format():
     assert q.decision.method == "replication"
     assert q.upfront == pytest.approx(q.result.price + 2.0, abs=1e-12)  # leg value plus the margin
     assert abs(q.control_gap_se) < 4
+
+
+# --- tests 5 to 7: autocalls against the backward quadrature ---
+
+def mc_bs(sheet, n_paths=N_MC, seed=61, batch=25_000):
+    p = compile_sheet(sheet, BS_CTX.valuation)
+    return price(p.program, BS_CTX.model("bs"), BS_CTX.market, n_paths=n_paths, seed=seed, batch=batch,
+                 valuation=p.valuation)
+
+
+def test_quadrature_reference_reproduces_the_rc_closed_form():
+    from _structured_refs import autocall_reference
+    sheet = preset("reverse_convertible", **{"downside.barrier": 0.7, "coupon.rate": 0.06})
+    assert autocall_reference(sheet) == pytest.approx(rc_reference(sheet)[2], abs=2e-4)
+
+
+def test_single_date_autocall_is_a_digital_plus_a_put():
+    from _structured_refs import FLAT, prob_below, put_fwd
+    from optlab.structured.dates import schedule
+    sheet = preset("phoenix", **{"general.maturity_months": 6, "autocall.frequency_months": 6,
+                                 "coupon.frequency_months": 6, "coupon.rate": 0.1, "coupon.memory": False,
+                                 "wrapper.solve": "upfront"})
+    (obs, pay), = schedule(BS_CTX.valuation, 6, 6)
+    p = compile_sheet(sheet, BS_CTX.valuation)
+    tl, _ = times(p)
+    T, Tp = float(tl.event_times[-1]), tl.pay_times[-1]
+    digital = 1 - prob_below(70.0, T)  # coupon if perf >= 70 %
+    loss = (put_fwd(60.0, T) + 40.0 * prob_below(60.0, T)) / S0  # PDI K 100 %, B 60 %
+    ref = float(FLAT.D(Tp)) * 100 * (0.05 * digital + 1 - loss)
+    mc = mc_bs(sheet)
+    assert within(mc, ref), (mc.price, mc.stderr, ref)
+    assert compile_sheet(sheet, BS_CTX.valuation).script.count("terminate") == 0
+
+
+@pytest.mark.parametrize("name, changes", [
+    ("athena", {"coupon.rate": 0.08}),
+    ("phoenix", {"coupon.rate": 0.08, "coupon.memory": False}),
+    ("phoenix", {"coupon.rate": 0.08, "coupon.memory": True}),
+    ("phoenix", {"coupon.rate": 0.08, "autocall.step_down": 0.05, "autocall.first_call": 2}),
+    ("phoenix", {"coupon.rate": 0.12, "coupon.frequency_months": 1, "general.maturity_months": 12}),
+])
+def test_autocall_matches_backward_quadrature(name, changes):
+    from _structured_refs import autocall_reference
+    sheet = preset(name, **{"wrapper.solve": "upfront", **changes})
+    ref = autocall_reference(sheet)
+    mc = mc_bs(sheet)
+    assert within(mc, ref), (mc.price, mc.stderr, ref)
+
+
+def test_autocall_with_daily_knock_in_matches_backward_quadrature():
+    from _structured_refs import autocall_reference
+    sheet = preset("phoenix", **{"wrapper.solve": "upfront", "coupon.rate": 0.08, "coupon.memory": False,
+                                 "general.maturity_months": 12, "downside.observation": "daily",
+                                 "downside.barrier": 0.7})
+    ref = autocall_reference(sheet)
+    mc = mc_bs(sheet)
+    assert within(mc, ref), (mc.price, mc.stderr, ref)
+    euro = autocall_reference(sheet.replace(**{"downside.observation": "european"}))
+    assert ref < euro
+
+
+def test_autocall_policy_is_slv_and_reports_call_probabilities():
+    q = quote(preset("phoenix"), SPX, n_paths=40_000, batch=20_000)
+    assert (q.decision.method, q.decision.model, q.decision.control) == ("monte_carlo", "slv", "lv")
+    assert q.result.price == pytest.approx(98.0, abs=1e-10)
+    assert q.result.termination.sum() > 0.3
+    assert 0.25 < q.result.expected_life < 2.0
+    assert "forward skew" in q.table()
