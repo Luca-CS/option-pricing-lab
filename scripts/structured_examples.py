@@ -99,8 +99,7 @@ def phoenix_greeks(ctx, n_paths, batch):
 
 
 def worst_of(ctx, n_paths, batch):
-    print("
-== Worst-of Phoenix 24M on SPX (calibrated, local vol) and a synthetic second name (flat vol 22 %, "
+    print("\n== Worst-of Phoenix 24M on SPX (calibrated, local vol) and a synthetic second name (flat vol 22 %, "
           "carry 0) ==")
     print("  only SPX is calibrated here: the second name, its vol and the correlation are inputs, not market data")
     single = quote(preset("phoenix"), ctx, control=None, n_paths=n_paths, batch=batch)
@@ -115,9 +114,9 @@ def worst_of(ctx, n_paths, batch):
 
 
 def book(ctx, n_paths, batch):
-    print("
-== Book on one shared simulation ==")
-    positions = [Position("Phoenix 24M", quote(preset("phoenix"), ctx, control=None, n_paths=n_paths, batch=batch), 10),
+    print("\n== Book on one shared simulation ==")
+    phoenix = quote(preset("phoenix"), ctx, control=None, n_paths=n_paths, batch=batch)
+    positions = [Position("Phoenix 24M", phoenix, 10),
                  Position("RC 12M", preset("reverse_convertible", **{"wrapper.solve": "upfront"}), -5),
                  Position("BRC 12M", preset("barrier_reverse_convertible", **{"wrapper.solve": "upfront"}), 5)]
     b = Book(positions)
