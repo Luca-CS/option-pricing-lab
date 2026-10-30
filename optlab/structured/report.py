@@ -51,7 +51,10 @@ def quote_table(q) -> str:
         g = q.greeks
         se = (lambda v: "") if g.method == "replication" else (lambda v: f" +/- {v:.4f}")
         vega = f"vega {g.vega:+.4f}{se(g.vega_se)}" if g.vega is not None else g.note
-        smooth = f", digitals smoothed {g.smoothing:.1%} (price bias {g.smoothing_bias:+.4f} +/- "                  f"{g.smoothing_bias_se:.4f} %)" if g.smoothing else ""
+        smooth = ""
+        if g.smoothing:
+            smooth = (f", digitals smoothed {g.smoothing:.1%} (price bias {g.smoothing_bias:+.4f} +/- "
+                      f"{g.smoothing_bias_se:.4f} %)")
         lines.append(f"greeks ({g.model.upper()}): delta {g.delta:+.4f}{se(g.delta_se)} % per +1 % spot, {vega} "
                      f"% per vol pt{smooth}")
     lines.append(f"time: {q.seconds:.2f} s")
