@@ -33,6 +33,7 @@ class StructuredResult:
     termination: np.ndarray  # probability that the product ends at each event
     expected_flows: dict  # (payment time, tag) → undiscounted expectation
     expected_life: float
+    redemption_probabilities: dict  # payment time → probability that the redemption is paid then
     warnings: list = field(default_factory=list)
 
     def __iter__(self):
@@ -59,6 +60,7 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
     pairs = [[] for _ in evaluators]
     terminated = [np.zeros(len(program.events)) for _ in evaluators]
     flows = [{} for _ in evaluators]
+    red = [{} for _ in evaluators]
     t_sim = t_eval = 0.0
     scenarios = simulated_scenarios(model, market, name, timeline.sim_times, n_paths, seed, batch, **sim_kwargs)
     while True:
@@ -74,6 +76,8 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
             terminated[i] += np.array([np.sum(d) for d in out.terminated])
             for key, f in out.flows.items():
                 flows[i][key] = flows[i].get(key, 0.0) + float(np.sum(f))
+            for t, w in out.redemption_weights.items():
+                red[i][t] = red[i].get(t, 0.0) + float(np.sum(w))
         t_eval += time.perf_counter() - t0
     seconds = time.perf_counter() - t_start
     warnings = []
@@ -91,7 +95,8 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
             value=value, price=100 * value.price / N, stderr=100 * value.stderr / N, fmt=fmt.name, notional=N,
             n_paths=n_paths, seconds=seconds, timings={"simulation": t_sim, "evaluation": t_eval},
             event_times=timeline.event_times, termination=term,
-            expected_flows={k: v / n_paths for k, v in flows[i].items()}, expected_life=life, warnings=warnings))
+            expected_flows={k: v / n_paths for k, v in flows[i].items()}, expected_life=life,
+            redemption_probabilities={t: v / n_paths for t, v in red[i].items()}, warnings=warnings))
     return results
 
 

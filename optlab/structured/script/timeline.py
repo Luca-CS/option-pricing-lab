@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from ..dates import WeekendCalendar, year_fraction
 from .nodes import Binary, Call, DateLit, If, Pay, Program, Unary, Window
 
 
@@ -28,23 +29,23 @@ class Clock:
 
     def __init__(self, valuation: dt.date | str | None = None, calendar=None):
         self.valuation = dt.date.fromisoformat(valuation) if isinstance(valuation, str) else valuation
-        self.calendar = calendar
+        self.calendar = calendar or WeekendCalendar()
 
     def time(self, w) -> float:
         if not isinstance(w, DateLit):
             return float(w.value)
         if self.valuation is None:
             raise ValueError("the script uses calendar dates: give a valuation date")
-        return (dt.date.fromisoformat(w.value) - self.valuation).days / 365.0
+        return year_fraction(self.valuation, w.value, "ACT/365F")
 
     def window_times(self, w: Window) -> np.ndarray:
         if not isinstance(w.start, DateLit):
             a, b = float(w.start.value), float(w.end.value)
             return np.linspace(a + (b - a) / w.n, b, w.n)
-        if self.calendar is None:
-            raise ValueError("date windows need a business-day calendar")
-        days = self.calendar.business_days(dt.date.fromisoformat(w.start.value), dt.date.fromisoformat(w.end.value))
-        return np.array([(d - self.valuation).days / 365.0 for d in days])
+        if self.valuation is None:
+            raise ValueError("the script uses calendar dates: give a valuation date")
+        days = self.calendar.business_days(w.start.value, w.end.value)
+        return np.array([year_fraction(self.valuation, d, "ACT/365F") for d in days])
 
 
 def _windows(node, out: list):
