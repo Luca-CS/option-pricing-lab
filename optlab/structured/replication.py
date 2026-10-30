@@ -129,7 +129,7 @@ def replication_result(program, timeline: Timeline, surface, market: Market, T_o
 
     def run(spots):
         cols = np.full((len(spots), len(timeline.sim_times)), np.nan)
-        if len(timeline.sim_times):
+        if col < len(timeline.sim_times) and timeline.sim_times[col] == T_obs:
             cols[:, col] = spots
         spot0 = market.spot if initial_fixing is None else initial_fixing
         return ev.run(Scenario(name, timeline.sim_times, cols, spot0, history))

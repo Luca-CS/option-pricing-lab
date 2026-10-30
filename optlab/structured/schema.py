@@ -242,6 +242,10 @@ class TermSheet:
         return f"TermSheet({self.mask.name!r}, {self.values!r})"
 
 
+def _json(v):
+    return v.isoformat() if isinstance(v, dt.date) else v
+
+
 def describe(mask: str, sheet: TermSheet | None = None) -> dict:
     """The visible form of a mask: sections, fields with kind, unit, choices and current value."""
     sheet = sheet or TermSheet(mask)
@@ -253,7 +257,7 @@ def describe(mask: str, sheet: TermSheet | None = None) -> dict:
             if not sheet.visible(path):
                 continue
             fields.append({"name": f.name, "path": path, "label": f.label, "kind": f.kind, "unit": f.unit,
-                           "choices": list(MASKS[mask].choices.get(path, f.choices)), "value": sheet.get(path),
+                           "choices": list(MASKS[mask].choices.get(path, f.choices)), "value": _json(sheet.get(path)),
                            "read_only": f.derived})
         out["sections"].append({"name": s, "label": SECTIONS[s].label, "fields": fields})
     return out

@@ -156,3 +156,11 @@ def test_policy_overrides_and_warnings():
     long = decide(prof(preset("phoenix", **{"general.maturity_months": 36})), t_max=2.14)
     assert any("beyond the last calibrated maturity" in w for w in long.warnings)
     assert decide(prof(preset("phoenix")), t_max=2.14, model="lv").control is None
+
+
+def test_describe_is_json_serialisable_for_a_front_end():
+    import json
+    sheet = preset("phoenix", **{"general.strike_date": dt.date(2026, 11, 2)})
+    out = json.loads(json.dumps(describe("autocall", sheet)))
+    general = next(s for s in out["sections"] if s["name"] == "general")
+    assert next(f for f in general["fields"] if f["name"] == "strike_date")["value"] == "2026-11-02"

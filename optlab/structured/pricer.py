@@ -100,7 +100,8 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
         value = MCResult(float(d.mean()), float(d.std(ddof=1) / np.sqrt(len(d))), n_paths)
         term = terminated[i] / n_paths
         alive_end = 1.0 - term.sum()
-        life = float(np.dot(term, timeline.event_times) + alive_end * timeline.event_times[-1])
+        remaining = np.maximum(timeline.event_times, 0.0)  # from the valuation date, for a running product
+        life = float(np.dot(term, remaining) + alive_end * remaining[-1])
         N = notionals[i]
         results.append(StructuredResult(
             value=value, price=100 * value.price / N, stderr=100 * value.stderr / N, fmt=fmt.name, notional=N,
