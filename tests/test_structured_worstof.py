@@ -190,3 +190,31 @@ def test_book_mixes_single_name_and_worst_of_positions_on_one_basket_simulation(
     from optlab.structured.portfolio import Book as B2
     with pytest.raises(ValueError, match="BasketContext"):
         B2([Position("wo", wo, 1.0)]).price(flat_context(), model="bs", n_paths=2_000)
+
+
+# --- per-name Greeks of basket books ---
+
+def worst_rc_reference(T, pays, rho, qs, vols=(VOL, VOL2), K=1.0, B=0.7, cpn=0.02):
+    loss = worst_put(B, T, vols, rho, R, qs) + (K - B) * (1 - worst_digital(B, T, vols, rho, R, qs))
+    return 100 * cpn * sum(float(FLAT.D(t)) for t in pays) + 100 * float(FLAT.D(pays[-1])) * (1 - loss)
+
+
+def test_basket_book_deltas_per_name_match_closed_form_differences():
+    from optlab.structured.portfolio import Book, Position
+    rho = 0.6
+    sheet = worst("reverse_convertible", **{"downside.barrier": 0.7, "coupon.rate": 0.08})
+    rc = preset("reverse_convertible", **{"wrapper.solve": "upfront", "coupon.rate": 0.06})
+    book = Book([Position("wo", sheet, 1.0), Position("rc", rc, 1.0)])
+    g = book.greeks(context(rho), n_paths=N_MC, seed=23, batch=25_000)
+    T, pays = times(compile_sheet(sheet, VAL))
+    qs = (0.01, Q2)
+    for i, name in enumerate(("SPX", "SX5E")):
+        # a spot bump of name i is a change of its carry: X_i = S_T / S_0 with S_0 fixed scales by (1 + h)
+        up = [q - (np.log(1.01) / T if j == i else 0.0) for j, q in enumerate(qs)]
+        down = [q - (np.log(0.99) / T if j == i else 0.0) for j, q in enumerate(qs)]
+        ref = (worst_rc_reference(T, pays, rho, up) - worst_rc_reference(T, pays, rho, down)) / 2
+        d = g["delta"][name]
+        assert abs(d["positions"][0] - ref) <= 4 * d["positions_se"][0] + 0.005, (name, d["positions"][0], ref)
+    # the single-name RC does not move with the other name, path by path
+    assert g["delta"]["SX5E"]["positions"][1] == 0.0 and g["vega"]["SX5E"]["positions"][1] == 0.0
+    assert g["delta"]["SPX"]["positions"][1] > 0 and g["vega"]["SPX"]["positions"][0] < 0

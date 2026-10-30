@@ -136,14 +136,14 @@ class Book:
 
     def price(self, ctx: PricingContext | None = None, model: str | None = None, n_paths: int = 200_000,
               seed: int = 2026, batch: int | None = 25_000, smoothing: float = 0.0, market=None, surface=None,
-              initial_fixing: float | None = None) -> BookResult:
+              initial_fixing: float | dict | None = None) -> BookResult:
         """Value of the book. `model` forces one model for every position ('bs', 'lv', 'heston', 'slv', or
         'surface' for an all-European book); `market`/`surface` override the context (bumps)."""
         t0 = time.perf_counter()
         ctx = ctx or PricingContext.from_calibration()
         basket = isinstance(ctx, BasketContext)
-        if basket and (market is not None or surface is not None or initial_fixing is not None):
-            raise ValueError("bumped markets are not supported for basket books yet")
+        if basket and (market is not None or surface is not None):
+            raise ValueError("bump a basket book through BasketContext.bumped")
         market = market or ctx.market
         surface = surface or getattr(ctx, "surface", None)
         items = self._prepare(ctx)
@@ -177,7 +177,8 @@ class Book:
                     merged[t] = v
         if basket:
             names = tuple(n for n in ctx.names if n in d_names)
-            scenarios = basket_scenarios(ctx.model(d.model, horizon, names), times, n_paths, seed, batch, history)
+            scenarios = basket_scenarios(ctx.model(d.model, horizon, names), times, n_paths, seed, batch, history,
+                                         initial_fixing)
         else:
             (name,) = d_names
             scenarios = simulated_scenarios(self._model(d.model, ctx, surface, horizon), market, name, times,
@@ -219,7 +220,7 @@ class Book:
         simulation, per position and in total, with standard errors. Products keep their initial fixing."""
         ctx = ctx or PricingContext.from_calibration()
         if isinstance(ctx, BasketContext):
-            raise ValueError("Greeks of basket books are not supported yet")
+            return self._basket_greeks(ctx, model, n_paths, seed, batch, smoothing, h_spot, h_vol)
         items = self._prepare(ctx)
         d = self.decision(ctx, items, model)
         eps = 0.0 if d.method == "replication" else smoothing
@@ -227,15 +228,7 @@ class Book:
         kw = dict(ctx=ctx, model=model, n_paths=n_paths, seed=seed, batch=batch, smoothing=eps, initial_fixing=S0)
         out = {"method": d.method, "model": d.model, "smoothing": eps}
 
-        def bump(a, b, scale):
-            if a.pairs is None:
-                per = [scale * (x.value - y.value) for x, y in zip(a.positions, b.positions)]
-                return per, [0.0] * len(per), scale * (a.value - b.value), 0.0
-            per = [scale * (x - y) for x, y in zip(a.position_pairs, b.position_pairs)]
-            tot = scale * (a.pairs - b.pairs)
-            se = [float(p.std(ddof=1) / np.sqrt(len(p))) for p in per]
-            return [float(p.mean()) for p in per], se, float(tot.mean()), float(tot.std(ddof=1) / np.sqrt(len(tot)))
-
+        bump = _bump
         up = self.price(market=ctx.market.scaled(S0 * (1 + h_spot)), **kw)
         down = self.price(market=ctx.market.scaled(S0 * (1 - h_spot)), **kw)
         out["delta"] = dict(zip(("positions", "positions_se", "total", "total_se"),
@@ -250,3 +243,34 @@ class Book:
                                    bump(vu, vd, 0.01 / (2 * h_vol))))
         out["names"] = [p.name for p in self.positions]
         return out
+
+    def _basket_greeks(self, ctx, model, n_paths, seed, batch, smoothing, h_spot, h_vol) -> dict:
+        """Delta and vega per underlying name (each name bumped alone, the others fixed), on common paths."""
+        items = self._prepare(ctx)
+        d = self.decision(ctx, items, model)
+        names = [n for n in ctx.names if any(n in it["underlyings"] for it in items)]
+        fixing = {n: ctx.markets[n].spot for n in names}
+        kw = dict(model=model, n_paths=n_paths, seed=seed, batch=batch, smoothing=smoothing, initial_fixing=fixing)
+        out = {"method": d.method, "model": d.model, "smoothing": smoothing, "names": [p.name for p in self.positions],
+               "delta": {}, "vega": {}}
+        for n in names:
+            up = self.price(ctx.bumped(n, spot_factor=1 + h_spot), **kw)
+            down = self.price(ctx.bumped(n, spot_factor=1 - h_spot), **kw)
+            out["delta"][n] = dict(zip(("positions", "positions_se", "total", "total_se"),
+                                       _bump(up, down, 0.01 / (2 * h_spot))))
+            vu = self.price(ctx.bumped(n, vol_shift=h_vol), **kw)
+            vd = self.price(ctx.bumped(n, vol_shift=-h_vol), **kw)
+            out["vega"][n] = dict(zip(("positions", "positions_se", "total", "total_se"),
+                                      _bump(vu, vd, 0.01 / (2 * h_vol))))
+        return out
+
+
+def _bump(a: BookResult, b: BookResult, scale: float):
+    """Per-position and total differences of two book prices on the same paths, with standard errors."""
+    if a.pairs is None:
+        per = [scale * (x.value - y.value) for x, y in zip(a.positions, b.positions)]
+        return per, [0.0] * len(per), scale * (a.value - b.value), 0.0
+    per = [scale * (x - y) for x, y in zip(a.position_pairs, b.position_pairs)]
+    tot = scale * (a.pairs - b.pairs)
+    se = [float(p.std(ddof=1) / np.sqrt(len(p))) for p in per]
+    return [float(p.mean()) for p in per], se, float(tot.mean()), float(tot.std(ddof=1) / np.sqrt(len(tot)))

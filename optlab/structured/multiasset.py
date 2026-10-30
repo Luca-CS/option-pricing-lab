@@ -138,15 +138,17 @@ class BasketScenario:
 
 
 def basket_scenarios(basket: Basket, times, n_paths: int, seed=None, batch: int | None = None,
-                     history: dict | None = None, **sim_kwargs) -> Iterator[BasketScenario]:
-    """Batches of correlated paths, with the seed convention of `scenario.simulated_scenarios`."""
+                     history: dict | None = None, initial_fixings: dict | None = None,
+                     **sim_kwargs) -> Iterator[BasketScenario]:
+    """Batches of correlated paths, with the seed convention of `scenario.simulated_scenarios`.
+    `initial_fixings` replaces the spots read on the valuation date (struck products on bumped markets)."""
     sizes = batch_sizes(n_paths, batch)
     if len(sizes) == 1:
         rngs = [np.random.default_rng(seed)]
     else:
         rngs = [np.random.default_rng(s) for s in np.random.SeedSequence(seed).spawn(len(sizes))]
     times = np.asarray(times, dtype=float)
-    spot0 = {n: basket.markets[n].spot for n in basket.names}
+    spot0 = {n: (initial_fixings or {}).get(n, basket.markets[n].spot) for n in basket.names}
     for size, rng in zip(sizes, rngs):
         paths = simulate_basket(basket, times, size, rng, **sim_kwargs) if len(times) else \
             {n: np.empty((size, 0)) for n in basket.names}
@@ -180,6 +182,17 @@ class BasketContext:
     @property
     def market(self) -> Market:
         return self.markets[self.names[0]]
+
+    def bumped(self, name: str, spot_factor: float = 1.0, vol_shift: float = 0.0) -> "BasketContext":
+        """The same context with one name's spot scaled (sticky moneyness) or its implied vols shifted."""
+        from .greeks import ShiftedSurface
+        markets, vols = dict(self.markets), dict(self.vols)
+        if spot_factor != 1.0:
+            markets[name] = markets[name].scaled(markets[name].spot * spot_factor)
+        if vol_shift:
+            v = vols[name]
+            vols[name] = v + vol_shift if np.isscalar(v) else ShiftedSurface(v, vol_shift)
+        return BasketContext(self.names, markets, vols, self.corr, self.valuation)
 
     @property
     def t_max(self) -> float:
