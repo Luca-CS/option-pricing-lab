@@ -61,10 +61,12 @@ def batch_sizes(n_paths: int, batch: int | None) -> list[int]:
 
 
 def simulated_scenarios(model: Model, market: Market, name: str, times, n_paths: int, seed=None,
-                        batch: int | None = None, **sim_kwargs) -> Iterator[Scenario]:
+                        batch: int | None = None, initial_fixing: float | None = None,
+                        **sim_kwargs) -> Iterator[Scenario]:
     """Batches of `simulate` paths. With a single batch the generator is `default_rng(seed)`, exactly as in the
     pricers of `products.py`; with several, batch b uses `SeedSequence(seed).spawn(n_batches)[b]`. Prices
-    therefore depend on (seed, n_paths, batch)."""
+    therefore depend on (seed, n_paths, batch). `initial_fixing` replaces the market spot for reads at t <= 0
+    (a product already struck, priced on a bumped market for Greeks)."""
     sizes = batch_sizes(n_paths, batch)
     if len(sizes) == 1:
         rngs = [np.random.default_rng(seed)]
@@ -73,4 +75,4 @@ def simulated_scenarios(model: Model, market: Market, name: str, times, n_paths:
     times = np.asarray(times, dtype=float)
     for size, rng in zip(sizes, rngs):
         paths = simulate(model, market, times, size, rng, **sim_kwargs) if len(times) else np.empty((size, 0))
-        yield Scenario(name, times, paths, market.spot)
+        yield Scenario(name, times, paths, market.spot if initial_fixing is None else initial_fixing)

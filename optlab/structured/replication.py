@@ -115,7 +115,7 @@ def nodes(f, surface, market: Market, T: float, n_cells: int = 4_000, levels: in
 
 
 def replication_result(program, timeline: Timeline, surface, market: Market, T_obs: float, fmt=None, params=None,
-                       notional=None, n_cells: int = 4_000, levels: int = 6):
+                       notional=None, n_cells: int = 4_000, levels: int = 6, initial_fixing: float | None = None):
     """Price on the surface. The numerical error is the change when the coarse grid is halved."""
     from .pricer import StructuredResult
 
@@ -130,7 +130,8 @@ def replication_result(program, timeline: Timeline, surface, market: Market, T_o
         cols = np.full((len(spots), len(timeline.sim_times)), np.nan)
         if len(timeline.sim_times):
             cols[:, col] = spots
-        return ev.run(Scenario(name, timeline.sim_times, cols, market.spot))
+        spot0 = market.spot if initial_fixing is None else initial_fixing
+        return ev.run(Scenario(name, timeline.sim_times, cols, spot0))
 
     def pv(spots):
         return fmt.present_values(run(spots), market, N)

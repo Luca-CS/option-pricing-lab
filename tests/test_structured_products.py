@@ -296,3 +296,56 @@ def test_autocall_policy_is_slv_and_reports_call_probabilities():
     assert q.result.termination.sum() > 0.3
     assert 0.25 < q.result.expected_life < 2.0
     assert "forward skew" in q.table()
+
+
+# --- test 10: Greeks ---
+
+def rc_closed_form(spot, vol, T, pays, cpn, K=1.0, B=0.7):
+    """RC value for a spot and a vol, the product struck at S0 = 100 (strike levels fixed)."""
+    from _structured_refs import FLAT, Q, R
+    from scipy.stats import norm
+    F = spot * np.exp((R - Q) * T)
+    sd = vol * np.sqrt(T)
+    put = float(black_price(F, B * S0, T, vol, 1.0, "put"))
+    below = norm.cdf(-(np.log(F / (B * S0)) / sd - 0.5 * sd))
+    loss = (put + (K - B) * S0 * below) / S0
+    return 100 * cpn * sum(float(FLAT.D(t)) for t in pays) + float(FLAT.D(pays[-1])) * 100 * (1 - loss)
+
+
+def test_rc_greeks_match_closed_form_differences():
+    from optlab.structured.greeks import greeks
+    sheet = preset("reverse_convertible", **{"downside.barrier": 0.7, "coupon.rate": 0.06,
+                                             "wrapper.solve": "upfront"})
+    p = compile_sheet(sheet, BS_CTX.valuation)
+    tl, pays = times(p)
+    T = float(tl.event_times[-1])
+    cpn = p.program.param_values["cpn"]
+    delta = (rc_closed_form(101, VOL, T, pays, cpn) - rc_closed_form(99, VOL, T, pays, cpn)) / 2
+    vega = (rc_closed_form(100, VOL + 0.01, T, pays, cpn) - rc_closed_form(100, VOL - 0.01, T, pays, cpn)) / 2
+    rep = greeks(p.program, BS_CTX, "bs", "replication", T_obs=T)
+    assert rep.delta == pytest.approx(delta, abs=1e-8) and rep.vega == pytest.approx(vega, abs=1e-8)
+    mc = greeks(p.program, BS_CTX, "bs", n_paths=N_MC, seed=71)
+    assert mc.smoothing == 0.005
+    assert abs(mc.smoothing_bias) <= 4 * mc.smoothing_bias_se + 0.002  # smoothing moves the price by < 0.01 %
+    assert abs(mc.delta - delta) <= 4 * mc.delta_se + abs(mc.smoothing_bias)
+    assert abs(mc.vega - vega) <= 4 * mc.vega_se + abs(mc.smoothing_bias)
+
+
+def test_slv_greeks_report_delta_but_no_vega():
+    from optlab.structured.greeks import greeks
+    p = compile_sheet(preset("phoenix", **{"general.maturity_months": 12}), SPX.valuation)
+    g = greeks(p.program, SPX, "slv", n_paths=20_000, batch=10_000, params={"cpn": 0.02})
+    assert g.vega is None and "recalibration" in g.note
+    assert 0 < g.delta < 1.5 and g.delta_se < 0.1
+
+
+def test_shifted_surface_shifts_implied_vols_and_keeps_local_vol_consistent():
+    from optlab.structured.greeks import ShiftedSurface
+    s = ShiftedSurface(SPX.surface, 0.01)
+    k, T = np.array([-0.3, 0.0, 0.2]), 1.0
+    np.testing.assert_allclose(s.iv(k, T), SPX.surface.iv(k, T) + 0.01, rtol=1e-12)
+    h = 1e-5
+    w, wk, wkk, wT = s.derivatives(k, T)
+    np.testing.assert_allclose(wk, (s.w(k + h, T) - s.w(k - h, T)) / (2 * h), rtol=1e-6)
+    np.testing.assert_allclose(wT, (s.w(k, T + h) - s.w(k, T - h)) / (2 * h), rtol=1e-5)
+    np.testing.assert_allclose(wkk, (s.w(k + h, T) - 2 * w + s.w(k - h, T)) / h**2, rtol=1e-4)

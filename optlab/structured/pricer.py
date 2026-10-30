@@ -49,7 +49,8 @@ def _program(script) -> Program:
 
 def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_paths: int = 100_000, seed=0,
                batch: int | None = None, smoothing: float = 0.0, valuation=None, calendar=None, notional=None,
-               check_redemption: bool = True, **sim_kwargs) -> list[StructuredResult]:
+               check_redemption: bool = True, initial_fixing: float | None = None,
+               **sim_kwargs) -> list[StructuredResult]:
     """Price one script for several parameter sets on the same paths (common random numbers)."""
     t_start = time.perf_counter()
     fmt = fmt or Note()
@@ -65,7 +66,8 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
     flows = [{} for _ in evaluators]
     red = [{} for _ in evaluators]
     t_sim = t_eval = 0.0
-    scenarios = simulated_scenarios(model, market, name, timeline.sim_times, n_paths, seed, batch, **sim_kwargs)
+    scenarios = simulated_scenarios(model, market, name, timeline.sim_times, n_paths, seed, batch, initial_fixing,
+                                    **sim_kwargs)
     while True:
         t0 = time.perf_counter()
         scenario = next(scenarios, None)
