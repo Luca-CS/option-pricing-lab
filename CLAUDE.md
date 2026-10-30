@@ -73,6 +73,9 @@ python -m venv .venv
   model (european → `replication.py` on the SVI smile; otherwise SLV Monte Carlo with an LV control),
   `solve.py` (coupon affine on common random numbers), `quote.py`, `greeks.py`, `report.py`. Independent
   references for the tests are in `tests/_structured_refs.py` (closed forms, autocall backward quadrature).
+  On top: `portfolio.py` (`Book` of `Position`s on one shared simulation, book Greeks), `cashflows.FundedSwap`
+  (floating funding leg until redemption), `multiasset.py` (`Basket` of correlated names, `BasketContext`; the
+  `basket` policy rule is LV per name with a BS control), and past `fixings` for running products.
 - **`space/app.py`** is a local Gradio front-end (needs `pip install gradio`), not deployed.
 
 ## Conventions

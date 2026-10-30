@@ -45,13 +45,16 @@ v0 0.0250 (true 0.0250), kappa 1.801 (1.8), theta 0.0398 (0.04), xi 0.748 (0.75)
 
 Full tables and charts: [`reports/calibration.md`](reports/calibration.md).
 
-**Tests**: 111, covering put-call parity (closed forms, Fourier, Monte Carlo), Monte Carlo convergence
+**Tests**: 302, covering put-call parity (closed forms, Fourier, Monte Carlo), Monte Carlo convergence
 (1/sqrt(N) error, closed forms within 4 standard errors), American >= European and the American call
 without dividend equal to the European, the geometric Asian against its closed form, barriers against
 Reiner-Rubinstein with the Broadie-Glasserman-Kou correction, parameter recovery for SSVI, SVI and
 Heston, the vanillas reproduced by Dupire local vol and by the SLV model, the JavaScript of the
 demo page against the Python library (to 1e-9 on the closed forms), and the CUDA engine called from Python
-against the same references (skipped without a GPU).
+against the same references (skipped without a GPU). For the structured products: the script parser and its
+errors, the calendar, the scripts against the library pricers bit for bit, every product family against a
+closed form or a quadrature, the coupon solver, the Greeks, books, funded swaps, worst-of baskets and running
+products.
 
 ## GPU Monte Carlo
 
@@ -109,8 +112,23 @@ print(q.table())                  # policy and reason, coupon solved ± SE, cont
 print(q.script)                   # the generated script, with the solved coupon
 ```
 
-`python scripts/structured_examples.py` prints the model-risk table, timings and example quotes (about five
-minutes at 200,000 paths).
+Beyond single products:
+
+- **Book.** `Book([Position(...), ...])` prices positions (term sheets, scripts or solved quotes, long or short) on
+  one shared simulation over the union of their dates, so the book error accounts for the correlation between
+  positions (a reverse convertible plus the put it is short is a bond, with zero error), and bumps that
+  simulation for book Greeks.
+- **Funded swap.** A swap can carry a floating funding leg (single curve, ACT/360, plus a spread) that stops at
+  the autocall; without spread or payment lag it equals the note minus par path by path.
+- **Worst-of.** Up to five correlated underlyings, each on its own model and forward curve (`worst(...)` in the
+  scripts, `general.basket = "worst_of"` in the term sheet), validated against the bivariate normal for the
+  worst-of digital and a conditional one-dimensional integral for the worst-of put. Only SPX is calibrated
+  here, so other names, their volatility and the correlation are inputs.
+- **Running products.** Past fixings (`fixings={"SPX": {date: level}}`) for products already struck; flows paid
+  before the valuation date drop out, knock-ins and calls that already happened are taken into account.
+
+`python scripts/structured_examples.py` prints the model-risk table, timings, example quotes, worst-of coupons
+against the correlation and a book (about five minutes at 200,000 paths).
 
 ## Method
 
@@ -247,7 +265,8 @@ runs locally: `pip install gradio`, then `python space/app.py`.
   quotes on barriers or forward-start options, which free data do not provide.
 - **Rates and dividends** are deterministic, and dividends enter as a continuous yield implied from the
   forwards (no discrete dividends).
-- **Structured products.** One underlying for now, deterministic rates, no holidays in the calendar,
+- **Structured products.** Deterministic rates, no holidays in the calendar, worst-of baskets under local vol
+  or Black-Scholes only (no SLV across names, no correlation skew), books on one underlying,
   maturities up to the last calibrated one (2.14 years; beyond, the surface is extrapolated and the SLV
   leverage is not fitted, and the pricer says so). Vega is a parallel shift of the implied vols, so it is not
   available under SLV, whose leverage would need a recalibration.
