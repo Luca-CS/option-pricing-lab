@@ -349,3 +349,12 @@ def test_shifted_surface_shifts_implied_vols_and_keeps_local_vol_consistent():
     np.testing.assert_allclose(wk, (s.w(k + h, T) - s.w(k - h, T)) / (2 * h), rtol=1e-6)
     np.testing.assert_allclose(wT, (s.w(k, T + h) - s.w(k, T - h)) / (2 * h), rtol=1e-5)
     np.testing.assert_allclose(wkk, (s.w(k + h, T) - 2 * w + s.w(k - h, T)) / h**2, rtol=1e-4)
+
+
+def test_quote_with_greeks_uses_the_policy_model():
+    q = quote(preset("reverse_convertible", **{"downside.barrier": 0.7}), BS_CTX, control=None, with_greeks=True)
+    assert q.greeks.method == "replication" and q.greeks.vega < 0 < q.greeks.delta
+    assert "greeks (SURFACE)" in q.table()
+    q = quote(preset("phoenix", **{"general.maturity_months": 12}), SPX, control=None, with_greeks=True,
+              n_paths=20_000, batch=10_000)
+    assert q.greeks.model == "slv" and q.greeks.vega is None and "recalibration" in q.table()

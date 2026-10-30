@@ -85,6 +85,10 @@ def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, f
     S0 = ctx.market.spot
     timeline = build_timeline(program, Clock(valuation))
     horizon = timeline.horizon
+    if method == "replication" and T_obs is None:
+        from .profile import profile
+        times = profile(program, timeline).observation_times
+        T_obs = times[-1] if times else horizon
     seconds = {}
 
     def run(spot_factor=1.0, vol_shift=0.0, eps=smoothing):
