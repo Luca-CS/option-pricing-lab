@@ -159,3 +159,34 @@ def test_worst_of_running_product_needs_every_fixing():
     sheet = worst("reverse_convertible", **{"general.strike_date": dt.date(2026, 4, 27)})
     with pytest.raises(KeyError, match="no fixing of SX5E"):
         quote(sheet, context(0.5), control=None, n_paths=2_000, batch=1_000, fixings={"SPX": {"2026-04-27": 100.0}})
+
+
+# --- books mixing single names and baskets ---
+
+def test_basket_book_with_one_position_is_the_product_price_bit_for_bit():
+    from optlab.structured.portfolio import Book, Position
+    ctx = context(0.6)
+    sheet = worst("phoenix", **{"coupon.rate": 0.08, "general.maturity_months": 12})
+    book = Book([Position("wo", sheet, 1.0)]).price(ctx, model="bs", n_paths=40_000, seed=3, batch=10_000)
+    alone, _ = mc(sheet, ctx, n_paths=40_000, seed=3, batch=10_000)
+    assert book.value == alone.value.price and book.stderr == alone.value.stderr
+
+
+def test_book_mixes_single_name_and_worst_of_positions_on_one_basket_simulation():
+    from optlab.structured.portfolio import Book, Position
+    ctx = context(0.6)
+    wo = worst("phoenix", **{"coupon.rate": 0.08, "general.maturity_months": 12})
+    rc = preset("reverse_convertible", **{"wrapper.solve": "upfront", "coupon.rate": 0.06})
+    res = Book([Position("wo", wo, 2.0), Position("rc", rc, -1.0), Position("wo short", wo, -2.0)]).price(
+        ctx, n_paths=40_000, seed=5, batch=10_000)
+    assert res.model == "lv" and any("flat volatility" in w for w in res.warnings)  # flat names stay BS
+    assert res.positions[0].value == -res.positions[2].value
+    assert res.value == pytest.approx(res.positions[1].value, abs=1e-9)
+    from _structured_refs import rc_european
+    p = compile_sheet(rc, VAL)
+    T, pays = times(p)
+    ref = rc_european(100.0, 0.015, pays, T, pays[-1], 1.0, 1.0)  # the preset knocks in at the strike
+    assert abs(res.positions[1].unit_price - ref) <= 4 * res.positions[1].unit_stderr
+    from optlab.structured.portfolio import Book as B2
+    with pytest.raises(ValueError, match="BasketContext"):
+        B2([Position("wo", wo, 1.0)]).price(flat_context(), model="bs", n_paths=2_000)
