@@ -10,6 +10,7 @@ from .cashflows import Note, Swap
 from .compiler import compile_sheet
 from .context import PricingContext
 from .policy import RULES, decide
+from .portfolio import Book, BookResult, Position
 from .presets import PRESETS, preset
 from .pricer import StructuredResult, price, price_many
 from .quote import Quote, quote
@@ -21,4 +22,4 @@ from .script.validate import validate
 
 __all__ = ["Note", "Swap", "PricingContext", "StructuredResult", "price", "price_many", "ScriptError", "parse",
            "to_text", "validate", "compile_sheet", "RULES", "decide", "PRESETS", "preset", "Quote", "quote", "MASKS",
-           "TermSheet", "TermSheetError", "describe"]
+           "TermSheet", "TermSheetError", "describe", "Book", "BookResult", "Position"]
