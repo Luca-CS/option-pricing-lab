@@ -35,6 +35,9 @@ class StructuredResult:
     expected_life: float
     redemption_probabilities: dict  # payment time → probability that the redemption is paid then
     warnings: list = field(default_factory=list)
+    method: str = "monte_carlo"
+    numerical_error: float = 0.0  # replication: change of the price (in %) when the grid is halved
+    pairs: np.ndarray | None = field(default=None, repr=False)  # antithetic pair averages of the present value
 
     def __iter__(self):
         return iter((self.price, self.stderr))
@@ -96,7 +99,8 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
             n_paths=n_paths, seconds=seconds, timings={"simulation": t_sim, "evaluation": t_eval},
             event_times=timeline.event_times, termination=term,
             expected_flows={k: v / n_paths for k, v in flows[i].items()}, expected_life=life,
-            redemption_probabilities={t: v / n_paths for t, v in red[i].items()}, warnings=warnings))
+            redemption_probabilities={t: v / n_paths for t, v in red[i].items()}, warnings=warnings,
+            pairs=d))
     return results
 
 
