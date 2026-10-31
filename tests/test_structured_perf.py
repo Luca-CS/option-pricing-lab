@@ -103,3 +103,28 @@ def test_daily_knock_in_prices_do_not_move_with_the_window_shortcut(monkeypatch)
     monkeypatch.delattr(Scenario, "extreme")  # the evaluator falls back to fixings(...).min(axis=1)
     slow = price_many(p.program, SPX.model("bs"), SPX.market, [{}], **kw)[0]
     assert np.array_equal(fast.pairs, slow.pairs)
+
+
+# --- forward control variates (opt-in) ---
+
+@pytest.mark.parametrize("model", ["lv", "slv"])
+def test_forward_controls_reduce_the_variance_without_moving_the_price(model):
+    from optlab.structured.pricer import price_many
+    p = compile_sheet(preset("phoenix"), SPX.valuation)
+    kw = dict(n_paths=60_000, seed=8, batch=20_000, valuation=SPX.valuation)
+    plain = price_many(p.program, SPX.model(model), SPX.market, [{}], **kw)[0]
+    ctrl = price_many(p.program, SPX.model(model), SPX.market, [{}], control_forwards=True, **kw)[0]
+    assert ctrl.timings["variance_ratio"] > 1.2
+    assert ctrl.stderr < plain.stderr
+    assert abs(ctrl.price - plain.price) <= 4 * plain.stderr
+
+
+def test_the_coupon_solver_stays_exact_with_forward_controls():
+    from optlab.structured.pricer import price_many
+    from optlab.structured.quote import quote
+    q = quote(preset("phoenix", **{"general.maturity_months": 12}), SPX, control=None, n_paths=40_000,
+              batch=10_000, control_forwards=True)
+    cpn = q.coupon_rate * q.product.coupon_scale
+    again = price_many(q.product.program, SPX.model("slv"), SPX.market, [{"cpn": cpn}], n_paths=40_000,
+                       seed=q.decision.seed, batch=10_000, valuation=SPX.valuation, control_forwards=True)[0]
+    assert again.price == pytest.approx(98.0, abs=1e-8)

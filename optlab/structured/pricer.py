@@ -57,12 +57,16 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
                batch: int | None = None, smoothing: float = 0.0, valuation=None, calendar=None, notional=None,
                check_redemption: bool = True, initial_fixing: float | dict | None = None,
                fixings: dict | None = None, workers: int | None = None, spot_factors: list | None = None,
-               smoothings: list | None = None, **sim_kwargs) -> list[StructuredResult]:
+               smoothings: list | None = None, control_forwards: bool = False,
+               **sim_kwargs) -> list[StructuredResult]:
     """Price one script for several parameter sets on the same paths (common random numbers). `fixings` gives the
     past fixings of a running product as {underlying: {date: level}}; flows paid up to the valuation date are
     excluded from the value. `workers` runs the batches on a process pool (same numbers bit for bit);
     `spot_factors` evaluates each parameter set on the paths scaled by its factor (a sticky-moneyness spot bump,
-    the product keeping its initial fixing); `smoothings` gives each parameter set its own smoothing."""
+    the product keeping its initial fixing); `smoothings` gives each parameter set its own smoothing.
+    `control_forwards` uses S(t) / F(t) - 1 at the script's observation dates as control variates (exact mean
+    zero in every model): the coefficients are fitted on the same paths, per parameter set, so the corrected price
+    stays affine in the coupon; the variance ratio is reported in `timings`."""
     t_start = time.perf_counter()
     fmt = fmt or Note()
     program = _program(script)
@@ -92,7 +96,8 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
     else:
         spot0 = market.spot if initial_fixing is None else initial_fixing
     n_sets = len(param_sets)
-    evaluations = [Evaluation(program, timeline, p, fmt, N, eps, check_redemption, f)
+    controls = _forward_controls(program, timeline, model, market) if control_forwards else ()
+    evaluations = [Evaluation(program, timeline, p, fmt, N, eps, check_redemption, f, controls)
                    for p, N, f, eps in zip(param_sets, notionals, spot_factors or [1.0] * n_sets,
                                            smoothings or [smoothing] * n_sets)]
     totals, timings = engine.run(model, market, name, timeline.sim_times, n_paths, seed, batch, spot0, history,
@@ -111,6 +116,9 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
     for i in range(len(evaluations)):
         tot = totals[i]
         d = np.concatenate(tot.pairs)
+        own_timings = dict(timings)
+        if control_forwards and tot.controls:
+            d, own_timings["variance_ratio"] = _controlled(d, np.concatenate(tot.controls))
         own = warnings + tot.warnings
         if not np.all(np.isfinite(d)):
             own = own + [f"non-finite present values on {np.mean(~np.isfinite(d)):.2%} of the pairs"]
@@ -123,12 +131,28 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
         N = notionals[i]
         results.append(StructuredResult(
             value=value, price=100 * value.price / N, stderr=100 * value.stderr / N, fmt=fmt.name, notional=N,
-            n_paths=n_paths, seconds=seconds, timings=dict(timings),
+            n_paths=n_paths, seconds=seconds, timings=own_timings,
             event_times=timeline.event_times, termination=term,
             expected_flows={k: v / n_paths for k, v in tot.flows.items()}, expected_life=life,
             redemption_probabilities={t: v / n_paths for t, v in tot.redemption.items()}, warnings=own,
             pairs=d))
     return results
+
+
+def _forward_controls(program, timeline, model, market) -> tuple:
+    from .profile import profile
+    times = profile(program, timeline).observation_times
+    names = program.underlying_names
+    markets = model.markets if isinstance(model, Basket) else {names[0]: market}
+    return tuple((n, t, float(markets[n].F(t))) for n in names for t in times)
+
+
+def _controlled(d: np.ndarray, X: np.ndarray):
+    """d - X beta with beta fitted by least squares on centred data; returns it and var(d) / var(corrected)."""
+    Xc, dc = X - X.mean(axis=0), d - d.mean()
+    beta = np.linalg.lstsq(Xc, dc, rcond=None)[0]
+    corrected = d - X @ beta
+    return corrected, float(np.var(d) / np.var(corrected))
 
 
 def check_fixing_scale(history: dict, spot: float, name: str, band=(0.2, 5.0)):

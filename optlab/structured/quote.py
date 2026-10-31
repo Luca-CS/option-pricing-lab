@@ -113,7 +113,7 @@ def wrapper(sheet: TermSheet, product: CompiledProduct):
 
 def _pricer(product: CompiledProduct, ctx: PricingContext, fmt, decision: PricingDecision, prof: ProductProfile,
             model_name: str, method: str, n_paths: int | None = None, fixings: dict | None = None,
-            workers: int | None = None):
+            workers: int | None = None, control_forwards: bool = False):
     program, valuation = product.program, product.valuation
     clock = Clock(valuation, product.calendar)
     timeline = build_timeline(program, clock)
@@ -131,21 +131,22 @@ def _pricer(product: CompiledProduct, ctx: PricingContext, fmt, decision: Pricin
         model = ctx.model(model_name, T, names) if isinstance(ctx, BasketContext) else ctx.model(model_name, T)
         return price_many(program, model, ctx.market, param_sets, fmt, n_paths or decision.n_paths, decision.seed,
                           decision.batch, valuation=valuation, fixings=fixings, calendar=product.calendar,
-                          workers=workers)
+                          workers=workers, control_forwards=control_forwards)
     return run
 
 
 def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None = None, control="default",
           n_paths: int = 200_000, batch: int = 25_000, seed: int = DEFAULT_SEED, control_paths: int | None = None,
           fixings: dict | None = None, with_greeks: bool = False, slv_vega: bool = False,
-          workers: int | None = None) -> Quote:
+          workers: int | None = None, control_forwards: bool = False) -> Quote:
     """Price a term sheet with the policy model. In 'coupon' mode the coupon is solved so that the note price is
     100 - margin, or the swap upfront is -margin (zero upfront paid, the margin kept by the bank); in 'upfront' mode
     the coupon is given and the result is the note price, or the swap upfront paid by the investor (leg value +
     margin). A running product (strike date before the valuation date) needs its past `fixings`. `with_greeks`
     adds delta and vega with the policy model, on the same paths, at the solved coupon (under SLV, the vega needs
     `slv_vega=True`: the leverage is recalibrated on the shifted surfaces). `workers` runs the Monte Carlo batches
-    on a process pool (same numbers bit for bit)."""
+    on a process pool (same numbers bit for bit); `control_forwards` adds forward control variates to the Monte
+    Carlo estimator."""
     t0 = time.perf_counter()
     ctx = ctx or PricingContext.from_calibration()
     product = compile_sheet(sheet, ctx.valuation)
@@ -160,7 +161,7 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
     fmt = wrapper(sheet, product)
     margin = 100 * sheet.get("wrapper.margin")
     run = _pricer(product, ctx, fmt, decision, prof, decision.model, decision.method, fixings=fixings,
-                  workers=workers)
+                  workers=workers, control_forwards=control_forwards)
     cpn = product.coupon_param
     target = rate = rate_se = upfront = None
     if sheet.get("wrapper.solve") == "coupon":

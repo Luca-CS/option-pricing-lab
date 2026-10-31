@@ -38,6 +38,7 @@ class Evaluation:
     smoothing: float = 0.0
     check_redemption: bool = True
     spot_factor: float | dict = 1.0  # float for one name, {name: factor} for a basket
+    controls: tuple = ()  # (name, time, forward): S(t) / F(t) - 1 has mean zero, a control variate
 
 
 @dataclass
@@ -48,10 +49,13 @@ class Totals:
     flows: dict = field(default_factory=dict)
     redemption: dict = field(default_factory=dict)
     warnings: list = field(default_factory=list)
+    controls: list = field(default_factory=list)
 
     def add(self, summary):
-        pairs, terminated, flows, red, warnings = summary
+        pairs, terminated, flows, red, warnings, controls = summary
         self.pairs.append(pairs)
+        if controls is not None:
+            self.controls.append(controls)
         self.terminated = terminated.copy() if self.terminated is None else self.terminated + terminated
         for key, v in flows.items():
             self.flows[key] = self.flows.get(key, 0.0) + v
@@ -83,14 +87,24 @@ def _scaled(scenario, factor):
     return Scenario(scenario.name, scenario.times, scenario.paths * factor, scenario.spot0, scenario.history)
 
 
+def _controls(ev: Evaluation, scenario):
+    """(pairs, controls) matrix of pair-averaged S(t) / (f F(t)) - 1 at the control dates."""
+    cols = []
+    for name, t, fwd in ev.controls:
+        f = ev.spot_factor.get(name, 1.0) if isinstance(ev.spot_factor, dict) else ev.spot_factor
+        cols.append(pair_averages(scenario.spot(name, t) / (f * fwd) - 1.0))
+    return np.stack(cols, axis=1)
+
+
 def _summary(ev: Evaluation, scenario, market):
-    out = Evaluator(ev.program, ev.timeline, ev.params, ev.smoothing, ev.check_redemption).run(
-        _scaled(scenario, ev.spot_factor))
+    scenario = _scaled(scenario, ev.spot_factor)
+    out = Evaluator(ev.program, ev.timeline, ev.params, ev.smoothing, ev.check_redemption).run(scenario)
     pairs = pair_averages(ev.fmt.present_values(out, market, ev.notional))
     terminated = np.array([np.sum(d) for d in out.terminated])
     flows = {key: float(np.sum(f)) for key, f in out.flows.items()}
     red = {t: float(np.sum(w)) for t, w in out.redemption_weights.items()}
-    return pairs, terminated, flows, red, list(out.warnings)
+    controls = _controls(ev, scenario) if ev.controls else None
+    return pairs, terminated, flows, red, list(out.warnings), controls
 
 
 def run_batch(job):
