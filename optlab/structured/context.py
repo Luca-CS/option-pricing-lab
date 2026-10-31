@@ -51,13 +51,21 @@ class PricingContext:
     def atm_vol(self, T: float) -> float:
         return float(self.surface.iv(0.0, T))
 
-    def model(self, name: str, T: float = 1.0):
-        """'bs' (ATM vol at T), 'heston', 'lv' (Dupire on SVI) or 'slv'."""
+    def model(self, name: str, T: float = 1.0, fast: bool = False):
+        """'bs' (ATM vol at T), 'heston', 'lv' (Dupire on SVI) or 'slv'. With `fast`, local vol is tabulated per
+        step and the SLV leverage sits on uniform grids (fastmodels: about 1e-4 relative interpolation error, prices
+        within a small fraction of the Monte Carlo error)."""
         name = name.lower()
         if name == "bs":
             return BlackScholesModel(self.atm_vol(T))
         if name == "heston":
             return HestonModel(self.heston)
+        if name == "lv" and fast:
+            from .fastmodels import TabulatedLocalVol
+            return TabulatedLocalVol(self.surface)
+        if name == "slv" and fast:
+            from .fastmodels import fast_slv
+            return fast_slv(self.slv)
         if name == "lv":
             return LocalVolModel(self.surface)
         if name == "slv":

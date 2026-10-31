@@ -160,3 +160,28 @@ def test_rqmc_needs_a_power_of_two():
     from optlab.structured.qmc import SobolNormals
     with pytest.raises(ValueError, match="power of two"):
         SobolNormals(1000, np.linspace(0, 1, 5), 1, 0)
+
+
+# --- grid-interpolated models (opt-in) ---
+
+def test_uniform_leverage_and_tabulated_local_vol_interpolate_closely():
+    from optlab.structured.fastmodels import TabulatedLocalVol, UniformLeverage
+    lev, ul = SPX.slv.leverage, UniformLeverage(SPX.slv.leverage)
+    for i in range(0, len(lev.times), 10):
+        xs = np.linspace(lev.x_grids[i][0] - 0.1, lev.x_grids[i][-1] + 0.1, 2000)
+        assert np.max(np.abs(ul(lev.times[i], xs) / lev(lev.times[i], xs) - 1)) < 1e-3
+    tab = TabulatedLocalVol(SPX.surface)
+    for t in (0.02, 0.5, 1.5):
+        sd = float(np.sqrt(SPX.surface.w(0.0, t)))
+        xs = np.linspace(-4 * sd, 3 * sd, 2001)
+        assert np.max(np.abs(tab.inst_var(t, xs, None) / SPX.surface.local_var(xs, t) - 1)) < 2e-4
+
+
+@pytest.mark.parametrize("model", ["lv", "slv"])
+def test_fast_models_price_within_a_small_fraction_of_the_error(model):
+    from optlab.structured.pricer import price_many
+    p = compile_sheet(preset("phoenix", **{"general.maturity_months": 12}), SPX.valuation)
+    kw = dict(n_paths=40_000, seed=12, batch=10_000, valuation=SPX.valuation)
+    ref = price_many(p.program, SPX.model(model), SPX.market, [{}], **kw)[0]
+    fast = price_many(p.program, SPX.model(model, fast=True), SPX.market, [{}], **kw)[0]
+    assert abs(fast.price - ref.price) < 0.25 * ref.stderr
