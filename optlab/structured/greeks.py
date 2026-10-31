@@ -93,12 +93,14 @@ def _diff(up, down, scale):
 def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, fmt=None, valuation=None,
            n_paths: int = 200_000, seed: int = DEFAULT_SEED, batch: int | None = 25_000, smoothing: float = 0.005,
            h_spot: float = 0.01, h_vol: float = 0.01, T_obs: float | None = None, slv_vega: bool = False,
-           n_particles: int = 200_000, calendar=None) -> Greeks:
+           n_particles: int = 200_000, calendar=None, workers: int | None = None) -> Greeks:
     """Delta and vega of a program under `model` ('bs', 'lv', 'slv', 'heston') or by replication on the surface
     (method 'replication'), with central differences. Monte Carlo digitals are smoothed (ramp of relative width
     `smoothing`); the bias this adds to the price is measured on the same paths. With `slv_vega`, the SLV
     leverage is recalibrated (particle method, `n_particles`, same seed up and down) on each shifted surface:
-    about half a minute per calibration at 200,000 particles."""
+    about half a minute per calibration at 200,000 particles. Under Monte Carlo, the exact and smoothed base and
+    the two spot bumps are evaluated on one simulation: at sticky moneyness a spot bump multiplies the paths
+    exactly, so only the vega needs new paths."""
     import time
     fmt = fmt or Note()
     valuation = valuation or ctx.valuation
@@ -110,6 +112,16 @@ def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, f
         times = profile(program, timeline).observation_times
         T_obs = times[-1] if times else horizon
     seconds = {}
+
+    def mc_model(vol_shift=0.0):
+        surface = ShiftedSurface(ctx.surface, vol_shift) if vol_shift else ctx.surface
+        if model == "bs":
+            return BlackScholesModel(ctx.atm_vol(horizon) + vol_shift)
+        if model == "lv":
+            return LocalVolModel(surface)
+        if vol_shift and not (model == "slv" and slv_vega):
+            return None
+        return _recalibrated_slv(ctx, surface, horizon, n_particles, seed) if vol_shift else ctx.model(model, horizon)
 
     def run(spot_factor=1.0, vol_shift=0.0, eps=smoothing):
         market = ctx.market.scaled(S0 * spot_factor) if spot_factor != 1.0 else ctx.market
@@ -125,16 +137,25 @@ def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, f
                 return None
             m = _recalibrated_slv(ctx, surface, horizon, n_particles, seed) if vol_shift else ctx.model(model, horizon)
         return price_many(program, m, market, [params or {}], fmt, n_paths, seed, batch, smoothing=eps,
-                          valuation=valuation, initial_fixing=S0, calendar=calendar)[0]
+                          valuation=valuation, initial_fixing=S0, calendar=calendar, workers=workers)[0]
 
     t0 = time.perf_counter()
     eps = 0.0 if method == "replication" else smoothing
-    base_exact = run(eps=0.0)
-    base = run() if eps else base_exact
-    bias, bias_se = _diff(base, base_exact, 1.0)
-    seconds["base"] = time.perf_counter() - t0
-    t0 = time.perf_counter()
-    up, down = run(1 + h_spot, eps=eps), run(1 - h_spot, eps=eps)
+    if method == "replication":
+        base_exact = base = run(eps=0.0)
+        bias, bias_se = 0.0, 0.0
+        seconds["base"] = time.perf_counter() - t0
+        t0 = time.perf_counter()
+        up, down = run(1 + h_spot, eps=0.0), run(1 - h_spot, eps=0.0)
+    else:
+        p = params or {}
+        base_exact, base, up, down = price_many(
+            program, mc_model(), ctx.market, [p, p, p, p], fmt, n_paths, seed, batch, smoothings=[0.0, eps, eps, eps],
+            spot_factors=[1.0, 1.0, 1 + h_spot, 1 - h_spot], valuation=valuation, initial_fixing=S0,
+            calendar=calendar, workers=workers)
+        bias, bias_se = _diff(base, base_exact, 1.0)
+        seconds["base"] = time.perf_counter() - t0
+        t0 = time.perf_counter()
     delta, delta_se = _diff(up, down, 0.01 / (2 * h_spot))
     seconds["delta"] = time.perf_counter() - t0
     t0 = time.perf_counter()

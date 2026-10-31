@@ -38,3 +38,46 @@ def test_local_vol_prices_do_not_move_with_the_fast_surface():
     b = price(p.program, LocalVolModel(SPX.surface), SPX.market, n_paths=4_000, seed=3, valuation=SPX.valuation)
     assert a.value.price == b.value.price and a.value.stderr == b.value.stderr
     assert pytest.approx(a.price) == b.price
+
+
+# --- batches on a process pool, Greeks on one simulation ---
+
+def test_process_pool_gives_the_same_numbers_bit_for_bit():
+    from optlab.structured import engine
+    from optlab.structured.portfolio import Book, Position
+    from optlab.structured.pricer import price_many
+    p = compile_sheet(preset("phoenix", **{"general.maturity_months": 12}), SPX.valuation)
+    kw = dict(n_paths=40_000, seed=7, batch=10_000, valuation=SPX.valuation)
+    seq = price_many(p.program, SPX.model("slv"), SPX.market, [{}, {"cpn": 0.03}], **kw)
+    par = price_many(p.program, SPX.model("slv"), SPX.market, [{}, {"cpn": 0.03}], workers=2, **kw)
+    for a, b in zip(seq, par):
+        assert np.array_equal(a.pairs, b.pairs) and np.array_equal(a.termination, b.termination)
+        assert a.expected_flows == b.expected_flows
+    assert par[0].timings["workers"] == 2
+    book = Book([Position("a", preset("phoenix", **{"general.maturity_months": 12}), 2.0),
+                 Position("b", preset("barrier_reverse_convertible", **{"wrapper.solve": "upfront"}), -1.0)])
+    r1 = book.price(SPX, model="lv", n_paths=20_000, batch=10_000)
+    r2 = book.price(SPX, model="lv", n_paths=20_000, batch=10_000, workers=2)
+    assert np.array_equal(r1.pairs, r2.pairs) and r1.value == r2.value
+    engine.shutdown_pool()
+
+
+def test_scaled_paths_are_the_bumped_market_paths():
+    from optlab.models import simulate
+    times = [0.25, 0.5, 1.0]
+    for name in ("bs", "heston", "lv", "slv"):
+        m = SPX.model(name, 1.0)
+        base = simulate(m, SPX.market, times, 2_000, np.random.default_rng(1))
+        bumped = simulate(m, SPX.market.scaled(101.0), times, 2_000, np.random.default_rng(1))
+        assert np.max(np.abs(bumped / (1.01 * base) - 1)) < 1e-13
+
+
+def test_one_simulation_delta_equals_the_bumped_market_delta():
+    from optlab.structured.pricer import price_many
+    p = compile_sheet(preset("phoenix", **{"general.maturity_months": 12}), SPX.valuation)
+    m, kw = SPX.model("lv"), dict(n_paths=10_000, seed=4, batch=5_000, valuation=SPX.valuation, smoothing=0.005,
+                                  initial_fixing=100.0)
+    up, down = price_many(p.program, m, SPX.market, [{}, {}], spot_factors=[1.01, 0.99], **kw)
+    up_m = price_many(p.program, m, SPX.market.scaled(101.0), [{}], **kw)[0]
+    down_m = price_many(p.program, m, SPX.market.scaled(99.0), [{}], **kw)[0]
+    assert (up.price - down.price) == pytest.approx(up_m.price - down_m.price, abs=1e-10)

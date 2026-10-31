@@ -19,19 +19,19 @@ import numpy as np
 from ..config import DEFAULT_SEED
 from ..models import BlackScholesModel, LocalVolModel
 from ..products import MCResult
-from .cashflows import Note, Swap, pair_averages
+from .cashflows import Note, Swap
 from .compiler import compile_sheet
 from .context import PricingContext
 from .greeks import ShiftedSurface, _recalibrated_slv
 from .units import BOOK_UNITS
 from .policy import RULES, decide
-from .multiasset import BasketContext, basket_scenarios
+from . import engine
+from .engine import Evaluation
+from .multiasset import BasketContext
 from .pricer import basket_history, check_fixing_scale
 from .profile import ProductProfile, profile
 from .replication import replication_result
-from .scenario import simulated_scenarios
 from .schema import TermSheet
-from .script.evaluator import Evaluator
 from .script.parser import parse
 from .script.timeline import Clock, build_timeline
 from .script.validate import validate
@@ -144,9 +144,12 @@ class Book:
 
     def price(self, ctx: PricingContext | None = None, model: str | None = None, n_paths: int = 200_000,
               seed: int = DEFAULT_SEED, batch: int | None = 25_000, smoothing: float = 0.0, market=None, surface=None,
-              initial_fixing: float | dict | None = None, sim_model=None) -> BookResult:
+              initial_fixing: float | dict | None = None, sim_model=None, workers: int | None = None,
+              spot_factors: list | None = None):
         """Value of the book. `model` forces one model for every position ('bs', 'lv', 'heston', 'slv', or
-        'surface' for an all-European book); `market`/`surface` override the context (bumps)."""
+        'surface' for an all-European book); `market`/`surface` override the context (bumps); `workers` runs the
+        batches on a process pool (same numbers bit for bit). With `spot_factors` (Monte Carlo only), a list of
+        BookResult is returned, one per factor (a float, or {name: factor} for a basket), all on one simulation."""
         t0 = time.perf_counter()
         ctx = ctx or PricingContext.from_calibration()
         basket = isinstance(ctx, BasketContext)
@@ -187,34 +190,36 @@ class Book:
         times = np.unique(np.concatenate([it["timeline"].sim_times for it in items]))
         if basket:
             names = tuple(n for n in ctx.names if n in d_names)
-            scenarios = basket_scenarios(ctx.model(d.model, horizon, names), times, n_paths, seed, batch, history,
-                                         initial_fixing)
+            sim, name, hist = ctx.model(d.model, horizon, names), names[0], history
+            spot0 = {n: (initial_fixing or {}).get(n, ctx.markets[n].spot) for n in names}
         else:
             (name,) = d_names
-            sim = sim_model or self._model(d.model, ctx, surface, horizon)
-            scenarios = simulated_scenarios(sim, market, name, times, n_paths, seed, batch, initial_fixing,
-                                            history.get(name, {}))
-        evaluators = [Evaluator(it["program"], it["timeline"], it["pos"].params, smoothing) for it in items]
-        pos_pairs = [[] for _ in items]
-        for scenario in scenarios:
-            for i, (it, ev) in enumerate(zip(items, evaluators)):
-                N = float(ev.params.get("N", 1.0))
-                pv = it["fmt"].present_values(ev.run(scenario), market, N)
-                pos_pairs[i].append(it["pos"].quantity * pair_averages(pv))
-        pos_pairs = [np.concatenate(p) for p in pos_pairs]
-        book = np.sum(pos_pairs, axis=0)
-        results = []
-        for it, ev, p in zip(items, evaluators, pos_pairs):
-            q, N = it["pos"].quantity, float(ev.params.get("N", 1.0))
-            v, se = float(p.mean()), float(p.std(ddof=1) / np.sqrt(len(p)))
-            unit = 100 * v / (q * N) if q else 0.0
-            unit_se = 100 * se / abs(q * N) if q else 0.0
-            results.append(PositionResult(it["pos"].name, q, unit, unit_se, v, se, it["profile"].product_class))
+            sim, hist = sim_model or self._model(d.model, ctx, surface, horizon), history.get(name, {})
+            spot0 = market.spot if initial_fixing is None else initial_fixing
         if smoothing:
             warnings.append(f"digital smoothing {smoothing:.2%}: prices are slightly biased")
-        res = MCResult(float(book.mean()), float(book.std(ddof=1) / np.sqrt(len(book))), n_paths)
-        return BookResult(results, res.price, res.stderr, "monte_carlo", d.model, reason, n_paths,
-                          time.perf_counter() - t0, warnings, book, pos_pairs, getattr(ctx, "snapshot_id", None))
+        notionals = [float({**it["program"].param_values, **it["pos"].params}.get("N", 1.0)) for it in items]
+        factors = spot_factors or [1.0]
+        evaluations = [Evaluation(it["program"], it["timeline"], it["pos"].params, it["fmt"], N, smoothing, True, f)
+                       for f in factors for it, N in zip(items, notionals)]
+        totals, _ = engine.run(sim, market, name, times, n_paths, seed, batch, spot0, hist, evaluations, workers)
+        out = []
+        for k in range(len(factors)):
+            chunk = totals[k * len(items):(k + 1) * len(items)]
+            pos_pairs = [it["pos"].quantity * np.concatenate(tot.pairs) for it, tot in zip(items, chunk)]
+            book = np.sum(pos_pairs, axis=0)
+            results = []
+            for it, N, p in zip(items, notionals, pos_pairs):
+                q = it["pos"].quantity
+                v, se = float(p.mean()), float(p.std(ddof=1) / np.sqrt(len(p)))
+                unit = 100 * v / (q * N) if q else 0.0
+                unit_se = 100 * se / abs(q * N) if q else 0.0
+                results.append(PositionResult(it["pos"].name, q, unit, unit_se, v, se, it["profile"].product_class))
+            res = MCResult(float(book.mean()), float(book.std(ddof=1) / np.sqrt(len(book))), n_paths)
+            out.append(BookResult(results, res.price, res.stderr, "monte_carlo", d.model, reason, n_paths,
+                                  time.perf_counter() - t0, warnings, book, pos_pairs,
+                                  getattr(ctx, "snapshot_id", None)))
+        return out if spot_factors is not None else out[0]
 
     @staticmethod
     def _model(name, ctx, surface, horizon):
@@ -226,22 +231,27 @@ class Book:
 
     def greeks(self, ctx: PricingContext | None = None, model: str | None = None, n_paths: int = 200_000,
                seed: int = DEFAULT_SEED, batch: int | None = 25_000, smoothing: float = 0.005, h_spot: float = 0.01,
-               h_vol: float = 0.01, slv_vega: bool = False, n_particles: int = 200_000) -> dict:
+               h_vol: float = 0.01, slv_vega: bool = False, n_particles: int = 200_000,
+               workers: int | None = None) -> dict:
         """Book delta (currency per +1 % spot) and vega (per +1 vol point) by central bumps of the shared
         simulation, per position and in total, with standard errors. Products keep their initial fixing."""
         ctx = ctx or PricingContext.from_calibration()
         if isinstance(ctx, BasketContext):
-            return self._basket_greeks(ctx, model, n_paths, seed, batch, smoothing, h_spot, h_vol)
+            return self._basket_greeks(ctx, model, n_paths, seed, batch, smoothing, h_spot, h_vol, workers)
         items = self._prepare(ctx)
         d = self.decision(ctx, items, model)
         eps = 0.0 if d.method == "replication" else smoothing
         S0 = ctx.market.spot
-        kw = dict(ctx=ctx, model=model, n_paths=n_paths, seed=seed, batch=batch, smoothing=eps, initial_fixing=S0)
+        kw = dict(ctx=ctx, model=model, n_paths=n_paths, seed=seed, batch=batch, smoothing=eps, initial_fixing=S0,
+                  workers=workers)
         out = {"method": d.method, "model": d.model, "smoothing": eps, "units": dict(BOOK_UNITS)}
 
         bump = _bump
-        up = self.price(market=ctx.market.scaled(S0 * (1 + h_spot)), **kw)
-        down = self.price(market=ctx.market.scaled(S0 * (1 - h_spot)), **kw)
+        if d.method == "replication":
+            up = self.price(market=ctx.market.scaled(S0 * (1 + h_spot)), **kw)
+            down = self.price(market=ctx.market.scaled(S0 * (1 - h_spot)), **kw)
+        else:  # sticky moneyness: the bumped paths are the base paths times the factor, one simulation
+            up, down = self.price(spot_factors=[1 + h_spot, 1 - h_spot], **kw)
         out["delta"] = dict(zip(("positions", "positions_se", "total", "total_se"),
                                 bump(up, down, 0.01 / (2 * h_spot))))
         if d.model == "heston" or (d.model == "slv" and not slv_vega):
@@ -261,20 +271,24 @@ class Book:
         out["names"] = [p.name for p in self.positions]
         return out
 
-    def _basket_greeks(self, ctx, model, n_paths, seed, batch, smoothing, h_spot, h_vol) -> dict:
+    def _basket_greeks(self, ctx, model, n_paths, seed, batch, smoothing, h_spot, h_vol, workers=None) -> dict:
         """Delta and vega per underlying name (each name bumped alone, the others fixed), on common paths."""
         items = self._prepare(ctx)
         d = self.decision(ctx, items, model)
         names = [n for n in ctx.names if any(n in it["underlyings"] for it in items)]
         fixing = {n: ctx.markets[n].spot for n in names}
-        kw = dict(model=model, n_paths=n_paths, seed=seed, batch=batch, smoothing=smoothing, initial_fixing=fixing)
+        kw = dict(model=model, n_paths=n_paths, seed=seed, batch=batch, smoothing=smoothing, initial_fixing=fixing,
+                  workers=workers)
         out = {"method": d.method, "model": d.model, "smoothing": smoothing, "names": [p.name for p in self.positions],
                "delta": {}, "vega": {}, "units": dict(BOOK_UNITS)}
-        for n in names:
-            up = self.price(ctx.bumped(n, spot_factor=1 + h_spot), **kw)
-            down = self.price(ctx.bumped(n, spot_factor=1 - h_spot), **kw)
+        # every name's spot bumps on one simulation: only that name's paths are scaled
+        factors = [{n: f} for n in names for f in (1 + h_spot, 1 - h_spot)]
+        bumped = self.price(ctx, spot_factors=factors, **kw)
+        for i, n in enumerate(names):
+            up, down = bumped[2 * i], bumped[2 * i + 1]
             out["delta"][n] = dict(zip(("positions", "positions_se", "total", "total_se"),
                                        _bump(up, down, 0.01 / (2 * h_spot))))
+        for n in names:
             vu = self.price(ctx.bumped(n, vol_shift=h_vol), **kw)
             vd = self.price(ctx.bumped(n, vol_shift=-h_vol), **kw)
             out["vega"][n] = dict(zip(("positions", "positions_se", "total", "total_se"),

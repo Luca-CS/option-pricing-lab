@@ -11,9 +11,10 @@ from ..log import get_logger
 from ..market import Market
 from ..models import Model
 from ..products import MCResult
-from .cashflows import Note, pair_averages
-from .multiasset import Basket, basket_scenarios
-from .scenario import simulated_scenarios
+from .cashflows import Note
+from . import engine
+from .engine import Evaluation
+from .multiasset import Basket
 from .script.evaluator import Evaluator
 from .script.nodes import DateLit, Program
 from .script.parser import parse
@@ -54,11 +55,14 @@ def _program(script) -> Program:
 
 def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_paths: int = 100_000, seed=0,
                batch: int | None = None, smoothing: float = 0.0, valuation=None, calendar=None, notional=None,
-               check_redemption: bool = True, initial_fixing: float | None = None, fixings: dict | None = None,
-               **sim_kwargs) -> list[StructuredResult]:
+               check_redemption: bool = True, initial_fixing: float | dict | None = None,
+               fixings: dict | None = None, workers: int | None = None, spot_factors: list | None = None,
+               smoothings: list | None = None, **sim_kwargs) -> list[StructuredResult]:
     """Price one script for several parameter sets on the same paths (common random numbers). `fixings` gives the
     past fixings of a running product as {underlying: {date: level}}; flows paid up to the valuation date are
-    excluded from the value."""
+    excluded from the value. `workers` runs the batches on a process pool (same numbers bit for bit);
+    `spot_factors` evaluates each parameter set on the paths scaled by its factor (a sticky-moneyness spot bump,
+    the product keeping its initial fixing); `smoothings` gives each parameter set its own smoothing."""
     t_start = time.perf_counter()
     fmt = fmt or Note()
     program = _program(script)
@@ -77,65 +81,52 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
             check_fixing_scale(h, model.markets[n].spot, n)
     else:
         check_fixing_scale(history, market.spot, name)
-    evaluators = [Evaluator(program, timeline, p, smoothing, check_redemption) for p in param_sets]
-    notionals = [float(notional if notional is not None else ev.params.get("N", 1.0)) for ev in evaluators]
-    pairs = [[] for _ in evaluators]
-    terminated = [np.zeros(len(program.events)) for _ in evaluators]
-    flows = [{} for _ in evaluators]
-    red = [{} for _ in evaluators]
-    batch_warnings = [[] for _ in evaluators]
-    t_sim = t_eval = 0.0
+    merged = [{**program.param_values, **(p or {})} for p in param_sets]
+    for p in param_sets:  # unknown parameters fail here, before any simulation
+        Evaluator(program, timeline, p, smoothing, check_redemption)
+    notionals = [float(notional if notional is not None else m.get("N", 1.0)) for m in merged]
     if basket:
-        if initial_fixing is not None:
-            raise ValueError("initial_fixing is for single-underlying scripts")
-        scenarios = basket_scenarios(model, timeline.sim_times, n_paths, seed, batch, history, **sim_kwargs)
+        if initial_fixing is not None and not isinstance(initial_fixing, dict):
+            raise ValueError("initial_fixing of a basket is a {name: level} dict")
+        spot0 = {n: (initial_fixing or {}).get(n, model.markets[n].spot) for n in model.names}
     else:
-        scenarios = simulated_scenarios(model, market, name, timeline.sim_times, n_paths, seed, batch,
-                                        initial_fixing, history, **sim_kwargs)
-    while True:
-        t0 = time.perf_counter()
-        scenario = next(scenarios, None)
-        t_sim += time.perf_counter() - t0
-        if scenario is None:
-            break
-        t0 = time.perf_counter()
-        for i, ev in enumerate(evaluators):
-            out = ev.run(scenario)
-            pairs[i].append(pair_averages(fmt.present_values(out, market, notionals[i])))
-            terminated[i] += np.array([np.sum(d) for d in out.terminated])
-            for key, f in out.flows.items():
-                flows[i][key] = flows[i].get(key, 0.0) + float(np.sum(f))
-            for t, w in out.redemption_weights.items():
-                red[i][t] = red[i].get(t, 0.0) + float(np.sum(w))
-            batch_warnings[i] += [w for w in out.warnings if w not in batch_warnings[i]]
-        t_eval += time.perf_counter() - t0
+        spot0 = market.spot if initial_fixing is None else initial_fixing
+    n_sets = len(param_sets)
+    evaluations = [Evaluation(program, timeline, p, fmt, N, eps, check_redemption, f)
+                   for p, N, f, eps in zip(param_sets, notionals, spot_factors or [1.0] * n_sets,
+                                           smoothings or [smoothing] * n_sets)]
+    totals, timings = engine.run(model, market, name, timeline.sim_times, n_paths, seed, batch, spot0, history,
+                                 evaluations, workers, **sim_kwargs)
+    t_sim, t_eval = timings["simulation"], timings["evaluation"]
     seconds = time.perf_counter() - t_start
     warnings = []
     if any(t <= 0 for t in timeline.pay_times if t is not None):
         warnings.append("some flows are already paid (on or before the valuation date): they are not in the value")
-    if smoothing:
-        warnings.append(f"digital smoothing active (eps = {smoothing:.2%}): prices are biased, see the solver notes")
+    if smoothing or any(smoothings or []):
+        eps = max([smoothing, *(smoothings or [])])
+        warnings.append(f"digital smoothing active (eps = {eps:.2%}): prices are biased, see the solver notes")
     LOG.debug("priced %s param set(s), %s paths, model %s, %s dates: simulation %.3f s, evaluation %.3f s",
-              len(evaluators), n_paths, type(model).__name__, len(timeline.sim_times), t_sim, t_eval)
+              len(evaluations), n_paths, type(model).__name__, len(timeline.sim_times), t_sim, t_eval)
     results = []
-    for i in range(len(evaluators)):
-        d = np.concatenate(pairs[i])
-        own = warnings + batch_warnings[i]
+    for i in range(len(evaluations)):
+        tot = totals[i]
+        d = np.concatenate(tot.pairs)
+        own = warnings + tot.warnings
         if not np.all(np.isfinite(d)):
             own = own + [f"non-finite present values on {np.mean(~np.isfinite(d)):.2%} of the pairs"]
             LOG.warning(own[-1])
         value = MCResult(float(d.mean()), float(d.std(ddof=1) / np.sqrt(len(d))), n_paths)
-        term = terminated[i] / n_paths
+        term = tot.terminated / n_paths
         alive_end = 1.0 - term.sum()
         remaining = np.maximum(timeline.event_times, 0.0)  # from the valuation date, for a running product
         life = float(np.dot(term, remaining) + alive_end * remaining[-1])
         N = notionals[i]
         results.append(StructuredResult(
             value=value, price=100 * value.price / N, stderr=100 * value.stderr / N, fmt=fmt.name, notional=N,
-            n_paths=n_paths, seconds=seconds, timings={"simulation": t_sim, "evaluation": t_eval},
+            n_paths=n_paths, seconds=seconds, timings=dict(timings),
             event_times=timeline.event_times, termination=term,
-            expected_flows={k: v / n_paths for k, v in flows[i].items()}, expected_life=life,
-            redemption_probabilities={t: v / n_paths for t, v in red[i].items()}, warnings=own,
+            expected_flows={k: v / n_paths for k, v in tot.flows.items()}, expected_life=life,
+            redemption_probabilities={t: v / n_paths for t, v in tot.redemption.items()}, warnings=own,
             pairs=d))
     return results
 

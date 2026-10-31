@@ -67,7 +67,8 @@ class Quote:
 LOG = get_logger(__name__)
 
 
-def _book_greeks(sheet: TermSheet, params: dict, fixings, ctx, decision: PricingDecision, slv_vega: bool):
+def _book_greeks(sheet: TermSheet, params: dict, fixings, ctx, decision: PricingDecision, slv_vega: bool,
+                 workers: int | None = None):
     """Greeks of a running product or of a basket, through a one-position book (which keeps the fixings and bumps
     each name), converted to % of notional. For a basket, delta and vega are the sums over the names (all names
     moved together, to first order) and `per_name` holds each name; the SE of a sum adds the SEs in quadrature."""
@@ -75,7 +76,8 @@ def _book_greeks(sheet: TermSheet, params: dict, fixings, ctx, decision: Pricing
     from .portfolio import Book, Position
     model = None if decision.method == "replication" else decision.model
     g = Book([Position("quote", sheet, 1.0, params=params, fixings=fixings)]).greeks(
-        ctx, model=model, n_paths=decision.n_paths, seed=decision.seed, batch=decision.batch, slv_vega=slv_vega)
+        ctx, model=model, n_paths=decision.n_paths, seed=decision.seed, batch=decision.batch, slv_vega=slv_vega,
+        workers=workers)
     scale = 100 / sheet.get("general.notional")
 
     def one(d):
@@ -110,7 +112,8 @@ def wrapper(sheet: TermSheet, product: CompiledProduct):
 
 
 def _pricer(product: CompiledProduct, ctx: PricingContext, fmt, decision: PricingDecision, prof: ProductProfile,
-            model_name: str, method: str, n_paths: int | None = None, fixings: dict | None = None):
+            model_name: str, method: str, n_paths: int | None = None, fixings: dict | None = None,
+            workers: int | None = None):
     program, valuation = product.program, product.valuation
     clock = Clock(valuation, product.calendar)
     timeline = build_timeline(program, clock)
@@ -127,19 +130,22 @@ def _pricer(product: CompiledProduct, ctx: PricingContext, fmt, decision: Pricin
         T = max(product.horizon, 1 / 365)
         model = ctx.model(model_name, T, names) if isinstance(ctx, BasketContext) else ctx.model(model_name, T)
         return price_many(program, model, ctx.market, param_sets, fmt, n_paths or decision.n_paths, decision.seed,
-                          decision.batch, valuation=valuation, fixings=fixings, calendar=product.calendar)
+                          decision.batch, valuation=valuation, fixings=fixings, calendar=product.calendar,
+                          workers=workers)
     return run
 
 
 def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None = None, control="default",
           n_paths: int = 200_000, batch: int = 25_000, seed: int = DEFAULT_SEED, control_paths: int | None = None,
-          fixings: dict | None = None, with_greeks: bool = False, slv_vega: bool = False) -> Quote:
+          fixings: dict | None = None, with_greeks: bool = False, slv_vega: bool = False,
+          workers: int | None = None) -> Quote:
     """Price a term sheet with the policy model. In 'coupon' mode the coupon is solved so that the note price is
     100 - margin, or the swap upfront is -margin (zero upfront paid, the margin kept by the bank); in 'upfront' mode
     the coupon is given and the result is the note price, or the swap upfront paid by the investor (leg value +
     margin). A running product (strike date before the valuation date) needs its past `fixings`. `with_greeks`
     adds delta and vega with the policy model, on the same paths, at the solved coupon (under SLV, the vega needs
-    `slv_vega=True`: the leverage is recalibrated on the shifted surfaces)."""
+    `slv_vega=True`: the leverage is recalibrated on the shifted surfaces). `workers` runs the Monte Carlo batches
+    on a process pool (same numbers bit for bit)."""
     t0 = time.perf_counter()
     ctx = ctx or PricingContext.from_calibration()
     product = compile_sheet(sheet, ctx.valuation)
@@ -153,7 +159,8 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
                       has_surfaces=getattr(ctx, "has_surfaces", True))
     fmt = wrapper(sheet, product)
     margin = 100 * sheet.get("wrapper.margin")
-    run = _pricer(product, ctx, fmt, decision, prof, decision.model, decision.method, fixings=fixings)
+    run = _pricer(product, ctx, fmt, decision, prof, decision.model, decision.method, fixings=fixings,
+                  workers=workers)
     cpn = product.coupon_param
     target = rate = rate_se = upfront = None
     if sheet.get("wrapper.solve") == "coupon":
@@ -170,18 +177,19 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
     ctrl = None
     if decision.control:
         ctrl_run = _pricer(product, ctx, fmt, decision, prof, decision.control, "monte_carlo",
-                           control_paths or decision.n_paths, fixings)
+                           control_paths or decision.n_paths, fixings, workers)
         (ctrl,) = ctrl_run([params])
     warnings = list(decision.warnings)
     if rate is not None and rate < 0:
         warnings.append("the solved coupon is negative: the product cannot reach the target price with a coupon")
     g = None
     if with_greeks and (basket or fixings):
-        g = _book_greeks(sheet, params, fixings, ctx, decision, slv_vega)
+        g = _book_greeks(sheet, params, fixings, ctx, decision, slv_vega, workers)
     elif with_greeks:
         from .greeks import greeks
         g = greeks(product.program, ctx, decision.model, decision.method, params, fmt, product.valuation,
-                   decision.n_paths, decision.seed, decision.batch, slv_vega=slv_vega, calendar=product.calendar)
+                   decision.n_paths, decision.seed, decision.batch, slv_vega=slv_vega, calendar=product.calendar,
+                   workers=workers)
     seconds = time.perf_counter() - t0
     LOG.info("quote %s %s: %s, %s, %.2f s", sheet.mask.name, ", ".join(sheet.underlyings), decision.label,
              f"coupon {rate:.6f} p.a." if rate is not None else f"upfront {upfront:.4f} %", seconds)
