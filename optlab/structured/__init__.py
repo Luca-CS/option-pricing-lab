@@ -14,12 +14,13 @@ from .portfolio import Book, BookResult, Position
 from .presets import PRESETS, preset
 from .pricer import StructuredResult, price, price_many
 from .quote import Quote, quote
-from .schema import MASKS, TermSheet, TermSheetError, describe
+from .schema import MASKS, TermSheet, TermSheetError, describe, json_schema
 from .script.lexer import ScriptError
+from .trade import Trade
 from .script.parser import parse
 from .script.printer import to_text
 from .script.validate import validate
 
 __all__ = ["Note", "Swap", "PricingContext", "StructuredResult", "price", "price_many", "ScriptError", "parse",
            "to_text", "validate", "compile_sheet", "RULES", "decide", "PRESETS", "preset", "Quote", "quote", "MASKS",
-           "TermSheet", "TermSheetError", "describe", "Book", "BookResult", "Position"]
+           "TermSheet", "TermSheetError", "describe", "json_schema", "Book", "BookResult", "Position", "Trade"]

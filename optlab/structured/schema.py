@@ -274,8 +274,33 @@ class TermSheet:
             return self.get("general.underlyings")
         return (self.get("general.underlying"),)
 
-    def to_dict(self) -> dict:
-        return {"type": self.mask.name, **{s: dict(v) for s, v in self.values.items()}}
+    def to_dict(self, json_safe: bool = False) -> dict:
+        """{"type": mask, section: {field: value}}; with json_safe, dates are ISO strings and tuples lists."""
+        out = {"type": self.mask.name, **{s: dict(v) for s, v in self.values.items()}}
+        if json_safe:
+            out = {k: ({f: _json(x) for f, x in v.items()} if isinstance(v, dict) else v) for k, v in out.items()}
+        return out
+
+    @classmethod
+    def from_dict(cls, d: dict, strict: bool = True) -> "TermSheet":
+        """Inverse of to_dict: computed fields (the gearing) are dropped, ISO dates and lists are accepted."""
+        d = dict(d)
+        if "type" not in d:
+            raise TermSheetError("a term-sheet dict needs its product type under 'type'")
+        mask = d.pop("type")
+        values = {}
+        for section, fields in d.items():
+            if section not in SECTIONS:
+                raise TermSheetError(f"unknown section {section!r}")
+            spec = {f.name: f for f in SECTIONS[section].fields}
+            values[section] = {}
+            for k, v in fields.items():
+                if k in spec and spec[k].derived:
+                    continue
+                if k in spec and spec[k].kind == "names" and isinstance(v, list):
+                    v = tuple(v)
+                values[section][k] = v
+        return cls(mask, values, strict)
 
     def __repr__(self) -> str:
         return f"TermSheet({self.mask.name!r}, {self.values!r})"
@@ -285,6 +310,42 @@ def _json(v):
     if isinstance(v, tuple):
         return list(v)
     return v.isoformat() if isinstance(v, dt.date) else v
+
+
+def json_schema() -> dict:
+    """JSON Schema (2020-12) of a term-sheet dict: one branch per mask, enums and bounds from the field list.
+    The visibility rules are listed per field under "x-visible-if"; the TermSheet constructor enforces them."""
+    kinds = {"number": "number", "int": "integer", "bool": "boolean", "choice": "string", "date": "string",
+             "names": "array"}
+    branches = []
+    for mask in MASKS.values():
+        props: dict = {"type": {"const": mask.name}}
+        for sname in mask.sections:
+            fields = {}
+            for f in SECTIONS[sname].fields:
+                if f.derived:
+                    continue
+                path = f"{sname}.{f.name}"
+                spec: dict = {"type": kinds[f.kind], "description": f.label + (f" ({f.unit})" if f.unit else "")}
+                if f.kind == "choice":
+                    spec["enum"] = list(mask.choices.get(path, f.choices))
+                if f.kind == "date":
+                    spec["format"] = "date"
+                if f.kind == "names":
+                    spec.update(items={"type": "string"}, minItems=2, maxItems=5, uniqueItems=True)
+                if f.minimum is not None:
+                    spec["minimum"] = f.minimum
+                if f.maximum is not None:
+                    spec["maximum"] = f.maximum
+                if f.default is not None:
+                    spec["default"] = _json(f.default)
+                if f.visible_if:
+                    spec["x-visible-if"] = {dep: list(v) for dep, v in f.visible_if}
+                fields[f.name] = spec
+            props[sname] = {"type": "object", "properties": fields, "additionalProperties": False}
+        branches.append({"type": "object", "properties": props, "required": ["type"], "additionalProperties": False})
+    return {"$schema": "https://json-schema.org/draft/2020-12/schema", "title": "optlab structured term sheet",
+            "oneOf": branches}
 
 
 def describe(mask: str, sheet: TermSheet | None = None) -> dict:

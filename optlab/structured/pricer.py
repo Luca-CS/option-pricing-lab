@@ -72,6 +72,11 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
     clock = Clock(valuation, calendar)
     timeline: Timeline = build_timeline(program, clock)
     history = basket_history(fixings, names, clock) if basket else history_times(fixings, name, clock)
+    if basket:
+        for n, h in history.items():
+            check_fixing_scale(h, model.markets[n].spot, n)
+    else:
+        check_fixing_scale(history, market.spot, name)
     evaluators = [Evaluator(program, timeline, p, smoothing, check_redemption) for p in param_sets]
     notionals = [float(notional if notional is not None else ev.params.get("N", 1.0)) for ev in evaluators]
     pairs = [[] for _ in evaluators]
@@ -133,6 +138,16 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
             redemption_probabilities={t: v / n_paths for t, v in red[i].items()}, warnings=own,
             pairs=d))
     return results
+
+
+def check_fixing_scale(history: dict, spot: float, name: str, band=(0.2, 5.0)):
+    """Past fixings far from the model's spot are almost always real index levels against a market rescaled to
+    100 (or the reverse): refuse them instead of pricing a product struck at the wrong level."""
+    for t, level in history.items():
+        if not band[0] * spot <= level <= band[1] * spot:
+            raise ValueError(f"fixing {level:g} of {name} (t = {t:.4f}) is {level / spot:.1f} times the model spot "
+                             f"{spot:g}: real index levels against a market rescaled to 100? convert them with "
+                             "optlab.marketdata.to_model_scale")
 
 
 def basket_history(fixings: dict | None, names, clock: Clock) -> dict:

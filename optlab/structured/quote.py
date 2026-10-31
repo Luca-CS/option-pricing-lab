@@ -14,7 +14,7 @@ from .compiler import CompiledProduct, compile_sheet
 from .context import PricingContext
 from .policy import PricingDecision, decide
 from .multiasset import BasketContext
-from .pricer import StructuredResult, history_times, price_many
+from .pricer import StructuredResult, check_fixing_scale, history_times, price_many
 from .profile import ProductProfile, profile
 from .replication import replication_result
 from .schema import TermSheet
@@ -40,6 +40,7 @@ class Quote:
     seconds: float = 0.0
     warnings: list = field(default_factory=list)
     greeks: object | None = None  # greeks.Greeks at the solved coupon, with the policy model
+    snapshot_id: str | None = None  # the market the quote was priced on
 
     @property
     def control_gap_se(self) -> float | None:
@@ -115,6 +116,8 @@ def _pricer(product: CompiledProduct, ctx: PricingContext, fmt, decision: Pricin
     timeline = build_timeline(program, clock)
     names = program.underlying_names
     history = history_times(fixings, names[0], clock) if len(names) == 1 else None
+    if history:
+        check_fixing_scale(history, ctx.market.spot, names[0])
 
     def run(param_sets):
         if method == "replication":
@@ -183,4 +186,4 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
     LOG.info("quote %s %s: %s, %s, %.2f s", sheet.mask.name, ", ".join(sheet.underlyings), decision.label,
              f"coupon {rate:.6f} p.a." if rate is not None else f"upfront {upfront:.4f} %", seconds)
     return Quote(product, prof, decision, fmt.name, result, target, rate, rate_se, upfront, margin, ctrl,
-                 seconds, warnings, g)
+                 seconds, warnings, g, getattr(ctx, "snapshot_id", None))

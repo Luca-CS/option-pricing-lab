@@ -26,7 +26,7 @@ from .greeks import ShiftedSurface, _recalibrated_slv
 from .units import BOOK_UNITS
 from .policy import RULES, decide
 from .multiasset import BasketContext, basket_scenarios
-from .pricer import basket_history
+from .pricer import basket_history, check_fixing_scale
 from .profile import ProductProfile, profile
 from .replication import replication_result
 from .scenario import simulated_scenarios
@@ -91,6 +91,7 @@ class BookResult:
     warnings: list = field(default_factory=list)
     pairs: np.ndarray | None = field(default=None, repr=False)
     position_pairs: list | None = field(default=None, repr=False)
+    snapshot_id: str | None = None
 
     def table(self) -> str:
         lines = [f"book: {len(self.positions)} positions, {self.method} ({self.model}), {self.reason}",
@@ -153,6 +154,16 @@ class Book:
         rule = "basket" if len(d_names := {n for it in items for n in it["underlyings"]}) > 1 else d.product_class
         reason = RULES[rule].reason.split(":")[0] if not d.forced else d.reason
         warnings = list(d.warnings)
+        history: dict = {}
+        for it in items:
+            for name, h in it["history"].items():
+                merged = history.setdefault(name, {})
+                for t, v in h.items():
+                    if t in merged and merged[t] != v:
+                        raise ValueError(f"two positions give different fixings of {name} at t = {t:.6f}")
+                    merged[t] = v
+        for name, h in history.items():
+            check_fixing_scale(h, (ctx.markets[name] if basket else market).spot, name)
         if d.method == "replication":
             results, values = [], []
             for it in items:
@@ -166,17 +177,9 @@ class Book:
                 results.append(PositionResult(it["pos"].name, it["pos"].quantity, r.price, 0.0, v, 0.0,
                                               it["profile"].product_class))
             return BookResult(results, float(sum(values)), 0.0, "replication", "surface", reason, 0,
-                              time.perf_counter() - t0, warnings)
+                              time.perf_counter() - t0, warnings, snapshot_id=getattr(ctx, "snapshot_id", None))
         horizon = max(it["profile"].horizon for it in items)
         times = np.unique(np.concatenate([it["timeline"].sim_times for it in items]))
-        history: dict = {}
-        for it in items:
-            for name, h in it["history"].items():
-                merged = history.setdefault(name, {})
-                for t, v in h.items():
-                    if t in merged and merged[t] != v:
-                        raise ValueError(f"two positions give different fixings of {name} at t = {t:.6f}")
-                    merged[t] = v
         if basket:
             names = tuple(n for n in ctx.names if n in d_names)
             scenarios = basket_scenarios(ctx.model(d.model, horizon, names), times, n_paths, seed, batch, history,
@@ -206,7 +209,7 @@ class Book:
             warnings.append(f"digital smoothing {smoothing:.2%}: prices are slightly biased")
         res = MCResult(float(book.mean()), float(book.std(ddof=1) / np.sqrt(len(book))), n_paths)
         return BookResult(results, res.price, res.stderr, "monte_carlo", d.model, reason, n_paths,
-                          time.perf_counter() - t0, warnings, book, pos_pairs)
+                          time.perf_counter() - t0, warnings, book, pos_pairs, getattr(ctx, "snapshot_id", None))
 
     @staticmethod
     def _model(name, ctx, surface, horizon):

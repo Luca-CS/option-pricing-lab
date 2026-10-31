@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime as dt
-import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -24,14 +23,23 @@ class PricingContext:
     slv: SLVModel
     valuation: dt.date
     underlying: str = "SPX"
+    snapshot_id: str | None = None  # the market every price of this context refers to
 
     @classmethod
-    def from_calibration(cls, path: str | Path | None = None, underlying: str = "SPX") -> "PricingContext":
-        cal = json.loads(Path(path or DEFAULT_CALIBRATION).read_text())
-        heston = HestonParams(**cal["heston"])
-        slv = SLVModel(heston, Leverage.from_dict(cal["slv"]["leverage"]), cal["slv"]["mix"])
-        return cls(Market.from_dict(cal["market"]), SVISurface.from_dict(cal["surface"]), heston, slv,
-                   dt.date.fromisoformat(cal["meta"]["snapshot"][:10]), underlying)
+    def from_calibration(cls, path: str | Path | None = None, underlying: str = "SPX",
+                         valuation: dt.date | str | None = None) -> "PricingContext":
+        """The calibrated market of a results/*.json file; files without a snapshot time need `valuation`."""
+        from ..marketdata import MarketSnapshot
+        snap = MarketSnapshot.from_calibration_file(path or DEFAULT_CALIBRATION, underlying, valuation,
+                                                    provenance=False)
+        return cls.from_snapshot(snap)
+
+    @classmethod
+    def from_snapshot(cls, snap) -> "PricingContext":
+        heston = HestonParams(**snap.heston)
+        slv = SLVModel(heston, Leverage.from_dict(snap.slv["leverage"]), snap.slv["mix"])
+        return cls(Market.from_dict(snap.market), SVISurface.from_dict(snap.surface), heston, slv, snap.valuation,
+                   snap.underlying, snap.snapshot_id)
 
     @property
     def t_max(self) -> float:
