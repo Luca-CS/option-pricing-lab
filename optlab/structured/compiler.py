@@ -5,7 +5,8 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass
 
-from .dates import add_business_days, add_months, adjust, as_date, schedule, year_fraction
+from . import calendars
+from .dates import add_months, as_date, schedule, year_fraction
 from .schema import TermSheet
 from .script.nodes import Program
 from .script.parser import parse
@@ -23,6 +24,7 @@ class CompiledProduct:
     maturity: dt.date
     coupon_param: str | None  # script parameter holding the coupon per period
     coupon_scale: float  # coupon per period = rate per annum * coupon_scale
+    calendar: object = None  # business-day calendar of the schedule and of the daily windows
 
     @property
     def horizon(self) -> float:
@@ -32,32 +34,34 @@ class CompiledProduct:
         return cpn / self.coupon_scale
 
 
-def _observations(sheet: TermSheet, strike: dt.date):
+def _observations(sheet: TermSheet, strike: dt.date, cal):
     """Observation dates with their roles: coupon date, call index (0 for the first call date) and payment."""
     months, conv, lag = sheet.get("general.maturity_months"), sheet.get("general.convention"), sheet.get(
         "general.pay_lag")
     obs: dict = {}
     if sheet.get("coupon.type") in ("fixed", "conditional"):
-        for o, p in schedule(strike, months, sheet.get("coupon.frequency_months"), conv, lag):
+        for o, p in schedule(strike, months, sheet.get("coupon.frequency_months"), conv, lag, cal):
             obs.setdefault(o, {"pay": p})["coupon"] = True
     if sheet.mask.name == "autocall":
-        calls = schedule(strike, months, sheet.get("autocall.frequency_months"), conv, lag)
+        calls = schedule(strike, months, sheet.get("autocall.frequency_months"), conv, lag, cal)
         first = sheet.get("autocall.first_call")
         for j, (o, p) in enumerate(calls[first - 1:-1]):
             obs.setdefault(o, {"pay": p})["call"] = j
             obs[o]["period"] = first + j
-    maturity = adjust(add_months(strike, months), conv)
-    obs.setdefault(maturity, {"pay": add_business_days(maturity, lag)})["final"] = True
+    maturity = cal.adjust(add_months(strike, months), conv)
+    obs.setdefault(maturity, {"pay": cal.add_business_days(maturity, lag)})["final"] = True
     return dict(sorted(obs.items())), maturity
 
 
-def compile_sheet(sheet: TermSheet, valuation) -> CompiledProduct:
+def compile_sheet(sheet: TermSheet, valuation, calendar=None) -> CompiledProduct:
+    """The script of a term sheet. `calendar` overrides the sheet's general.calendar."""
     valuation = as_date(valuation)
+    cal = calendars.calendar(calendar or sheet.get("general.calendar"))
     strike = sheet.get("general.strike_date") or valuation
     g = sheet.get
     coupon, upside, downside = g("coupon.type"), g("upside.type", "none"), g("downside.type")
     autocall = sheet.mask.name == "autocall"
-    obs, maturity = _observations(sheet, strike)
+    obs, maturity = _observations(sheet, strike, cal)
     n_periods = g("general.maturity_months") // g("autocall.frequency_months") if autocall else None
 
     params = {"N": g("general.notional")}
@@ -146,4 +150,4 @@ def compile_sheet(sheet: TermSheet, valuation) -> CompiledProduct:
     script = "\n".join(lines) + "\n"
     program = validate(parse(script))
     return CompiledProduct(sheet, script, program, valuation, strike, maturity,
-                           "cpn" if coupon != "none" else None, coupon_scale)
+                           "cpn" if coupon != "none" else None, coupon_scale, cal)

@@ -93,7 +93,7 @@ def _diff(up, down, scale):
 def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, fmt=None, valuation=None,
            n_paths: int = 200_000, seed: int = DEFAULT_SEED, batch: int | None = 25_000, smoothing: float = 0.005,
            h_spot: float = 0.01, h_vol: float = 0.01, T_obs: float | None = None, slv_vega: bool = False,
-           n_particles: int = 200_000) -> Greeks:
+           n_particles: int = 200_000, calendar=None) -> Greeks:
     """Delta and vega of a program under `model` ('bs', 'lv', 'slv', 'heston') or by replication on the surface
     (method 'replication'), with central differences. Monte Carlo digitals are smoothed (ramp of relative width
     `smoothing`); the bias this adds to the price is measured on the same paths. With `slv_vega`, the SLV
@@ -103,7 +103,7 @@ def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, f
     fmt = fmt or Note()
     valuation = valuation or ctx.valuation
     S0 = ctx.market.spot
-    timeline = build_timeline(program, Clock(valuation))
+    timeline = build_timeline(program, Clock(valuation, calendar))
     horizon = timeline.horizon
     if method == "replication" and T_obs is None:
         from .profile import profile
@@ -125,7 +125,7 @@ def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, f
                 return None
             m = _recalibrated_slv(ctx, surface, horizon, n_particles, seed) if vol_shift else ctx.model(model, horizon)
         return price_many(program, m, market, [params or {}], fmt, n_paths, seed, batch, smoothing=eps,
-                          valuation=valuation, initial_fixing=S0)[0]
+                          valuation=valuation, initial_fixing=S0, calendar=calendar)[0]
 
     t0 = time.perf_counter()
     eps = 0.0 if method == "replication" else smoothing

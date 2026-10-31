@@ -104,15 +104,15 @@ def wrapper(sheet: TermSheet, product: CompiledProduct):
         return Swap()
     g = sheet.get
     periods = funding_periods(product.strike_date, g("general.maturity_months"), g("wrapper.funding_frequency_months"),
-                              product.valuation, g("general.convention"), g("general.pay_lag"))
-    tl = build_timeline(product.program, Clock(product.valuation))
+                              product.valuation, g("general.convention"), g("general.pay_lag"), product.calendar)
+    tl = build_timeline(product.program, Clock(product.valuation, product.calendar))
     return FundedSwap(g("wrapper.funding_spread"), periods, tuple(float(t) for t in tl.event_times))
 
 
 def _pricer(product: CompiledProduct, ctx: PricingContext, fmt, decision: PricingDecision, prof: ProductProfile,
             model_name: str, method: str, n_paths: int | None = None, fixings: dict | None = None):
     program, valuation = product.program, product.valuation
-    clock = Clock(valuation)
+    clock = Clock(valuation, product.calendar)
     timeline = build_timeline(program, clock)
     names = program.underlying_names
     history = history_times(fixings, names[0], clock) if len(names) == 1 else None
@@ -127,7 +127,7 @@ def _pricer(product: CompiledProduct, ctx: PricingContext, fmt, decision: Pricin
         T = max(product.horizon, 1 / 365)
         model = ctx.model(model_name, T, names) if isinstance(ctx, BasketContext) else ctx.model(model_name, T)
         return price_many(program, model, ctx.market, param_sets, fmt, n_paths or decision.n_paths, decision.seed,
-                          decision.batch, valuation=valuation, fixings=fixings)
+                          decision.batch, valuation=valuation, fixings=fixings, calendar=product.calendar)
     return run
 
 
@@ -145,7 +145,7 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
     product = compile_sheet(sheet, ctx.valuation)
     if product.strike_date < product.valuation and sheet.get("wrapper.solve") == "coupon":
         raise ValueError("a running product has a fixed coupon: price it with wrapper.solve = 'upfront'")
-    prof = profile(product.program, build_timeline(product.program, Clock(product.valuation)))
+    prof = profile(product.program, build_timeline(product.program, Clock(product.valuation, product.calendar)))
     basket = len(product.program.underlyings) > 1
     if basket != isinstance(ctx, BasketContext):
         raise ValueError("a worst-of term sheet needs a BasketContext, a single-name one a PricingContext")
@@ -181,7 +181,7 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
     elif with_greeks:
         from .greeks import greeks
         g = greeks(product.program, ctx, decision.model, decision.method, params, fmt, product.valuation,
-                   decision.n_paths, decision.seed, decision.batch, slv_vega=slv_vega)
+                   decision.n_paths, decision.seed, decision.batch, slv_vega=slv_vega, calendar=product.calendar)
     seconds = time.perf_counter() - t0
     LOG.info("quote %s %s: %s, %s, %.2f s", sheet.mask.name, ", ".join(sheet.underlyings), decision.label,
              f"coupon {rate:.6f} p.a." if rate is not None else f"upfront {upfront:.4f} %", seconds)

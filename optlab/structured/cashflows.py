@@ -96,11 +96,11 @@ class FundedSwap:
 
 
 def funding_periods(strike, months: int, freq_months: int, valuation, convention="modified_following",
-                    pay_lag: int = 5) -> tuple:
+                    pay_lag: int = 5, calendar=None) -> tuple:
     """Funding periods from the strike date: (start, end, payment, ACT/360 accrual), times from the valuation."""
     from .dates import schedule, year_fraction
     start, out = strike, []
-    for end, pay in schedule(strike, months, freq_months, convention, pay_lag):
+    for end, pay in schedule(strike, months, freq_months, convention, pay_lag, calendar):
         out.append((year_fraction(valuation, start), year_fraction(valuation, end), year_fraction(valuation, pay),
                     year_fraction(start, end, "ACT/360")))
         start = end

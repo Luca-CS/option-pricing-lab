@@ -56,6 +56,7 @@ SECTIONS = {s.name: s for s in [
         Field("strike_date", "date", None, "Strike date (default: valuation date)"),
         Field("maturity_months", "int", 24, "Maturity", "months", minimum=1),
         Field("pay_lag", "int", 5, "Payment lag", "business days", minimum=0),
+        Field("calendar", "choice", "weekend", "Business-day calendar", choices=("weekend", "nyse")),
         Field("convention", "choice", "modified_following", "Roll convention",
               choices=("modified_following", "following", "preceding", "unadjusted")),
     )),

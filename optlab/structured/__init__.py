@@ -6,9 +6,11 @@ Layers: the engine (dates, script language, scenarios, cash flows, note and swap
 
 from __future__ import annotations
 
+from .calendars import CALENDARS, NYSECalendar
 from .cashflows import Note, Swap
 from .compiler import compile_sheet
 from .context import PricingContext
+from .lifecycle import Event, events
 from .policy import RULES, decide
 from .portfolio import Book, BookResult, Position
 from .presets import PRESETS, preset
@@ -23,4 +25,5 @@ from .script.validate import validate
 
 __all__ = ["Note", "Swap", "PricingContext", "StructuredResult", "price", "price_many", "ScriptError", "parse",
            "to_text", "validate", "compile_sheet", "RULES", "decide", "PRESETS", "preset", "Quote", "quote", "MASKS",
-           "TermSheet", "TermSheetError", "describe", "json_schema", "Book", "BookResult", "Position", "Trade"]
+           "TermSheet", "TermSheetError", "describe", "json_schema", "Book", "BookResult", "Position", "Trade",
+           "CALENDARS", "NYSECalendar", "Event", "events"]

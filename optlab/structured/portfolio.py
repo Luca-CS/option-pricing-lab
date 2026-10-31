@@ -49,22 +49,27 @@ class Position:
     params: dict = field(default_factory=dict)
     fixings: dict | None = None
     fmt: str | None = None  # note or swap; a term sheet carries its own
+    calendar: object = None  # scripts only: business days of their windows (a term sheet carries its own)
 
     def compiled(self, valuation):
+        """(program, wrapper, calendar) of the position."""
         product = self.product
         if hasattr(product, "script") and hasattr(product, "product"):  # a Quote: its solved script
             sheet = product.product.sheet
             program = validate(parse(product.script))
+            cal = product.product.calendar
         elif isinstance(product, TermSheet):
             sheet = product
-            program = compile_sheet(product, valuation).program
+            compiled = compile_sheet(product, valuation)
+            program, cal = compiled.program, compiled.calendar
         else:
             sheet = None
             program = validate(parse(product) if isinstance(product, str) else product)
+            cal = self.calendar
         if sheet is not None and self.fmt is None:
             from .quote import wrapper
-            return program, wrapper(sheet, compile_sheet(sheet, valuation))
-        return program, (Swap() if self.fmt == "swap" else Note())
+            return program, wrapper(sheet, compile_sheet(sheet, valuation)), cal
+        return program, (Swap() if self.fmt == "swap" else Note()), cal
 
 
 @dataclass
@@ -118,8 +123,8 @@ class Book:
     def _prepare(self, ctx):
         items = []
         for pos in self.positions:
-            program, fmt = pos.compiled(ctx.valuation)
-            clock = Clock(ctx.valuation)
+            program, fmt, cal = pos.compiled(ctx.valuation)
+            clock = Clock(ctx.valuation, cal)
             timeline = build_timeline(program, clock)
             names = program.underlying_names
             items.append({"pos": pos, "program": program, "fmt": fmt, "timeline": timeline, "underlyings": names,

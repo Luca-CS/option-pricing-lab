@@ -6,7 +6,8 @@ Every variable is an array over paths. Conditions are float masks (0/1, or a ram
 
 Undefined values are errors, not silent branches: a comparison with NaN (log of a negative number, 0/0) stays NaN,
 `and`/`or` short-circuit on a certain operand, and a NaN condition or a non-finite payment on a path that the
-current mask reaches raises a ScriptError with the line. Values that are masked out may be NaN.
+current mask reaches (and that has not terminated) raises a ScriptError with the line. Values that are masked out
+may be NaN.
 """
 
 from __future__ import annotations
@@ -118,7 +119,8 @@ class Evaluator:
                 c = self.expr(s.cond)
                 undefined = np.isnan(c)
                 if np.any(undefined):
-                    self._check_defined(undefined & (np.asarray(m) != 0), s.line,
+                    # a path that already terminated pays nothing more: its conditions do not matter
+                    self._check_defined(undefined & (np.asarray(m * self.out.alive) != 0), s.line,
                                         "the condition is undefined (NaN, e.g. the log of a negative number)")
                     c = np.where(undefined, 0.0, c)  # reached by no path
                 self.block(s.body, m * c)

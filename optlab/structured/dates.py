@@ -77,21 +77,29 @@ def business_days(start, end) -> list[dt.date]:
 
 
 def schedule(start, months: int, freq_months: int, convention: str = "modified_following",
-             pay_lag: int = 5) -> list[tuple[dt.date, dt.date]]:
+             pay_lag: int = 5, calendar=None) -> list[tuple[dt.date, dt.date]]:
     """(observation, payment) dates every freq_months from start up to start + months. Unadjusted dates are
-    start + k * freq (no roll drift), then adjusted; payment is pay_lag business days after the observation."""
+    start + k * freq (no roll drift), then adjusted; payment is pay_lag business days after the observation.
+    `calendar` (an object with adjust and add_business_days) defaults to Monday-Friday."""
     if freq_months <= 0 or months <= 0 or months % freq_months:
         raise ValueError(f"the maturity ({months} months) must be a positive multiple of the frequency "
                          f"({freq_months} months): stubs are not supported")
     out = []
     for k in range(1, months // freq_months + 1):
-        obs = adjust(add_months(start, k * freq_months), convention)
-        out.append((obs, add_business_days(obs, pay_lag)))
+        if calendar is None:
+            obs = adjust(add_months(start, k * freq_months), convention)
+            out.append((obs, add_business_days(obs, pay_lag)))
+        else:
+            obs = calendar.adjust(add_months(start, k * freq_months), convention)
+            out.append((obs, calendar.add_business_days(obs, pay_lag)))
     return out
 
 
 class WeekendCalendar:
     """Business days are Monday to Friday. Holidays are not modelled (known limitation)."""
+
+    def is_business_day(self, d) -> bool:
+        return is_business_day(d)
 
     def business_days(self, start, end) -> list[dt.date]:
         return business_days(start, end)
