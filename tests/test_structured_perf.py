@@ -128,3 +128,35 @@ def test_the_coupon_solver_stays_exact_with_forward_controls():
     again = price_many(q.product.program, SPX.model("slv"), SPX.market, [{"cpn": cpn}], n_paths=40_000,
                        seed=q.decision.seed, batch=10_000, valuation=SPX.valuation, control_forwards=True)[0]
     assert again.price == pytest.approx(98.0, abs=1e-8)
+
+
+# --- randomised quasi-Monte Carlo (opt-in) ---
+
+def test_brownian_bridge_increments_are_independent_standard_normals():
+    from optlab.structured.qmc import bridge_normals, bridge_order
+    rng = np.random.default_rng(0)
+    t = np.r_[0, np.cumsum(rng.uniform(0.001, 0.01, 37))]
+    assert sorted(i for i, _, _ in bridge_order(t)) == list(range(1, 38))
+    inc = bridge_normals(rng.standard_normal((100_000, 37)), t)
+    assert abs(inc.mean()) < 0.01 and abs(inc.std() - 1) < 0.01
+    assert np.abs(np.corrcoef(inc[:, :5].T) - np.eye(5)).max() < 0.02
+
+
+@pytest.mark.parametrize("model", ["bs", "lv"])
+def test_rqmc_agrees_with_monte_carlo_and_cuts_the_variance(model):
+    from optlab.structured.pricer import price_many
+    from optlab.structured.qmc import price_rqmc
+    p = compile_sheet(preset("phoenix", **{"general.maturity_months": 12}), SPX.valuation)
+    m = SPX.model(model, 1.0)
+    q = price_rqmc(p.program, m, SPX.market, m=11, replications=8, seed=5, valuation=SPX.valuation)
+    mc = price_many(p.program, m, SPX.market, [{}], n_paths=q.n_paths, seed=5, batch=8_192,
+                    valuation=SPX.valuation)[0]
+    assert abs(q.price - mc.price) <= 4 * np.hypot(q.stderr, mc.stderr)
+    assert (mc.stderr / q.stderr) ** 2 > 3
+    assert q.method == "rqmc" and q.n_paths == 8 * 2 ** 12
+
+
+def test_rqmc_needs_a_power_of_two():
+    from optlab.structured.qmc import SobolNormals
+    with pytest.raises(ValueError, match="power of two"):
+        SobolNormals(1000, np.linspace(0, 1, 5), 1, 0)

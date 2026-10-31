@@ -15,6 +15,7 @@ from .policy import RULES, decide
 from .portfolio import Book, BookResult, Position
 from .presets import PRESETS, preset
 from .pricer import StructuredResult, price, price_many
+from .qmc import price_rqmc
 from .quote import Quote, quote
 from .schema import MASKS, TermSheet, TermSheetError, describe, json_schema
 from .script.lexer import ScriptError
@@ -26,4 +27,4 @@ from .script.validate import validate
 __all__ = ["Note", "Swap", "PricingContext", "StructuredResult", "price", "price_many", "ScriptError", "parse",
            "to_text", "validate", "compile_sheet", "RULES", "decide", "PRESETS", "preset", "Quote", "quote", "MASKS",
            "TermSheet", "TermSheetError", "describe", "json_schema", "Book", "BookResult", "Position", "Trade",
-           "CALENDARS", "NYSECalendar", "Event", "events"]
+           "CALENDARS", "NYSECalendar", "Event", "events", "price_rqmc"]
