@@ -46,6 +46,26 @@ class Scenario:
             return self._past(t)
         return self.paths[:, self._col[float(t)]]
 
+    def extreme(self, name: str, times, func: str):
+        """Lowest ("min") or highest ("max") fixing over `times` on each path, without copying the window: the
+        simulated dates of a window are contiguous columns. Same result as fixings(...).min(axis=1)."""
+        self._check(name)
+        times = np.asarray(times, dtype=float)
+        future = times[times > 0]
+        reduce = np.min if func == "min" else np.max
+        out = None
+        if len(future):
+            cols = [self._col[float(t)] for t in future]
+            lo, hi = cols[0], cols[-1] + 1
+            block = self.paths
+            contiguous = hi - lo == len(cols) and cols == list(range(lo, hi))
+            out = reduce(block[:, lo:hi] if contiguous else block[:, cols], axis=1)
+        past = [self._past(t) for t in times if t <= 0]
+        if past:
+            p = reduce(np.array(past))
+            out = np.full(self.n_paths, p) if out is None else (np.minimum if func == "min" else np.maximum)(out, p)
+        return out
+
     def fixings(self, name: str, times) -> np.ndarray:
         """(n_paths, len(times)) spots, known fixings repeated on every path for times <= 0."""
         self._check(name)

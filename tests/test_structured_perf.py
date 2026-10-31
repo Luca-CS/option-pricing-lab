@@ -81,3 +81,25 @@ def test_one_simulation_delta_equals_the_bumped_market_delta():
     up_m = price_many(p.program, m, SPX.market.scaled(101.0), [{}], **kw)[0]
     down_m = price_many(p.program, m, SPX.market.scaled(99.0), [{}], **kw)[0]
     assert (up.price - down.price) == pytest.approx(up_m.price - down_m.price, abs=1e-10)
+
+
+def test_window_extremes_without_copies_are_bit_identical():
+    from optlab.structured.scenario import Scenario
+    rng = np.random.default_rng(2)
+    times = np.linspace(0.01, 1.0, 100)
+    paths = 100 * np.exp(0.2 * rng.standard_normal((50, 100)).cumsum(axis=1) * 0.1)
+    sc = Scenario("SPX", times, paths, 100.0, {-0.5: 90.0, -0.2: 130.0})
+    for window in (times[10:60], times[::3], np.r_[-0.5, -0.2, 0.0, times[:40]], np.r_[-0.5, 0.0]):
+        for func, ref in (("min", np.min), ("max", np.max)):
+            assert np.array_equal(sc.extreme("SPX", window, func), ref(sc.fixings("SPX", window), axis=1))
+
+
+def test_daily_knock_in_prices_do_not_move_with_the_window_shortcut(monkeypatch):
+    from optlab.structured.pricer import price_many
+    from optlab.structured.scenario import Scenario
+    p = compile_sheet(preset("barrier_reverse_convertible", **{"wrapper.solve": "upfront"}), SPX.valuation)
+    kw = dict(n_paths=20_000, seed=3, batch=10_000, valuation=SPX.valuation)
+    fast = price_many(p.program, SPX.model("bs"), SPX.market, [{}], **kw)[0]
+    monkeypatch.delattr(Scenario, "extreme")  # the evaluator falls back to fixings(...).min(axis=1)
+    slow = price_many(p.program, SPX.model("bs"), SPX.market, [{}], **kw)[0]
+    assert np.array_equal(fast.pairs, slow.pairs)

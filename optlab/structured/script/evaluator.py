@@ -160,6 +160,9 @@ class Evaluator:
                 return functools.reduce(np.minimum if e.func == "worst" else np.maximum, args)
             return FUNCS[e.func](*args)
         if isinstance(e, Window):
-            fix = self.scenario.fixings(e.underlying, self.timeline.windows[e])
+            times = self.timeline.windows[e]
+            if hasattr(self.scenario, "extreme"):  # a path source without it still works through fixings
+                return self.scenario.extreme(e.underlying, times, "min" if e.func == "lowest" else "max")
+            fix = self.scenario.fixings(e.underlying, times)
             return fix.min(axis=1) if e.func == "lowest" else fix.max(axis=1)
         raise TypeError(f"cannot evaluate {e!r}")
