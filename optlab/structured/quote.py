@@ -66,6 +66,35 @@ class Quote:
 LOG = get_logger(__name__)
 
 
+def _book_greeks(sheet: TermSheet, params: dict, fixings, ctx, decision: PricingDecision, slv_vega: bool):
+    """Greeks of a running product or of a basket, through a one-position book (which keeps the fixings and bumps
+    each name), converted to % of notional. For a basket, delta and vega are the sums over the names (all names
+    moved together, to first order) and `per_name` holds each name; the SE of a sum adds the SEs in quadrature."""
+    from .greeks import Greeks
+    from .portfolio import Book, Position
+    model = None if decision.method == "replication" else decision.model
+    g = Book([Position("quote", sheet, 1.0, params=params, fixings=fixings)]).greeks(
+        ctx, model=model, n_paths=decision.n_paths, seed=decision.seed, batch=decision.batch, slv_vega=slv_vega)
+    scale = 100 / sheet.get("general.notional")
+
+    def one(d):
+        return (scale * d["positions"][0], scale * d["positions_se"][0]) if d is not None else (None, None)
+
+    if isinstance(ctx, BasketContext):
+        per = {n: dict(zip(("delta", "delta_se"), one(g["delta"][n])), **dict(zip(("vega", "vega_se"),
+               one(g["vega"][n])))) for n in g["delta"]}
+        delta = sum(v["delta"] for v in per.values())
+        delta_se = float(np.sqrt(sum(v["delta_se"] ** 2 for v in per.values())))
+        vega = sum(v["vega"] for v in per.values())
+        vega_se = float(np.sqrt(sum(v["vega_se"] ** 2 for v in per.values())))
+        return Greeks(delta, delta_se, vega, vega_se, g["smoothing"], 0.0, 0.0, g["method"], g["model"], {},
+                      "basket: delta and vega summed over the names, see per_name", per_name=per)
+    delta, delta_se = one(g["delta"])
+    vega, vega_se = one(g.get("vega"))
+    return Greeks(delta, delta_se, vega, vega_se, g["smoothing"], 0.0, 0.0, g["method"], g["model"], {},
+                  g.get("note", "running product: Greeks through a one-position book, fixings kept"))
+
+
 def wrapper(sheet: TermSheet, product: CompiledProduct):
     """Note (issuer spread), Swap (upfront only) or FundedSwap (floating leg until redemption) for a sheet."""
     if sheet.get("wrapper.format") == "note":
@@ -144,11 +173,9 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
     if rate is not None and rate < 0:
         warnings.append("the solved coupon is negative: the product cannot reach the target price with a coupon")
     g = None
-    if with_greeks and basket:
-        raise ValueError("Greeks of baskets are not supported yet")
-    if with_greeks:
-        if fixings:
-            raise ValueError("Greeks of running products are not supported yet")
+    if with_greeks and (basket or fixings):
+        g = _book_greeks(sheet, params, fixings, ctx, decision, slv_vega)
+    elif with_greeks:
         from .greeks import greeks
         g = greeks(product.program, ctx, decision.model, decision.method, params, fmt, product.valuation,
                    decision.n_paths, decision.seed, decision.batch, slv_vega=slv_vega)

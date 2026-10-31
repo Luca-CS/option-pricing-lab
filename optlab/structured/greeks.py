@@ -2,14 +2,15 @@
 
 The product keeps its initial fixing (it is struck); the market spot is bumped with sticky moneyness (forwards
 scale with the spot, the surface and the SLV leverage are read in ln(S/F)). Vega is a parallel shift of the
-implied volatilities: the local vol is rebuilt from the shifted surface; under SLV the leverage would have to be
-recalibrated, which is not done here, so SLV and Heston report no vega.
-Units: delta is the change of the price (in % of notional) for a +1 % spot move, vega for +1 vol point.
+implied volatilities: the local vol is rebuilt from the shifted surface; under SLV the leverage is recalibrated on
+each shifted surface when `slv_vega=True` (otherwise no vega), and Heston reports none.
+Units (`units.GREEK_UNITS`): delta is the change of the price (in % of notional) for a +1 % spot move, vega for +1
+vol point.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -17,6 +18,7 @@ from ..config import DEFAULT_SEED
 from ..models import BlackScholesModel, LocalVolModel
 from ..svi import g_function
 from .cashflows import Note
+from .units import GREEK_UNITS
 from .pricer import price_many
 from .replication import replication_result
 from .script.timeline import Clock, build_timeline
@@ -77,6 +79,8 @@ class Greeks:
     model: str
     seconds: dict
     note: str = ""
+    units: dict = field(default_factory=lambda: dict(GREEK_UNITS))
+    per_name: dict | None = None  # baskets: {name: {"delta", "delta_se", "vega", "vega_se"}}
 
 
 def _diff(up, down, scale):

@@ -23,6 +23,7 @@ from .cashflows import Note, Swap, pair_averages
 from .compiler import compile_sheet
 from .context import PricingContext
 from .greeks import ShiftedSurface, _recalibrated_slv
+from .units import BOOK_UNITS
 from .policy import RULES, decide
 from .multiasset import BasketContext, basket_scenarios
 from .pricer import basket_history
@@ -228,7 +229,7 @@ class Book:
         eps = 0.0 if d.method == "replication" else smoothing
         S0 = ctx.market.spot
         kw = dict(ctx=ctx, model=model, n_paths=n_paths, seed=seed, batch=batch, smoothing=eps, initial_fixing=S0)
-        out = {"method": d.method, "model": d.model, "smoothing": eps}
+        out = {"method": d.method, "model": d.model, "smoothing": eps, "units": dict(BOOK_UNITS)}
 
         bump = _bump
         up = self.price(market=ctx.market.scaled(S0 * (1 + h_spot)), **kw)
@@ -260,7 +261,7 @@ class Book:
         fixing = {n: ctx.markets[n].spot for n in names}
         kw = dict(model=model, n_paths=n_paths, seed=seed, batch=batch, smoothing=smoothing, initial_fixing=fixing)
         out = {"method": d.method, "model": d.model, "smoothing": smoothing, "names": [p.name for p in self.positions],
-               "delta": {}, "vega": {}}
+               "delta": {}, "vega": {}, "units": dict(BOOK_UNITS)}
         for n in names:
             up = self.price(ctx.bumped(n, spot_factor=1 + h_spot), **kw)
             down = self.price(ctx.bumped(n, spot_factor=1 - h_spot), **kw)

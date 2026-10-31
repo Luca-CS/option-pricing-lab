@@ -1,4 +1,4 @@
-"""AST of the payoff language. Line numbers are kept for messages but ignored by equality."""
+"""AST of the payoff language. Lines and columns are kept for messages but ignored by equality."""
 
 from __future__ import annotations
 
@@ -16,12 +16,14 @@ class Node:
 class DateLit(Node):
     value: str  # ISO date, YYYY-MM-DD
     line: int = field(default=0, compare=False)
+    col: int = field(default=0, compare=False)
 
 
 @dataclass(frozen=True)
 class TimeLit(Node):
     value: float
     line: int = field(default=0, compare=False)
+    col: int = field(default=0, compare=False)
 
 
 When = DateLit | TimeLit
@@ -33,12 +35,14 @@ When = DateLit | TimeLit
 class Num(Node):
     value: float
     line: int = field(default=0, compare=False)
+    col: int = field(default=0, compare=False)
 
 
 @dataclass(frozen=True)
 class Name(Node):
     id: str
     line: int = field(default=0, compare=False)
+    col: int = field(default=0, compare=False)
 
 
 @dataclass(frozen=True)
@@ -46,6 +50,7 @@ class Unary(Node):
     op: str  # "-" or "not"
     operand: Node
     line: int = field(default=0, compare=False)
+    col: int = field(default=0, compare=False)
 
 
 @dataclass(frozen=True)
@@ -54,6 +59,7 @@ class Binary(Node):
     left: Node
     right: Node
     line: int = field(default=0, compare=False)
+    col: int = field(default=0, compare=False)
 
 
 @dataclass(frozen=True)
@@ -61,6 +67,7 @@ class Call(Node):
     func: str  # min, max, abs, exp, log
     args: tuple
     line: int = field(default=0, compare=False)
+    col: int = field(default=0, compare=False)
 
 
 @dataclass(frozen=True)
@@ -73,6 +80,7 @@ class Window(Node):
     end: When
     n: int | None = None
     line: int = field(default=0, compare=False)
+    col: int = field(default=0, compare=False)
 
 
 # --- statements ---
@@ -82,6 +90,7 @@ class Assign(Node):
     name: str
     expr: Node
     line: int = field(default=0, compare=False)
+    col: int = field(default=0, compare=False)
 
 
 @dataclass(frozen=True)
@@ -90,6 +99,7 @@ class If(Node):
     body: tuple
     orelse: tuple = ()
     line: int = field(default=0, compare=False)
+    col: int = field(default=0, compare=False)
 
 
 @dataclass(frozen=True)
@@ -97,11 +107,13 @@ class Pay(Node):
     expr: Node
     tag: str  # coupon, upside or redemption
     line: int = field(default=0, compare=False)
+    col: int = field(default=0, compare=False)
 
 
 @dataclass(frozen=True)
 class Terminate(Node):
     line: int = field(default=0, compare=False)
+    col: int = field(default=0, compare=False)
 
 
 # --- program ---
@@ -112,6 +124,7 @@ class Event(Node):
     pay: When | None
     body: tuple
     line: int = field(default=0, compare=False)
+    col: int = field(default=0, compare=False)
 
 
 @dataclass(frozen=True)
@@ -119,12 +132,14 @@ class Param(Node):
     name: str
     value: float
     line: int = field(default=0, compare=False)
+    col: int = field(default=0, compare=False)
 
 
 @dataclass(frozen=True)
 class Underlying(Node):
     name: str
     line: int = field(default=0, compare=False)
+    col: int = field(default=0, compare=False)
 
 
 @dataclass(frozen=True)

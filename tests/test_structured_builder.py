@@ -54,8 +54,8 @@ def test_visible_fields_follow_the_choices():
 
 
 @pytest.mark.parametrize("mask, values, message", [
-    ("bullet", {"coupon": {"type": "snowball"}}, "not allowed for a bullet"),
-    ("autocall", {"upside": {"type": "call"}}, "section 'upside' is not part of a autocall"),
+    ("bullet", {"coupon": {"type": "snowball"}}, "not allowed for the bullet mask"),
+    ("autocall", {"upside": {"type": "call"}}, "section 'upside' is not part of the autocall mask"),
     ("bullet", {"downside": {"type": "none", "barrier": 0.5}}, "downside.barrier is not used here"),
     ("bullet", {"downside": {"type": "geared_put", "gearing": 2.0}}, "is computed"),
     ("bullet", {"downside": {"strike": 0.8, "barrier": 0.9}}, "at or below the put strike"),

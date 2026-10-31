@@ -37,6 +37,10 @@ class Section:
         return next(f for f in self.fields if f.name == name)
 
 
+LEVEL_MAX = 3.0  # levels are fractions of the initial fixing: 3.0 = 300 %
+FRACTIONS = "levels and rates are fractions: 0.6 = 60 %, 0.08 = 8 % p.a."
+
+
 def _v(path: str, *values) -> tuple:
     return ((path, values),)
 
@@ -70,35 +74,36 @@ SECTIONS = {s.name: s for s in [
     )),
     Section("autocall", "Autocall", (
         Field("frequency_months", "int", 3, "Call frequency", "months", minimum=1),
-        Field("trigger", "number", 1.0, "Autocall trigger", "of initial", minimum=0.0),
-        Field("step_down", "number", 0.0, "Step-down per call date", "of initial", minimum=0.0),
+        Field("trigger", "number", 1.0, "Autocall trigger", "of initial", minimum=0.0, maximum=LEVEL_MAX),
+        Field("step_down", "number", 0.0, "Step-down per call date", "of initial", minimum=0.0, maximum=1.0),
         Field("first_call", "int", 1, "First call date (non-call periods + 1)", minimum=1),
     )),
     Section("coupon", "Coupon", (
         Field("type", "choice", "fixed", "Coupon type", choices=("none", "fixed", "conditional", "snowball")),
-        Field("rate", "number", 0.08, "Coupon rate", "per annum", minimum=0.0,
+        Field("rate", "number", 0.08, "Coupon rate", "per annum", minimum=0.0, maximum=1.0,
               visible_if=_v("coupon.type", "fixed", "conditional", "snowball")),
         Field("frequency_months", "int", 3, "Coupon frequency", "months", minimum=1,
               visible_if=_v("coupon.type", "fixed", "conditional")),
-        Field("barrier", "number", 0.7, "Coupon barrier", "of initial", minimum=0.0,
+        Field("barrier", "number", 0.7, "Coupon barrier", "of initial", minimum=0.0, maximum=LEVEL_MAX,
               visible_if=_v("coupon.type", "conditional")),
         Field("memory", "bool", True, "Memory", visible_if=_v("coupon.type", "conditional")),
     )),
     Section("upside", "Upside", (
         Field("type", "choice", "none", "Upside", choices=("none", "call", "call_spread", "digital")),
-        Field("strike", "number", 1.0, "Strike", "of initial", minimum=0.0,
+        Field("strike", "number", 1.0, "Strike", "of initial", minimum=0.0, maximum=LEVEL_MAX,
               visible_if=_v("upside.type", "call", "call_spread", "digital")),
-        Field("participation", "number", 1.0, "Participation", minimum=0.0,
+        Field("participation", "number", 1.0, "Participation", minimum=0.0, maximum=10.0,
               visible_if=_v("upside.type", "call", "call_spread")),
-        Field("cap", "number", 1.3, "Cap", "of initial", minimum=0.0, visible_if=_v("upside.type", "call_spread")),
-        Field("digital_amount", "number", 0.1, "Digital amount", "of notional", minimum=0.0,
+        Field("cap", "number", 1.3, "Cap", "of initial", minimum=0.0, maximum=LEVEL_MAX,
+              visible_if=_v("upside.type", "call_spread")),
+        Field("digital_amount", "number", 0.1, "Digital amount", "of notional", minimum=0.0, maximum=1.0,
               visible_if=_v("upside.type", "digital")),
     )),
     Section("downside", "Downside", (
         Field("type", "choice", "pdi", "Downside", choices=("none", "pdi", "geared_put")),
         Field("strike", "number", 1.0, "Put strike", "of initial", minimum=0.0, maximum=2.0,
               visible_if=_v("downside.type", "pdi", "geared_put")),
-        Field("barrier", "number", 0.6, "Knock-in barrier", "of initial", minimum=0.0,
+        Field("barrier", "number", 0.6, "Knock-in barrier", "of initial", minimum=0.0, maximum=LEVEL_MAX,
               visible_if=_v("downside.type", "pdi")),
         Field("observation", "choice", "european", "Barrier observation", choices=("european", "daily"),
               visible_if=_v("downside.type", "pdi")),
@@ -128,6 +133,17 @@ class TermSheetError(ValueError):
     pass
 
 
+def _hint(f: Field) -> str:
+    return f" ({FRACTIONS})" if f.unit in ("of initial", "per annum", "of notional") else ""
+
+
+def _split(path: str) -> tuple[str, str]:
+    parts = path.split(".")
+    if len(parts) != 2 or not all(parts):
+        raise TermSheetError(f"{path!r} is not a field path: use 'section.field', e.g. 'coupon.rate'")
+    return parts[0], parts[1]
+
+
 def _coerce(f: Field, value, path: str):
     if value is None:
         return None
@@ -152,9 +168,9 @@ def _coerce(f: Field, value, path: str):
             raise TermSheetError(f"{path}: names must be identifiers (letters, digits, _), got {value!r}")
         return value
     if f.minimum is not None and value < f.minimum:
-        raise TermSheetError(f"{path} = {value} is below the minimum {f.minimum}")
+        raise TermSheetError(f"{path} = {value} is below the minimum {f.minimum}" + _hint(f))
     if f.maximum is not None and value > f.maximum:
-        raise TermSheetError(f"{path} = {value} is above the maximum {f.maximum}")
+        raise TermSheetError(f"{path} = {value} is above the maximum {f.maximum}" + _hint(f))
     return value
 
 
@@ -168,7 +184,7 @@ class TermSheet:
         given = {s: dict(v) for s, v in (values or {}).items()}
         for s in given:
             if s not in self.mask.sections:
-                raise TermSheetError(f"section {s!r} is not part of a {mask} product "
+                raise TermSheetError(f"section {s!r} is not part of the {mask} mask "
                                      f"(sections: {', '.join(self.mask.sections)})")
         self.values: dict = {}
         # defaults first, so that visibility can be evaluated on the merged values
@@ -195,7 +211,7 @@ class TermSheet:
                 v = _coerce(f, self.values[s][f.name], path)
                 allowed = self.mask.choices.get(path, f.choices)
                 if f.kind == "choice" and v not in allowed:
-                    raise TermSheetError(f"{path} = {v!r} is not allowed for a {self.mask.name} product "
+                    raise TermSheetError(f"{path} = {v!r} is not allowed for the {self.mask.name} mask "
                                          f"(choices: {', '.join(allowed)})")
                 self.values[s][f.name] = v
         if self.visible("downside.gearing"):
@@ -203,7 +219,7 @@ class TermSheet:
         self._check()
 
     def visible(self, path: str) -> bool:
-        s, name = path.split(".")
+        s, name = _split(path)
         if s not in self.mask.sections:
             return False
         f = SECTIONS[s].field(name)
@@ -214,7 +230,7 @@ class TermSheet:
         return True
 
     def get(self, path: str, default=None):
-        s, name = path.split(".")
+        s, name = _split(path)
         return self.values.get(s, {}).get(name, default)
 
     def _check(self):
@@ -242,7 +258,7 @@ class TermSheet:
         dropped; changing a field that ends up hidden is an error."""
         values = {s: dict(v) for s, v in self.values.items()}
         for path, v in changes.items():
-            s, name = path.split(".")
+            s, name = _split(path)
             values.setdefault(s, {})[name] = v
         for s in values:
             values[s].pop("gearing", None)

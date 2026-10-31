@@ -68,12 +68,12 @@ class Parser:
         self.skip_newlines()
         while not self.check("EOF"):
             if (tok := self.accept("KEYWORD", "underlying")):
-                underlyings.append(Underlying(self.expect("NAME", what="underlying name").text, tok.line))
+                underlyings.append(Underlying(self.expect("NAME", what="underlying name").text, tok.line, tok.col))
             elif (tok := self.accept("KEYWORD", "param")):
                 name = self.expect("NAME", what="parameter name").text
                 self.expect("OP", "=")
                 sign = -1.0 if self.accept("OP", "-") else 1.0
-                params.append(Param(name, sign * float(self.expect("NUMBER", what="number").text), tok.line))
+                params.append(Param(name, sign * float(self.expect("NUMBER", what="number").text), tok.line, tok.col))
             elif self.check("KEYWORD", "event"):
                 events.append(self.event())
                 continue
@@ -85,11 +85,11 @@ class Parser:
     def when(self):
         tok = self.tok
         if self.accept("DATE"):
-            return DateLit(tok.text, tok.line)
+            return DateLit(tok.text, tok.line, tok.col)
         if self.check("NAME", "t"):
             self.i += 1
             self.expect("OP", "=")
-            return TimeLit(float(self.expect("NUMBER", what="time in years").text), tok.line)
+            return TimeLit(float(self.expect("NUMBER", what="time in years").text), tok.line, tok.col)
         raise self.error(f"expected a date (YYYY-MM-DD) or t=<years>, found {tok.text!r}")
 
     def event(self) -> Event:
@@ -100,7 +100,7 @@ class Parser:
         body = self.block(("end",))
         self.expect("KEYWORD", "end", "'end' closing the event")
         self.end_of_line()
-        return Event(when, pay, body, tok.line)
+        return Event(when, pay, body, tok.line, tok.col)
 
     def block(self, closers) -> tuple:
         stmts = []
@@ -124,39 +124,39 @@ class Parser:
                 orelse = self.block(("end",))
             self.expect("KEYWORD", "end", "'end' closing the if")
             self.end_of_line()
-            return If(cond, body, orelse, tok.line)
+            return If(cond, body, orelse, tok.line, tok.col)
         if self.accept("KEYWORD", "pay"):
             expr = self.expr()
             self.expect("KEYWORD", "as")
             tag = self.expect("NAME", what="a flow tag").text
             self.end_of_line()
-            return Pay(expr, tag, tok.line)
+            return Pay(expr, tag, tok.line, tok.col)
         if self.accept("KEYWORD", "terminate"):
             self.end_of_line()
-            return Terminate(tok.line)
+            return Terminate(tok.line, tok.col)
         if self.accept("NAME"):
             self.expect("OP", "=", "'=' (assignment)")
             expr = self.expr()
             self.end_of_line()
-            return Assign(tok.text, expr, tok.line)
+            return Assign(tok.text, expr, tok.line, tok.col)
         raise self.error(f"expected a statement, found {tok.text!r}")
 
     # --- expressions ---
     def expr(self):
         left = self.and_expr()
         while (tok := self.accept("KEYWORD", "or")):
-            left = Binary("or", left, self.and_expr(), tok.line)
+            left = Binary("or", left, self.and_expr(), tok.line, tok.col)
         return left
 
     def and_expr(self):
         left = self.not_expr()
         while (tok := self.accept("KEYWORD", "and")):
-            left = Binary("and", left, self.not_expr(), tok.line)
+            left = Binary("and", left, self.not_expr(), tok.line, tok.col)
         return left
 
     def not_expr(self):
         if (tok := self.accept("KEYWORD", "not")):
-            return Unary("not", self.not_expr(), tok.line)
+            return Unary("not", self.not_expr(), tok.line, tok.col)
         return self.comparison()
 
     def comparison(self):
@@ -164,7 +164,7 @@ class Parser:
         if self.tok.kind == "OP" and self.tok.text in COMPARISONS:
             tok = self.tok
             self.i += 1
-            left = Binary(tok.text, left, self.arith(), tok.line)
+            left = Binary(tok.text, left, self.arith(), tok.line, tok.col)
             if self.tok.kind == "OP" and self.tok.text in COMPARISONS:
                 raise self.error("chained comparisons are not allowed, use 'and'")
         return left
@@ -174,7 +174,7 @@ class Parser:
         while self.tok.kind == "OP" and self.tok.text in "+-":
             tok = self.tok
             self.i += 1
-            left = Binary(tok.text, left, self.term(), tok.line)
+            left = Binary(tok.text, left, self.term(), tok.line, tok.col)
         return left
 
     def term(self):
@@ -182,25 +182,25 @@ class Parser:
         while self.tok.kind == "OP" and self.tok.text in "*/":
             tok = self.tok
             self.i += 1
-            left = Binary(tok.text, left, self.unary(), tok.line)
+            left = Binary(tok.text, left, self.unary(), tok.line, tok.col)
         return left
 
     def unary(self):
         if (tok := self.accept("OP", "-")):
-            return Unary("-", self.unary(), tok.line)
+            return Unary("-", self.unary(), tok.line, tok.col)
         return self.primary()
 
     def primary(self):
         tok = self.tok
         if self.accept("NUMBER"):
-            return Num(float(tok.text), tok.line)
+            return Num(float(tok.text), tok.line, tok.col)
         if self.accept("OP", "("):
             e = self.expr()
             self.expect("OP", ")")
             return e
         if self.accept("NAME"):
             if not self.accept("OP", "("):
-                return Name(tok.text, tok.line)
+                return Name(tok.text, tok.line, tok.col)
             if tok.text in WINDOWS:
                 return self.window(tok)
             if tok.text not in FUNCTIONS:
@@ -213,7 +213,7 @@ class Parser:
             if (arity is None and len(args) < 2) or (arity is not None and len(args) != arity):
                 expected = "at least 2" if arity is None else arity
                 raise self.error(f"{tok.text} takes {expected} argument(s), got {len(args)}", tok)
-            return Call(tok.text, tuple(args), tok.line)
+            return Call(tok.text, tuple(args), tok.line, tok.col)
         raise self.error(f"expected an expression, found {tok.text!r}" if tok.text else "expected an expression")
 
     def window(self, tok: Token):
@@ -231,7 +231,7 @@ class Parser:
                 raise self.error("n must be a positive integer", num)
             n = int(num.text)
         self.expect("OP", ")")
-        return Window(tok.text, und, start, end, n, tok.line)
+        return Window(tok.text, und, start, end, n, tok.line, tok.col)
 
 
 def parse(text: str) -> Program:

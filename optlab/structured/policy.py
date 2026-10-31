@@ -65,6 +65,7 @@ def decide(prof: ProductProfile, t_max: float, model: str | None = None, control
     """Policy decision for a profile. `model` forces a Monte Carlo model ('bs', 'heston', 'lv', 'slv') or
     'surface' (replication, European class only); `control=None` skips the control price."""
     rules = rules or RULES
+    model = model.lower() if isinstance(model, str) else model
     basket = len(prof.underlyings) > 1
     rule = rules["basket"] if basket else rules[prof.product_class]
     warnings = []
