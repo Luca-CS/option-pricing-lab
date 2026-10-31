@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from ..config import DEFAULT_SEED
 from .profile import ProductProfile
 
 
@@ -59,7 +60,7 @@ class PricingDecision:
 
 
 def decide(prof: ProductProfile, t_max: float, model: str | None = None, control: str | None = "default",
-           n_paths: int = 200_000, batch: int = 25_000, seed: int = 2026, rules: dict | None = None,
+           n_paths: int = 200_000, batch: int = 25_000, seed: int = DEFAULT_SEED, rules: dict | None = None,
            has_surfaces: bool = True) -> PricingDecision:
     """Policy decision for a profile. `model` forces a Monte Carlo model ('bs', 'heston', 'lv', 'slv') or
     'surface' (replication, European class only); `control=None` skips the control price."""

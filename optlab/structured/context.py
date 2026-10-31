@@ -7,12 +7,13 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..config import paths
 from ..heston import HestonParams
 from ..market import Market
 from ..models import BlackScholesModel, HestonModel, Leverage, LocalVolModel, SLVModel
 from ..svi import SVISurface
 
-DEFAULT_CALIBRATION = Path(__file__).resolve().parents[2] / "results" / "spx_calibration.json"
+DEFAULT_CALIBRATION = paths().results / "spx_calibration.json"
 
 
 @dataclass

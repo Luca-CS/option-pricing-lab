@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from ..config import DEFAULT_SEED
 from ..models import BlackScholesModel, LocalVolModel
 from ..products import MCResult
 from .cashflows import Note, Swap, pair_averages
@@ -135,7 +136,7 @@ class Book:
         return decide(prof, ctx.t_max, model, control=None, has_surfaces=getattr(ctx, "has_surfaces", True))
 
     def price(self, ctx: PricingContext | None = None, model: str | None = None, n_paths: int = 200_000,
-              seed: int = 2026, batch: int | None = 25_000, smoothing: float = 0.0, market=None, surface=None,
+              seed: int = DEFAULT_SEED, batch: int | None = 25_000, smoothing: float = 0.0, market=None, surface=None,
               initial_fixing: float | dict | None = None, sim_model=None) -> BookResult:
         """Value of the book. `model` forces one model for every position ('bs', 'lv', 'heston', 'slv', or
         'surface' for an all-European book); `market`/`surface` override the context (bumps)."""
@@ -215,7 +216,7 @@ class Book:
         return ctx.model(name, horizon)
 
     def greeks(self, ctx: PricingContext | None = None, model: str | None = None, n_paths: int = 200_000,
-               seed: int = 2026, batch: int | None = 25_000, smoothing: float = 0.005, h_spot: float = 0.01,
+               seed: int = DEFAULT_SEED, batch: int | None = 25_000, smoothing: float = 0.005, h_spot: float = 0.01,
                h_vol: float = 0.01, slv_vega: bool = False, n_particles: int = 200_000) -> dict:
         """Book delta (currency per +1 % spot) and vega (per +1 vol point) by central bumps of the shared
         simulation, per position and in total, with standard errors. Products keep their initial fixing."""

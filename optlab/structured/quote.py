@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from ..config import DEFAULT_SEED
+from ..log import get_logger
 from .cashflows import FundedSwap, Note, Swap, funding_periods
 from .compiler import CompiledProduct, compile_sheet
 from .context import PricingContext
@@ -61,6 +63,9 @@ class Quote:
         return quote_table(self)
 
 
+LOG = get_logger(__name__)
+
+
 def wrapper(sheet: TermSheet, product: CompiledProduct):
     """Note (issuer spread), Swap (upfront only) or FundedSwap (floating leg until redemption) for a sheet."""
     if sheet.get("wrapper.format") == "note":
@@ -95,7 +100,7 @@ def _pricer(product: CompiledProduct, ctx: PricingContext, fmt, decision: Pricin
 
 
 def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None = None, control="default",
-          n_paths: int = 200_000, batch: int = 25_000, seed: int = 2026, control_paths: int | None = None,
+          n_paths: int = 200_000, batch: int = 25_000, seed: int = DEFAULT_SEED, control_paths: int | None = None,
           fixings: dict | None = None, with_greeks: bool = False, slv_vega: bool = False) -> Quote:
     """Price a term sheet with the policy model. In 'coupon' mode the coupon is solved so that the note price is
     100 - margin, or the swap upfront is -margin (zero upfront paid, the margin kept by the bank); in 'upfront' mode
@@ -147,5 +152,8 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
         from .greeks import greeks
         g = greeks(product.program, ctx, decision.model, decision.method, params, fmt, product.valuation,
                    decision.n_paths, decision.seed, decision.batch, slv_vega=slv_vega)
+    seconds = time.perf_counter() - t0
+    LOG.info("quote %s %s: %s, %s, %.2f s", sheet.mask.name, ", ".join(sheet.underlyings), decision.label,
+             f"coupon {rate:.6f} p.a." if rate is not None else f"upfront {upfront:.4f} %", seconds)
     return Quote(product, prof, decision, fmt.name, result, target, rate, rate_se, upfront, margin, ctrl,
-                 time.perf_counter() - t0, warnings, g)
+                 seconds, warnings, g)

@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from ..config import DEFAULT_SEED
 from ..models import BlackScholesModel, LocalVolModel
 from ..svi import g_function
 from .cashflows import Note
@@ -86,7 +87,7 @@ def _diff(up, down, scale):
 
 
 def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, fmt=None, valuation=None,
-           n_paths: int = 200_000, seed: int = 2026, batch: int | None = 25_000, smoothing: float = 0.005,
+           n_paths: int = 200_000, seed: int = DEFAULT_SEED, batch: int | None = 25_000, smoothing: float = 0.005,
            h_spot: float = 0.01, h_vol: float = 0.01, T_obs: float | None = None, slv_vega: bool = False,
            n_particles: int = 200_000) -> Greeks:
     """Delta and vega of a program under `model` ('bs', 'lv', 'slv', 'heston') or by replication on the surface

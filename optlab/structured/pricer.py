@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from ..log import get_logger
 from ..market import Market
 from ..models import Model
 from ..products import MCResult
@@ -18,6 +19,9 @@ from .script.nodes import DateLit, Program
 from .script.parser import parse
 from .script.timeline import Clock, Timeline, build_timeline
 from .script.validate import validate
+
+
+LOG = get_logger(__name__)
 
 
 @dataclass
@@ -106,12 +110,15 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
         warnings.append("some flows are already paid (on or before the valuation date): they are not in the value")
     if smoothing:
         warnings.append(f"digital smoothing active (eps = {smoothing:.2%}): prices are biased, see the solver notes")
+    LOG.debug("priced %s param set(s), %s paths, model %s, %s dates: simulation %.3f s, evaluation %.3f s",
+              len(evaluators), n_paths, type(model).__name__, len(timeline.sim_times), t_sim, t_eval)
     results = []
     for i in range(len(evaluators)):
         d = np.concatenate(pairs[i])
         own = warnings + batch_warnings[i]
         if not np.all(np.isfinite(d)):
             own = own + [f"non-finite present values on {np.mean(~np.isfinite(d)):.2%} of the pairs"]
+            LOG.warning(own[-1])
         value = MCResult(float(d.mean()), float(d.std(ddof=1) / np.sqrt(len(d))), n_paths)
         term = terminated[i] / n_paths
         alive_end = 1.0 - term.sum()
