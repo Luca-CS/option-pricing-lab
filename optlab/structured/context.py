@@ -11,6 +11,7 @@ from ..heston import HestonParams
 from ..market import Market
 from ..models import BlackScholesModel, HestonModel, Leverage, LocalVolModel, SLVModel
 from ..svi import SVISurface
+from .surfaces import FastSVISurface
 
 DEFAULT_CALIBRATION = paths().results / "spx_calibration.json"
 
@@ -38,8 +39,9 @@ class PricingContext:
     def from_snapshot(cls, snap) -> "PricingContext":
         heston = HestonParams(**snap.heston)
         slv = SLVModel(heston, Leverage.from_dict(snap.slv["leverage"]), snap.slv["mix"])
-        return cls(Market.from_dict(snap.market), SVISurface.from_dict(snap.surface), heston, slv, snap.valuation,
-                   snap.underlying, snap.snapshot_id)
+        surface = FastSVISurface.from_dict(snap.surface)  # bit-identical to SVISurface, faster per step
+        return cls(Market.from_dict(snap.market), surface, heston, slv, snap.valuation, snap.underlying,
+                   snap.snapshot_id)
 
     @property
     def t_max(self) -> float:
