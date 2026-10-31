@@ -3,6 +3,10 @@
 Every variable is an array over paths. Conditions are float masks (0/1, or a ramp in smoothed mode): inside an
 `if`, `x = e` becomes `x = m*e + (1-m)*x`, `pay e` adds `m*alive*e` to the flows and `terminate` multiplies
 `alive` by `1-m`.
+
+Undefined values are errors, not silent branches: a comparison with NaN (log of a negative number, 0/0) stays NaN,
+`and`/`or` short-circuit on a certain operand, and a NaN condition or a non-finite payment on a path that the
+current mask reaches raises a ScriptError with the line. Values that are masked out may be NaN.
 """
 
 from __future__ import annotations
@@ -30,11 +34,14 @@ class BatchFlows:
     redemption_weights: dict = field(default_factory=dict)
     terminated: list = field(default_factory=list)
     alive: np.ndarray | float = 1.0
+    warnings: list = field(default_factory=list)
 
 
 def _compare(op, a, b, eps):
     hard = HARD[op](a, b).astype(float) if isinstance(a, np.ndarray) or isinstance(b, np.ndarray) \
         else float(HARD[op](a, b))
+    if _any_nan(a, b):  # NaN compares as False: keep it undefined instead of sending the path to `else`
+        hard = np.where(np.isnan(a) | np.isnan(b), np.nan, hard)
     if eps == 0 or op == "==":
         return hard
     scale = eps * np.abs(b)
@@ -42,6 +49,10 @@ def _compare(op, a, b, eps):
     with np.errstate(divide="ignore", invalid="ignore"):
         ramp = np.clip(d / scale + 0.5, 0.0, 1.0)
     return np.where(scale > 0, ramp, hard)
+
+
+def _any_nan(a, b) -> bool:
+    return bool(np.any(np.isnan(a)) or np.any(np.isnan(b)))
 
 
 class Evaluator:
@@ -68,13 +79,16 @@ class Evaluator:
                 before = out.alive
                 self.block(ev.body, 1.0)
                 out.terminated.append(before - out.alive)
-        if self.check_redemption and self.eps == 0:
+        if self.check_redemption:
             total = sum(out.redemption_weights.values(), np.zeros(scenario.n_paths))
-            bad = np.abs(total - 1.0) > 1e-12
+            tol = 1e-12 if self.eps == 0 else 1e-9
+            bad = ~(np.abs(total - 1.0) <= tol)  # NaN weights fail too
             if bad.any():
-                raise ScriptError(f"the redemption is not paid exactly once on {bad.mean():.2%} of the paths "
-                                  "(a valid product pays one 'redemption' per path)",
-                                  self.program.events[-1].line)
+                message = (f"the redemption is not paid exactly once on {bad.mean():.2%} of the paths "
+                           "(a valid product pays one 'redemption' per path)")
+                if self.eps == 0 or not np.all(np.isfinite(total)):
+                    raise ScriptError(message, self.program.events[-1].line)
+                out.warnings.append(message + " in the smoothing ramps")
         return out
 
     # --- statements ---
@@ -86,10 +100,14 @@ class Evaluator:
                     self.vars[s.name] = e
                 else:
                     old = self.vars.get(s.name, 0.0)
-                    self.vars[s.name] = np.where(m == 1.0, e, old) if self.eps == 0 else m * e + (1 - m) * old
+                    if self.eps == 0:
+                        self.vars[s.name] = np.where(m == 1.0, e, old)
+                    else:  # values outside the mask may be NaN: never multiply them by a zero weight
+                        self.vars[s.name] = np.where(m == 1.0, e, np.where(m == 0.0, old, m * e + (1 - m) * old))
             elif isinstance(s, Pay):
                 w = m * self.out.alive
                 e = self.expr(s.expr)
+                self._check_defined(~np.isfinite(e) & (w != 0), s.line, f"the amount paid as {s.tag} is not finite")
                 key = (self.t_pay, s.tag)
                 self.out.flows[key] = self.out.flows.get(key, 0.0) + np.where(w != 0, w * e, 0.0)
                 if s.tag == "redemption":
@@ -98,9 +116,19 @@ class Evaluator:
                 self.out.alive = self.out.alive * (1.0 - m)
             elif isinstance(s, If):
                 c = self.expr(s.cond)
+                undefined = np.isnan(c)
+                if np.any(undefined):
+                    self._check_defined(undefined & (np.asarray(m) != 0), s.line,
+                                        "the condition is undefined (NaN, e.g. the log of a negative number)")
+                    c = np.where(undefined, 0.0, c)  # reached by no path
                 self.block(s.body, m * c)
                 if s.orelse:
                     self.block(s.orelse, m * (1.0 - c))
+
+    def _check_defined(self, bad, line: int, what: str):
+        bad = np.broadcast_to(bad, (self.scenario.n_paths,))
+        if bad.any():
+            raise ScriptError(f"{what} on {bad.mean():.2%} of the paths it reaches", line)
 
     # --- expressions ---
     def expr(self, e):
@@ -116,10 +144,10 @@ class Evaluator:
             a, b = self.expr(e.left), self.expr(e.right)
             if e.op in ARITH:
                 return ARITH[e.op](a, b)
-            if e.op == "and":
-                return a * b
+            if e.op == "and":  # a certain false operand decides, even if the other one is undefined
+                return np.where((a == 0) | (b == 0), 0.0, a * b) if _any_nan(a, b) else a * b
             if e.op == "or":
-                return a + b - a * b
+                return np.where((a == 1) | (b == 1), 1.0, a + b - a * b) if _any_nan(a, b) else a + b - a * b
             return _compare(e.op, a, b, self.eps)
         if isinstance(e, Unary):
             v = self.expr(e.operand)

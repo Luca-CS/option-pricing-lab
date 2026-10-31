@@ -250,3 +250,61 @@ def test_worst_and_best_take_any_number_of_arguments():
              " as redemption\nend\n"
     out = run(script, [[90.0], [110.0]])
     np.testing.assert_array_equal(out.flows[(1.0, "redemption")], [90 + 101_000, 95 + 110_000])
+
+
+# --- undefined values are errors, not silent branches ---
+
+NAN_SCRIPT = "underlying SPX\nevent t=1 pay t=1\n  x = log(SPX - 90)\n  if {cond} then\n    pay 100 as redemption\n" \
+             "  else\n    pay 0 as redemption\n  end\nend\n"
+
+
+@pytest.mark.parametrize("cond", ["x > 0", "not (x <= 0)", "x > 0 or SPX > 1000"])
+def test_a_nan_condition_raises_with_its_line(cond):
+    with pytest.raises(ScriptError, match="condition is undefined") as err:
+        run(NAN_SCRIPT.format(cond=cond), [[80.0], [120.0]])
+    assert err.value.line == 4
+
+
+def test_a_guarded_condition_is_fine_and_short_circuits():
+    guarded = NAN_SCRIPT.format(cond="SPX > 90 and x > 0")
+    out = run(guarded, [[80.0], [95.0], [120.0]])
+    np.testing.assert_array_equal(out.flows[(1.0, "redemption")], [0, 100, 100])  # log(5) > 0
+    nested = """underlying SPX
+event t=1 pay t=1
+  if SPX > 90 then
+    if log(SPX - 90) > 0 then
+      pay 100 as redemption
+    else
+      pay 50 as redemption
+    end
+  else
+    pay 0 as redemption
+  end
+end
+"""
+    out = run(nested, [[80.0], [90.5], [120.0]])
+    np.testing.assert_array_equal(out.flows[(1.0, "redemption")], [0, 50, 100])
+
+
+def test_a_non_finite_payment_raises_unless_masked_out():
+    with pytest.raises(ScriptError, match="amount paid as redemption is not finite") as err:
+        run("underlying SPX\nevent t=1 pay t=1\n  pay 100 + log(SPX - 150) as redemption\nend\n", [[120.0], [200.0]])
+    assert err.value.line == 3
+    masked = "underlying SPX\nevent t=1 pay t=1\n  if SPX > 150 then\n    pay log(SPX - 150) as redemption\n" \
+             "  else\n    pay 0 as redemption\n  end\nend\n"
+    out = run(masked, [[120.0], [200.0]])
+    np.testing.assert_allclose(out.flows[(1.0, "redemption")], [0.0, np.log(50.0)])
+
+
+def test_smoothed_assignments_never_spread_masked_nans():
+    script = """underlying SPX
+event t=1 pay t=1
+  y = 1
+  if SPX > 150 then
+    y = log(SPX - 150)
+  end
+  pay y as redemption
+end
+"""
+    out = run(script, [[120.0], [200.0]], smoothing=0.01)
+    assert np.all(np.isfinite(out.flows[(1.0, "redemption")]))

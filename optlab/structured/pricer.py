@@ -74,6 +74,7 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
     terminated = [np.zeros(len(program.events)) for _ in evaluators]
     flows = [{} for _ in evaluators]
     red = [{} for _ in evaluators]
+    batch_warnings = [[] for _ in evaluators]
     t_sim = t_eval = 0.0
     if basket:
         if initial_fixing is not None:
@@ -97,6 +98,7 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
                 flows[i][key] = flows[i].get(key, 0.0) + float(np.sum(f))
             for t, w in out.redemption_weights.items():
                 red[i][t] = red[i].get(t, 0.0) + float(np.sum(w))
+            batch_warnings[i] += [w for w in out.warnings if w not in batch_warnings[i]]
         t_eval += time.perf_counter() - t0
     seconds = time.perf_counter() - t_start
     warnings = []
@@ -107,6 +109,9 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
     results = []
     for i in range(len(evaluators)):
         d = np.concatenate(pairs[i])
+        own = warnings + batch_warnings[i]
+        if not np.all(np.isfinite(d)):
+            own = own + [f"non-finite present values on {np.mean(~np.isfinite(d)):.2%} of the pairs"]
         value = MCResult(float(d.mean()), float(d.std(ddof=1) / np.sqrt(len(d))), n_paths)
         term = terminated[i] / n_paths
         alive_end = 1.0 - term.sum()
@@ -118,7 +123,7 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
             n_paths=n_paths, seconds=seconds, timings={"simulation": t_sim, "evaluation": t_eval},
             event_times=timeline.event_times, termination=term,
             expected_flows={k: v / n_paths for k, v in flows[i].items()}, expected_life=life,
-            redemption_probabilities={t: v / n_paths for t, v in red[i].items()}, warnings=warnings,
+            redemption_probabilities={t: v / n_paths for t, v in red[i].items()}, warnings=own,
             pairs=d))
     return results
 
