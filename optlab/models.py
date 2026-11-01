@@ -116,9 +116,12 @@ def time_grid(times, dt_max, dt_min=None):
 
 
 def simulate(model: Model, market: Market, times, n_paths: int, rng=None, dt_max=1 / 252,
-             antithetic=True, return_variance=False, dt_min=1 / 2000):
+             antithetic=True, return_variance=False, dt_min=1 / 2000, tile: int | None = 25_000):
     """Simulate S at the observation times. Returns an array (n_paths, len(times)),
-    plus the variance at the same dates if return_variance is True."""
+    plus the variance at the same dates if return_variance is True.
+
+    Each step is applied tile by tile (`tile` paths at a time, the draws unchanged and in the same order), which
+    keeps the temporaries in cache: the result is the same bit for bit as without tiles (`tile=None`)."""
     rng = np.random.default_rng(rng)
     times = np.asarray(times, dtype=float)
     if isinstance(model, BlackScholesModel):
@@ -133,23 +136,31 @@ def simulate(model: Model, market: Market, times, n_paths: int, rng=None, dt_max
     v = np.full(n, hp.v0 if hp is not None else 0.0)
     out_x = np.empty((n, len(times)))
     out_v = np.empty((n, len(times))) if return_variance else None
+    width = half if tile is None or tile >= half else int(tile)
+    # (first path, last path, offset into the draws, sign): the mirrored half reuses the draws with a minus sign
+    segments = [(a, min(a + width, half), a, 1.0) for a in range(0, half, width)]
+    if antithetic:
+        segments += [(half + a, half + b, o, -1.0) for a, b, o, _ in segments]
+    rho_c = np.sqrt(1 - hp.rho**2) if hp is not None else 0.0
     j = 0
     for i in range(1, len(grid)):
         t0, dt = grid[i - 1], grid[i] - grid[i - 1]
         z1 = rng.standard_normal(half)
-        if antithetic:
-            z1 = np.concatenate([z1, -z1])
-        a = model.inst_var(t0, x, v)
-        if hp is not None:
-            z2 = rng.standard_normal(half)
-            if antithetic:
-                z2 = np.concatenate([z2, -z2])
-            zx = hp.rho * z2 + np.sqrt(1 - hp.rho**2) * z1
-            vp = np.maximum(v, 0.0)
-            v = v + hp.kappa * (hp.theta - vp) * dt + hp.xi * np.sqrt(vp * dt) * z2
-        else:
-            zx = z1
-        x = x - 0.5 * a * dt + np.sqrt(a * dt) * zx
+        z2 = None
+        for k, (a, b, o, sign) in enumerate(segments):
+            s = slice(a, b)
+            zz1 = z1[o:o + (b - a)] if sign > 0 else -z1[o:o + (b - a)]
+            av = model.inst_var(t0, x[s], v[s])
+            if hp is not None:
+                if z2 is None:
+                    z2 = rng.standard_normal(half)  # drawn after the variance of the first tile, as before
+                zz2 = z2[o:o + (b - a)] if sign > 0 else -z2[o:o + (b - a)]
+                zx = hp.rho * zz2 + rho_c * zz1
+                vp = np.maximum(v[s], 0.0)
+                v[s] = v[s] + hp.kappa * (hp.theta - vp) * dt + hp.xi * np.sqrt(vp * dt) * zz2
+            else:
+                zx = zz1
+            x[s] = x[s] - 0.5 * av * dt + np.sqrt(av * dt) * zx
         while j < len(obs) and obs[j] == i:
             out_x[:, j] = x
             if return_variance:
