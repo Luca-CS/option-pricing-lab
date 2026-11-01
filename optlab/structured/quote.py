@@ -141,7 +141,8 @@ def _pricer(product: CompiledProduct, ctx: PricingContext, fmt, decision: Pricin
 def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None = None, control="default",
           n_paths: int = 200_000, batch: int = 25_000, seed: int = DEFAULT_SEED, control_paths: int | None = None,
           fixings: dict | None = None, with_greeks: bool = False, slv_vega: bool = False,
-          workers: int | None = None, control_forwards: bool = False, fast: bool = False) -> Quote:
+          workers: int | None = None, control_forwards: bool = False, fast: bool = False,
+          sticky: str = "moneyness") -> Quote:
     """Price a term sheet with the policy model. In 'coupon' mode the coupon is solved so that the note price is
     100 - margin, or the swap upfront is -margin (zero upfront paid, the margin kept by the bank); in 'upfront' mode
     the coupon is given and the result is the note price, or the swap upfront paid by the investor (leg value +
@@ -149,7 +150,8 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
     adds delta and vega with the policy model, on the same paths, at the solved coupon (under SLV, the vega needs
     `slv_vega=True`: the leverage is recalibrated on the shifted surfaces). `workers` runs the Monte Carlo batches
     on a process pool (same numbers bit for bit); `control_forwards` adds forward control variates to the Monte
-    Carlo estimator; `fast` uses the grid-interpolated local vol and SLV models (fastmodels)."""
+    Carlo estimator; `fast` uses the grid-interpolated local vol and SLV models (fastmodels); `sticky` sets the
+    smile dynamics of the delta (moneyness, strike or model)."""
     t0 = time.perf_counter()
     ctx = ctx or PricingContext.from_calibration()
     product = compile_sheet(sheet, ctx.valuation)
@@ -193,7 +195,7 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
         from .greeks import greeks
         g = greeks(product.program, ctx, decision.model, decision.method, params, fmt, product.valuation,
                    decision.n_paths, decision.seed, decision.batch, slv_vega=slv_vega, calendar=product.calendar,
-                   workers=workers)
+                   workers=workers, sticky=sticky)
     seconds = time.perf_counter() - t0
     LOG.info("quote %s %s: %s, %s, %.2f s", sheet.mask.name, ", ".join(sheet.underlyings), decision.label,
              f"coupon {rate:.6f} p.a." if rate is not None else f"upfront {upfront:.4f} %", seconds)

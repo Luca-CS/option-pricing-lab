@@ -104,3 +104,62 @@ def test_local_linear_falls_back_where_bins_are_thin():
     assert np.max(np.abs(ll[inner] - (0.04 + 0.01 * xe[inner]))) < 1e-3  # linear truth recovered
     with pytest.raises(ValueError, match="unknown regression"):
         _conditional_mean(x, v, xe, 0.2, regression="spline")
+
+
+# --- B5: delta conventions ---
+
+def test_delta_conventions_agree_on_a_flat_smile():
+    from _structured_refs import flat_context
+
+    from optlab.structured import compile_sheet, preset
+    from optlab.structured.greeks import greeks
+    ctx = flat_context()
+    p = compile_sheet(preset("reverse_convertible", **{"downside.barrier": 0.7, "wrapper.solve": "upfront"}),
+                      ctx.valuation)
+    rep = [greeks(p.program, ctx, "surface", "replication", sticky=s).delta for s in ("moneyness", "strike", "model")]
+    assert max(rep) - min(rep) < 1e-10
+    mc = [greeks(p.program, ctx, "bs", n_paths=20_000, batch=10_000, sticky=s).delta for s in ("moneyness", "strike")]
+    assert mc[0] == mc[1]
+
+
+def rc_sticky_strike_reference(ctx, T, T_pay, pays, cpn, K=1.0, B=0.7, h=0.01):
+    """RC value with implied vols fixed at absolute strikes, from Black prices only (no pricer code)."""
+    from optlab.blackscholes import black_price
+    F0 = float(ctx.market.F(T))
+
+    def put(F, strike):
+        return float(black_price(F, strike, T, float(ctx.surface.iv(np.log(strike / F0), T)), 1.0, "put"))
+
+    def value(f):
+        F, Bs = F0 * f, B * 100.0
+        dig = (put(F, Bs + 1e-4) - put(F, Bs - 1e-4)) / 2e-4  # P(S_T < B S0), skew included
+        loss = (put(F, Bs) + (K - B) * 100.0 * dig) / 100.0
+        return 100 * cpn * sum(float(ctx.market.D(t)) for t in pays) + float(ctx.market.D(T_pay)) * 100 * (1 - loss)
+    return (value(1 + h) - value(1 - h)) / 2
+
+
+def test_sticky_strike_delta_matches_black_prices_at_fixed_strike_vols():
+    from optlab.structured import PricingContext, compile_sheet, preset
+    from optlab.structured.greeks import greeks
+    from optlab.structured.script.timeline import Clock, build_timeline
+    ctx = PricingContext.from_calibration()
+    p = compile_sheet(preset("reverse_convertible", **{"downside.barrier": 0.7, "wrapper.solve": "upfront"}),
+                      ctx.valuation)
+    tl = build_timeline(p.program, Clock(ctx.valuation))
+    pays = [t for t in tl.pay_times if t is not None]
+    strike = greeks(p.program, ctx, "surface", "replication", sticky="strike")
+    moneyness = greeks(p.program, ctx, "surface", "replication")
+    ref = rc_sticky_strike_reference(ctx, float(tl.event_times[-1]), pays[-1], pays, p.program.param_values["cpn"])
+    assert strike.delta == pytest.approx(ref, abs=1e-6)
+    assert strike.sticky == "strike" and moneyness.sticky == "moneyness"
+    assert strike.delta == pytest.approx(0.1879, abs=0.001) and moneyness.delta == pytest.approx(0.0869, abs=0.001)
+
+
+def test_local_vol_model_delta_is_far_from_the_sticky_moneyness_delta():
+    from optlab.structured import PricingContext, compile_sheet, preset
+    from optlab.structured.greeks import greeks
+    ctx = PricingContext.from_calibration()
+    p = compile_sheet(preset("phoenix"), ctx.valuation)
+    model = greeks(p.program, ctx, "lv", n_paths=100_000, params={"cpn": 0.02}, sticky="model")
+    moneyness = greeks(p.program, ctx, "lv", n_paths=100_000, params={"cpn": 0.02})
+    assert model.sticky == "strike" and model.delta > 2 * moneyness.delta

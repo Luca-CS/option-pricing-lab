@@ -65,8 +65,8 @@ def quote_table(q) -> str:
         if g.smoothing:
             smooth = (f", digitals smoothed {g.smoothing:.1%} (price bias {g.smoothing_bias:+.4f} +/- "
                       f"{g.smoothing_bias_se:.4f} %)")
-        lines.append(f"greeks ({g.model.upper()}): delta {g.delta:+.4f}{se(g.delta_se)} % per +1 % spot, {vega} "
-                     f"% per vol pt{smooth}")
+        lines.append(f"greeks ({g.model.upper()}): delta (sticky {getattr(g, 'sticky', 'moneyness')}) "
+                     f"{g.delta:+.4f}{se(g.delta_se)} % per +1 % spot, {vega} % per vol pt{smooth}")
     lines.append(f"time: {q.seconds:.2f} s")
     lines += [f"warning: {w}" for w in q.warnings + q.result.warnings]
     lines += ["", result_table(q.result, q.product.valuation)]

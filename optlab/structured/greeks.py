@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from ..config import DEFAULT_SEED
-from ..models import BlackScholesModel, LocalVolModel
+from ..models import BlackScholesModel, LocalVolModel, SLVModel
 from ..svi import g_function
 from .cashflows import Note
 from .units import GREEK_UNITS
@@ -66,6 +66,55 @@ def _recalibrated_slv(ctx, surface, horizon: float, n_particles: int, seed: int)
                               rng=seed)
 
 
+class StickyStrikeSurface:
+    """The surface seen after a spot move by a factor (1 + h) when implied vols stay fixed at absolute strikes:
+    log-moneyness k against the new forward is k + ln(1 + h) against the old one."""
+
+    def __init__(self, base, h: float):
+        self.base, self.c = base, float(np.log1p(h))
+        self.maturities = base.maturities
+
+    def derivatives(self, k, T):
+        return self.base.derivatives(np.asarray(k, dtype=float) + self.c, T)
+
+    def w(self, k, T):
+        return self.derivatives(k, T)[0]
+
+    def iv(self, k, T):
+        return np.sqrt(np.maximum(self.w(k, T), 0.0) / np.asarray(T, dtype=float))
+
+    def theta(self, T):
+        return self.base.w(self.c, T)
+
+    def local_var(self, k, T, floor=1e-4, cap=4.0):
+        return self.base.local_var(np.asarray(k, dtype=float) + self.c, T, floor, cap)
+
+
+class ShiftedLeverage:
+    """SLV leverage fixed in absolute spot after a spot move by (1 + h): L_new(t, x) = L(t, x + ln(1 + h))."""
+
+    def __init__(self, leverage, h: float):
+        self.base, self.c = leverage, float(np.log1p(h))
+        self.times = leverage.times
+
+    def __call__(self, t, x):
+        return self.base(t, np.asarray(x, dtype=float) + self.c)
+
+
+STICKY = ("moneyness", "strike", "model")
+
+
+def sticky_convention(sticky: str, model: str, method: str) -> str:
+    """'model' means the model's own dynamics: sticky strike for local vol and SLV (their local vol or leverage is a
+    function of the absolute spot) and for the surface replication, sticky moneyness for the homogeneous BS and
+    Heston."""
+    if sticky not in STICKY:
+        raise ValueError(f"unknown delta convention {sticky!r}, expected one of {', '.join(STICKY)}")
+    if sticky != "model":
+        return sticky
+    return "strike" if method == "replication" or model in ("lv", "slv") else "moneyness"
+
+
 @dataclass
 class Greeks:
     delta: float  # % of notional per +1 % spot
@@ -81,6 +130,7 @@ class Greeks:
     note: str = ""
     units: dict = field(default_factory=lambda: dict(GREEK_UNITS))
     per_name: dict | None = None  # baskets: {name: {"delta", "delta_se", "vega", "vega_se"}}
+    sticky: str = "moneyness"  # smile dynamics of the delta: moneyness or strike
 
 
 def _diff(up, down, scale):
@@ -93,14 +143,17 @@ def _diff(up, down, scale):
 def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, fmt=None, valuation=None,
            n_paths: int = 200_000, seed: int = DEFAULT_SEED, batch: int | None = 25_000, smoothing: float = 0.005,
            h_spot: float = 0.01, h_vol: float = 0.01, T_obs: float | None = None, slv_vega: bool = False,
-           n_particles: int = 200_000, calendar=None, workers: int | None = None) -> Greeks:
+           n_particles: int = 200_000, calendar=None, workers: int | None = None, sticky: str = "moneyness"
+           ) -> Greeks:
     """Delta and vega of a program under `model` ('bs', 'lv', 'slv', 'heston') or by replication on the surface
     (method 'replication'), with central differences. Monte Carlo digitals are smoothed (ramp of relative width
     `smoothing`); the bias this adds to the price is measured on the same paths. With `slv_vega`, the SLV
     leverage is recalibrated (particle method, `n_particles`, same seed up and down) on each shifted surface:
     about half a minute per calibration at 200,000 particles. Under Monte Carlo, the exact and smoothed base and
     the two spot bumps are evaluated on one simulation: at sticky moneyness a spot bump multiplies the paths
-    exactly, so only the vega needs new paths."""
+    exactly, so only the vega needs new paths. `sticky` sets the smile dynamics of the delta: "moneyness" (the
+    default: the surface and the leverage move with the forward), "strike" (implied vols, local vol and leverage
+    stay at absolute strikes) or "model" (strike for local vol, SLV and replication, moneyness for BS and Heston)."""
     import time
     fmt = fmt or Note()
     valuation = valuation or ctx.valuation
@@ -123,9 +176,15 @@ def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, f
             return None
         return _recalibrated_slv(ctx, surface, horizon, n_particles, seed) if vol_shift else ctx.model(model, horizon)
 
+    convention = sticky_convention(sticky, model, method)
+    homogeneous = method != "replication" and model in ("bs", "heston")  # no smile to hold: both conventions agree
+
     def run(spot_factor=1.0, vol_shift=0.0, eps=smoothing):
         market = ctx.market.scaled(S0 * spot_factor) if spot_factor != 1.0 else ctx.market
         surface = ShiftedSurface(ctx.surface, vol_shift) if vol_shift else ctx.surface
+        strike_bump = convention == "strike" and spot_factor != 1.0 and not homogeneous
+        if strike_bump:
+            surface = StickyStrikeSurface(surface, spot_factor - 1.0)
         if method == "replication":
             return replication_result(program, timeline, surface, market, T_obs, fmt, params, initial_fixing=S0)
         if model == "bs":
@@ -136,6 +195,8 @@ def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, f
             if vol_shift and not (model == "slv" and slv_vega):
                 return None
             m = _recalibrated_slv(ctx, surface, horizon, n_particles, seed) if vol_shift else ctx.model(model, horizon)
+            if strike_bump and model == "slv":
+                m = SLVModel(m.params, ShiftedLeverage(m.leverage, spot_factor - 1.0), m.mix)
         return price_many(program, m, market, [params or {}], fmt, n_paths, seed, batch, smoothing=eps,
                           valuation=valuation, initial_fixing=S0, calendar=calendar, workers=workers)[0]
 
@@ -147,6 +208,15 @@ def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, f
         seconds["base"] = time.perf_counter() - t0
         t0 = time.perf_counter()
         up, down = run(1 + h_spot, eps=0.0), run(1 - h_spot, eps=0.0)
+    elif convention == "strike" and not homogeneous:  # the bumped models differ: two more simulations
+        p = params or {}
+        base_exact, base = price_many(
+            program, mc_model(), ctx.market, [p, p], fmt, n_paths, seed, batch, smoothings=[0.0, eps],
+            valuation=valuation, initial_fixing=S0, calendar=calendar, workers=workers)
+        bias, bias_se = _diff(base, base_exact, 1.0)
+        seconds["base"] = time.perf_counter() - t0
+        t0 = time.perf_counter()
+        up, down = run(1 + h_spot, eps=eps), run(1 - h_spot, eps=eps)
     else:
         p = params or {}
         base_exact, base, up, down = price_many(
@@ -168,4 +238,5 @@ def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, f
         note = f"no vega under {model.upper()}: a vol bump needs a recalibration of the model" + (
             " (pass slv_vega=True to recalibrate the leverage)" if model == "slv" else "")
     seconds["vega"] = time.perf_counter() - t0
-    return Greeks(delta, delta_se, vega, vega_se, eps, bias, bias_se, method, model, seconds, note)
+    return Greeks(delta, delta_se, vega, vega_se, eps, bias, bias_se, method, model, seconds, note,
+                  sticky=convention)
