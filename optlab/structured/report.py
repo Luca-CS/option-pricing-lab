@@ -67,6 +67,12 @@ def quote_table(q) -> str:
                       f"{g.smoothing_bias_se:.4f} %)")
         lines.append(f"greeks ({g.model.upper()}): delta (sticky {getattr(g, 'sticky', 'moneyness')}) "
                      f"{g.delta:+.4f}{se(g.delta_se)} % per +1 % spot, {vega} % per vol pt{smooth}")
+    if getattr(q, "mix_band", None):
+        what = "coupon p.a." if q.coupon_rate is not None else "value"
+        cells = [f"mix {m:.2f}: {100 * b['value'] if q.coupon_rate is not None else b['value']:.3f}"
+                 f"{' %' if q.coupon_rate is not None else ''} (ATM {b['atm_error_bp']:+.1f} bp)"
+                 for m, b in q.mix_band.items()]
+        lines.append(f"SLV mix band ({what}): " + "; ".join(cells))
     lines.append(f"time: {q.seconds:.2f} s")
     lines += [f"warning: {w}" for w in q.warnings + q.result.warnings]
     lines += ["", result_table(q.result, q.product.valuation)]

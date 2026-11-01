@@ -41,6 +41,7 @@ class Quote:
     warnings: list = field(default_factory=list)
     greeks: object | None = None  # greeks.Greeks at the solved coupon, with the policy model
     snapshot_id: str | None = None  # the market the quote was priced on
+    mix_band: dict | None = None  # {mix: {"value", "se", "atm_error_bp"}}: coupon p.a. or upfront per SLV mix
 
     @property
     def control_gap_se(self) -> float | None:
@@ -111,9 +112,33 @@ def wrapper(sheet: TermSheet, product: CompiledProduct):
     return FundedSwap(g("wrapper.funding_spread"), periods, tuple(float(t) for t in tl.event_times))
 
 
+def _mix_band(mixes, product, ctx, fmt, decision, prof, fixings, workers, margin, sheet) -> dict:
+    """Coupon (or upfront) under SLV for each mixing fraction, and the ATM vol error of each recalibrated model."""
+    from ..validation import mc_smile
+    T = max(product.horizon, 1 / 365)
+    T_check = min(T, ctx.t_max)
+    F = float(ctx.market.F(T_check))
+    out = {}
+    for mix in mixes:
+        model = ctx.slv_at_mix(mix, T)
+        run = _pricer(product, ctx, fmt, decision, prof, "slv", "monte_carlo", fixings=fixings, workers=workers,
+                      model_object=model)
+        if sheet.get("wrapper.solve") == "coupon":
+            target = 100 - margin if fmt.name == "note" else -margin
+            r0, r1 = run([{product.coupon_param: 0.0}, {product.coupon_param: 1.0}])
+            x, x_se = solve_affine(r0, r1, target)
+            value, se = product.coupon_rate(x), x_se / product.coupon_scale
+        else:
+            (r,) = run([{}])
+            value, se = (r.price if fmt.name == "note" else r.price + margin), r.stderr
+        iv, _ = mc_smile(model, ctx.market, T_check, [F], n_paths=200_000, rng=decision.seed)
+        out[float(mix)] = {"value": value, "se": se, "atm_error_bp": (float(iv[0]) - ctx.atm_vol(T_check)) * 1e4}
+    return out
+
+
 def _pricer(product: CompiledProduct, ctx: PricingContext, fmt, decision: PricingDecision, prof: ProductProfile,
             model_name: str, method: str, n_paths: int | None = None, fixings: dict | None = None,
-            workers: int | None = None, control_forwards: bool = False, fast: bool = False):
+            workers: int | None = None, control_forwards: bool = False, fast: bool = False, model_object=None):
     program, valuation = product.program, product.valuation
     clock = Clock(valuation, product.calendar)
     timeline = build_timeline(program, clock)
@@ -128,7 +153,9 @@ def _pricer(product: CompiledProduct, ctx: PricingContext, fmt, decision: Pricin
             return [replication_result(program, timeline, ctx.surface, ctx.market, T_obs, fmt, p, history=history)
                     for p in param_sets]
         T = max(product.horizon, 1 / 365)
-        if isinstance(ctx, BasketContext):
+        if model_object is not None:
+            model = model_object
+        elif isinstance(ctx, BasketContext):
             model = ctx.model(model_name, T, names)
         else:  # `fast` only when asked, so that contexts with their own model(name, T) keep working
             model = ctx.model(model_name, T, fast=True) if fast else ctx.model(model_name, T)
@@ -142,7 +169,7 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
           n_paths: int = 200_000, batch: int = 25_000, seed: int = DEFAULT_SEED, control_paths: int | None = None,
           fixings: dict | None = None, with_greeks: bool = False, slv_vega: bool = False,
           workers: int | None = None, control_forwards: bool = False, fast: bool = False,
-          sticky: str = "moneyness") -> Quote:
+          sticky: str = "moneyness", mix_band: tuple | None = None) -> Quote:
     """Price a term sheet with the policy model. In 'coupon' mode the coupon is solved so that the note price is
     100 - margin, or the swap upfront is -margin (zero upfront paid, the margin kept by the bank); in 'upfront' mode
     the coupon is given and the result is the note price, or the swap upfront paid by the investor (leg value +
@@ -151,7 +178,9 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
     `slv_vega=True`: the leverage is recalibrated on the shifted surfaces). `workers` runs the Monte Carlo batches
     on a process pool (same numbers bit for bit); `control_forwards` adds forward control variates to the Monte
     Carlo estimator; `fast` uses the grid-interpolated local vol and SLV models (fastmodels); `sticky` sets the
-    smile dynamics of the delta (moneyness, strike or model)."""
+    smile dynamics of the delta (moneyness, strike or model). `mix_band`, e.g. (0, 0.25, 0.5, 0.75), reprices
+    the product under SLV with the leverage recalibrated for each mixing fraction (same mode, seed and paths): the
+    mix is not calibrated, and for autocalls it moves the coupon more than the SLV - LV gap."""
     t0 = time.perf_counter()
     ctx = ctx or PricingContext.from_calibration()
     product = compile_sheet(sheet, ctx.valuation)
@@ -180,6 +209,9 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
         (result,) = run([{}])
         upfront = result.price if fmt.name == "note" else result.price + margin
         params = {}
+    band = None
+    if mix_band and decision.method == "monte_carlo" and not basket:
+        band = _mix_band(mix_band, product, ctx, fmt, decision, prof, fixings, workers, margin, sheet)
     ctrl = None
     if decision.control:
         ctrl_run = _pricer(product, ctx, fmt, decision, prof, decision.control, "monte_carlo",
@@ -199,5 +231,8 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
     seconds = time.perf_counter() - t0
     LOG.info("quote %s %s: %s, %s, %.2f s", sheet.mask.name, ", ".join(sheet.underlyings), decision.label,
              f"coupon {rate:.6f} p.a." if rate is not None else f"upfront {upfront:.4f} %", seconds)
+    if band:
+        warnings += [f"mix {m:.2f}: the recalibrated SLV misses the ATM vol at the horizon by {b['atm_error_bp']:+.1f} "
+                     "bp (over 5 bp)" for m, b in band.items() if abs(b["atm_error_bp"]) > 5]
     return Quote(product, prof, decision, fmt.name, result, target, rate, rate_se, upfront, margin, ctrl,
-                 seconds, warnings, g, getattr(ctx, "snapshot_id", None))
+                 seconds, warnings, g, getattr(ctx, "snapshot_id", None), band)

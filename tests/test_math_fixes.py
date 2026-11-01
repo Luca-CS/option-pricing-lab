@@ -163,3 +163,19 @@ def test_local_vol_model_delta_is_far_from_the_sticky_moneyness_delta():
     model = greeks(p.program, ctx, "lv", n_paths=100_000, params={"cpn": 0.02}, sticky="model")
     moneyness = greeks(p.program, ctx, "lv", n_paths=100_000, params={"cpn": 0.02})
     assert model.sticky == "strike" and model.delta > 2 * moneyness.delta
+
+
+# --- B6: SLV mix band in quotes ---
+
+def test_mix_band_moves_the_autocall_coupon_and_starts_at_local_vol():
+    from optlab.structured import PricingContext, preset, quote
+    ctx = PricingContext.from_calibration()
+    sheet = preset("phoenix", **{"coupon.memory": False, "general.maturity_months": 12})
+    q = quote(sheet, ctx, control=None, n_paths=40_000, batch=10_000, mix_band=(0.0, 0.25, 0.5, 0.75))
+    band = q.mix_band
+    coupons = [band[m]["value"] for m in (0.0, 0.25, 0.5, 0.75)]
+    assert all(a > b for a, b in zip(coupons, coupons[1:]))  # more stochastic vol of vol, cheaper autocall
+    lv = quote(sheet, ctx, model="lv", control=None, n_paths=40_000, batch=10_000)
+    assert abs(band[0.0]["value"] - lv.coupon_rate) <= 4 * float(np.hypot(band[0.0]["se"], lv.coupon_rate_se))
+    assert band[0.5]["value"] == pytest.approx(q.coupon_rate, abs=4 * band[0.5]["se"])
+    assert "SLV mix band" in q.table() and len(ctx.slv_cache) == 4

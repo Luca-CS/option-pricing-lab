@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..config import paths
@@ -25,6 +25,7 @@ class PricingContext:
     valuation: dt.date
     underlying: str = "SPX"
     snapshot_id: str | None = None  # the market every price of this context refers to
+    slv_cache: dict = field(default_factory=dict, repr=False)  # leverages recalibrated per (mix, horizon)
 
     @classmethod
     def from_calibration(cls, path: str | Path | None = None, underlying: str = "SPX",
@@ -53,6 +54,17 @@ class PricingContext:
         surface = FastSVISurface.from_dict(snap.surface)  # bit-identical to SVISurface, faster per step
         return cls(Market.from_dict(snap.market), surface, heston, slv, snap.valuation, snap.underlying,
                    snap.snapshot_id)
+
+    def slv_at_mix(self, mix: float, horizon: float, n_particles: int = 200_000, seed: int = 2026):
+        """The SLV model with its leverage recalibrated for another mixing fraction (cached): the vanillas stay on
+        the surface while the share of stochastic vol of vol changes."""
+        from ..slv import calibrate_leverage
+        T_max = round(min(max(horizon, 1 / 12), self.t_max), 6)
+        key = (round(float(mix), 6), T_max, n_particles, seed)
+        if key not in self.slv_cache:
+            self.slv_cache[key] = calibrate_leverage(self.heston, self.surface, self.market, T_max, mix=float(mix),
+                                                     n_particles=n_particles, rng=seed)
+        return self.slv_cache[key]
 
     @property
     def t_max(self) -> float:
