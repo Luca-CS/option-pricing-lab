@@ -45,7 +45,7 @@ v0 0.0250 (true 0.0250), kappa 1.801 (1.8), theta 0.0398 (0.04), xi 0.748 (0.75)
 
 Full tables and charts: [`reports/calibration.md`](reports/calibration.md).
 
-**Tests**: 307, covering put-call parity (closed forms, Fourier, Monte Carlo), Monte Carlo convergence
+**Tests**: 369, covering put-call parity (closed forms, Fourier, Monte Carlo), Monte Carlo convergence
 (1/sqrt(N) error, closed forms within 4 standard errors), American >= European and the American call
 without dividend equal to the European, the geometric Asian against its closed form, barriers against
 Reiner-Rubinstein with the Broadie-Glasserman-Kou correction, parameter recovery for SSVI, SVI and
@@ -126,7 +126,20 @@ Beyond single products:
   worst-of digital and a conditional one-dimensional integral for the worst-of put. Only SPX is calibrated
   here, so other names, their volatility and the correlation are inputs.
 - **Running products.** Past fixings (`fixings={"SPX": {date: level}}`) for products already struck; flows paid
-  before the valuation date drop out, knock-ins and calls that already happened are taken into account.
+  before the valuation date drop out, knock-ins and calls that already happened are taken into account, and
+  `events()` lists what happened (coupons paid or missed, call, knock-in date, maturity). Fixings far from the
+  model's spot (real index levels against the market rescaled to 100) are refused until converted.
+- **Trades and market data.** `Trade` stores a term sheet or a script with its quantity and strike date as JSON
+  (`TermSheet.to_dict`/`from_dict`, `json_schema()` for a front end); `optlab.marketdata` gives every calibrated
+  market an id hashed on its content (`MarketSnapshot`, an immutable local `MarketStore` under `data/store`), and
+  quotes and books carry it. A NYSE calendar (`general.calendar = "nyse"`) drives schedules and daily windows.
+- **Speed.** Measured on a Phoenix 2 years: a bit-identical fast path of the SVI surface makes local vol about twice
+  as fast (2.15 times with a European knock-in, 1.92 daily); `workers=6` runs the batches on a process pool (4.7
+  times faster at 10^6 SLV paths, same numbers bit for bit); Greeks bump the spot on the base paths (local vol
+  Greeks from 45 to 14 s at 100,000 paths). Opt-in, within the Monte Carlo error: forward control variates
+  (`control_forwards`, variance divided by 1.3 to 2.2), grid-interpolated models (`fast=True`, local vol 2.7 to 3.6
+  times and SLV 1.6 to 1.8 times faster) and randomised quasi-Monte Carlo (`price_rqmc`, Sobol with a Brownian
+  bridge: variance divided by 24 to 29 under Black-Scholes and local vol, by 2.7 under SLV).
 
 `python scripts/structured_examples.py` prints the model-risk table, timings, example quotes, worst-of coupons
 against the correlation and a book (about five minutes at 200,000 paths).

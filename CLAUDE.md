@@ -76,6 +76,12 @@ python -m venv .venv
   On top: `portfolio.py` (`Book` of `Position`s on one shared simulation, book Greeks), `cashflows.FundedSwap`
   (floating funding leg until redemption), `multiasset.py` (`Basket` of correlated names, `BasketContext`; the
   `basket` policy rule is LV per name with a BS control), and past `fixings` for running products.
+  Batches run through `engine.py` (`Evaluation`s on each simulated batch, sequential or `workers=` on a persistent
+  spawn process pool, same numbers bit for bit; spot factors scale the paths for the Greeks). Also `trade.py`,
+  `calendars.py` (NYSE), `lifecycle.py`, `surfaces.py` (`FastSVISurface`, bit-identical), `fastmodels.py` and
+  `qmc.py` (opt-in, validated within the Monte Carlo error), `units.py`; `optlab/config.py`, `optlab/log.py` and
+  `optlab/marketdata/` (snapshots and their local store under `data/store`). A script with a NaN condition or a
+  non-finite payment on a live path raises `ScriptError` with its line.
 - **`space/app.py`** is a local Gradio front-end (needs `pip install gradio`), not deployed.
 
 ## Conventions
