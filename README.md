@@ -157,18 +157,34 @@ step and no CDN.
   delta and vega (sticky moneyness, sticky strike or the model's own; SLV vega by recalibrating the leverage) and
   the SLV mix band. Quick precision (20,000 paths) prices a 2-year Phoenix under SLV in about 2 s, Standard
   (100,000) in 6 s; SLV vega adds about 15 s.
-- **Book**: trades kept in SQLite with their versions, edit, delete with undo, and the whole book priced on one
-  simulation with its delta and vega.
-- **Lifecycle**: fixings pasted as `date level` lines, real index levels converted with the real spot; per trade,
-  what happened (coupons paid or missed, call, knock-in) and the next observations.
-- **Market**: the SVI smiles, the ATM term structure, forwards and discount factors, the model-risk table and the
-  calibration fit. **Script lab**: any payoff of the script language, checked as it is typed, priced under any model.
+- **Worst-ofs**: up to five names. Only SPX is calibrated, so the others are flat Black-Scholes markets whose
+  volatility, dividend, rate and correlations are set on the Market screen; the policy prices them with local vol
+  per name (a 2-year SPX/SX5E Phoenix at Quick precision: 5.6 s, delta and vega per name).
+- **Book**: trades kept in SQLite with their versions, edit, delete with undo. The book is valued in two groups,
+  each on one shared simulation: single names under the policy (SLV for autocalls) and worst-ofs under the basket
+  context; the groups are independent, so their errors add in quadrature. Risk comes as delta and vega per
+  underlying.
+- **Trade page**: the term sheet, the value at today's market (price, value, delta, vega), the events, every
+  version, the quote it came from, and "quote a copy" to restart from it in the pricer.
+- **Lifecycle**: fixings pasted as `date level` lines or imported from a CSV (the Close column of a Yahoo export),
+  real index levels converted with the real spot; per trade, what happened (coupons paid or missed, call, knock-in)
+  and the next observations.
+- **Market**: the snapshots in the local store (every calibration file is registered, immutable and identified by
+  its content) and the switch between them, the SVI smiles, the ATM term structure, forwards and discount factors,
+  the model-risk table and the calibration fit. **Script lab**: any single-name payoff of the script language,
+  checked as it is typed, priced under any model.
 
-Sharing while the engine stays on this PC: `--host 0.0.0.0` serves the LAN and prints an address with a generated
-token (kept in a cookie after the first visit); a tunnel to the port (Tailscale, Cloudflare Tunnel) does the same
-outside the LAN. Quotes and the book also export as standalone HTML reports that open anywhere without the server.
+Every table sorts by its headers. Sharing while the engine stays on this PC:
+
+| How | Start with | Notes |
+|---|---|---|
+| Your network | `python -m optlab.app --host 0.0.0.0` | prints an address with a generated token (kept in a cookie after the first visit) |
+| A public link | `python -m optlab.app --tunnel` | https through an SSH tunnel to localhost.run: no install (`ssh` ships with Windows 10 and later), the address changes at each start; a third party relays the traffic, so the token is always on |
+| A fixed result | the report button of a quote or of the book | one standalone HTML file that opens anywhere without the desk |
+
 The page is served by the desk itself, not by GitHub Pages, because browsers block a public https page from calling
-a server on a private address. Trades, fixings and quotes live in `data/store/desk.sqlite`, which git ignores.
+a server on a private address. Trades, fixings, quotes, settings and market snapshots live under `data/store/`,
+which git ignores.
 
 ## Method
 
