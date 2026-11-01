@@ -1,0 +1,214 @@
+"""The desk API and its HTTP server: term-sheet forms, quote and book jobs, trades, fixings, events, script lab,
+reports, the static page and the token. Quotes run at the quick precision (20,000 paths) on the SPX calibration."""
+
+import json
+import re
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+import pytest
+
+from optlab.app.api import ApiError, Desk
+from optlab.app.report import book_report, quote_report
+from optlab.app.server import serve, serve_in_thread
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.fixture(scope="module")
+def desk(tmp_path_factory):
+    d = Desk(store=tmp_path_factory.mktemp("desk") / "desk.sqlite")
+    yield d
+    d.jobs.shutdown()
+
+
+def wait(desk, job_id, timeout=300):
+    t0 = time.perf_counter()
+    while (j := desk.job(job_id))["state"] in ("queued", "running"):
+        assert time.perf_counter() - t0 < timeout, "job did not finish"
+        time.sleep(0.1)
+    assert j["state"] == "done", j.get("error")
+    return j["result"]
+
+
+def sheet_of(desk, name):
+    s = next(p["sheet"] for p in desk.presets()["presets"] if p["name"] == name)
+    return {"type": s["type"], "values": {k: v for k, v in s.items() if k != "type"}}
+
+
+def test_health_context_and_market(desk):
+    h = desk.health()
+    assert h["ok"] and h["valuation"] == "2026-10-27" and h["snapshot_id"].startswith("SPX-")
+    c = desk.context()
+    assert c["spot"] == pytest.approx(100.0) and 0.05 < c["atm_vols"]["1"] < 0.5 and c["maturities"]
+    s = desk.smile(1.0)
+    assert len(s["moneyness"]) == len(s["iv"]) == 61 and all(0 < v < 1.5 for v in s["iv"])
+    t = desk.term_structure()
+    assert len(t["T"]) == 40 and t["discount"][0] > t["discount"][-1]
+    risk = desk.model_risk()
+    assert "exotics" in risk and risk["errors"]
+
+
+def test_presets_round_trip_through_the_form(desk):
+    presets = desk.presets()
+    assert {"autocall", "bullet"} <= set(presets["masks"])
+    for p in presets["presets"]:  # a sheet read back from the API carries the computed gearing: still accepted
+        f = desk.form(sheet_of(desk, p["name"]))
+        assert f["error"] is None, (p["name"], f["error"])
+        assert f["form"] and f["bounds"]
+
+
+def test_form_reports_the_field_in_error(desk):
+    body = sheet_of(desk, "phoenix")
+    body["values"]["coupon"]["barrier"] = -0.2
+    f = desk.form(body)
+    assert f["sheet"] is None and f["error"]["field"] == "coupon.barrier"
+    # the form keeps the conditional coupon of the sheet, so the field to correct stays on screen
+    shown = [x["path"] for sec in f["form"]["sections"] for x in sec["fields"]]
+    assert "coupon.barrier" in shown and "coupon.memory" in shown
+    with pytest.raises(ApiError) as exc:
+        desk.form({"type": "nope"})
+    assert exc.value.status == 422
+
+
+def test_quote_job_end_to_end(desk):
+    job = desk.quote({"sheet": sheet_of(desk, "phoenix"), "options": {"precision": "quick", "greeks": False}})["job"]
+    q = wait(desk, job)
+    assert q["headline"]["kind"] == "coupon" and 0 < q["headline"]["value"] < 30 and q["headline"]["se"] > 0
+    assert q["policy"]["class"] == "callable" and q["options"]["n_paths"] == 20_000
+    assert q["schedule"] and abs(sum(r["p_end"] for r in q["schedule"]) - 1) < 1e-9
+    saved = desk.saved_quote(q["quote_id"])
+    assert saved["result"]["headline"] == q["headline"]
+    assert desk.quotes()["quotes"][0]["quote_id"] == q["quote_id"]
+    html = quote_report(saved)
+    assert html.startswith("<!doctype html>") and "<svg" in html and q["snapshot_id"] in html
+
+
+def test_quote_with_slv_vega(desk):
+    """SLV has a vega only when the leverage is recalibrated on the bumped surface: the option reaches the library."""
+    job = desk.quote({"sheet": sheet_of(desk, "phoenix"),
+                      "options": {"precision": "quick", "greeks": True, "slv_vega": True}})["job"]
+    g = wait(desk, job)["greeks"]
+    assert g["model"] == "slv" and g["vega"] < 0 and 0 < g["vega_se"] < abs(g["vega"]) / 4
+    assert 0 < g["delta"] and g["delta_se"] < g["delta"] / 4
+
+
+def test_trades_versions_delete_and_restore(desk):
+    t = desk.create_trade({"sheet": sheet_of(desk, "phoenix"), "coupon_rate": 0.05, "quantity": 2.0})
+    tid = t["trade_id"]
+    assert t["version"] == 1 and t["summary"]["coupon_rate"] == 0.05
+    assert t["product"]["term_sheet"]["wrapper"]["solve"] == "upfront"
+    t2 = desk.update_trade(tid, {"quantity": 3.0, "counterparty": "Desk B"})
+    assert t2["version"] == 2 and t2["quantity"] == 3.0 and t2["counterparty"] == "Desk B"
+    desk.delete_trade(tid)
+    assert tid not in [x["trade_id"] for x in desk.trades()["trades"]]
+    desk.restore_trade(tid)
+    assert tid in [x["trade_id"] for x in desk.trades()["trades"]]
+
+
+def test_fixings_scale_and_future_dates(desk):
+    # real index levels are divided by real spot / model spot (the market is rescaled to 100)
+    r = desk.put_fixings({"underlying": "SX5E", "levels": {"2026-10-26": 5100.0}, "real_spot": 5000.0})
+    assert r["stored"] == 1
+    assert desk.fixings("SX5E")["fixings"]["SX5E"]["2026-10-26"] == pytest.approx(102.0)
+    with pytest.raises(ApiError):
+        desk.put_fixings({"underlying": "SX5E", "levels": {"2026-12-01": 100.0}})
+    desk.delete_fixing("SX5E", "2026-10-26")
+    assert "SX5E" not in desk.fixings()["fixings"]
+
+
+def test_seasoned_trade_events_book_and_report(desk):
+    t = desk.create_trade({"sheet": sheet_of(desk, "phoenix"), "coupon_rate": 0.06, "quantity": 1.0,
+                           "strike_date": "2026-01-27", "trade_date": "2026-01-20"})
+    tid = t["trade_id"]
+    ev = desk.trade_events(tid)
+    assert ev["missing"] and ev["past"] == [] and ev["strike_date"] == "2026-01-27"
+    assert all(u["observation"] > "2026-10-27" for u in ev["upcoming"])
+    desk.put_fixings({"underlying": "SPX", "levels": {"2026-01-27": 100.0, "2026-04-27": 95.0, "2026-07-27": 90.0,
+                                                      "2026-10-27": 92.0}})
+    ev = desk.trade_events(tid)
+    assert ev["missing"] is None and "coupon_paid" in [e["kind"] for e in ev["past"]]
+    up = desk.upcoming(120)["events"]
+    assert tid in [e["trade_id"] for e in up] and up == sorted(up, key=lambda e: e["observation"])
+
+    book = wait(desk, desk.price_book({"options": {"precision": "quick", "greeks": True}})["job"])
+    names = [p["name"] for p in book["positions"]]
+    assert tid in names and book["stderr"] > 0 and book["greeks"]["delta"]["total"] is not None
+    assert book["independent_stderr"] > 0
+    assert desk.last_book is not None
+    html = book_report(desk)
+    assert tid in html and "<table" in html
+
+
+def test_script_lab(desk):
+    src = (ROOT / "optlab/app/static/js/views/script.js").read_text(encoding="utf-8")
+    example = re.search(r"const EXAMPLE = `(.*?)`;", src, re.S)[1]  # the page's example must stay valid
+    ok = desk.script_check({"script": example})
+    assert ok["ok"] and list(ok["underlyings"]) == ["SPX"]
+    bad = desk.script_check({"script": "underlying SPX\nevent 2027-10-27\n  pay (SPX as redemption\nend\n"})
+    assert not bad["ok"] and bad["line"] == 3
+    with pytest.raises(ApiError):
+        desk.script_price({"script": "underlying SPX\nevent"})
+    r = wait(desk, desk.script_price({"script": example, "model": "lv", "n_paths": 20_000})["job"])
+    assert 50 < r["price"] < 130 and 0 < r["stderr"] < 1
+
+
+def test_jobs_report_errors_and_cancel(desk):
+    def boom():
+        raise RuntimeError("no luck")
+
+    j = desk.jobs.submit("test", boom)
+    while desk.job(j)["state"] in ("queued", "running"):
+        time.sleep(0.02)
+    err = desk.job(j)
+    assert err["state"] == "error" and err["error"] == {"type": "RuntimeError", "message": "no luck"}
+    with pytest.raises(ApiError) as exc:
+        desk.job("missing")
+    assert exc.value.status == 404
+
+
+def _get(url, headers=None, data=None, method=None):
+    req = urllib.request.Request(url, data=json.dumps(data).encode() if data is not None else None,
+                                 headers={"Content-Type": "application/json", **(headers or {})}, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return r.status, dict(r.headers), r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, dict(e.headers), e.read()
+
+
+def test_http_server_token_static_and_api(desk):
+    httpd, base = serve_in_thread(desk, token="s3cret")
+    try:
+        assert _get(base + "/api/health")[0] == 401
+        status, headers, body = _get(base + "/?token=s3cret")
+        assert status == 200 and b"<!doctype html>" in body.lower() and "optlab_token=s3cret" in headers["Set-Cookie"]
+        auth = {"X-Optlab-Token": "s3cret"}
+        status, _, body = _get(base + "/api/health", auth)
+        assert status == 200 and json.loads(body)["ok"]
+        assert _get(base + "/api/health", {"Cookie": "optlab_token=s3cret"})[0] == 200
+        assert _get(base + "/api/health", {"X-Optlab-Token": "wrong"})[0] == 401
+        status, headers, _ = _get(base + "/js/main.js", auth)
+        assert status == 200 and headers["Content-Type"].startswith("text/javascript")
+        status, _, body = _get(base + "/../../api.py", auth)  # outside the static folder: the page, not the file
+        assert status == 200 and b"class Desk" not in body
+        status, _, body = _get(base + "/api/termsheet/form", auth, {"type": "nope"}, "POST")
+        assert status == 422 and "unknown product type" in json.loads(body)["error"]
+        status, _, body = _get(base + "/api/trades/NOPE-1/events", auth)
+        assert status == 404
+        status, _, body = _get(base + "/api/nothing", auth)
+        assert status == 404
+        status, _, body = _get(base + "/api/fixings", auth, method="POST", data=None)
+        assert status == 200  # an empty body is an empty request
+        status, headers, body = _get(base + "/report/book", auth)
+        assert status == 200 and headers["Content-Type"].startswith("text/html")
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_serve_refuses_the_network_without_a_token(desk):
+    with pytest.raises(ValueError, match="token"):
+        serve(desk, host="0.0.0.0", port=0)

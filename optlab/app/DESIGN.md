@@ -1,0 +1,141 @@
+# optlab desk: design of the user interface
+
+A local web application over the whole library: price a product from its term sheet, book it, follow it through
+its life, look at the market behind every number, and share a result. This document is the plan the code follows.
+
+## 1. Constraints that shape everything
+
+| Constraint | Consequence |
+|---|---|
+| The engine runs on Luca's PC (NumPy, SciPy, optional GPU), calibrations and Yahoo data are local | The browser talks to a **local Python server**; nothing is computed in the browser except formatting and charts |
+| A public https page cannot call `localhost` (Chrome Private Network Access) | The **server serves the UI itself** (same origin): `python -m optlab.app` then open the printed address |
+| Portable, easy to set up, no installation without approval | **Zero new dependency**: standard-library HTTP server and SQLite; the front is plain HTML, CSS and JavaScript modules, no build step, no CDN (works offline) |
+| Shareable while the back stays on the PC | (1) LAN: `--host 0.0.0.0` with an access token; (2) any tunnel Luca chooses (Tailscale, Cloudflare Tunnel) pointed at the port, same token; (3) **standalone HTML reports** of a quote or a book, one file that opens anywhere without the server |
+| Honest numbers | Every price shows its standard error and method, every time is measured, every result names its market snapshot |
+| Yahoo data is personal-use | Real fixings stay in the local store (`data/store`, git-ignored); exported reports show prices, not the raw quotes |
+
+## 2. Who uses it and for what
+
+A structurer or trader, alone, on a desk-like workflow:
+
+1. **Quote**: pick a product (preset or blank), adjust the term sheet, get the coupon (or the upfront) with the
+   model the policy chose and why, the model-risk check, the call probabilities and the flows.
+2. **Book**: save the quote as a trade (term sheet + strike date + quantity), see the book's value and risk on one
+   shared simulation.
+3. **Follow**: enter fixings as they come, see what happened (coupons paid or missed, calls, knock-ins) and what is
+   next, reprice the running trades.
+4. **Understand the market**: the snapshot in use, the smile, the term structure, how far the models agree.
+5. **Share**: export a quote or the book as a self-contained report.
+
+## 3. Information architecture
+
+A left navigation rail with six destinations, each one screen, plus a global status bar.
+
+| Screen | Purpose | Main components |
+|---|---|---|
+| **Overview** | Where things stand | Market card (snapshot id, valuation date, spot, ATM vols 3M/1Y/2Y), book card (value, delta, vega, trades by status), next events (observations and payments in the next 30 days), recent quotes |
+| **Pricer** | Build and quote a product | Product picker (masks and presets as cards) · term-sheet form generated from the schema, by section · quote panel · actions (book it, export, view script) |
+| **Book** | Positions and risk | Trades table (sortable, filterable by status) · totals bar · per-trade detail drawer · "price the book" with risk |
+| **Lifecycle** | Fixings and events | Fixings editor (paste a column, CSV import, real to model scale) · per-trade timeline of past and next events |
+| **Market** | The calibration behind the prices | Snapshot list and details · smile chart per maturity · ATM term structure · model-risk table (BS, LV, Heston, SLV) |
+| **Script lab** | Products outside the schema | Editor with line numbers, errors at line and column, price under a chosen model |
+
+Global: a status bar (server connection, snapshot in use, running jobs with progress), a settings sheet (precision
+preset, workers, fast models, control variates, theme), keyboard shortcuts (`g o`, `g p`, `g b`, `g l`, `g m`, `?`).
+
+## 4. Interaction design
+
+- **The form is the schema.** Sections and fields come from `describe()` and `json_schema()`: the front never
+  duplicates the business rules. Changing a choice re-asks the server for the visible form (debounced 120 ms), so
+  hidden fields disappear and computed ones (the gearing) update. Values are typed in **percent** in the UI
+  (60 %, 8 % p.a.) and converted to fractions at the edge: the most common input mistake of the API (a coupon of 8
+  meaning 800 %) cannot happen.
+- **Validation where the eye is.** Errors appear under the field, in the units on screen ("Must be between 0 % and
+  300 %"), as soon as the server rejects a value. The form keeps following the rest of the sheet, so the field to
+  correct stays visible; Quote is disabled, with a tooltip, until the sheet is valid.
+- **Long work never freezes the page.** A quote is a job: the button turns into a progress state with elapsed time
+  and a cancel action; results stream into the panel when ready. A precision switch chooses between *Quick* (20,000
+  paths, seconds) and *Precise* (200,000 paths), so iterating is fast and the final number is solid.
+- **Every number carries its context.** Coupon `5.12 % p.a. ± 0.05`, method (`SLV Monte Carlo, 200,000 paths`),
+  the policy's reason, the control model gap in standard errors, the snapshot id, the time taken. Units are written
+  next to values; tables align decimals.
+- **Progressive disclosure.** The headline first (coupon or price, ± SE), then the policy and the model check, then
+  the detail (flows by date, call probabilities, Greeks, the SLV mix band, the generated script) in collapsible
+  blocks.
+- **Safe actions.** Deleting a trade asks for confirmation and can be undone for a few seconds; nothing is sent
+  anywhere; the server only listens on 127.0.0.1 unless started otherwise.
+- **State survives a reload.** The form in progress and the last results are kept in the browser (localStorage);
+  trades, fixings and quotes live in the server's SQLite store.
+
+## 5. Visual design
+
+- **Tone**: a calm professional tool, dense but readable. Neutral surfaces, one accent colour for actions, semantic
+  colours only for meaning (positive, negative, warning), never for decoration.
+- **Typography**: system UI font stack; tabular figures for every number; a type scale of 12 / 14 / 16 / 20 / 28 px;
+  line height 1.45 for text, 1.2 for headlines.
+- **Layout**: 8 px spacing grid; content max width 1440 px; the pricer uses two columns (form 5/12, results 7/12) and
+  collapses to one below 1100 px; tables scroll horizontally inside their card on narrow screens.
+- **Colour**: design tokens as CSS custom properties, light and dark themes following the system setting with a
+  manual override; contrast at least 4.5:1 for text (WCAG AA).
+- **Charts**: inline SVG drawn by a small module (no library): bars for call probabilities by date, lines for smiles
+  and term structures, with axis labels, units and hover values; colours from the tokens; a table alternative for
+  every chart.
+- **Accessibility**: semantic HTML (nav, main, forms with labels, tables with headers), visible focus rings, full
+  keyboard use, `aria-live` regions for job progress and results, no information carried by colour alone.
+
+## 6. Architecture
+
+```
+optlab/app/
+  __main__.py      python -m optlab.app [--host 127.0.0.1] [--port 8765] [--token ...] [--workers N]
+  server.py        ThreadingHTTPServer: static files + JSON API, token check, gzip off, CORS off (same origin)
+  api.py           routes -> library calls, JSON in and out (no HTTP inside)
+  jobs.py          background jobs (thread pool): status, progress, elapsed, result, cancel flag
+  repository.py    SQLite under data/store: trades (versioned JSON), fixings, quotes, runs
+  serialize.py     Quote, BookResult, Greeks, events -> JSON
+  report.py        standalone HTML report of a quote or the book (inline CSS and SVG)
+  static/          index.html, app.css, js/ (main.js: router and shortcuts, api.js, state.js, ui.js, charts.js,
+                   format.js, views/*.js)
+```
+
+API (JSON):
+
+| Method and path | Does |
+|---|---|
+| `GET /api/health` | version, snapshot id, workers, GPU availability |
+| `GET /api/context` | valuation date, spot, curves summary, ATM vols, last calibrated maturity |
+| `GET /api/presets` | named presets with their term sheets |
+| `POST /api/termsheet/form` | term sheet (partial) -> validated sheet, visible form (`describe`) or field errors |
+| `POST /api/quote` | term sheet + options -> job id |
+| `GET /api/jobs/{id}` | status, progress, elapsed, result or error |
+| `GET/POST/PUT/DELETE /api/trades[/{id}]` | the book's trades (versions kept) |
+| `POST /api/book/price` | price the book (job): positions, totals, SE, delta, vega |
+| `GET/POST /api/fixings` | fixings by underlying and date, in model scale (with an optional real-scale conversion) |
+| `GET /api/trades/{id}/events` | lifecycle events from the fixings |
+| `GET /api/market/smile?T=` | implied vols of the surface at T |
+| `GET /api/market/risk` | the model-risk table of the calibration |
+| `POST /api/script/check`, `POST /api/script/price` | script lab |
+| `GET /report/quote/{id}`, `GET /report/book` | standalone HTML reports |
+
+## 7. Delivery plan and status
+
+1. Server, jobs, repository, serialization, API, with tests (no browser needed: the API is called directly). Done:
+   `tests/test_app_api.py`.
+2. Front shell: tokens, layout, navigation, status bar, settings, router. Done.
+3. Pricer (form from the schema, quote job, results panel, book it, export). Done.
+4. Book and Lifecycle (trades table, book pricing, fixings editor, events timeline). Done.
+5. Market and Script lab. Done.
+6. Reports, sharing (token, LAN), README section, end-to-end check in a browser. Done.
+
+Checked in a browser on every screen: quote, book, edit, delete and undo, fixings pasted in real levels, events,
+book valuation, reports, the script lab with an error, widths down to 360 px, contrast of every token pair (AA in
+both themes). Found and fixed on the way: about 250 ms per API call in the browser on Windows (headers and body sent
+in two writes waited for a delayed ACK; now one buffered write, no Nagle, keep-alive), a dialog whose Escape could
+confirm after an earlier OK, and a form that hid the field in error.
+
+Not done, by order of use:
+
+- A detail drawer per trade in the Book (the Lifecycle screen shows the events; the trade's quote is not linked).
+- Worst-of trades in the book valuation (they need a basket context: correlation and the other names' models).
+- Sortable tables, a CSV file picker for fixings (pasting a column works), a table alternative to the smile charts.
+- A list of market snapshots: the desk runs on one calibration file (`--calibration`).
