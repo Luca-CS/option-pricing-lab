@@ -111,7 +111,7 @@ def main():
     sweep = [] if args.skip_sweep else mix_sweep(fit, market, n_particles=args.particles)
 
     lev = fit["slv"].leverage
-    keep = np.unique(np.concatenate([np.arange(0, len(lev.times), 3), [len(lev.times) - 1]]))
+    keep = np.arange(len(lev.times))  # every step: the leverage is piecewise constant in time
     result = {
         "meta": meta,
         "market": market.to_dict(),
