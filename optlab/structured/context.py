@@ -28,12 +28,23 @@ class PricingContext:
 
     @classmethod
     def from_calibration(cls, path: str | Path | None = None, underlying: str = "SPX",
-                         valuation: dt.date | str | None = None) -> "PricingContext":
-        """The calibrated market of a results/*.json file; files without a snapshot time need `valuation`."""
+                         valuation: dt.date | str | None = None, slv_regression: str | None = None,
+                         ) -> "PricingContext":
+        """The calibrated market of a results/*.json file; files without a snapshot time need `valuation`.
+        `slv_regression="local_linear"` recalibrates the SLV leverage at load (about 7 s) with the local linear
+        regression of max(v, 0), which removes most of the ATM vanilla bias left by the stored leverage."""
         from ..marketdata import MarketSnapshot
         snap = MarketSnapshot.from_calibration_file(path or DEFAULT_CALIBRATION, underlying, valuation,
                                                     provenance=False)
-        return cls.from_snapshot(snap)
+        ctx = cls.from_snapshot(snap)
+        if slv_regression:
+            from ..slv import calibrate_leverage
+            fresh = calibrate_leverage(ctx.heston, ctx.surface, ctx.market, ctx.t_max, mix=ctx.slv.mix,
+                                       n_particles=200_000, rng=2026, regression=slv_regression,
+                                       positive_part=slv_regression == "local_linear")
+            ctx.slv = fresh
+            ctx.snapshot_id = f"{ctx.snapshot_id}+slv-{slv_regression}"
+        return ctx
 
     @classmethod
     def from_snapshot(cls, snap) -> "PricingContext":

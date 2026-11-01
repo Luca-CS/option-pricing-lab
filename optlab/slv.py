@@ -20,7 +20,11 @@ from .models import Leverage, SLVModel, time_grid
 from .ssvi import SSVI
 
 
-def _conditional_mean(x, v, x_eval, bandwidth, n_bins=400):
+def _conditional_mean(x, v, x_eval, bandwidth, n_bins=400, regression="nadaraya_watson", positive_part=False):
+    """E[v | x = x_eval] by a binned Gaussian kernel regression: local constant (Nadaraya-Watson, the default) or
+    local linear, which removes the first-order bias of the local constant where the density of x is skewed."""
+    if positive_part:
+        v = np.maximum(v, 0.0)
     lo, hi = x.min(), x.max()
     edges = np.linspace(lo, hi + 1e-12, n_bins + 1)
     centres = 0.5 * (edges[1:] + edges[:-1])
@@ -30,13 +34,34 @@ def _conditional_mean(x, v, x_eval, bandwidth, n_bins=400):
     kern = np.exp(-0.5 * ((x_eval[:, None] - centres[None, :]) / bandwidth) ** 2)
     num, den = kern @ sums, kern @ counts
     fallback = v.mean()
-    return np.where(den > 1e-8, num / np.maximum(den, 1e-300), fallback)
+    nw = np.where(den > 1e-8, num / np.maximum(den, 1e-300), fallback)
+    if regression == "nadaraya_watson":
+        return nw
+    if regression != "local_linear":
+        raise ValueError(f"unknown regression {regression!r}, expected nadaraya_watson or local_linear")
+    sx = np.bincount(idx, weights=x, minlength=n_bins)
+    sxx = np.bincount(idx, weights=x * x, minlength=n_bins)
+    sxv = np.bincount(idx, weights=x * v, minlength=n_bins)
+    x0 = x_eval
+    S0, Ax, Axx, T0 = den, kern @ sx, kern @ sxx, num
+    S1 = Ax - x0 * S0
+    S2 = Axx - 2 * x0 * Ax + x0 * x0 * S0
+    T1 = kern @ sxv - x0 * T0
+    det = S0 * S2 - S1 * S1
+    ok = (S0 >= 50) & (det > 1e-12 * S0 * np.abs(S2))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ll = (S2 * T0 - S1 * T1) / det
+    return np.maximum(np.where(ok, ll, nw), 1e-8)
 
 
 def calibrate_leverage(params: HestonParams, surface: SSVI, market: Market, T_max: float,
                        mix: float = 1.0, n_particles: int = 100_000, dt_max=1 / 100, dt_min=1 / 2000, n_x=81,
-                       bandwidth_scale=1.0, rng=None, l_bounds=(0.05, 8.0)) -> SLVModel:
-    """Return the SLV model whose leverage reproduces the local volatility of `surface` up to T_max."""
+                       bandwidth_scale=1.0, rng=None, l_bounds=(0.05, 8.0), regression="nadaraya_watson",
+                       positive_part=False) -> SLVModel:
+    """Return the SLV model whose leverage reproduces the local volatility of `surface` up to T_max.
+
+    `regression="local_linear"` (with `positive_part=True`, the regression of max(v, 0)) estimates E[v | x] with
+    less bias than the default local constant; the default keeps the published leverage unchanged."""
     rng = np.random.default_rng(rng)
     grid = time_grid([T_max], dt_max, dt_min)
     p = HestonParams(params.v0, params.kappa, params.theta, mix * params.xi, params.rho)
@@ -55,7 +80,7 @@ def calibrate_leverage(params: HestonParams, surface: SSVI, market: Market, T_ma
             q_lo, q_hi = np.quantile(x, [0.0005, 0.9995])
             x_eval = np.linspace(q_lo, q_hi, n_x)
             bw = bandwidth_scale * atm_vol * np.sqrt(max(t0, 0.15)) * len(x) ** -0.2
-            cond_v = _conditional_mean(x, v, x_eval, bw)
+            cond_v = _conditional_mean(x, v, x_eval, bw, regression=regression, positive_part=positive_part)
         lev = np.sqrt(surface.local_var(x_eval, max(t0, 1 / 365)) / np.maximum(cond_v, 1e-8))
         lev = np.clip(lev, *l_bounds)
         x_grids.append(x_eval)

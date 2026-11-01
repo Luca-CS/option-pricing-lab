@@ -61,3 +61,46 @@ def test_heston_price_matches_adaptive_quadrature(T):
 def test_short_dated_out_of_the_money_calls_are_not_negative():
     calls = heston_price(100.0, np.array([105.0, 110.0, 115.0, 130.0]), 0.02, SPX_HESTON)
     assert np.all(calls > -1e-10)  # was -9e-3 with uniform panels
+
+
+# --- B4: local-linear regression of the leverage (opt-in) ---
+
+def test_local_linear_leverage_removes_the_atm_bias_on_spx():
+    # SPX, 1e6 paths: Nadaraya-Watson leaves +0.054 / +0.048 vol point at the money at 1 and 2 years, the local
+    # linear regression of max(v, 0) +0.008 / +0.009 (standard error about 0.015)
+    from optlab.structured import PricingContext
+    from optlab.validation import mc_smile
+    ctx = PricingContext.from_calibration(slv_regression="local_linear")
+    for T in (1.0, 2.0):
+        F = float(ctx.market.F(T))
+        iv, _ = mc_smile(ctx.slv, ctx.market, T, [F], n_paths=1_000_000, rng=777)
+        assert abs(iv[0] - float(ctx.surface.iv(0.0, T))) * 100 < 0.03
+
+
+def test_local_linear_leverage_stays_within_tolerance_on_the_synthetic_surface():
+    # on this surface both regressions are within the Monte Carlo error (a few bp per strike): no ranking claimed
+    from test_calibration import MARKET, TRUE_SSVI
+
+    from optlab import calibrate_leverage
+    from optlab.validation import mc_smile
+    slv = calibrate_leverage(HestonParams(0.04, 1.5, 0.045, 0.6, -0.7), TRUE_SSVI, MARKET, 1.0, mix=0.7,
+                             n_particles=200_000, rng=2, regression="local_linear", positive_part=True)
+    T = 1.0
+    F = float(MARKET.F(T))
+    K = F * np.exp(np.linspace(-0.3, 0.2, 6) * np.sqrt(T))
+    iv, _ = mc_smile(slv, MARKET, T, K, n_paths=400_000, rng=3)
+    assert np.max(np.abs(iv - TRUE_SSVI.iv(np.log(K / F), T))) < 0.0015
+
+
+def test_local_linear_falls_back_where_bins_are_thin():
+    from optlab.slv import _conditional_mean
+    rng = np.random.default_rng(0)
+    x = rng.standard_normal(20_000)
+    v = 0.04 + 0.01 * x + 0.002 * rng.standard_normal(20_000)
+    xe = np.linspace(-6, 6, 41)
+    ll = _conditional_mean(x, v, xe, 0.2, regression="local_linear")
+    assert np.all(np.isfinite(ll)) and np.all(ll >= 1e-8)
+    inner = np.abs(xe) < 2.5
+    assert np.max(np.abs(ll[inner] - (0.04 + 0.01 * xe[inner]))) < 1e-3  # linear truth recovered
+    with pytest.raises(ValueError, match="unknown regression"):
+        _conditional_mean(x, v, xe, 0.2, regression="spline")
