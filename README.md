@@ -180,7 +180,7 @@ Every table sorts by its headers. Sharing while the engine stays on this PC:
 |---|---|---|
 | Your network | `python -m optlab.app --host 0.0.0.0` | prints an address with a generated token (kept in a cookie after the first visit); on Windows the firewall must let Python in, which needs the connection in the Private profile: the desk checks this at start and says what blocks other machines |
 | A public link | `python -m optlab.app --tunnel` | https through an SSH tunnel to localhost.run: no install (`ssh` ships with Windows 10 and later), the address changes at each start; a third party relays the traffic, so the token is always on |
-| A fixed result | the report button of a quote or of the book | one standalone HTML file that opens anywhere without the desk |
+| A fixed result | Desk snapshot (Overview), or the report of a quote or of the book | one standalone HTML file that opens anywhere without the desk: the market in use, the book with its risk by underlying, the trades, the next observations and the recent quotes; send the file or publish it as a page |
 
 The page is served by the desk itself, not by GitHub Pages, because browsers block a public https page from calling
 a server on a private address. Trades, fixings, quotes, settings and market snapshots live under `data/store/`,
