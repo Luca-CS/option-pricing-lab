@@ -104,6 +104,19 @@ def geometric_asian_price(S, K, r, q, vol, fixings, cp="call"):
     return black_price(fwd_g, K, 1.0, np.sqrt(var), np.exp(-r * T), cp)
 
 
+def geometric_asian_price_curve(market, K, vol, fixings, cp="call"):
+    """Discrete geometric Asian on the market's forward curve, paid at the last fixing (Black-Scholes).
+
+    ln S_t = ln F(t) - vol^2 t / 2 + vol W_t, so ln G = mean(ln S_ti) is Gaussian with mean
+    mean(ln F(t_i)) - vol^2 mean(t_i) / 2 and variance vol^2 mean_ij(min(t_i, t_j)). On a flat market this is
+    geometric_asian_price.
+    """
+    t = np.asarray(fixings, dtype=float)
+    mean = np.mean(np.log(market.F(t))) - 0.5 * vol**2 * t.mean()
+    var = vol**2 * np.minimum.outer(t, t).mean()
+    return black_price(np.exp(mean + 0.5 * var), K, 1.0, np.sqrt(var), market.D(t[-1]), cp)
+
+
 def barrier_price(S, K, H, T, r, q, vol, kind="down-out", cp="call"):
     """Continuously monitored single barrier without rebate (Reiner-Rubinstein, as in Haug).
 

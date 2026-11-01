@@ -54,7 +54,8 @@ def _lewis_integral(F, K, T, p: HestonParams):
     """Integral of Re[exp(i u ln(F/K)) phi(u - i/2)] / (u^2 + 1/4) over u >= 0, for one maturity."""
     vol_scale = np.sqrt(max(p.v0, p.theta, 1e-4) * T)
     u_max = float(np.clip(40.0 / vol_scale, 60.0, 5000.0))
-    edges = np.linspace(0.0, u_max, 9)
+    # two short panels near u = 0, where the integrand varies fastest at short maturities
+    edges = np.concatenate([[0.0, 2.0, 10.0], np.linspace(10.0, u_max, 9)[1:]])
     u = (0.5 * (edges[1:, None] - edges[:-1, None]) * _GL_X[None, :]
          + 0.5 * (edges[1:, None] + edges[:-1, None])).ravel()
     w = (0.5 * (edges[1:, None] - edges[:-1, None]) * _GL_W[None, :]).ravel()

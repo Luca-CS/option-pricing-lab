@@ -255,9 +255,11 @@
   // Lewis (2001): C = D [F - sqrt(F K) / pi * integral of Re(e^{iu ln(F/K)} phi(u - i/2)) / (u^2 + 1/4)]
   function hestonPrice(S, K, T, r, q, h, call) {
     var F = S * Math.exp((r - q) * T), D = Math.exp(-r * T), lk = Math.log(F / K), s = 0;
-    var uMax = Math.min(Math.max(40 / Math.sqrt(Math.max(h.v0, h.theta, 1e-4) * T), 60), 5000), panels = 8;
-    for (var p = 0; p < panels; p++) {
-      var a = uMax * p / panels, b = uMax * (p + 1) / panels;
+    var uMax = Math.min(Math.max(40 / Math.sqrt(Math.max(h.v0, h.theta, 1e-4) * T), 60), 5000);
+    var edges = [0, 2, 10]; // two short panels near u = 0, as in optlab/heston.py
+    for (var e = 1; e <= 8; e++) edges.push(10 + (uMax - 10) * e / 8);
+    for (var p = 0; p < edges.length - 1; p++) {
+      var a = edges[p], b = edges[p + 1];
       for (var i = 0; i < GL.x.length; i++) {
         var u = 0.5 * (b - a) * GL.x[i] + 0.5 * (b + a);
         var ph = cmul(cx(Math.cos(u * lk), Math.sin(u * lk)), hestonCF(cx(u, -0.5), T, h));

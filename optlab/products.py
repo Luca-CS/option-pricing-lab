@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .blackscholes import geometric_asian_price
+from .blackscholes import geometric_asian_price_curve
 from .market import Market
 from .models import BlackScholesModel, Model, simulate
 
@@ -61,8 +61,8 @@ def asian_mc(model: Model, market: Market, K, T, n_fixings=12, cp="call", averag
     arith_pay = D * np.maximum(phi * (S.mean(axis=1) - K), 0.0)
     if not (control_variate and isinstance(model, BlackScholesModel)):
         return _result(arith_pay, n_paths)
-    r, q = market.zero_rate(T), market.zero_rate(T) - market.carry_rate(T)
-    exact = float(geometric_asian_price(market.spot, K, r, q, model.vol, times, cp))
+    # on the market's own forward curve: constant r and q would bias the control variate on a curved market
+    exact = float(geometric_asian_price_curve(market, K, model.vol, times, cp))
     c = np.cov(arith_pay, geo_pay)
     beta = c[0, 1] / c[1, 1] if c[1, 1] > 0 else 0.0
     return _result(arith_pay - beta * (geo_pay - exact), n_paths)
