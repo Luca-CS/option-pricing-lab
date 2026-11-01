@@ -1,6 +1,6 @@
 // Overview: market, book and what comes next.
 
-import { api } from "../api.js";
+import { api, withToken } from "../api.js";
 import { describeSheet } from "../format.js";
 import { desk, state } from "../state.js";
 import { badgeFor, clear, dateLabel, errorNotice, h, num, pct, pm, pretty } from "../ui.js";
@@ -26,7 +26,9 @@ export async function render(page) {
     h("div", { class: "page-head" }, h("div", {}, h("h1", {}, "Overview"),
       h("p", {}, `Valuation date ${dateLabel(ctx.valuation)} · market ${ctx.snapshot_id}`)),
       h("div", { class: "btn-row" }, h("a", { class: "btn primary", href: "#/pricer" }, "New quote"),
-        h("a", { class: "btn", href: "#/book" }, "Open the book"))),
+        h("a", { class: "btn", href: "#/book" }, "Open the book"),
+        h("a", { class: "btn ghost", href: withToken("/report/desk"), target: "_blank", rel: "noopener",
+          title: "The whole desk on one page that opens anywhere: market, book, events, quotes" }, "Desk snapshot"))),
     h("div", { class: "grid cols-4" },
       kpi("Spot (model scale)", num(ctx.spot, 2), `${ctx.underlying}, rescaled to 100`),
       kpi("ATM vol 1 year", pct(ctx.atm_vols["1"], 2), `3M ${pct(ctx.atm_vols["0.25"], 1)} · 2Y ${pct(ctx.atm_vols["2"], 1)}`),

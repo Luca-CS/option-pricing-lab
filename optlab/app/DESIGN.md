@@ -149,6 +149,12 @@ owner's call), so only the reading of its address is tested: the first real `--t
 Automated since: the fixings parser moved to the server (`fixings.py`, pytest), and the table sorting runs under
 node (`tests/test_app_js.py`).
 
+The path that needs no incoming connection at all: the desk snapshot (`/report/desk`, Overview > Desk snapshot), the
+whole desk on one standalone page produced by the engine on this PC. It was published as a private claude.ai page
+from the test store (book 539.41 ± 0.34, two trades, four quotes, the SX5E inputs); its link opens on any machine
+signed in to the account, and the page's Share menu can open it to anyone with the link. It is a snapshot, not a
+live desk: live use from another machine still needs the LAN (firewall) or the tunnel.
+
 Limits that remain, from the library rather than the page:
 
 - Names other than SPX have no smile (flat Black-Scholes) and the correlation is an input; SLV is not extended to

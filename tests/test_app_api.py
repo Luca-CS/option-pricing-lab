@@ -13,7 +13,7 @@ import pytest
 from optlab.app.api import ApiError, Desk
 from optlab.app.fixings import parse_fixings
 from optlab.app.netcheck import interpret
-from optlab.app.report import book_report, quote_report
+from optlab.app.report import book_report, desk_snapshot, quote_report
 from optlab.app.server import serve, serve_in_thread
 from optlab.app.tunnel import public_url
 
@@ -217,6 +217,18 @@ def test_worst_of_quote_book_and_trade_page(desk):
     assert len(book["greeks"]["positions"]) == len(book["positions"])
     assert "worst-of" in book_report(desk)
     assert desk.trade_events(t["trade_id"])["underlyings"] == ["SPX", "SX5E"]
+
+
+def test_desk_snapshot_is_one_page_that_opens_anywhere(desk):
+    t = desk.create_trade({"sheet": sheet_of(desk, "phoenix"), "coupon_rate": 0.05, "quantity": 1.0})
+    page = desk_snapshot(desk)
+    assert page.startswith("<!doctype html>") and "<title>Desk snapshot</title>" in page
+    assert t["trade_id"] in page and desk.ctx.snapshot_id in page and "<svg" in page
+    assert "http" not in page.replace("http-equiv", "")  # nothing loaded from elsewhere: it opens offline
+    part = desk_snapshot(desk, fragment=True, note="example")
+    assert not part.startswith("<!doctype") and "<html" not in part and "example" in part
+    assert 'prefers-color-scheme:dark){:root:not([data-theme="light"])' in part  # both themes, and the override
+    desk.delete_trade(t["trade_id"])
 
 
 def test_snapshots_switch_the_market(desk):

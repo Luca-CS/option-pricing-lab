@@ -1,6 +1,6 @@
 // Settings: preferences of this browser and what the server runs with.
 
-import { api } from "../api.js";
+import { api, withToken } from "../api.js";
 import { applyTheme, save, state } from "../state.js";
 import { clear, field, h, segmented, toast } from "../ui.js";
 
@@ -43,7 +43,10 @@ export async function render(page) {
               + "address. On Windows, the firewall must let Python in on a Private network (checked at start)"],
             ["A public link", "python -m optlab.app --tunnel", "https through localhost.run (ssh, no install); a third "
               + "party relays the traffic, so the token is always on; the address changes at each start"],
-            ["A fixed result", "Open the report (Pricer or Book)", "one HTML file that opens anywhere without the desk"]]
-            .map(([a, c, n]) => h("tr", {}, h("td", {}, a), h("td", {}, h("code", {}, c)), h("td", { class: "muted" }, n)))))));
+            ["A fixed result", "Desk snapshot (Overview), or the report of a quote or of the book",
+              "one HTML file that opens anywhere without the desk: send it, or publish it as a page"]]
+            .map(([a, c, n]) => h("tr", {}, h("td", {}, a), h("td", {}, h("code", {}, c)), h("td", { class: "muted" }, n)))),
+        h("div", { class: "btn-row" }, h("a", { class: "btn", href: withToken("/report/desk"), target: "_blank",
+          rel: "noopener" }, "Open the desk snapshot")))));
   draw();
 }

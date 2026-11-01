@@ -19,7 +19,7 @@ from urllib.parse import parse_qs, urlparse
 
 from ..log import get_logger
 from .api import ApiError, Desk
-from .report import book_report, quote_report
+from .report import book_report, desk_snapshot, quote_report
 
 STATIC = Path(__file__).resolve().parent / "static"
 LOG = get_logger(__name__)
@@ -148,6 +148,8 @@ def make_handler(desk: Desk, token: str | None = None):
             try:
                 if path == "/report/book":
                     html = book_report(desk)
+                elif path == "/report/desk":
+                    html = desk_snapshot(desk)
                 elif m := re.match(r"^/report/quote/(\w+)$", path):
                     html = quote_report(desk.saved_quote(m[1]))
                 else:
