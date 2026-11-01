@@ -155,6 +155,13 @@ from the test store (book 539.41 ± 0.34, two trades, four quotes, the SX5E inpu
 signed in to the account, and the page's Share menu can open it to anyone with the link. It is a snapshot, not a
 live desk: live use from another machine still needs the LAN (firewall) or the tunnel.
 
+The tunnel was then opened for real with the owner's approval, on the test store: public address in 1.8 s, 401
+without the token and 200 with it (634 ms through the relay), the page served, and from WSL through the public
+address a full quote in 2.3 s (4.960 % ± 0.161). The first start showed that the relay's welcome banner prints
+other addresses (admin.localhost.run): only the announced *.lhr.life address is taken now, with a test on that
+banner. The relay does not pass the token cookie, so the shared address keeps its ?token= (the page sends it on
+every call).
+
 Limits that remain, from the library rather than the page:
 
 - Names other than SPX have no smile (flat Black-Scholes) and the correlation is an input; SLV is not extended to

@@ -252,6 +252,10 @@ def test_tunnel_address_is_read_from_the_relay_output():
     line = "abc123.lhr.life tunneled with tls termination, https://abc123.lhr.life"
     assert public_url(line) == "https://abc123.lhr.life"
     assert public_url("** your connection id is 1f2e, please mention it if you send me a message **") is None
+    # the welcome banner prints the service's own pages: they are not the tunnel (seen on the first real start)
+    assert public_url("To set up and manage custom domains go to https://admin.localhost.run/") is None
+    assert public_url("More details on custom domains (and how to enable subdomains) at https://localhost.run/docs/") \
+        is None
 
 
 def test_script_lab(desk):

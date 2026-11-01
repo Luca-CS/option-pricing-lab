@@ -10,13 +10,20 @@ import shutil
 import subprocess
 import threading
 
-URL = re.compile(r"https://[a-z0-9-]+(\.[a-z0-9-]+)*\.(lhr\.life|localhost\.run)\b", re.I)
+# The tunnel's own address: a host under lhr.life (lhr.pro for keyed accounts), announced on the line that says
+# "tunneled with tls termination". The welcome banner also prints addresses (admin.localhost.run, the docs): never
+# those.
+TUNNEL = re.compile(r"https://[a-z0-9-]+(\.[a-z0-9-]+)*\.lhr\.(life|pro)\b", re.I)
+ANNOUNCED = re.compile(r"tunneled with tls termination,\s*(https://\S+)", re.I)
 
 
 def public_url(line: str) -> str | None:
-    """The https address in a line of the relay's output, if any."""
-    m = URL.search(line)
-    return m.group(0) if m else None
+    """The tunnel's https address in a line of the relay's output, if the line announces one."""
+    m = ANNOUNCED.search(line) or TUNNEL.search(line)
+    if m is None:
+        return None
+    url = (m.group(1) if m.re is ANNOUNCED else m.group(0)).rstrip(".,")
+    return None if "localhost.run" in url else url
 
 
 def open_tunnel(port: int, relay: str = "localhost.run", timeout: float = 30.0):
