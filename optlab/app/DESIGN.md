@@ -137,8 +137,12 @@ Second round (the "tout" scope): worst-ofs everywhere (other names and correlati
 book in two independent groups, risk per underlying), a page per trade (sheet, value at today's market, events,
 versions, original quote), market snapshots registered in the local store with a switch, sortable tables, CSV
 import of fixings, and a public link through an SSH tunnel (`--tunnel`, localhost.run). Checked in the browser
-again; the tunnel itself was not opened during development (it exposes the PC through a third party): only the
-reading of its address is tested.
+again, end to end: a Yahoo-style CSV attached in the fixings dialog (Close column taken, empty row reported, real
+levels converted), sorting by dates and numbers on the Overview, Book and Lifecycle tables. The LAN path was checked
+on this PC's network address (401 without the token, 200 with it, the page sets its cookie, a quote in 1.8 s end to
+end), not from a second machine. Opening the public tunnel was refused by the development session's permission
+rules (an ingress tunnel through a third party is the owner's call), so only the reading of its address is tested:
+the first real `--tunnel` start is the owner's.
 
 Limits that remain, from the library rather than the page:
 
