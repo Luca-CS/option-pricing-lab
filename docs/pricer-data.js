@@ -56,7 +56,7 @@ window.PRICER_DATA = {
   {
    "product": "Asian call, 12 monthly fixings, K 100 %",
    "prices": [
-    5.0913,
+    5.0453,
     5.0504,
     5.0267,
     5.0409

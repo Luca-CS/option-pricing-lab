@@ -57321,8 +57321,8 @@
   },
   "Asian call, 12 monthly fixings, K 100 %": {
    "Black-Scholes (ATM vol)": {
-    "price": 5.091310156446118,
-    "stderr": 0.0003774118793028257
+    "price": 5.045290384658666,
+    "stderr": 0.00037741187930282567
    },
    "Heston": {
     "price": 5.050430560909209,

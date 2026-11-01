@@ -57,7 +57,7 @@ Monte Carlo prices in % of spot, standard errors in brackets. Black-Scholes uses
 | Down-and-out call, K 100 %, H 80 % | 8.625 (0.019) | 8.763 (0.019) | 8.793 (0.012) | 8.826 (0.015) |
 | Up-and-out call, K 100 %, H 120 % | 1.870 (0.008) | 4.692 (0.013) | 3.489 (0.011) | 3.967 (0.012) |
 | Down-and-in put, K 100 %, H 85 % | 3.647 (0.014) | 4.843 (0.025) | 4.715 (0.025) | 4.763 (0.025) |
-| Asian call, 12 monthly fixings, K 100 % | 5.091 (0.000) | 5.050 (0.010) | 5.027 (0.006) | 5.041 (0.008) |
+| Asian call, 12 monthly fixings, K 100 % | 5.045 (0.000) | 5.050 (0.010) | 5.027 (0.006) | 5.041 (0.008) |
 | American put, K 100 %, 50 dates | 5.114 (0.011) | 5.471 (0.031) | 5.370 (0.024) | 5.444 (0.028) |
 
 Barrier prices when the leverage is recalibrated for each mixing fraction (0 = local vol, 1 = full Heston vol of vol): vanillas stay on the surface, barriers move.
