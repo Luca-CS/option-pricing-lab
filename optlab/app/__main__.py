@@ -10,6 +10,7 @@ import webbrowser
 
 from ..log import configure
 from .api import Desk
+from .netcheck import lan_blockers
 from .server import serve
 from .tunnel import open_tunnel
 
@@ -38,8 +39,11 @@ def main():
     url = f"http://{shown}:{port}/" + (f"?token={token}" if token else "")
     print(f"optlab desk on {url}")
     print(f"market {desk.ctx.snapshot_id}, valuation {desk.ctx.valuation}, store {desk.repo.path}")
-    if args.host == "0.0.0.0":
-        print(f"listening on the LAN: share http://<this-pc-address>:{port}/?token={token}")
+    if args.host not in ("127.0.0.1", "localhost", "::1"):
+        print(f"listening on the network: share http://<this-pc-address>:{port}/?token={token}")
+        desk.lan_blockers = lan_blockers()
+        for reason in desk.lan_blockers:
+            print(f"  other machines cannot connect yet: {reason}")
     tunnel = None
     if args.tunnel:
         threading.Thread(target=httpd.serve_forever, daemon=True).start()

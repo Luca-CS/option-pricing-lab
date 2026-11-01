@@ -71,13 +71,11 @@ export async function render(page, arg) {
           placeholder: "e.g. 5812.4" }), { hint: desk.context ? `Model spot ${desk.context.spot} on ${desk.context.valuation}` : "" })],
       read: (form) => Object.fromEntries(new FormData(form)) });
     if (!res) return;
-    const { levels, skipped } = parseFixings(res.lines);
-    if (!Object.keys(levels).length) { toast("No line of the form 2026-07-27 104.2"); return; }
-    try {
-      const r = await api("/api/fixings", { method: "POST", body: { underlying, levels,
+    try {  // the server parses the text (lines, columns or a CSV export): one parser, under the tests
+      const r = await api("/api/fixings", { method: "POST", body: { underlying, text: res.lines,
         real_spot: real ? Number(res.real_spot) || null : null } });
       toast(`${r.stored} fixing${r.stored > 1 ? "s" : ""} saved`
-        + (skipped.length ? `; skipped (not "date level"): ${skipped.slice(0, 3).join(" | ")}` : ""), { timeout: 8000 });
+        + (r.skipped.length ? `; skipped (not "date level"): ${r.skipped.slice(0, 3).join(" | ")}` : ""), { timeout: 8000 });
       loadFixings();
       if (selected) drawTrade(selected);
     } catch (e) { toast(e.message); }
@@ -121,28 +119,4 @@ export async function render(page, arg) {
   try { basketNames = Object.keys((await api("/api/basket")).names); } catch (e) { /* the list keeps the others */ }
   await drawTrades();
   await loadFixings();
-}
-
-// "date level" lines, or a CSV with a header (its Close column): {levels: {iso date: level}, skipped: [lines]}.
-export function parseFixings(text) {
-  const lines = String(text || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  let col = 1;
-  const split = (line) => line.split(/[,;\t]|\s+/).map((c) => c.trim()).filter((c) => c !== "");
-  if (lines.length && !/^\d/.test(lines[0])) {  // a header row
-    const head = split(lines.shift().toLowerCase().replace("adj close", "adj_close"));
-    const k = head.indexOf("close");
-    if (k > 0) col = k;
-  }
-  const levels = {};
-  const skipped = [];
-  for (const line of lines) {
-    const cells = split(line);
-    let date = cells[0] || "";
-    const dmy = date.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-    if (dmy) date = `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
-    const level = Number(cells[col]);
-    if (/^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(level) && level > 0) levels[date] = level;
-    else skipped.push(line);
-  }
-  return { levels, skipped };
 }

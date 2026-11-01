@@ -11,6 +11,8 @@ from pathlib import Path
 import pytest
 
 from optlab.app.api import ApiError, Desk
+from optlab.app.fixings import parse_fixings
+from optlab.app.netcheck import interpret
 from optlab.app.report import book_report, quote_report
 from optlab.app.server import serve, serve_in_thread
 from optlab.app.tunnel import public_url
@@ -118,6 +120,38 @@ def test_fixings_scale_and_future_dates(desk):
         desk.put_fixings({"underlying": "SX5E", "levels": {"2026-12-01": 100.0}})
     desk.delete_fixing("SX5E", "2026-10-26")
     assert "SX5E" not in desk.fixings()["fixings"]
+
+
+def test_fixings_text_lines_columns_and_yahoo_csv(desk):
+    yahoo = ("Date,Open,High,Low,Close,Adj Close,Volume\n2026-10-20,4890,4910,4880,4902.5,4902.5,100\n"
+             "2026-10-21,4900,4930,4895,4925.0,4920.0,100\n2026-10-24,null,null,null,null,null,0\n")
+    levels, skipped = parse_fixings(yahoo)  # the Close column, not the open nor the adjusted close
+    assert levels == {"2026-10-20": 4902.5, "2026-10-21": 4925.0}
+    assert skipped == ["2026-10-24,null,null,null,null,null,0"]
+    levels, skipped = parse_fixings("27/07/2026; 104.2\n2026-10-27\t98.7\n\n2026-10-28 -3\nnot a fixing")
+    assert levels == {"2026-07-27": 104.2, "2026-10-27": 98.7} and skipped == ["2026-10-28 -3", "not a fixing"]
+    r = desk.put_fixings({"underlying": "sx5e", "text": yahoo, "real_spot": 4950.0})
+    assert r["stored"] == 2 and len(r["skipped"]) == 1
+    assert desk.fixings("SX5E")["fixings"]["SX5E"]["2026-10-20"] == pytest.approx(100 * 4902.5 / 4950)
+    with pytest.raises(ApiError, match="no line"):
+        desk.put_fixings({"underlying": "SX5E", "text": "nothing here"})
+    for d in ("2026-10-20", "2026-10-21"):
+        desk.delete_fixing("SX5E", d)
+
+
+def test_lan_blockers_read_from_the_windows_firewall():
+    python = r"C:\Program Files\Python314\python.exe"
+    data = {"profiles": {"alias": "Wi-Fi", "category": "Public"},  # one object, as ConvertTo-Json writes it
+            "rules": [{"program": r"C:\program files\python314\python.exe", "action": "Block", "profile": "Public",
+                       "enabled": "True", "direction": "Inbound"},
+                      {"program": r"C:\Other\python.exe", "action": "Block", "profile": "Public", "enabled": "True",
+                       "direction": "Inbound"}]}
+    reasons = interpret(data, python)
+    assert len(reasons) == 2 and "blocks incoming connections" in reasons[0] and "Wi-Fi" in reasons[1]
+    data = {"profiles": [{"alias": "Wi-Fi", "category": "Private"}],
+            "rules": [{"program": python, "action": "Allow", "profile": "Private", "enabled": "True",
+                       "direction": "Inbound"}]}
+    assert interpret(data, python) == []
 
 
 def test_seasoned_trade_events_book_and_report(desk):
@@ -267,7 +301,7 @@ def test_http_server_token_static_and_api(desk):
         status, _, body = _get(base + "/api/nothing", auth)
         assert status == 404
         status, _, body = _get(base + "/api/fixings", auth, method="POST", data=None)
-        assert status == 200  # an empty body is an empty request
+        assert status == 422 and "no line" in json.loads(body)["error"]  # an empty body stores nothing
         status, headers, body = _get(base + "/report/book", auth)
         assert status == 200 and headers["Content-Type"].startswith("text/html")
     finally:

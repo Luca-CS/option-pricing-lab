@@ -34,10 +34,13 @@ export async function render(page) {
       h("div", { class: "card stack" },
         h("h2", {}, "Sharing"),
         h("p", {}, "The engine stays on this PC; the people you share with use their browser."),
+        health && health.lan_blockers && health.lan_blockers.length ? h("div", { class: "notice" },
+          h("b", {}, "Other machines cannot connect to this PC yet. "), health.lan_blockers.join(". "), ".") : null,
         h("table", { class: "data nosort" },
           h("tr", {}, h("th", {}, "How"), h("th", {}, "Start with"), h("th", {}, "Notes")),
           [["This PC only", "python -m optlab.app", "the default: listens on 127.0.0.1, no token"],
-            ["Your network", "python -m optlab.app --host 0.0.0.0", "a token is generated; share the printed address"],
+            ["Your network", "python -m optlab.app --host 0.0.0.0", "a token is generated; share the printed "
+              + "address. On Windows, the firewall must let Python in on a Private network (checked at start)"],
             ["A public link", "python -m optlab.app --tunnel", "https through localhost.run (ssh, no install); a third "
               + "party relays the traffic, so the token is always on; the address changes at each start"],
             ["A fixed result", "Open the report (Pricer or Book)", "one HTML file that opens anywhere without the desk"]]

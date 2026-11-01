@@ -140,9 +140,14 @@ import of fixings, and a public link through an SSH tunnel (`--tunnel`, localhos
 again, end to end: a Yahoo-style CSV attached in the fixings dialog (Close column taken, empty row reported, real
 levels converted), sorting by dates and numbers on the Overview, Book and Lifecycle tables. The LAN path was checked
 on this PC's network address (401 without the token, 200 with it, the page sets its cookie, a quote in 1.8 s end to
-end), not from a second machine. Opening the public tunnel was refused by the development session's permission
-rules (an ingress tunnel through a third party is the owner's call), so only the reading of its address is tested:
-the first real `--tunnel` start is the owner's.
+end). From a second host (WSL, on its own network) the connection times out: this PC's Wi-Fi is in the Public
+profile and Windows has inbound block rules for Python, so no other machine can reach the desk until the owner
+changes that. The desk now reads both (read-only, `netcheck.py`) when it listens on the network and says what to
+change, in the terminal and in Settings. Opening the public tunnel, which is outbound and not affected by the
+firewall, was refused by the development session's permission rules (an ingress tunnel through a third party is the
+owner's call), so only the reading of its address is tested: the first real `--tunnel` start is the owner's.
+Automated since: the fixings parser moved to the server (`fixings.py`, pytest), and the table sorting runs under
+node (`tests/test_app_js.py`).
 
 Limits that remain, from the library rather than the page:
 

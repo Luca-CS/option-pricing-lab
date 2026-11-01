@@ -134,12 +134,27 @@ export function errorNotice(err) {
 const DATE = /^(\d{1,2} [A-Za-z]{3,4}\.? \d{4}|\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2})?)$/;
 const NUMBER = /^[+−-]?(\d[\d,]*)?\.?\d+(e[+-]?\d+)?/i;
 
-function sortKey(cell) {
-  const text = (cell ? cell.textContent : "").trim();
+function sortKey(text) {
+  text = String(text ?? "").trim();
   const empty = !text || text === "–";
   const n = text.match(NUMBER);
   return { text, empty, date: DATE.test(text) ? Date.parse(text) : null,
     num: n ? parseFloat(n[0].replace(/,/g, "").replace("−", "-")) : null };
+}
+
+// The order of a column's cells (as shown): dates if every filled cell is a date, else numbers if every one starts
+// with a number (98.000 ± 0.034, 65.6 %, +0.183), else text with numeric parts compared as numbers. Empty cells go
+// last in both directions; ties keep their order. dir = 1 ascending, -1 descending.
+export function sortOrder(texts, dir = 1) {
+  const keys = texts.map(sortKey);
+  const full = keys.filter((k) => !k.empty);
+  const kind = full.every((k) => k.date !== null) ? "date" : full.every((k) => k.num !== null) ? "num" : "text";
+  const cmp = (a, b) => {
+    if (a.empty || b.empty) return a.empty - b.empty;
+    if (kind === "text") return dir * a.text.localeCompare(b.text, undefined, { numeric: true });
+    return dir * (a[kind] - b[kind]);
+  };
+  return keys.map((_, i) => i).sort((i, j) => cmp(keys[i], keys[j]) || i - j);
 }
 
 export function sortable(table) {
@@ -157,15 +172,7 @@ export function sortable(table) {
       head.querySelectorAll("th").forEach((x) => x.removeAttribute("aria-sort"));
       th.setAttribute("aria-sort", dir > 0 ? "ascending" : "descending");
       const body = [...table.rows].slice(1);
-      const keys = body.map((r) => sortKey(r.cells[col]));
-      const full = keys.filter((k) => !k.empty);
-      const kind = full.every((k) => k.date !== null) ? "date" : full.every((k) => k.num !== null) ? "num" : "text";
-      const cmp = (a, b) => {
-        if (a.empty || b.empty) return a.empty - b.empty;  // empty cells last, whatever the direction
-        if (kind === "text") return dir * a.text.localeCompare(b.text, undefined, { numeric: true });
-        return dir * (a[kind] - b[kind]);
-      };
-      const order = body.map((_, i) => i).sort((i, j) => cmp(keys[i], keys[j]) || i - j);
+      const order = sortOrder(body.map((r) => (r.cells[col] ? r.cells[col].textContent : "")), dir);
       const parent = body[0].parentNode;
       order.forEach((i) => parent.appendChild(body[i]));
     });

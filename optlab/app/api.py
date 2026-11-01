@@ -30,6 +30,7 @@ from ..structured.script.lexer import ScriptError
 from ..structured.script.parser import parse
 from ..structured.script.validate import validate
 from ..structured.trade import Trade
+from .fixings import parse_fixings
 from .jobs import Jobs
 from .repository import Repository
 from .serialize import book_json, clean, events_json, quote_json, result_json, trade_json
@@ -79,6 +80,7 @@ class Desk:
         self.started = dt.datetime.now(dt.timezone.utc)
         self.last_book = None
         self.public_url = None  # set when a tunnel is open
+        self.lan_blockers: list[str] = []  # what stops other machines, found at start (Windows firewall)
 
     def _register(self, path: Path) -> None:
         """Keep a calibration file's market in the snapshot store (immutable, by content), so the desk can switch
@@ -97,7 +99,8 @@ class Desk:
     def health(self) -> dict:
         return {"ok": True, "snapshot_id": self.ctx.snapshot_id, "valuation": self.ctx.valuation.isoformat(),
                 "workers": self.workers, "jobs": self.jobs.running(), "store": str(self.repo.path),
-                "started": self.started.isoformat(timespec="seconds"), "public_url": self.public_url}
+                "started": self.started.isoformat(timespec="seconds"), "public_url": self.public_url,
+                "lan_blockers": self.lan_blockers}
 
     def context(self) -> dict:
         c = self.ctx
@@ -441,7 +444,12 @@ class Desk:
 
     def put_fixings(self, body: dict) -> dict:
         und = str(body.get("underlying", "SPX")).upper()
-        levels = body.get("levels") or {}
+        levels, skipped = dict(body.get("levels") or {}), []
+        if body.get("text"):  # pasted lines or a CSV file, parsed here so that the page and the tests share it
+            parsed, skipped = parse_fixings(body["text"])
+            levels.update(parsed)
+        if not levels:
+            raise ApiError("no line of the form 2026-07-27 104.2", 422)
         scale = float(body.get("real_spot") or 0)
         ctx = self.ctx
         if scale:  # real index levels: divide by real spot / model spot (every market is rescaled to 100)
@@ -451,7 +459,7 @@ class Desk:
             if dt.date.fromisoformat(str(d)) > ctx.valuation:
                 raise ApiError(f"fixing on {d} is after the valuation date {ctx.valuation}", 422)
         n = self.repo.put_fixings(und, levels, body.get("source", "manual"))
-        return {"ok": True, "stored": n}
+        return {"ok": True, "stored": n, "skipped": skipped}
 
     def delete_fixing(self, underlying: str, date: str) -> dict:
         self.repo.delete_fixing(underlying, date)
