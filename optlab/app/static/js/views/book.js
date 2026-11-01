@@ -2,6 +2,7 @@
 
 import { api, runJob, withToken } from "../api.js";
 import { describeSheet, vegaNote } from "../format.js";
+import { basketCard } from "./pricer.js";
 import { save, state } from "../state.js";
 import { badgeFor, clear, dateLabel, dialog, errorNotice, field, h, int, num, pm, pretty, progress, segmented,
   signed, switchControl, toast } from "../ui.js";
@@ -27,7 +28,7 @@ export async function render(page) {
   };
 
   const drawRun = () => clear(runCard,
-    h("div", { class: "card-head" }, h("h2", {}, "Valuation"), h("span", { class: "muted" }, "single-name trades")),
+    h("div", { class: "card-head" }, h("h2", {}, "Valuation"), h("span", { class: "muted" }, "every live trade")),
     h("div", { class: "btn-row", style: { justifyContent: "space-between" } },
       h("div", { class: "btn-row", style: { gap: "16px" } },
         segmented([["quick", "Quick"], ["standard", "Standard"], ["precise", "Precise"]], state.precision,
@@ -45,7 +46,8 @@ export async function render(page) {
       shown.length ? h("div", { class: "table-wrap" }, h("table", { class: "data" },
         h("tr", {}, ["Trade", "Product", "Quantity", "Strike", "Status", ""].map((c, i) => h("th", { class: i === 2 ? "num" : "" }, c))),
         shown.map((t) => h("tr", {},
-          h("td", {}, h("b", {}, t.trade_id), t.version > 1 ? h("span", { class: "faint" }, ` v${t.version}`) : null),
+          h("td", {}, h("a", { href: `#/trade/${t.trade_id}` }, h("b", {}, t.trade_id)),
+            t.version > 1 ? h("span", { class: "faint" }, ` v${t.version}`) : null),
           h("td", {}, t.summary ? describeSheet(t.product.term_sheet) : "script"),
           h("td", { class: "num" }, num(t.quantity, 2)),
           h("td", {}, dateLabel(t.strike_date)),
@@ -108,28 +110,46 @@ export async function render(page) {
   }
 
   function drawResult(res) {
-    const g = res.greeks;
+    const g = res.greeks && res.greeks.by_name ? res.greeks : null;  // older runs kept in the browser: no risk
     const n = res.positions.length;
+    const groups = res.groups || [];
+    const several = groups.length > 1;
     clear(out,
-      h("div", { class: "grid cols-4" },
+      h("div", { class: "grid cols-3" },
         kpi("Book value", pm(res.value, res.stderr, 2), `currency · ${n} position${n > 1 ? "s" : ""}`),
         kpi("Error if legs were independent", num(res.independent_stderr, 2),
-          n > 1 ? "against the error of the total: the shared simulation nets the legs" : "one position: the same"),
-        kpi("Delta", g && g.delta ? pm(g.delta.total, g.delta.total_se, 3) : "–", "currency per +1 % spot"),
-        kpi("Vega", g && g.vega ? pm(g.vega.total, g.vega.total_se, 3) : "–", g && !g.vega ? vegaNote(g.note) : "currency per vol point")),
+          n > 1 ? "against the error of the total: positions on one simulation net out" : "one position: the same"),
+        kpi("Run", `${num(res.seconds, 1)} s`,
+          `${int(res.n_paths)} paths · ${several ? `${groups.length} independent simulations` : pretty(res.model)}`)),
+      g ? h("div", { class: "card" },
+        h("div", { class: "card-head" }, h("h2", {}, "Risk by underlying"),
+          h("span", { class: "muted" }, "currency per +1 % spot · per vol point")),
+        h("div", { class: "table-wrap" }, h("table", { class: "data" },
+          h("tr", {}, h("th", {}, "Underlying"), h("th", { class: "num" }, "Delta"), h("th", { class: "num" }, "Vega")),
+          Object.entries(g.by_name).map(([name, r]) => h("tr", {}, h("td", {}, name),
+            h("td", { class: "num" }, pm(r.delta, r.delta_se, 3)),
+            h("td", { class: "num" }, r.vega != null ? pm(r.vega, r.vega_se, 3) : `– (not for ${r.vega_missing.join(", ")})`))))),
+        g.note ? h("p", { class: "muted", style: { marginTop: "8px" } }, vegaNote(g.note)) : null) : null,
+      several ? h("div", { class: "card" },
+        h("div", { class: "card-head" }, h("h2", {}, "Simulations"),
+          h("span", { class: "muted" }, "independent: their errors add in quadrature")),
+        h("div", { class: "table-wrap" }, h("table", { class: "data" },
+          h("tr", {}, ["Group", "Positions", "Model", "Value", "Time"].map((c, k) => h("th", { class: k === 1 || k > 2 ? "num" : "" }, c))),
+          groups.map((x) => h("tr", {}, h("td", {}, pretty(x.label)), h("td", { class: "num" }, x.positions),
+            h("td", {}, `${pretty(x.method)} (${pretty(x.model)})`), h("td", { class: "num" }, pm(x.value, x.stderr, 2)),
+            h("td", { class: "num" }, `${num(x.seconds, 1)} s`))))),
+        groups.filter((x) => x.basket).map((x) => h("div", { style: { marginTop: "12px" } }, basketCard(x.basket)))) : null,
       h("div", { class: "card" },
         h("div", { class: "card-head" }, h("h2", {}, "Positions"),
-          h("span", { class: "muted" },
-            `${pretty(res.method)} (${pretty(res.model)}) · ${int(res.n_paths)} paths · ${num(res.seconds, 1)} s`)),
+          h("span", { class: "muted" }, several ? "" : `${pretty(res.method)} (${pretty(res.model)})`)),
         h("div", { class: "table-wrap" }, h("table", { class: "data" },
-          h("tr", {}, ["Trade", "Class", "Quantity", "Unit price %", "Value", "SE", "Delta"].map((c, i) =>
-            h("th", { class: i > 1 ? "num" : "" }, c))),
-          res.positions.map((p, i) => h("tr", {}, h("td", {}, h("b", {}, p.name)), h("td", {}, pretty(p.class)),
+          h("tr", {}, ["Trade", several ? "Group" : null, "Class", "Quantity", "Unit price %", "Value", "SE", "Delta"]
+            .filter((c) => c !== null).map((c, k, all) => h("th", { class: k >= all.indexOf("Quantity") ? "num" : "" }, c))),
+          res.positions.map((p, k) => h("tr", {}, h("td", {}, h("a", { href: `#/trade/${p.name}` }, h("b", {}, p.name))),
+            several ? h("td", {}, pretty(p.group)) : null, h("td", {}, pretty(p.class)),
             h("td", { class: "num" }, num(p.quantity, 2)), h("td", { class: "num" }, pm(p.unit_price, p.unit_stderr)),
             h("td", { class: "num" }, num(p.value, 2)), h("td", { class: "num" }, num(p.stderr, 2)),
-            h("td", { class: "num" }, g && g.delta ? signed(g.delta.positions[i], 3) : "–"))))),
-        res.skipped && res.skipped.length ? h("div", { class: "notice", style: { marginTop: "10px" } },
-          `Not in this valuation: ${res.skipped.map((s) => `${s.trade_id} (${s.reason})`).join(", ")}`) : null,
+            h("td", { class: "num" }, g && g.positions[k] != null ? signed(g.positions[k], 3) : "–"))))),
         res.warnings.map((w) => h("div", { class: "notice", style: { marginTop: "8px" } }, w))));
   }
 

@@ -1,5 +1,5 @@
-"""Local store of the desk: trades (every version kept), fixings, saved quotes. SQLite under data/store, which is
-git-ignored like all of data/: real fixings from Yahoo are personal-use data."""
+"""Local store of the desk: trades (every version kept), fixings, saved quotes, settings. SQLite under data/store,
+which is git-ignored like all of data/: real fixings from Yahoo are personal-use data."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import json
 import sqlite3
 import threading
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 
 from ..config import paths
@@ -19,6 +20,7 @@ SCHEMA = (
     """CREATE TABLE IF NOT EXISTS fixings (underlying TEXT, date TEXT, level REAL, source TEXT, recorded_at TEXT,
        PRIMARY KEY (underlying, date))""",
     """CREATE TABLE IF NOT EXISTS quotes (quote_id TEXT PRIMARY KEY, created_at TEXT, sheet TEXT, result TEXT)""",
+    """CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT, recorded_at TEXT)""",
 )
 
 
@@ -35,10 +37,17 @@ class Repository:
             for stmt in SCHEMA:
                 con.execute(stmt)
 
-    def _db(self) -> sqlite3.Connection:
+    @contextmanager
+    def _db(self):
+        """A connection that commits on success and is always closed (sqlite3's own context manager only commits,
+        and an open file cannot be removed on Windows)."""
         con = sqlite3.connect(self.path, timeout=10)
         con.row_factory = sqlite3.Row
-        return con
+        try:
+            with con:
+                yield con
+        finally:
+            con.close()
 
     # --- trades ---
     def save_trade(self, trade: Trade) -> Trade:
@@ -72,6 +81,20 @@ class Repository:
                                "WHERE t.deleted = 0 ORDER BY t.recorded_at").fetchall()
         out = [Trade.from_json(r["payload"]) for r in rows]
         return [t for t in out if (book is None or t.book == book) and (status is None or t.status == status)]
+
+    def versions(self, trade_id: str) -> list[dict]:
+        """Every stored version of a trade, oldest first, with what changed between them."""
+        with self._db() as con:
+            rows = con.execute("SELECT version, payload, deleted, recorded_at FROM trades WHERE trade_id = ? "
+                               "ORDER BY version", (trade_id,)).fetchall()
+        if not rows:
+            raise KeyError(f"no trade {trade_id!r}")
+        out = []
+        for r in rows:
+            t = Trade.from_json(r["payload"])
+            out.append({"version": r["version"], "recorded_at": r["recorded_at"], "deleted": bool(r["deleted"]),
+                        "quantity": t.quantity, "status": t.status, "book": t.book, "counterparty": t.counterparty})
+        return out
 
     def delete_trade(self, trade_id: str) -> None:
         with self._lock, self._db() as con:
@@ -131,3 +154,13 @@ class Repository:
                                "LIMIT ?", (limit,)).fetchall()
         return [{"quote_id": r["quote_id"], "created_at": r["created_at"], "sheet": json.loads(r["sheet"]),
                  "headline": json.loads(r["result"]).get("headline")} for r in rows]
+
+    # --- settings (JSON values) ---
+    def setting(self, key: str, default=None):
+        with self._db() as con:
+            row = con.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        return default if row is None else json.loads(row["value"])
+
+    def put_setting(self, key: str, value) -> None:
+        with self._lock, self._db() as con:
+            con.execute("INSERT OR REPLACE INTO settings VALUES (?, ?, ?)", (key, json.dumps(value), _now()))

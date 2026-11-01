@@ -1,23 +1,36 @@
 // Shell: router, status bar, theme, keyboard shortcuts.
 
 import { api } from "./api.js";
-import { clear, dialog, h } from "./ui.js";
+import { clear, dialog, h, sortable } from "./ui.js";
 import { applyTheme, desk, save, state } from "./state.js";
 
 const VIEWS = {
   overview: () => import("./views/overview.js"),
   pricer: () => import("./views/pricer.js"),
   book: () => import("./views/book.js"),
+  trade: () => import("./views/trade.js"),
   lifecycle: () => import("./views/lifecycle.js"),
   market: () => import("./views/market.js"),
   script: () => import("./views/script.js"),
   settings: () => import("./views/settings.js"),
 };
-const TITLES = { overview: "Overview", pricer: "Pricer", book: "Book", lifecycle: "Lifecycle", market: "Market",
-  script: "Script lab", settings: "Settings" };
+const TITLES = { overview: "Overview", pricer: "Pricer", book: "Book", trade: "Trade", lifecycle: "Lifecycle",
+  market: "Market", script: "Script lab", settings: "Settings" };
+const SECTION = { trade: "book" };  // pages without their own entry in the navigation
 
 const main = document.getElementById("main");
 let cleanup = null;
+
+// Every data table a screen inserts becomes sortable by its headers.
+new MutationObserver((changes) => {
+  for (const change of changes) {
+    for (const node of change.addedNodes) {
+      if (node.nodeType !== 1) continue;
+      if (node.matches("table.data")) sortable(node);
+      node.querySelectorAll("table.data").forEach(sortable);
+    }
+  }
+}).observe(main, { childList: true, subtree: true });
 
 function route() {
   const [name, ...rest] = (location.hash.replace(/^#\/?/, "") || "overview").split("/");
@@ -27,7 +40,7 @@ function route() {
 async function render() {
   const { name, arg } = route();
   document.querySelectorAll(".nav a").forEach((a) => {
-    if (a.dataset.route === name) a.setAttribute("aria-current", "page");
+    if (a.dataset.route === (SECTION[name] || name)) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   });
   document.title = `${TITLES[name]} · optlab desk`;

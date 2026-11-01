@@ -49,30 +49,29 @@ export async function render(page, arg) {
         : h("div", { class: "empty" }, `No fixing of ${underlying} yet.`));
   };
 
+  let basketNames = [];
   const names = () => {
-    const set = new Set(["SPX"]);
+    const set = new Set([desk.context ? desk.context.underlying : "SPX", ...basketNames]);
     for (const t of trades) for (const n of (t.summary && t.summary.underlyings) || []) set.add(n);
     return [...set];
   };
 
   async function addFixings() {
     let real = false;
+    const area = h("textarea", { name: "lines", rows: "8", placeholder: "2026-07-27 104.2\n2026-10-27 98.7" });
+    const file = h("input", { type: "file", accept: ".csv,.txt,text/csv", "aria-label": "CSV file",
+      onchange: async (e) => { const f = e.target.files[0]; if (f) area.value = await f.text(); } });
     const res = await dialog({ title: `Add fixings of ${underlying}`, ok: "Save",
-      body: [field("One fixing per line: date and level", h("textarea", { name: "lines", rows: "8",
-        placeholder: "2026-07-27 104.2\n2026-10-27 98.7" }), { hint: "Separators: space, comma, semicolon or tab; CSV pasted from a sheet works." }),
+      body: [field("One fixing per line: date and level", area,
+        { hint: "Space, comma, semicolon or tab between them; a pasted column pair or a CSV with a header works "
+          + "(its Close column is taken, as in a Yahoo export). Dates as 2026-07-27 or 27/07/2026." }),
+        field("Or a CSV file", file),
         switchControl("These are real index levels", false, (v) => { real = v; }, "fx-real"),
         field("Real spot on the valuation date (for real levels)", h("input", { type: "number", name: "real_spot", step: "any",
           placeholder: "e.g. 5812.4" }), { hint: desk.context ? `Model spot ${desk.context.spot} on ${desk.context.valuation}` : "" })],
       read: (form) => Object.fromEntries(new FormData(form)) });
     if (!res) return;
-    const levels = {};
-    const skipped = [];
-    for (const line of res.lines.split(/\r?\n/)) {
-      if (!line.trim()) continue;
-      const m = line.trim().match(/^(\d{4}-\d{2}-\d{2})[\s,;\t]+([\d.]+)/);
-      if (m) levels[m[1]] = Number(m[2]);
-      else skipped.push(line.trim());
-    }
+    const { levels, skipped } = parseFixings(res.lines);
     if (!Object.keys(levels).length) { toast("No line of the form 2026-07-27 104.2"); return; }
     try {
       const r = await api("/api/fixings", { method: "POST", body: { underlying, levels,
@@ -119,6 +118,31 @@ export async function render(page, arg) {
     } catch (e) { clear(tradeCard, h("div", { class: "card-head" }, h("h2", {}, "Trade"), picker), errorNotice(e)); }
   }
 
+  try { basketNames = Object.keys((await api("/api/basket")).names); } catch (e) { /* the list keeps the others */ }
   await drawTrades();
   await loadFixings();
+}
+
+// "date level" lines, or a CSV with a header (its Close column): {levels: {iso date: level}, skipped: [lines]}.
+export function parseFixings(text) {
+  const lines = String(text || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  let col = 1;
+  const split = (line) => line.split(/[,;\t]|\s+/).map((c) => c.trim()).filter((c) => c !== "");
+  if (lines.length && !/^\d/.test(lines[0])) {  // a header row
+    const head = split(lines.shift().toLowerCase().replace("adj close", "adj_close"));
+    const k = head.indexOf("close");
+    if (k > 0) col = k;
+  }
+  const levels = {};
+  const skipped = [];
+  for (const line of lines) {
+    const cells = split(line);
+    let date = cells[0] || "";
+    const dmy = date.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (dmy) date = `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
+    const level = Number(cells[col]);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(level) && level > 0) levels[date] = level;
+    else skipped.push(line);
+  }
+  return { levels, skipped };
 }

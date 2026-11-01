@@ -47,6 +47,7 @@ export function int(x) {
   return isNum(x) ? Math.round(x).toLocaleString("en-US") : "–";
 }
 const WORDS = { pdi: "PDI", nyse: "NYSE", slv: "SLV", lv: "Local vol", bs: "Black-Scholes", heston: "Heston",
+  spx: "SPX", yahoo: "Yahoo",
   monte_carlo: "Monte Carlo", worst_of: "Worst of" };
 export function pretty(s) {
   return WORDS[s] || String(s ?? "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
@@ -127,4 +128,46 @@ export function progress(text) {
 
 export function errorNotice(err) {
   return h("div", { class: "notice err", role: "alert" }, String(err && err.message ? err.message : err));
+}
+
+// --- sortable tables: a click on a header sorts the rows below it (dates, numbers, then text); again reverses ---
+const DATE = /^(\d{1,2} [A-Za-z]{3,4}\.? \d{4}|\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2})?)$/;
+const NUMBER = /^[+−-]?(\d[\d,]*)?\.?\d+(e[+-]?\d+)?/i;
+
+function sortKey(cell) {
+  const text = (cell ? cell.textContent : "").trim();
+  const empty = !text || text === "–";
+  const n = text.match(NUMBER);
+  return { text, empty, date: DATE.test(text) ? Date.parse(text) : null,
+    num: n ? parseFloat(n[0].replace(/,/g, "").replace("−", "-")) : null };
+}
+
+export function sortable(table) {
+  const rows = [...table.rows];
+  if (table.dataset.sortable || table.classList.contains("nosort") || rows.length < 3) return;
+  const head = rows[0];
+  if (!head.cells.length || [...head.cells].some((c) => c.tagName !== "TH")) return;
+  table.dataset.sortable = "1";
+  [...head.cells].forEach((th, col) => {
+    if (!th.textContent.trim()) return;
+    const btn = h("button", { type: "button", class: "sort", title: "Sort" }, [...th.childNodes]);
+    th.replaceChildren(btn);
+    btn.addEventListener("click", () => {
+      const dir = th.getAttribute("aria-sort") === "ascending" ? -1 : 1;
+      head.querySelectorAll("th").forEach((x) => x.removeAttribute("aria-sort"));
+      th.setAttribute("aria-sort", dir > 0 ? "ascending" : "descending");
+      const body = [...table.rows].slice(1);
+      const keys = body.map((r) => sortKey(r.cells[col]));
+      const full = keys.filter((k) => !k.empty);
+      const kind = full.every((k) => k.date !== null) ? "date" : full.every((k) => k.num !== null) ? "num" : "text";
+      const cmp = (a, b) => {
+        if (a.empty || b.empty) return a.empty - b.empty;  // empty cells last, whatever the direction
+        if (kind === "text") return dir * a.text.localeCompare(b.text, undefined, { numeric: true });
+        return dir * (a[kind] - b[kind]);
+      };
+      const order = body.map((_, i) => i).sort((i, j) => cmp(keys[i], keys[j]) || i - j);
+      const parent = body[0].parentNode;
+      order.forEach((i) => parent.appendChild(body[i]));
+    });
+  });
 }

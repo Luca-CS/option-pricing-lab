@@ -105,21 +105,29 @@ def book_report(desk) -> str:
     last = getattr(desk, "last_book", None)
     if last is None:
         return _page("Book", "<h1>Book</h1><p>Price the book in the desk first: the report shows the last run.</p>")
-    rows = "".join(f"<tr><td>{_e(p['name'])}</td><td>{_word(p['class'])}</td><td>{p['quantity']:g}</td>"
-                   f"<td>{p['unit_price']:.3f} ± {p['unit_stderr']:.3f}</td><td>{p['value']:.2f}</td>"
-                   f"<td>{p['stderr']:.2f}</td></tr>" for p in last["positions"])
+    rows = "".join(f"<tr><td>{_e(p['name'])}</td><td>{_e(p.get('group', ''))}</td><td>{_word(p['class'])}</td>"
+                   f"<td>{p['quantity']:g}</td><td>{p['unit_price']:.3f} ± {p['unit_stderr']:.3f}</td>"
+                   f"<td>{p['value']:.2f}</td><td>{p['stderr']:.2f}</td></tr>" for p in last["positions"])
     g = last.get("greeks") or {}
     risk = ""
-    if g.get("delta"):
-        risk = (f"<p>Delta {g['delta']['total']:+.3f} ± {g['delta']['total_se']:.3f} ({_e(g['units']['delta'])})"
-                + (f", vega {g['vega']['total']:+.3f} ± {g['vega']['total_se']:.3f} ({_e(g['units']['vega'])})"
-                   if g.get("vega") else f". {_e(g.get('note') or '')}") + "</p>")
+    if g.get("by_name"):
+        def cell(x, se):
+            return "–" if x is None else f"{x:+.3f} ± {se:.3f}"
+        lines = "".join(f"<tr><td>{_e(n)}</td><td>{cell(r['delta'], r['delta_se'])}</td>"
+                        f"<td>{cell(r['vega'], r['vega_se'])}</td></tr>" for n, r in g["by_name"].items())
+        risk = (f"<table><tr><th>Underlying</th><th>Delta ({_e(g['units']['delta'])})</th>"
+                f"<th>Vega ({_e(g['units']['vega'])})</th></tr>{lines}</table>"
+                + (f"<p class='muted'>{_e(g['note'])}</p>" if g.get("note") else ""))
+    groups = "".join(f"<li>{_e(x['label'])}: {x['positions']} position{'s' if x['positions'] > 1 else ''}, "
+                     f"{_word(x['method'])} ({_word(x['model'])}), {x['value']:.2f} ± {x['stderr']:.2f}</li>"
+                     for x in last.get("groups", []))
     n = len(last["positions"])
-    body = (f"<h1>Book</h1><p class='muted'>{n} position{'s' if n > 1 else ''} · {_word(last['method'])} "
-            f"({_word(last['model'])}), {last['n_paths']:,} paths · market {_e(last.get('snapshot_id'))}</p>"
+    body = (f"<h1>Book</h1><p class='muted'>{n} position{'s' if n > 1 else ''} · {last['n_paths']:,} paths · "
+            f"market {_e(last.get('snapshot_id'))}</p>"
             f"<div class='headline'>{last['value']:.2f}<span class='muted' style='font-size:18px'> ± "
-            f"{last['stderr']:.2f}</span></div><p class='muted'>Book value in currency; the standard error accounts "
-            f"for the correlation between positions (independent legs would give {last['independent_stderr']:.2f}).</p>"
-            f"{risk}<table><tr><th>Position</th><th>Class</th><th>Quantity</th><th>Unit price %</th><th>Value</th>"
-            f"<th>SE</th></tr>{rows}</table>")
+            f"{last['stderr']:.2f}</span></div><p class='muted'>Book value in currency. Within a group the positions "
+            f"share one simulation, so the error accounts for their correlation (independent legs would give "
+            f"{last['independent_stderr']:.2f}); groups are independent.</p><ul>{groups}</ul>"
+            f"{risk}<table><tr><th>Position</th><th>Group</th><th>Class</th><th>Quantity</th><th>Unit price %</th>"
+            f"<th>Value</th><th>SE</th></tr>{rows}</table>")
     return _page("Book", body)

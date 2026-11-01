@@ -133,9 +133,16 @@ both themes). Found and fixed on the way: about 250 ms per API call in the brows
 in two writes waited for a delayed ACK; now one buffered write, no Nagle, keep-alive), a dialog whose Escape could
 confirm after an earlier OK, and a form that hid the field in error.
 
-Not done, by order of use:
+Second round (the "tout" scope): worst-ofs everywhere (other names and correlations as settings, quotes, the
+book in two independent groups, risk per underlying), a page per trade (sheet, value at today's market, events,
+versions, original quote), market snapshots registered in the local store with a switch, sortable tables, CSV
+import of fixings, and a public link through an SSH tunnel (`--tunnel`, localhost.run). Checked in the browser
+again; the tunnel itself was not opened during development (it exposes the PC through a third party): only the
+reading of its address is tested.
 
-- A detail drawer per trade in the Book (the Lifecycle screen shows the events; the trade's quote is not linked).
-- Worst-of trades in the book valuation (they need a basket context: correlation and the other names' models).
-- Sortable tables, a CSV file picker for fixings (pasting a column works), a table alternative to the smile charts.
-- A list of market snapshots: the desk runs on one calibration file (`--calibration`).
+Limits that remain, from the library rather than the page:
+
+- Names other than SPX have no smile (flat Black-Scholes) and the correlation is an input; SLV is not extended to
+  baskets, so worst-ofs are priced with local vol per name.
+- A market snapshot is a calibration: a new market needs `scripts/run_calibration.py`, the desk does not
+  recalibrate.

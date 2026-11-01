@@ -13,6 +13,7 @@ import pytest
 from optlab.app.api import ApiError, Desk
 from optlab.app.report import book_report, quote_report
 from optlab.app.server import serve, serve_in_thread
+from optlab.app.tunnel import public_url
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -135,11 +136,76 @@ def test_seasoned_trade_events_book_and_report(desk):
 
     book = wait(desk, desk.price_book({"options": {"precision": "quick", "greeks": True}})["job"])
     names = [p["name"] for p in book["positions"]]
-    assert tid in names and book["stderr"] > 0 and book["greeks"]["delta"]["total"] is not None
+    assert tid in names and book["stderr"] > 0 and book["greeks"]["by_name"]["SPX"]["delta"] > 0
     assert book["independent_stderr"] > 0
     assert desk.last_book is not None
     html = book_report(desk)
     assert tid in html and "<table" in html
+
+
+def worst_of(desk, names=("SPX", "SX5E")):
+    body = sheet_of(desk, "phoenix")
+    body["values"]["general"].update(basket="worst_of", underlyings=list(names))
+    return body
+
+
+def test_basket_settings_are_validated(desk):
+    with pytest.raises(ApiError, match="volatility"):
+        desk.put_basket({"names": {"SX5E": {"vol": 5.0}}})
+    with pytest.raises(ApiError, match="valid matrix"):  # SPX close to both, the two others opposite: not a matrix
+        desk.put_basket({"names": {"AAA": {}, "BBB": {}},
+                         "corr": {"SPX|AAA": 0.9, "SPX|BBB": 0.9, "AAA|BBB": -0.9}})
+    s = desk.put_basket({"names": {"sx5e": {"vol": 0.18, "q": 0.03}}, "corr": {"SPX|SX5E": 0.75}})
+    assert s["names"]["SX5E"]["vol"] == 0.18 and s["corr"] == {"SPX|SX5E": 0.75}
+
+
+def test_worst_of_quote_book_and_trade_page(desk):
+    desk.put_basket({"names": {"SX5E": {"vol": 0.18, "q": 0.03}}, "corr": {"SPX|SX5E": 0.75}})
+    q = wait(desk, desk.quote({"sheet": worst_of(desk), "options": {"precision": "quick", "greeks": True}})["job"])
+    single = wait(desk, desk.quote({"sheet": sheet_of(desk, "phoenix"), "options": {"precision": "quick"}})["job"])
+    assert q["basket"]["names"]["SX5E"]["vol"] == 0.18 and q["basket"]["corr"] == {"SPX|SX5E": 0.75}
+    assert q["policy"]["model"] == "lv" and set(q["greeks"]["per_name"]) == {"SPX", "SX5E"}
+    assert q["headline"]["value"] > single["headline"]["value"] + 4 * q["headline"]["se"]  # worst-of pays more
+    t = desk.create_trade({"sheet": worst_of(desk), "coupon_rate": q["coupon_rate"], "quantity": 2.0,
+                           "tags": [f"quote:{q['quote_id']}"]})
+    detail = desk.trade(t["trade_id"])
+    assert detail["quote_id"] == q["quote_id"] and detail["versions"][0]["quantity"] == 2.0
+    assert detail["form"]["sections"] and detail["trade"]["summary"]["underlyings"] == ["SPX", "SX5E"]
+    v = wait(desk, desk.value_trade(t["trade_id"], {"options": {"precision": "quick"}})["job"])
+    # the trade's coupon was solved on the same paths for a note price of 98: the value says so
+    assert v["unit_price"] == pytest.approx(98.0, abs=1e-6) and v["value"] == pytest.approx(2.0 * 100 * 0.98)
+    book = wait(desk, desk.price_book({"options": {"precision": "quick", "greeks": True}})["job"])
+    groups = {g["label"]: g for g in book["groups"]}
+    assert "worst-of" in groups and groups["worst-of"]["model"] == "lv"
+    assert book["value"] == pytest.approx(sum(g["value"] for g in book["groups"]))
+    assert book["stderr"] == pytest.approx(sum(g["stderr"] ** 2 for g in book["groups"]) ** 0.5)
+    assert {"SPX", "SX5E"} <= set(book["greeks"]["by_name"])
+    assert len(book["greeks"]["positions"]) == len(book["positions"])
+    assert "worst-of" in book_report(desk)
+    assert desk.trade_events(t["trade_id"])["underlyings"] == ["SPX", "SX5E"]
+
+
+def test_snapshots_switch_the_market(desk):
+    snaps = desk.snapshots()["snapshots"]
+    active = next(s for s in snaps if s["active"])
+    other = next(s for s in snaps if s["source"] == "simulated")
+    assert active["file"] == "spx_calibration.json"
+    try:
+        ctx = desk.use_snapshot({"snapshot_id": other["snapshot_id"]})
+        assert ctx["snapshot_id"] == other["snapshot_id"] and desk.health()["snapshot_id"] == other["snapshot_id"]
+        assert desk.model_risk()["exotics"]  # the simulated calibration carries its own table
+        assert desk.last_book is None
+    finally:
+        desk.use_snapshot({"snapshot_id": active["snapshot_id"]})
+    with pytest.raises(ApiError) as exc:
+        desk.use_snapshot({"snapshot_id": "nope"})
+    assert exc.value.status == 404
+
+
+def test_tunnel_address_is_read_from_the_relay_output():
+    line = "abc123.lhr.life tunneled with tls termination, https://abc123.lhr.life"
+    assert public_url(line) == "https://abc123.lhr.life"
+    assert public_url("** your connection id is 1f2e, please mention it if you send me a message **") is None
 
 
 def test_script_lab(desk):

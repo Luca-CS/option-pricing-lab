@@ -80,10 +80,15 @@ export async function render(page, arg) {
         h("div", { class: "fields" }, fields));
     });
     const top = resp.error && !resp.error.field ? errorNotice(resp.error.message) : null;
+    const general = (resp.sheet && resp.sheet.general) || draft.values.general || {};
+    const worstOf = general.basket === "worst_of" ? h("div", { class: "notice info" },
+      `Only ${desk.context ? desk.context.underlying : "SPX"} is calibrated: the other names are flat Black-Scholes `
+      + "markets with the volatility, dividend and correlations set in ", h("a", { href: "#/market" }, "Market › Other underlyings"),
+      ". The policy prices worst-ofs with local vol per name.") : null;
     clear(formCard,
       h("div", { class: "card-head" }, h("h2", {}, "Term sheet"),
         h("span", { class: "muted" }, describeSheet(resp.sheet || { ...draft.values }))),
-      top, sections);
+      top, sections, worstOf);
     if (focused) { const el = document.getElementById(focused); if (el) el.focus(); }
     const qb = document.getElementById("quote-btn");
     if (qb && !running) {
@@ -256,10 +261,11 @@ export async function render(page, arg) {
           kpi("Vega", g.vega != null ? `${signed(g.vega, 4)} %` : "–", g.vega != null ? `± ${num(g.vega_se, 4)} · per vol point` : vegaNote(g.note)),
           kpi("Smoothing", g.smoothing ? `${num(100 * g.smoothing, 1)} %` : "none",
             g.smoothing ? `price bias ${signed(g.smoothing_bias, 4)} %` : "exact digitals")),
-        g.per_name ? h("table", { class: "data", style: { marginTop: "10px" } },
+        g.per_name ? h("div", { class: "table-wrap", style: { marginTop: "10px" } }, h("table", { class: "data" },
           h("tr", {}, h("th", {}, "Name"), h("th", { class: "num" }, "Delta %"), h("th", { class: "num" }, "Vega %")),
           Object.entries(g.per_name).map(([n, v]) => h("tr", {}, h("td", {}, n), h("td", { class: "num" }, pm(v.delta, v.delta_se, 4)),
-            h("td", { class: "num" }, pm(v.vega, v.vega_se, 4))))) : null) : null,
+            h("td", { class: "num" }, pm(v.vega, v.vega_se, 4)))))) : null) : null,
+      q.basket ? basketCard(q.basket) : null,
       q.mix_band ? h("div", { class: "card" }, h("h2", {}, "SLV mixing fraction"),
         h("p", { class: "muted" }, "The share of stochastic vol of vol is not calibrated; the vanillas stay on the surface."),
         h("table", { class: "data" },
@@ -297,8 +303,8 @@ export async function render(page, arg) {
     try {
       const t = await api("/api/trades", { method: "POST", body: { sheet: q.sheet ? { type: q.sheet.type, values: strip(q.sheet) } : null,
         quantity: Number(res.quantity), trade_date: res.trade_date, strike_date: res.strike_date || null,
-        counterparty: res.counterparty, coupon_rate: q.coupon_rate } });
-      toast(`Booked ${t.trade_id}`, { action: "Open the book", onAction: () => { location.hash = "#/book"; } });
+        counterparty: res.counterparty, coupon_rate: q.coupon_rate, tags: q.quote_id ? [`quote:${q.quote_id}`] : [] } });
+      toast(`Booked ${t.trade_id}`, { action: "Open the trade", onAction: () => { location.hash = `#/trade/${t.trade_id}`; } });
     } catch (e) { toast(e.message); }
   }
 
@@ -319,6 +325,22 @@ export async function render(page, arg) {
         `${last.product} · ${pm(last.headline.value, last.headline.se)} ${last.headline.unit}`)) : null));
   }
   return () => document.removeEventListener("keydown", onKey);
+}
+
+// What a worst-of was priced with: the names that are not calibrated, and the correlations.
+export function basketCard(b) {
+  const names = Object.entries(b.names || {});
+  return h("div", { class: "card" },
+    h("div", { class: "card-head" }, h("h2", {}, "Other underlyings"), h("a", { href: "#/market" }, "Change")),
+    h("p", { class: "muted" }, `${b.calibrated} on its calibrated surface; the others on flat markets rescaled to 100.`),
+    h("div", { class: "table-wrap" }, h("table", { class: "data" },
+      h("tr", {}, h("th", {}, "Name"), h("th", { class: "num" }, "Volatility"), h("th", { class: "num" }, "Dividend"),
+        h("th", { class: "num" }, "Rate"), h("th", {}, "")),
+      names.map(([n, p]) => h("tr", {}, h("td", {}, n), h("td", { class: "num" }, `${num(100 * p.vol, 1)} %`),
+        h("td", { class: "num" }, `${num(100 * p.q, 2)} %`), h("td", { class: "num" }, `${num(100 * p.r, 2)} %`),
+        h("td", { class: "faint" }, p.set ? "" : "default"))))),
+    h("p", { class: "muted", style: { marginTop: "8px" } }, "Correlations: ",
+      Object.entries(b.corr || {}).map(([k, v]) => `${k.replace("|", "–")} ${num(v, 2)}`).join(" · ")));
 }
 
 function kpi(label, value, sub) {

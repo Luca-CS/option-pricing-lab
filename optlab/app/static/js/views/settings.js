@@ -25,10 +25,22 @@ export async function render(page) {
         h("h2", {}, "Server"),
         health ? h("table", { class: "data" },
           [["Market snapshot", health.snapshot_id], ["Valuation date", health.valuation],
-            ["Monte Carlo workers", health.workers || "1 (sequential)"], ["Store", health.store], ["Started", health.started]]
+            ["Monte Carlo workers", health.workers || "1 (sequential)"], ["Store", health.store], ["Started", health.started],
+            ["Public address", health.public_url || "none (start with --tunnel)"]]
             .map(([k, v]) => h("tr", {}, h("td", { class: "muted" }, k), h("td", { style: { overflowWrap: "anywhere" } }, String(v)))))
           : h("div", { class: "notice err" }, "The server does not answer."),
-        h("p", { class: "muted" }, "Start options: python -m optlab.app --workers 6 (process pool), --host 0.0.0.0 to share "
-          + "on the network (a token is generated), --store and --calibration to change the files."))));
+        h("p", { class: "muted" }, "Start options: --workers 6 (process pool), --store and --calibration to change the "
+          + "files.")),
+      h("div", { class: "card stack" },
+        h("h2", {}, "Sharing"),
+        h("p", {}, "The engine stays on this PC; the people you share with use their browser."),
+        h("table", { class: "data nosort" },
+          h("tr", {}, h("th", {}, "How"), h("th", {}, "Start with"), h("th", {}, "Notes")),
+          [["This PC only", "python -m optlab.app", "the default: listens on 127.0.0.1, no token"],
+            ["Your network", "python -m optlab.app --host 0.0.0.0", "a token is generated; share the printed address"],
+            ["A public link", "python -m optlab.app --tunnel", "https through localhost.run (ssh, no install); a third "
+              + "party relays the traffic, so the token is always on; the address changes at each start"],
+            ["A fixed result", "Open the report (Pricer or Book)", "one HTML file that opens anywhere without the desk"]]
+            .map(([a, c, n]) => h("tr", {}, h("td", {}, a), h("td", {}, h("code", {}, c)), h("td", { class: "muted" }, n)))))));
   draw();
 }
