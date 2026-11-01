@@ -17,7 +17,8 @@ python -m venv .venv
 - Desk (web UI): `.venv/Scripts/python -m optlab.app [--open] [--workers 6] [--host 0.0.0.0]` serves
   `http://localhost:8765` (a token is generated beyond localhost; `--tunnel` gives a public link through
   localhost.run); `--store` and `--calibration` change the SQLite file and the calibration. `tests/test_app_api.py`
-  (about 40 s) covers the API and the HTTP server.
+  (about 40 s) covers the API and the HTTP server; `tests/test_app_js.py` runs the page's table sorting under
+  `node` (skipped without it, like `test_widget_js.py`).
 - `tests/test_widget_js.py` runs `docs/lab.js` under `node` and compares it to the Python library; it is
   skipped when `node` is not on PATH.
 - Calibration pipeline: `scripts/run_calibration.py --source simulated|spx` writes `results/*.json`;
@@ -92,9 +93,11 @@ python -m venv .venv
   response and no Nagle, or Windows browsers wait ~250 ms per call), `jobs.py` runs quotes and book valuations in a
   thread pool that the page polls, `repository.py` keeps trades (versioned), fixings and quotes in SQLite under
   `data/store` with the basket settings (market snapshots go to `data/store/market`), `report.py` writes standalone
-  HTML reports, `tunnel.py` opens the `--tunnel` SSH link. Worst-ofs use a `BasketContext` built from the stored
-  settings, and the book is valued in two independent groups (single names, worst-ofs). Each job captures the
-  market context when submitted, so a snapshot switch never changes a run in progress. The page is plain ES modules
+  HTML reports, `tunnel.py` opens the `--tunnel` SSH link, `fixings.py` parses pasted or CSV fixings (the page sends
+  the raw text), `netcheck.py` reads what blocks LAN access on Windows (firewall, Public profile; read-only).
+  Worst-ofs use a `BasketContext` built from the stored settings, and the book is valued in two independent groups
+  (single names, worst-ofs). Each job captures the market context when submitted, so a snapshot switch never changes
+  a run in progress. The page is plain ES modules
   without a build: `js/main.js` routes `#/screen/arg` to `js/views/*.js`, each exporting `render(page, arg)`, and
   makes every `table.data` sortable.
 - **`space/app.py`** is a local Gradio front-end (needs `pip install gradio`), not deployed.
