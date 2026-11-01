@@ -128,7 +128,10 @@ def _pricer(product: CompiledProduct, ctx: PricingContext, fmt, decision: Pricin
             return [replication_result(program, timeline, ctx.surface, ctx.market, T_obs, fmt, p, history=history)
                     for p in param_sets]
         T = max(product.horizon, 1 / 365)
-        model = ctx.model(model_name, T, names) if isinstance(ctx, BasketContext) else             ctx.model(model_name, T, fast=fast)
+        if isinstance(ctx, BasketContext):
+            model = ctx.model(model_name, T, names)
+        else:  # `fast` only when asked, so that contexts with their own model(name, T) keep working
+            model = ctx.model(model_name, T, fast=True) if fast else ctx.model(model_name, T)
         return price_many(program, model, ctx.market, param_sets, fmt, n_paths or decision.n_paths, decision.seed,
                           decision.batch, valuation=valuation, fixings=fixings, calendar=product.calendar,
                           workers=workers, control_forwards=control_forwards)
