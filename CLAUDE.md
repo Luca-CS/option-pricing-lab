@@ -14,6 +14,9 @@ python -m venv .venv
 
 - Structured products: `.venv/Scripts/python -m pytest -q tests/test_structured_*.py` (about a minute);
   `scripts/structured_examples.py [--quick]` prints the autocall model-risk table, timings and example quotes.
+- Desk (web UI): `.venv/Scripts/python -m optlab.app [--open] [--workers 6] [--host 0.0.0.0]` serves
+  `http://localhost:8765` (a token is generated beyond localhost); `--store` and `--calibration` change the SQLite file
+  and the calibration. `tests/test_app_api.py` (about 20 s) covers the API and the HTTP server.
 - `tests/test_widget_js.py` runs `docs/lab.js` under `node` and compares it to the Python library; it is
   skipped when `node` is not on PATH.
 - Calibration pipeline: `scripts/run_calibration.py --source simulated|spx` writes `results/*.json`;
@@ -82,6 +85,13 @@ python -m venv .venv
   `qmc.py` (opt-in, validated within the Monte Carlo error), `units.py`; `optlab/config.py`, `optlab/log.py` and
   `optlab/marketdata/` (snapshots and their local store under `data/store`). A script with a NaN condition or a
   non-finite payment on a live path raises `ScriptError` with its line.
+- **`optlab/app/`** is the local web desk (design and status in `optlab/app/DESIGN.md`). `api.py` holds a `Desk`
+  whose methods are the API routes (JSON in and out, levels as fractions; the page shows percent), `server.py` maps
+  routes to them on a stdlib `ThreadingHTTPServer` that also serves `static/` (same origin; one buffered write per
+  response and no Nagle, or Windows browsers wait ~250 ms per call), `jobs.py` runs quotes and book valuations in a
+  thread pool that the page polls, `repository.py` keeps trades (versioned), fixings and quotes in SQLite under
+  `data/store`, `report.py` writes standalone HTML reports. The page is plain ES modules without a build:
+  `js/main.js` routes `#/screen/arg` to `js/views/*.js`, each exporting `render(page, arg)`.
 - **`space/app.py`** is a local Gradio front-end (needs `pip install gradio`), not deployed.
 
 ## Conventions

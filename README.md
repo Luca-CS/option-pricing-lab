@@ -144,6 +144,32 @@ Beyond single products:
 `python scripts/structured_examples.py` prints the model-risk table, timings, example quotes, worst-of coupons
 against the correlation and a book (about five minutes at 200,000 paths).
 
+## Desk
+
+`python -m optlab.app --open` starts a local web desk over the library at `http://localhost:8765`, with nothing to
+install beyond the requirements: a standard-library HTTP server, SQLite, and plain JavaScript modules with no build
+step and no CDN.
+
+- **Pricer**: presets or a blank autocall or bullet, a term-sheet form generated from the schema (levels and rates
+  typed in percent, errors under the field), a quote run as a background job with progress and cancel. The result
+  shows the solved coupon or the price with its standard error, the model the policy chose and why, the gap to the
+  control model in standard errors, the probability of ending at each date, the expected flows, and on request the
+  delta and vega (sticky moneyness, sticky strike or the model's own; SLV vega by recalibrating the leverage) and
+  the SLV mix band. Quick precision (20,000 paths) prices a 2-year Phoenix under SLV in about 2 s, Standard
+  (100,000) in 6 s; SLV vega adds about 15 s.
+- **Book**: trades kept in SQLite with their versions, edit, delete with undo, and the whole book priced on one
+  simulation with its delta and vega.
+- **Lifecycle**: fixings pasted as `date level` lines, real index levels converted with the real spot; per trade,
+  what happened (coupons paid or missed, call, knock-in) and the next observations.
+- **Market**: the SVI smiles, the ATM term structure, forwards and discount factors, the model-risk table and the
+  calibration fit. **Script lab**: any payoff of the script language, checked as it is typed, priced under any model.
+
+Sharing while the engine stays on this PC: `--host 0.0.0.0` serves the LAN and prints an address with a generated
+token (kept in a cookie after the first visit); a tunnel to the port (Tailscale, Cloudflare Tunnel) does the same
+outside the LAN. Quotes and the book also export as standalone HTML reports that open anywhere without the server.
+The page is served by the desk itself, not by GitHub Pages, because browsers block a public https page from calling
+a server on a private address. Trades, fixings and quotes live in `data/store/desk.sqlite`, which git ignores.
+
 ## Method
 
 ### Products and pricers
@@ -249,6 +275,7 @@ runs locally: `pip install gradio`, then `python space/app.py`.
 | `optlab/gpu.py` | Python bridge to the CUDA engine, NumPy fallback |
 | `optlab/data.py` | SPX chain download and cleaning |
 | `optlab/structured/` | structured products: script language, term-sheet builder, policy, pricers |
+| `optlab/app/` | local web desk: HTTP server, JSON API, jobs, SQLite store, reports, the page in `static/` |
 | `optlab/pipeline.py`, `scripts/` | calibration runs, report and charts |
 | `cuda/` | C++/CUDA Monte Carlo engine, benchmarks and optimisation study |
 | `docs/` | demo page (GitHub Pages) |
