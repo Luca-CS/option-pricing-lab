@@ -28,17 +28,18 @@ class NameMarkets:
         self.correlations: dict = {}  # local correlations calibrated per basket and date: BasketContext.correlation_cache
         self._lock = threading.Lock()
 
-    def context(self, name: str, day) -> tuple:
-        """(PricingContext, MarketSnapshot) of a name at a date. KeyError when the lake cannot build it."""
+    def context(self, name: str, day, payment: str | None = None) -> tuple:
+        """(PricingContext, MarketSnapshot) of a name at a date, on its quanto market when `payment` is another currency.
+        KeyError when the lake cannot build it."""
         from ..structured.context import PricingContext
 
         day = pd.Timestamp(day).date()
-        key = (name, day)
+        key = (name, day, payment)
         with self._lock:
             if key in self._cache:
                 self._cache.move_to_end(key)
                 return self._cache[key]
-        snap = self._snapshot(name, day)
+        snap = self._snapshot(name, day, payment)
         got = PricingContext.from_snapshot(snap), snap
         with self._lock:
             got = self._cache.setdefault(key, got)  # two jobs may build it at once: they share the first one
@@ -46,10 +47,10 @@ class NameMarkets:
                 self._cache.popitem(last=False)
         return got
 
-    def _snapshot(self, name: str, day: dt.date) -> MarketSnapshot:
+    def _snapshot(self, name: str, day: dt.date, payment: str | None = None) -> MarketSnapshot:
         try:
-            return market_at(self.lake, name, day, layer=self.layer)
+            return market_at(self.lake, name, day, layer=self.layer, payment=payment)
         except KeyError:
             if self.layer is None:
                 raise
-            return market_at(self.lake, name, day)
+            return market_at(self.lake, name, day, payment=payment)

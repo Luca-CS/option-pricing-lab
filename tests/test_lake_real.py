@@ -10,7 +10,7 @@ import pytest
 from optlab.config import paths
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.pit import basket_at, context_at, market_at, real_close, truncated_copy
-from optlab.marketdata.quality import check_splits
+from optlab.marketdata.quality import check_splits, open_issues
 from optlab.marketdata.quotes import clean_day, quote_days
 from optlab.marketdata.universe import enabled_names
 from optlab.structured import CALENDARS, preset, quote
@@ -31,6 +31,37 @@ def test_splits_are_continuous_in_the_real_closes():
     assert {"AAPL", "AMZN", "GOOGL"} <= set(actions["instrument"])
     prices = LAKE.read("prices_eod", columns="instrument, obs_date, close")
     assert check_splits(prices, actions) == []
+
+
+def test_a_worst_of_spx_sx5e_on_the_real_lake_is_quanto_with_its_labels():
+    if not LAKE.has("fx_vols"):
+        pytest.skip("no FX in this lake: scripts/lake_update.py --only fx, then scripts/lake_derive.py --only fx")
+    day = dt.date(2022, 7, 1)
+    ctx, snaps, meta = basket_at(LAKE, ["SPX", "SX5E"], day)
+    link = meta["quanto"]["SX5E"]
+    assert ctx.payment_currency == "USD" and set(meta["quanto"]) == {"SX5E"} and link["pair"] == "EURUSD"
+    assert link["vol_origin"] == "derived" and link["vol_method"] == "realized" and link["rho_origin"] == "derived"
+    own = market_at(LAKE, "SX5E", day)
+    own_forward = float(np.interp(1.0, own.market["pillars"], own.market["forwards"]))
+    assert np.sign(float(ctx.markets["SX5E"].F(1.0)) - own_forward) == -np.sign(link["rho"])
+    assert float(ctx.markets["SX5E"].D(1.0)) == pytest.approx(float(ctx.markets["SPX"].D(1.0)), rel=1e-4)
+
+
+@pytest.mark.parametrize("pair, base, quote", [("EURUSD", "EUR", "USD"), ("USDJPY", "USD", "JPY"), ("GBPUSD", "GBP", "USD")])
+def test_every_pair_has_forwards_at_covered_parity_on_the_real_lake(pair, base, quote):
+    from optlab.marketdata.derive.carry import cip_forward
+    from optlab.marketdata.derive.fx import spot_series
+    from optlab.marketdata.quotes import discount_function
+    if not LAKE.has("fx_forwards"):
+        pytest.skip("no FX in this lake")
+    for day in (dt.date(2019, 7, 1), dt.date(2022, 7, 1)):
+        rows = LAKE.read("fx_forwards", where=f"pair = '{pair}' AND obs_date = DATE '{day}'", order="tenor")
+        if rows.empty:
+            pytest.skip(f"no {pair} forward: scripts/lake_update.py --only mof boj boe, then scripts/lake_derive.py --only curves fx")
+        T = rows["tenor"].to_numpy()
+        expected = cip_forward(float(spot_series(LAKE, pair, day).iloc[-1]), discount_function(LAKE, quote, day)(T), discount_function(LAKE, base, day)(T))
+        np.testing.assert_allclose(rows["forward"], expected, rtol=1e-12)
+    assert open_issues(LAKE, "check_name = 'no_curve'").empty
 
 
 def test_every_nyse_trading_day_has_a_close_and_no_other_day_does():
@@ -170,6 +201,32 @@ def test_the_desk_prices_a_share_and_a_worst_of_on_their_real_surfaces(tmp_path)
         bctx, shown = desk._basket_ctx(("SPX", "NDX", "AAPL"))
         assert bctx.has_surfaces and {r["origin"] for r in shown["names"].values()} == {"reconstructed"}
         assert all(v == "lake" for v in shown["corr_source"].values()) and 0.3 < shown["corr"]["NDX|SPX"] < 1
+    finally:
+        desk.jobs.shutdown()
+
+
+def test_the_desk_puts_a_name_paid_in_another_currency_on_its_quanto_market(tmp_path):
+    if not LAKE.has("fx_vols"):
+        pytest.skip("no FX in this lake")
+    from optlab.app.api import Desk
+
+    desk = Desk(store=tmp_path / "desk.sqlite")
+    try:
+        day = dt.date(2022, 7, 1)
+        desk.use_snapshot({"snapshot_id": desk.market_store.put(market_at(LAKE, "SPX", day))})
+        sheet = preset("phoenix", **{"general.basket": "worst_of", "general.underlyings": ("SPX", "SX5E")})
+        bctx, _ = desk._context_for(sheet, desk.ctx)
+        direct, _, _ = basket_at(LAKE, ["SPX", "SX5E"], day, layer=desk.names.layer)
+        native = desk.names.context("SX5E", day)[0].market
+        T = np.array([0.5, 1.0, 2.0])
+        assert bctx.payment_currency == "USD"
+        assert np.allclose(bctx.markets["SX5E"].F(T), direct.markets["SX5E"].F(T), rtol=0, atol=1e-12)
+        assert not np.allclose(bctx.markets["SX5E"].F(T), native.F(T))  # the quanto drift moved the forward
+        q = quote(sheet, bctx, model="lv", control=None, n_paths=4000, batch=4000)
+        assert not any("not adjusted" in w for w in q.warnings)
+        single = preset("phoenix", **{"general.underlying": "SX5E", "general.payment_currency": "USD"})
+        sctx, _ = desk._context_for(single, desk.ctx)
+        assert sctx.underlying == "SX5E" and sctx.payment_currency == "USD"
     finally:
         desk.jobs.shutdown()
 

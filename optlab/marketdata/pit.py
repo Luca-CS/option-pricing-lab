@@ -18,6 +18,7 @@ import pandas as pd
 from ..market import Market
 from .derive.carry import DividendStream, dividend_stream
 from .derive.correl import correlation_at
+from .derive.fx import quanto_link_at
 from .derive.surfaces import surface_at
 from .lake import TABLES, Lake, sql_str
 from .quotes import discount_function
@@ -101,13 +102,22 @@ def fitted_heston(surface, market: Market, x0: dict | None = None) -> dict:
 
 
 def market_at(lake: Lake, name: str, day, as_of=None, heston: str = "prior", leverage: str = "flat", T_max: float = 2.0,
-              n_particles: int = 100_000, seed: int = 2026, mix: float = MIX, layer: str | None = None) -> MarketSnapshot:
+              n_particles: int = 100_000, seed: int = 2026, mix: float = MIX, layer: str | None = None, payment: str | None = None,
+              fx_window: int = 120) -> MarketSnapshot:
     """The market of a name at a date. `heston`: prior (dynamics fixed, levels from the surface) or fit. `leverage`: flat
     (for local vol and replication), or calibrate (particles, up to T_max, several seconds). `layer` forces a surface layer
-    instead of the best one of the day."""
+    instead of the best one of the day. `payment` other than the name's currency gives the quanto market: forward adjusted, discount
+    curve of that currency, correlation and FX volatility known at `day` with their origins in the provenance."""
     day = pd.Timestamp(day).date()
     market, spot, prov = market_curves(lake, name, day, as_of)
     got = surface_at(lake, name, day, as_of, layer=layer)
+    pay = payment or instrument(name).currency
+    if pay != instrument(name).currency:
+        from ..structured.quanto import quanto_market
+        link = quanto_link_at(lake, name, pay, day, fx_window, as_of)
+        market = quanto_market(market, discount_function(lake, pay, day, as_of), link.rho, link.vol_fx, got.surface)
+        prov.update(discount={"origin": "derived", "curve": pay}, quanto=link.meta)
+    prov["payment"] = pay
     h = quick_heston(got.surface) if heston == "prior" else fitted_heston(got.surface, market)
     if leverage == "calibrate":
         from ..heston import HestonParams
@@ -132,16 +142,19 @@ def context_at(lake: Lake, name: str, day, as_of=None, **kw):
     return PricingContext.from_snapshot(snap), snap
 
 
-def basket_at(lake: Lake, names, day, as_of=None, window: int = 120, implied: bool = True, layer: str | None = None):
-    """(BasketContext, {name: snapshot}, correlation meta): each name on its own surface, correlation known at `day`."""
+def basket_at(lake: Lake, names, day, as_of=None, window: int = 120, implied: bool = True, layer: str | None = None,
+              payment: str | None = None):
+    """(BasketContext, {name: snapshot}, correlation meta): each name on its own surface, correlation known at `day`. Everything is
+    paid in `payment`, by default the first name's currency, and a name in another currency is on its quanto market."""
     from ..structured.context import PricingContext
     from ..structured.multiasset import BasketContext
-    snaps = {n: market_at(lake, n, day, as_of, layer=layer) for n in names}
+    pay = payment or instrument(names[0]).currency
+    snaps = {n: market_at(lake, n, day, as_of, layer=layer, payment=pay, fx_window=window) for n in names}
     corr, meta = correlation_at(lake, names, day, window, implied, as_of)
     ctxs = {n: PricingContext.from_snapshot(s) for n, s in snaps.items()}
     ctx = BasketContext(tuple(names), {n: c.market for n, c in ctxs.items()}, {n: c.surface for n, c in ctxs.items()}, corr,
-                        pd.Timestamp(day).date(), ctxs)
-    return ctx, snaps, meta
+                        pd.Timestamp(day).date(), ctxs, payment_currency=pay)
+    return ctx, snaps, {**meta, "payment": pay, "quanto": {n: s.provenance["quanto"] for n, s in snaps.items() if "quanto" in s.provenance}}
 
 
 def truncated_copy(lake: Lake, target, day, tables=None, where_extra: dict | None = None) -> Lake:

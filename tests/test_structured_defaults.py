@@ -32,7 +32,7 @@ def worst_of(*names, **kw):
 def test_every_loaded_name_has_a_group_with_defaults():
     assert instrument("SPX").group == "index_us" and instrument("SX5E").group == "index_eu" and instrument("AAPL").group == "equity_us"
     for i in UNIVERSE:
-        if i.enabled:
+        if i.enabled and i.asset_class != "fx":  # FX pairs feed quanto adjustments, they are not underlyings of a sheet
             assert i.group in STARTING, i.id
 
 

@@ -14,8 +14,8 @@ import pandas as pd
 
 from ..log import get_logger
 from .lake import Lake, new_run_id
-from .sources import curl_get, http_get, simple, yahoo
-from .universe import REFERENCE_INSTRUMENT, as_rows, enabled
+from .sources import curl_get, fx, http_get, rates, simple, yahoo
+from .universe import REFERENCE_INSTRUMENT, as_rows, enabled_underlyings
 
 LOG = get_logger(__name__)
 START = "2015-01-01"  # the replay period starts in 2018; earlier history feeds rolling windows
@@ -74,6 +74,62 @@ def load_ecb(lake: Lake, fetch=http_get) -> list[dict]:
     return out
 
 
+def load_fx(lake: Lake, fetch=http_get, fred_fetch=curl_get, pause=lambda: time.sleep(3.0)) -> list[dict]:
+    """The ECB's reference rates (EURUSD observed, the crosses derived), then the H.10 rates kept as an independent check."""
+    out, per_euro, hashes = [], {}, []
+    for currency in fx.ECB_CURRENCIES:
+        url = simple.ecb_fx_url(currency, START)
+        raw = lake.store_raw("ecb", f"EXR_{currency}.csv", fetch(url, headers=simple.ECB_HEADERS), url)
+        per_euro[currency] = fx.parse_ecb_fx(raw.content, currency)
+        hashes.append(raw.sha256)
+    rows = fx.ecb_pairs(per_euro)
+    for origin, group in rows.groupby("origin"):
+        out.append(lake.ingest("fx_spots", group, "ecb", origin, raw_sha256=",".join(hashes)))
+    for pair, series in fx.FRED_PAIRS.items():
+        url = simple.fred_url(series, START)
+        raw = lake.store_raw("fred", f"{series}.csv", fred_fetch(url), url)
+        pause()  # FRED drops the connection on quick series of requests
+        out.append(lake.ingest("fx_spots", fx.parse_fred_fx(raw.content, pair), "fred", "observed", raw_sha256=raw.sha256))
+    return out
+
+
+def _since_start(rows: pd.DataFrame) -> pd.DataFrame:
+    return rows[pd.to_datetime(rows["obs_date"]) >= START]
+
+
+def load_mof(lake: Lake, fetch=http_get) -> list[dict]:
+    """JGB par yields: the history, which stops at the end of the last month, then the current month."""
+    out = []
+    for name, url in (("jgbcme_all.csv", rates.MOF_HISTORY_URL), ("jgbcme.csv", rates.MOF_CURRENT_URL)):
+        raw = lake.store_raw("mof", name, fetch(url), url)
+        rows = _since_start(rates.parse_mof_jgb(raw.content)).assign(curve=rates.JGB_CURVE)
+        out.append(lake.ingest("rate_points", rows, "mof", "observed", raw_sha256=raw.sha256))
+    return out
+
+
+def load_boj(lake: Lake, fetch=http_get) -> list[dict]:
+    url = rates.boj_call_url(START[:4] + START[5:7])
+    raw = lake.store_raw("boj", "call_rate.csv", fetch(url), url)
+    rows = _since_start(rates.parse_boj_call(raw.content)).rename(columns={"value": "rate"}).assign(curve=rates.CALL_CURVE, tenor=1 / 365)
+    return [lake.ingest("rate_points", rows, "boj", "observed", raw_sha256=raw.sha256)]
+
+
+def load_boe(lake: Lake, fetch=http_get) -> list[dict]:
+    """The gilt curve, history then current month, and SONIA. Each workbook is kept as its own raw file, not the zip: a zip of 39 MB
+    changes every month, while the workbooks of past years do not."""
+    out = []
+    for url in (rates.GLC_HISTORY_URL, rates.GLC_CURRENT_URL):
+        for name, book in rates.glc_workbooks(fetch(url), int(START[:4])).items():
+            raw = lake.store_raw("boe", name, book, url)
+            rows = _since_start(rates.parse_glc_workbook(raw.content)).assign(curve=rates.GLC_CURVE)
+            out.append(lake.ingest("rate_points", rows, "boe", "observed", raw_sha256=raw.sha256))
+    url = rates.boe_series_url()
+    raw = lake.store_raw("boe", f"{rates.SONIA_SERIES}.csv", fetch(url), url)
+    rows = _since_start(rates.parse_boe_series(raw.content)).rename(columns={"value": "rate"}).assign(curve=rates.SONIA_CURVE, tenor=1 / 365)
+    out.append(lake.ingest("rate_points", rows, "boe", "observed", raw_sha256=raw.sha256))
+    return out
+
+
 def _parquet_bytes(frame: pd.DataFrame) -> bytes:
     buf = io.BytesIO()
     frame.to_parquet(buf)
@@ -83,7 +139,7 @@ def _parquet_bytes(frame: pd.DataFrame) -> bytes:
 def load_yahoo(lake: Lake, download=yahoo.download_history, instruments=None) -> list[dict]:
     """Prices and corporate actions of the enabled names, plus the total-return indices kept as their own series."""
     out = []
-    for inst in instruments if instruments is not None else enabled():
+    for inst in instruments if instruments is not None else enabled_underlyings():
         for name, ticker in ((inst.id, inst.yahoo), (f"{inst.id}.TR", inst.total_return)):
             if not ticker:
                 continue
@@ -135,7 +191,8 @@ def load_yahoo_chains(lake: Lake, names=("SPX", "NDX", "RUT", "AAPL"), tickers=N
 
 
 STEPS = {"universe": load_universe, "cboe": load_cboe, "stoxx": load_stoxx, "fred": load_fred,
-         "treasury": load_treasury, "ecb": load_ecb, "yahoo": load_yahoo, "calendars": load_calendars}
+         "treasury": load_treasury, "ecb": load_ecb, "mof": load_mof, "boj": load_boj, "boe": load_boe, "fx": load_fx, "yahoo": load_yahoo,
+         "calendars": load_calendars}
 
 
 def update_all(lake: Lake, only=None, log=LOG.info) -> dict:

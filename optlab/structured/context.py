@@ -28,6 +28,7 @@ class PricingContext:
     snapshot_id: str | None = None  # the market every price of this context refers to
     slv_cache: dict = field(default_factory=dict, repr=False)  # leverages recalibrated per (mix, horizon)
     leverage_flat: bool = False  # read from the lake without a leverage: calibrated on the first SLV use
+    payment_currency: str | None = None  # the currency this market pays in; None when it was not built with FX in mind
 
     @classmethod
     def from_calibration(cls, path: str | Path | None = None, underlying: str = "SPX",
@@ -56,7 +57,8 @@ class PricingContext:
         surface = FastSVISurface.from_dict(snap.surface)  # bit-identical to SVISurface, faster per step
         flat = (snap.provenance or {}).get("leverage", {}).get("mode") == "flat"
         return cls(Market.from_dict(snap.market), surface, heston, slv, snap.valuation, snap.underlying,
-                   snap.snapshot_id, leverage_flat=flat)
+                   snap.snapshot_id, leverage_flat=flat,
+                   payment_currency=snap.provenance.get("payment"))
 
     def slv_at_mix(self, mix: float, horizon: float, n_particles: int = 200_000, seed: int = 2026):
         """The SLV model with its leverage recalibrated for another mixing fraction (cached): the vanillas stay on

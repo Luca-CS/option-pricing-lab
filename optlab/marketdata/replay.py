@@ -62,17 +62,18 @@ def struck_sheet(sheet: TermSheet, strike: dt.date) -> TermSheet:
     return sheet.replace(**{"general.strike_date": strike, "general.calendar": place_calendar(sheet.underlyings)})
 
 
-def market_for(lake: Lake, names, day, cfg: ReplayConfig, previous=None, T_max: float = 2.0, recalibrate: bool = True):
+def market_for(lake: Lake, names, day, cfg: ReplayConfig, previous=None, T_max: float = 2.0, recalibrate: bool = True,
+               payment: str | None = None):
     """(context, {name: spot scale}, provenance by name). Under SLV the leverage comes from the last recalibration."""
     if len(names) > 1:
-        ctx, snaps, _ = basket_at(lake, list(names), day, cfg.as_of, layer=cfg.surface_layer)
+        ctx, snaps, _ = basket_at(lake, list(names), day, cfg.as_of, layer=cfg.surface_layer, payment=payment)
         return ctx, {n: s.spot_scale for n, s in snaps.items()}, {n: s.provenance for n, s in snaps.items()}
     name = names[0]
     if cfg.model == "slv" and recalibrate:
         ctx, snap = context_at(lake, name, day, cfg.as_of, leverage="calibrate", T_max=T_max, n_particles=cfg.n_particles,
-                               seed=cfg.seed, layer=cfg.surface_layer)
+                               seed=cfg.seed, layer=cfg.surface_layer, payment=payment)
     else:
-        ctx, snap = context_at(lake, name, day, cfg.as_of, layer=cfg.surface_layer)
+        ctx, snap = context_at(lake, name, day, cfg.as_of, layer=cfg.surface_layer, payment=payment)
         if cfg.model == "slv" and previous is not None:
             ctx = dataclasses.replace(ctx, slv=previous.slv, heston=previous.heston, leverage_flat=previous.leverage_flat)
     return ctx, {name: snap.spot_scale}, {name: snap.provenance}
@@ -86,7 +87,8 @@ def strike_trade(lake: Lake, trade_id: str, sheet: TermSheet, strike, quantity: 
     sheet = struck_sheet(sheet, strike)
     t0 = time.perf_counter()
     names = sheet.underlyings
-    ctx, scales, prov = market_for(lake, names, strike, cfg, T_max=max(sheet.get("general.maturity_months") / 12, 0.5))
+    ctx, scales, prov = market_for(lake, names, strike, cfg, T_max=max(sheet.get("general.maturity_months") / 12, 0.5),
+                                   payment=sheet.payment_currency)
     info = {"strike": strike.isoformat(), "provenance": prov}
     has_coupon = sheet.get("coupon.type") != "none"  # an airbag or a capital-protected note has nothing to solve
     desk = None
@@ -182,7 +184,7 @@ def _time_value(trade, ctx, cfg, scales, fixings, names, new_day):
         for n in names:
             extended[n][d.isoformat()] = fixings[n][max(fixings[n])]
     if isinstance(ctx, BasketContext):
-        moved = BasketContext(ctx.names, ctx.markets, ctx.vols, ctx.corr, new_day)
+        moved = dataclasses.replace(ctx, valuation=new_day)
     else:
         moved = dataclasses.replace(ctx, valuation=new_day)
     return _price(trade, moved, cfg, scales, extended, ctx_override=moved).value
@@ -269,7 +271,8 @@ def replay(lake: Lake, trade: Trade, end=None, cfg: ReplayConfig = ReplayConfig(
         fix = {n: {d: v for d, v in known[n].items() if d <= day.isoformat()} for n in names}
         t0 = time.perf_counter()
         recalibrate = since_leverage >= cfg.leverage_every
-        ctx, scales, prov = market_for(lake, names, day, cfg, previous, T_max=max(T_rem_years, 0.5), recalibrate=recalibrate)
+        ctx, scales, prov = market_for(lake, names, day, cfg, previous, T_max=max(T_rem_years, 0.5), recalibrate=recalibrate,
+                                       payment=sheet.payment_currency)
         if cfg.model == "slv":
             seconds["leverage" if recalibrate else "market"] += time.perf_counter() - t0
             since_leverage = 1 if recalibrate else since_leverage + 1
@@ -381,7 +384,8 @@ def cost_table(lake: Lake, name: str, day, trade: Trade, n_paths=(20_000, 100_00
     for n in n_paths:
         for model in ("lv", "slv"):
             cfg = ReplayConfig(model=model, n_paths=n, greeks=False)
-            ctx, scales, _ = market_for(lake, sheet.underlyings, day, cfg, T_max=T, recalibrate=model == "slv")
+            ctx, scales, _ = market_for(lake, sheet.underlyings, day, cfg, T_max=T, recalibrate=model == "slv",
+                                        payment=sheet.payment_currency)
             t = time.perf_counter()
             r = _price(trade, ctx, cfg, scales, fix)
             out["valuation"][f"{model}_{n}"] = {"seconds": time.perf_counter() - t, "value": r.value, "se": r.stderr}

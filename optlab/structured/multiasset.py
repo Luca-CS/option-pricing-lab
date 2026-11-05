@@ -6,7 +6,8 @@ matrix square root of the correlation. A name with a variance process has its ow
 driver is rho_i z_i + sqrt(1 - rho_i^2) w_i. With `vol_corr="same"`, the residuals w_i take the spots' correlation, so two variances have the correlation
 c_ij (rho_i rho_j + sqrt((1 - rho_i^2)(1 - rho_j^2))), close to c_ij for similar rho, and identical names at a correlation of 1 have the same paths. With
 "independent", it is rho_i rho_j c_ij, about half of c_ij on indices. A `mixer` (localcorr.py) gives a correlation that moves with the state, each name keeping its law.
-Discounting uses the curve of the first name (one currency).
+Discounting uses the curve of the first name: names in another currency come here on a
+quanto market (`quanto.quanto_market`), which carries the discount curve of the payment currency.
 With one name and Black-Scholes, the draws are those of `simulate`, so prices match it bit for bit.
 """
 
@@ -224,6 +225,7 @@ class BasketContext:
     valuation: dt.date
     contexts: dict = field(default_factory=dict, repr=False)  # name → PricingContext, which keeps that name's SLV leverages
     correlation_cache: dict = field(default_factory=dict, repr=False)  # calibrated local correlations
+    payment_currency: str | None = None  # the currency its markets pay in; None when they were not built with FX in mind
 
     def __post_init__(self):
         self.names = tuple(self.names)
@@ -252,13 +254,15 @@ class BasketContext:
         if vol_shift:
             v = vols[name]
             vols[name] = v + vol_shift if np.isscalar(v) else ShiftedSurface(v, vol_shift)
-        return BasketContext(self.names, markets, vols, self.corr, self.valuation, self.contexts, self.correlation_cache)
+        return BasketContext(self.names, markets, vols, self.corr, self.valuation, self.contexts, self.correlation_cache,
+                             self.payment_currency)
 
     def with_bumps(self, vol: float = 0.0, skew: float = 0.0, corr: float = 0.0) -> "BasketContext":
         """The same context with every name's implied vols moved, and every pair's correlation, the matrix repaired if needed."""
         from .surfaces import BumpedSurface
         vols = {n: (v + vol if np.isscalar(v) else BumpedSurface(v, vol, skew)) if vol or skew else v for n, v in self.vols.items()}
-        return BasketContext(self.names, self.markets, vols, moved_correlation(self.corr, corr) if corr else self.corr, self.valuation, self.contexts, self.correlation_cache)
+        return BasketContext(self.names, self.markets, vols, moved_correlation(self.corr, corr) if corr else self.corr, self.valuation, self.contexts, self.correlation_cache,
+                             self.payment_currency)
 
     @property
     def t_max(self) -> float:

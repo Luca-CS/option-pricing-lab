@@ -104,7 +104,8 @@ Numbers and limits, including what the mix and the correlation of the variances 
 
 ## What this does not show
 
-- **No FX and no quanto.** The tables and the parity formula exist, with no FX source loaded. A worst-of on SPX and SX5E mixes performances in their own currencies, with no adjustment.
+- **FX is loaded, and the quanto reaches the Pricer, the Book and the replay.** The lake has ECB spots since 2015 (H.10 as a check), EURUSD forwards by covered parity, and realised FX volatility and correlation. A term sheet has a payment currency. When the lake builds a name, a worst-of on SPX and SX5E has SX5E on its quanto forward and the dollar curve, and the Book values trades paying in different currencies in separate groups. A name on typed or flat inputs is not adjusted: the quote says so, and an explicit payment currency is refused. SHOW-09 was dealt before the quanto reached the desk, so its dealt price is unadjusted while the Book now values it adjusted. [fx_check.md](fx_check.md).
+- **The FX inputs have limits.** The volatility is realised (`derived`): no free source quotes an implied one. From six months out, EURUSD forwards sit about 22 bp a year above the CME future, on Treasury and AAA curves with no basis. The adjustment is a deterministic drift, exact under Black-Scholes. Under local vol the state-dependent term is left out: on a 2-year 80 % put, 5 to 16 bp, a half or more of the adjustment itself.
 - **Defaults are starting values,** and on worst-ofs they hold more in reserves than the 2 % margin.
 - **The correlation skew is an assumption:** no broker level exists, and on three indices its provision also rests on extrapolating below 90 % ([pricing.md](pricing.md)).
 - **Reconstructed surfaces are not quotes.** Above a VIX of 60 the at-the-money level is still about 3.5 points low. From 70 to 95 % of the forward they ran about 2 points high in 2022, so coupons
