@@ -49,9 +49,9 @@ OPTLAB_API const char* optlab_last_error(void);
 OPTLAB_API const char* optlab_gpu_name(void);
 
 /* Paths for the Python library (paths.hpp): every model of optlab (constant, tabulated local variance, Heston, SLV),
-   1 to 8 correlated names, an optional local correlation. Arrays in double, row major; out has n_names * n_obs
-   columns of 2 n_pairs rows (pair p at row p, its antithetic at row n_pairs + p), column (a, j) at
-   out + (a * n_obs + j) * 2 n_pairs. Draws depend on (seed, first_pair + p) only. */
+   1 to 8 correlated names, an optional local correlation. Arrays in double, row major; out has n_names * n_cols
+   columns of 2 n_pairs rows (pair p at row p, its antithetic at row n_pairs + p), column (a, c) at
+   out + (a * n_cols + c) * 2 n_pairs. Draws depend on (seed, first_pair + p) only. */
 typedef struct {
     int n_names, n_steps, n_obs, n_x, n_rows;
     long long n_pairs, first_pair;
@@ -72,6 +72,11 @@ typedef struct {
     int mixer;               /* 0 none, 1 local correlation */
     double mix[8];           /* w0, level, down, up, sigma, market sign, cos(turn), sin(turn) */
     const double* low_root;  /* n_names x n_names when mixer = 1 */
+    int n_cols, n_keep;      /* columns per name in out; the first n_keep hold observations */
+    const int* col_of;       /* n_obs: column of each observation, -1 for none */
+    int n_windows;           /* at most 2: lowest and highest spot in columns n_keep + 2 w and n_keep + 2 w + 1 */
+    const int* win_lo;       /* n_windows, first observation */
+    const int* win_hi;       /* n_windows, last observation */
     double* out;
     double kernel_ms, total_ms;  /* filled on return */
 } optlab_paths_request;

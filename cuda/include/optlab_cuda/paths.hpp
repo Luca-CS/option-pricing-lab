@@ -34,11 +34,15 @@
 namespace optlab {
 
 constexpr int kMaxNames = 8;
+constexpr int kMaxWindows = 2;
 
 enum VarKind : int { kConstVar = 0, kTableVar = 1, kHestonVar = 2, kSlvVar = 3 };
 
 // Everything a path needs, as pointers into one memory space (host for the CPU, device for the GPU) of the real
-// type R. The output is double, one column per (name, observation): out[(a * n_obs + j) * rows + row].
+// type R. The output is double, n_cols columns per name: out[(a * n_cols + c) * rows + row]. Observation j goes to
+// column col_of[j] (or nowhere when -1), then each window w (observations win_lo[w] to win_hi[w], at most
+// kMaxWindows) gives its lowest and highest spot in columns n_keep + 2 w and n_keep + 2 w + 1: a daily barrier needs
+// two columns instead of one per day.
 template <typename R>
 struct PathSpec {
     int n_names = 1, n_steps = 0, n_obs = 0, n_x = 0;
@@ -64,6 +68,11 @@ struct PathSpec {
     int mixer = 0;                 // 1: local correlation
     R mix[8] = {};                 // w0, level, down, up, sigma, market sign, cos(turn), sin(turn)
     const R* low_root = nullptr;   // n_names x n_names
+    int n_cols = 0, n_keep = 0;    // columns per name; the first n_keep hold observations
+    const int* col_of = nullptr;   // n_obs
+    int n_win = 0;
+    const int* win_lo = nullptr;   // n_win, first observation of each window
+    const int* win_hi = nullptr;   // n_win, last one
     double* out = nullptr;
 };
 
@@ -117,14 +126,42 @@ OPTLAB_PD void draw(std::uint64_t pair, int step, int stream, std::uint32_t k0, 
     }
 }
 
-template <typename R>
-OPTLAB_PD void record(const PathSpec<R>& s, long long p, int j, const R* x0, const R* x1) {
-    const long long r0 = s.row0 + p, r1 = s.out_pairs + s.row0 + p;
+// Running extremes of the windows, per leg, name and window.
+template <typename R, int N>
+struct Extremes {
+    R lo[2][N][kMaxWindows], hi[2][N][kMaxWindows];
+};
+
+template <typename R, int N>
+OPTLAB_PD void record(const PathSpec<R>& s, long long p, int j, const R* x0, const R* x1, Extremes<R, N>& e) {
+    const long long r[2] = {s.row0 + p, s.out_pairs + s.row0 + p};
+    const int c = s.col_of[j];
     for (int a = 0; a < s.n_names; ++a) {
         const R f = s.fwd[a * s.n_obs + j];
-        double* col = s.out + (static_cast<long long>(a) * s.n_obs + j) * s.rows;
-        col[r0] = static_cast<double>(f * p_exp(x0[a]));
-        col[r1] = static_cast<double>(f * p_exp(x1[a]));
+        const R S[2] = {f * p_exp(x0[a]), f * p_exp(x1[a])};
+        double* base = s.out + static_cast<long long>(a) * s.n_cols * s.rows;
+        if (c >= 0) {
+            base[c * s.rows + r[0]] = static_cast<double>(S[0]);
+            base[c * s.rows + r[1]] = static_cast<double>(S[1]);
+        }
+        for (int w = 0; w < s.n_win; ++w) {
+            if (j < s.win_lo[w] || j > s.win_hi[w]) continue;
+            for (int leg = 0; leg < 2; ++leg) {
+                if (j == s.win_lo[w]) {
+                    e.lo[leg][a][w] = e.hi[leg][a][w] = S[leg];
+                } else {
+                    e.lo[leg][a][w] = p_min(e.lo[leg][a][w], S[leg]);
+                    e.hi[leg][a][w] = p_max(e.hi[leg][a][w], S[leg]);
+                }
+            }
+            if (j == s.win_hi[w]) {
+                const long long cl = s.n_keep + 2 * w, ch = cl + 1;
+                for (int leg = 0; leg < 2; ++leg) {
+                    base[cl * s.rows + r[leg]] = static_cast<double>(e.lo[leg][a][w]);
+                    base[ch * s.rows + r[leg]] = static_cast<double>(e.hi[leg][a][w]);
+                }
+            }
+        }
     }
 }
 
@@ -142,8 +179,9 @@ OPTLAB_PD void simulate_pair(const PathSpec<R>& s, long long p) {
         x[0][a] = x[1][a] = R(0);
         v[0][a] = v[1][a] = hv ? s.hes[a * 5] : R(0);
     }
+    Extremes<R, N> ext;
     int j = 0;
-    while (j < s.n_obs && s.obs_step[j] == 0) record(s, p, j++, x[0], x[1]);
+    while (j < s.n_obs && s.obs_step[j] == 0) record<R, N>(s, p, j++, x[0], x[1], ext);
     R zs[N], zr[N], fresh[4];
     for (int i = 1; i <= s.n_steps; ++i) {
         const R dt = s.dt[i - 1], t0 = s.t0[i - 1];
@@ -208,7 +246,7 @@ OPTLAB_PD void simulate_pair(const PathSpec<R>& s, long long p) {
                 x[leg][a] += R(-0.5) * var * dt + p_sqrt(var * dt) * z[a];
             }
         }
-        while (j < s.n_obs && s.obs_step[j] == i) record(s, p, j++, x[0], x[1]);
+        while (j < s.n_obs && s.obs_step[j] == i) record<R, N>(s, p, j++, x[0], x[1], ext);
     }
 }
 

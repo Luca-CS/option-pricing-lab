@@ -192,3 +192,18 @@ def test_numpy_stays_the_default_of_the_leverage():
     a = calibrate_leverage(CTX.heston, CTX.surface, CTX.market, 0.2, n_particles=20_000, rng=2)
     b = calibrate_leverage(CTX.heston, CTX.surface, CTX.market, 0.2, n_particles=20_000, rng=2, engine="numpy")
     assert np.array_equal(a.leverage.values, b.leverage.values)
+
+
+@needs_engine
+@pytest.mark.parametrize("name", ["barrier_reverse_convertible", "phoenix"])
+def test_daily_windows_reduced_in_the_engine_give_the_same_numbers(name):
+    sheet = preset(name, **({"downside.observation": "daily"} if name == "phoenix" else {}))
+    product = compile_sheet(sheet, CTX.valuation)
+    model = CTX.model("lv", product.horizon)
+    sets = [{product.coupon_param: 0.02}] if product.coupon_param else [{}]
+    kw = dict(n_paths=40_000, seed=13, valuation=CTX.valuation, calendar=product.calendar, engine="cpu",
+              spot_factors=[1.01] * len(sets))
+    (full,) = price_many(product.program, model, CTX.market, sets, reduce=False, **kw)
+    (red,) = price_many(product.program, model, CTX.market, sets, **kw)
+    assert red.price == pytest.approx(full.price, abs=1e-12) and red.stderr == pytest.approx(full.stderr, abs=1e-12)
+    assert red.timings["windows"] == 1 and red.timings["columns"] < full.timings["columns"] / 10  # two columns, not one a day

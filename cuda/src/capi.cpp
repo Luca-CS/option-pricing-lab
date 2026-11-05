@@ -90,6 +90,14 @@ optlab::PathSpec<double> path_spec(const optlab_paths_request& c) {
         prev = c.obs_step[j];
     }
     if (c.mixer && (c.mixer != 1 || !c.low_root || !(c.mix[4] > 0))) throw std::invalid_argument("bad local correlation");
+    if (c.n_windows < 0 || c.n_windows > optlab::kMaxWindows || (c.n_windows && (!c.win_lo || !c.win_hi)))
+        throw std::invalid_argument("n_windows must be 0 to 2, with win_lo and win_hi");
+    if (c.n_obs && !c.col_of) throw std::invalid_argument("null col_of");
+    if (c.n_keep < 0 || c.n_cols != c.n_keep + 2 * c.n_windows) throw std::invalid_argument("n_cols must be n_keep + 2 n_windows");
+    for (int j = 0; j < c.n_obs; ++j)
+        if (c.col_of[j] < -1 || c.col_of[j] >= c.n_keep) throw std::invalid_argument("col_of out of range");
+    for (int w = 0; w < c.n_windows; ++w)
+        if (c.win_lo[w] < 0 || c.win_hi[w] < c.win_lo[w] || c.win_hi[w] >= c.n_obs) throw std::invalid_argument("bad window");
     optlab::PathSpec<double> s;
     s.n_names = c.n_names, s.n_steps = c.n_steps, s.n_obs = c.n_obs, s.n_x = c.n_x;
     s.n_pairs = c.n_pairs, s.first_pair = c.first_pair, s.rows = 2 * c.n_pairs, s.row0 = 0, s.out_pairs = c.n_pairs;
@@ -97,6 +105,8 @@ optlab::PathSpec<double> path_spec(const optlab_paths_request& c) {
     s.dt = c.dt, s.t0 = c.t0, s.obs_step = c.obs_step, s.root = c.root, s.kind = c.kind, s.cvar = c.cvar;
     s.hes = c.heston, s.same = c.same, s.step_row = c.step_row, s.lo = c.row_lo, s.inv_dx = c.row_inv_dx;
     s.table = c.table, s.fwd = c.fwd, s.mixer = c.mixer, s.low_root = c.low_root, s.out = c.out;
+    s.n_cols = c.n_cols, s.n_keep = c.n_keep, s.col_of = c.col_of, s.n_win = c.n_windows, s.win_lo = c.win_lo;
+    s.win_hi = c.win_hi;
     for (int k = 0; k < 8; ++k) s.mix[k] = c.mix[k];
     return s;
 }

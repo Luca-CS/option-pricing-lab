@@ -19,7 +19,7 @@ void expect(bool ok, const char* what, double got, double want, double tol) {
 struct Case {
     int n = 1, steps = 1;
     std::vector<double> dt, t0, root, cvar, hes, fwd;
-    std::vector<int> obs, kind;
+    std::vector<int> obs, kind, col_of, win_lo, win_hi;
     long long pairs = 200000;
     std::vector<double> out;
     optlab_paths_request rq{};
@@ -29,10 +29,16 @@ struct Case {
         rq.n_names = n, rq.n_steps = steps, rq.n_obs = static_cast<int>(obs.size()), rq.n_pairs = pairs;
         rq.seed = 20261105ull, rq.dt = dt.data(), rq.t0 = t0.data(), rq.obs_step = obs.data(), rq.root = root.data();
         rq.kind = kind.data(), rq.cvar = cvar.data(), rq.heston = hes.data(), rq.same = 1, rq.fwd = fwd.data();
-        out.assign(static_cast<size_t>(n) * obs.size() * 2 * pairs, 0.0);
+        if (col_of.empty())
+            for (size_t j = 0; j < obs.size(); ++j) col_of.push_back(static_cast<int>(j));
+        int keep = 0;
+        for (int c : col_of) keep = c + 1 > keep ? c + 1 : keep;
+        rq.n_keep = keep, rq.n_windows = static_cast<int>(win_lo.size()), rq.n_cols = keep + 2 * rq.n_windows;
+        rq.col_of = col_of.data(), rq.win_lo = win_lo.data(), rq.win_hi = win_hi.data();
+        out.assign(static_cast<size_t>(n) * rq.n_cols * 2 * pairs, 0.0);
         rq.out = out.data();
     }
-    const double* col(int a, int j) const { return out.data() + (static_cast<size_t>(a) * obs.size() + j) * 2 * pairs; }
+    const double* col(int a, int c) const { return out.data() + (static_cast<size_t>(a) * rq.n_cols + c) * 2 * pairs; }
 };
 
 double ncdf(double x) { return 0.5 * std::erfc(-x / std::sqrt(2.0)); }
@@ -100,6 +106,33 @@ int main() {
         }
         const double cov = sab / n - sa / n * sb / n, rho = cov / std::sqrt((saa / n - sa * sa / n / n) * (sbb / n - sb * sb / n / n));
         expect(std::fabs(rho - 0.6) < 0.005, "CPU two names: correlation of log returns", rho, 0.6, 0.005);
+    }
+
+    // A daily window reduced in the engine: its lowest and highest spots equal those of the full columns
+    {
+        Case full;
+        full.steps = 252;
+        for (int i = 0; i < full.steps; ++i) full.dt.push_back(1.0 / 252), full.t0.push_back(i / 252.0);
+        full.root = {1.0}, full.cvar = {0}, full.hes = {0.0228, 3.09, 0.0537, 1.31, -0.69}, full.kind = {2};
+        for (int i = 1; i <= 252; ++i) full.obs.push_back(i), full.fwd.push_back(100.0);
+        full.pairs = 20000;
+        Case red = full;
+        red.col_of.assign(252, -1);
+        red.col_of[251] = 0;  // keep the last date only
+        red.win_lo = {0}, red.win_hi = {251};
+        for (int backend = 0; backend <= (optlab_gpu_count() > 0 ? 1 : 0); ++backend) {
+            run(full, backend, "full columns");
+            run(red, backend, "reduced window");
+            double worst = 0;
+            for (long long r = 0; r < 2 * full.pairs; ++r) {
+                double lo = full.col(0, 0)[r], hi = lo;
+                for (int j = 1; j < 252; ++j) lo = std::fmin(lo, full.col(0, j)[r]), hi = std::fmax(hi, full.col(0, j)[r]);
+                worst = std::fmax(worst, std::fabs(red.col(0, 1)[r] - lo) + std::fabs(red.col(0, 2)[r] - hi) +
+                                             std::fabs(red.col(0, 0)[r] - full.col(0, 251)[r]));
+            }
+            expect(worst == 0.0, backend ? "GPU window: lowest, highest and last spot as the full columns"
+                                         : "CPU window: lowest, highest and last spot as the full columns", worst, 0, 0);
+        }
     }
 
     if (optlab_gpu_count() > 0) {

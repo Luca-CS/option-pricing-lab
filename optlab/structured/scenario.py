@@ -14,11 +14,19 @@ from ..market import Market
 from ..models import Model, simulate
 
 
+def window_key(future) -> tuple:
+    """Key of a window by its simulated times: (first, last, count)."""
+    return round(float(future[0]), 12), round(float(future[-1]), 12), len(future)
+
+
 class Scenario:
     """One batch of antithetic paths, stored as [first half, mirrored half]. `history` maps past times (< 0, and
-    optionally 0) to known fixings; the valuation date otherwise reads `spot0`."""
+    optionally 0) to known fixings; the valuation date otherwise reads `spot0`. `windows` holds the lowest and
+    highest spot of daily windows already reduced by the path engine, {window_key: (lowest, highest)}: their days
+    are then not among `times`."""
 
-    def __init__(self, name: str, times, paths, spot0: float, history: dict | None = None):
+    def __init__(self, name: str, times, paths, spot0: float, history: dict | None = None, windows: dict | None = None):
+        self.windows = windows or {}
         self.name = name
         self.times = np.asarray(times, dtype=float)
         self.paths = paths
@@ -54,7 +62,10 @@ class Scenario:
         future = times[times > 0]
         reduce = np.min if func == "min" else np.max
         out = None
-        if len(future):
+        reduced = self.windows.get(window_key(future)) if len(future) else None
+        if reduced is not None:  # lowest and highest computed by the engine while simulating
+            out = reduced[0 if func == "min" else 1]
+        elif len(future):
             cols = [self._col[float(t)] for t in future]
             lo, hi = cols[0], cols[-1] + 1
             block = self.paths

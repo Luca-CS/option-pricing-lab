@@ -138,7 +138,8 @@ def simulate_basket(basket: Basket, times, n_paths: int, rng=None, dt_max=1 / 25
 class BasketScenario:
     """Scenario interface for several names (see scenario.Scenario)."""
 
-    def __init__(self, times, paths: dict, spot0: dict, history: dict | None = None):
+    def __init__(self, times, paths: dict, spot0: dict, history: dict | None = None, windows: dict | None = None):
+        self.windows = windows or {}  # {window_key: {name: (lowest, highest)}}, see scenario.Scenario
         self.times = np.asarray(times, dtype=float)
         self.paths = paths
         self.spot0 = {k: float(v) for k, v in spot0.items()}
@@ -169,12 +170,16 @@ class BasketScenario:
     def extreme(self, name: str, times, func: str):
         """Lowest ("min") or highest ("max") fixing over `times` on each path, without copying the window: the
         simulated dates of a window are contiguous columns. Same result as fixings(...).min(axis=1)."""
+        from .scenario import window_key
         self._check(name)
         times = np.asarray(times, dtype=float)
         future = times[times > 0]
         reduce = np.min if func == "min" else np.max
         out = None
-        if len(future):
+        reduced = self.windows.get(window_key(future), {}).get(name) if len(future) else None
+        if reduced is not None:
+            out = reduced[0 if func == "min" else 1]
+        elif len(future):
             cols = [self._col[float(t)] for t in future]
             lo, hi = cols[0], cols[-1] + 1
             block = self.paths[name]

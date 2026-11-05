@@ -94,10 +94,14 @@ PathTiming gpu_paths(const PathSpec<double>& h, int n_rows) {
     s.table = dev.put(to_float(h.table, static_cast<long long>(n_rows) * h.n_x));
     s.fwd = dev.put(to_float(h.fwd, static_cast<long long>(n) * h.n_obs));
     s.low_root = dev.put(to_float(h.low_root, h.mixer ? n * n : 0));
+    s.n_cols = h.n_cols, s.n_keep = h.n_keep, s.n_win = h.n_win;
+    s.col_of = dev.put(ints(h.col_of, h.n_obs));
+    s.win_lo = dev.put(ints(h.win_lo, h.n_win));
+    s.win_hi = dev.put(ints(h.win_hi, h.n_win));
 
     // Chunk size: about 2^27 pair-steps-names per launch (tens of ms), and two output buffers within a quarter of the
     // free memory (at most 1 GB each).
-    const long long cols = static_cast<long long>(n) * h.n_obs;
+    const long long cols = static_cast<long long>(n) * h.n_cols;
     size_t free_mem = 0, total_mem = 0;
     check(cudaMemGetInfo(&free_mem, &total_mem), "cudaMemGetInfo");
     const long long work = std::max<long long>(1, static_cast<long long>(h.n_steps) * n);

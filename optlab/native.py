@@ -40,7 +40,9 @@ class _PathsRequest(ctypes.Structure):  # optlab_paths_request in cuda/include/o
         ("kind", ctypes.c_void_p), ("cvar", ctypes.c_void_p), ("heston", ctypes.c_void_p), ("same", ctypes.c_int),
         ("step_row", ctypes.c_void_p), ("row_lo", ctypes.c_void_p), ("row_inv_dx", ctypes.c_void_p),
         ("table", ctypes.c_void_p), ("fwd", ctypes.c_void_p), ("mixer", ctypes.c_int), ("mix", ctypes.c_double * 8),
-        ("low_root", ctypes.c_void_p), ("out", ctypes.c_void_p), ("kernel_ms", ctypes.c_double),
+        ("low_root", ctypes.c_void_p), ("n_cols", ctypes.c_int), ("n_keep", ctypes.c_int), ("col_of", ctypes.c_void_p),
+        ("n_windows", ctypes.c_int), ("win_lo", ctypes.c_void_p), ("win_hi", ctypes.c_void_p),
+        ("out", ctypes.c_void_p), ("kernel_ms", ctypes.c_double),
         ("total_ms", ctypes.c_double),
     ]
 
@@ -303,9 +305,15 @@ def _ptr(a):
     return None if a is None else a.ctypes.data
 
 
-def run(p: Plan, n_pairs: int, seed: int, first_pair: int = 0, backend: str = "cpu", threads: int = 0):
-    """(spots, timing): spots[a] is an (2 n_pairs, n_obs) array (Fortran order) of name a, pair i at row i and its
-    antithetic at row n_pairs + i; timing {"kernel_ms", "total_ms", "backend"}."""
+MAX_WINDOWS = 2
+
+
+def run(p: Plan, n_pairs: int, seed: int, first_pair: int = 0, backend: str = "cpu", threads: int = 0, keep=None,
+        windows=()):
+    """(spots, extremes, timing). spots[a] is an (2 n_pairs, len(keep)) array (Fortran order) of name a at the kept
+    observations (all of them by default), pair i at row i and its antithetic at row n_pairs + i. `windows` lists
+    up to two (first, last) observation indices: extremes[a][w] is then (lowest, highest) spot over that window,
+    computed while simulating. timing: {"kernel_ms", "total_ms", "backend"}."""
     lib = _lib()
     if lib is None:
         raise _gpu.EngineError(f"{_gpu._LIB_NAME} with the path engine not found: build cuda/ (README) or set OPTLAB_CUDA_LIB")
@@ -314,22 +322,34 @@ def run(p: Plan, n_pairs: int, seed: int, first_pair: int = 0, backend: str = "c
     if backend not in ("cpu", "gpu"):
         raise ValueError(f"backend must be cpu, gpu or auto, not {backend!r}")
     k = len(p.names)
-    out = np.empty((k, p.n_obs, 2 * n_pairs))
+    keep = np.arange(p.n_obs) if keep is None else np.asarray(keep, dtype=int)
+    if len(windows) > MAX_WINDOWS:
+        raise ValueError(f"at most {MAX_WINDOWS} windows")
+    col_of = np.full(p.n_obs, -1, np.int32)
+    col_of[keep] = np.arange(len(keep), dtype=np.int32)
+    win_lo = np.array([w[0] for w in windows], np.int32)
+    win_hi = np.array([w[1] for w in windows], np.int32)
+    n_cols = len(keep) + 2 * len(windows)
+    out = np.empty((k, n_cols, 2 * n_pairs))
     rq = _PathsRequest()
     rq.n_names, rq.n_steps, rq.n_obs, rq.n_x = k, len(p.dt), p.n_obs, p.n_x
     rq.n_rows = 0 if p.lo is None else len(p.lo)
     rq.n_pairs, rq.first_pair, rq.seed = n_pairs, first_pair, seed
-    keep = [np.ascontiguousarray(a) for a in (p.dt, p.t0)]
-    rq.dt, rq.t0 = _ptr(keep[0]), _ptr(keep[1])
+    grid = [np.ascontiguousarray(a) for a in (p.dt, p.t0)]  # held until the call returns
+    rq.dt, rq.t0 = _ptr(grid[0]), _ptr(grid[1])
     rq.obs_step, rq.root, rq.kind, rq.cvar, rq.heston = (_ptr(p.obs_step), _ptr(p.root), _ptr(p.kind), _ptr(p.cvar),
                                                          _ptr(p.heston))
     rq.same, rq.step_row, rq.row_lo, rq.row_inv_dx = p.same, _ptr(p.step_row), _ptr(p.lo), _ptr(p.inv_dx)
     rq.table, rq.fwd, rq.mixer, rq.low_root, rq.out = _ptr(p.table), _ptr(p.fwd), p.mixer, _ptr(p.low_root), _ptr(out)
     rq.mix[:] = p.mix
+    rq.n_cols, rq.n_keep, rq.col_of, rq.n_windows = n_cols, len(keep), _ptr(col_of), len(windows)
+    rq.win_lo, rq.win_hi = (_ptr(win_lo), _ptr(win_hi)) if len(windows) else (None, None)
     if lib.optlab_paths(ctypes.byref(rq), 1 if backend == "gpu" else 0, threads) != 0:
         raise _gpu.EngineError(lib.optlab_last_error().decode())
-    spots = [out[a].T for a in range(k)]  # (rows, n_obs) views, Fortran order: one column per date, contiguous
-    return spots, {"kernel_ms": rq.kernel_ms, "total_ms": rq.total_ms, "backend": backend}
+    m = len(keep)
+    spots = [out[a, :m].T for a in range(k)]  # (rows, kept) views, Fortran order: one column per date, contiguous
+    extremes = [[(out[a, m + 2 * w], out[a, m + 2 * w + 1]) for w in range(len(windows))] for a in range(k)]
+    return spots, extremes, {"kernel_ms": rq.kernel_ms, "total_ms": rq.total_ms, "backend": backend}
 
 
 def simulate(model, market, times, n_paths: int, seed=None, dt_max=1 / 252, dt_min=1 / 2000, backend: str = "auto",
@@ -337,7 +357,7 @@ def simulate(model, market, times, n_paths: int, seed=None, dt_max=1 / 252, dt_m
     """`models.simulate` (or `simulate_basket` for a Basket: a {name: array} dict) on the engine."""
     from .structured.multiasset import Basket
     p = plan(model, market, times, dt_max, dt_min)
-    spots, _ = run(p, n_paths // 2, seed64(seed), first_pair, backend, threads)
+    spots, _, _ = run(p, n_paths // 2, seed64(seed), first_pair, backend, threads)
     if isinstance(model, Basket):
         return dict(zip(p.names, spots))
     return spots[0]

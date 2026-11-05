@@ -93,10 +93,13 @@ def _scaled(scenario, factor):
         if all(_no_change(f) for f in factor.values()):
             return scenario
         paths = {n: p if _no_change(factor.get(n, 1.0)) else p * factor[n] for n, p in scenario.paths.items()}
-        return BasketScenario(scenario.times, paths, scenario.spot0, scenario.history)
+        windows = {k: {n: (lo * factor.get(n, 1.0), hi * factor.get(n, 1.0)) for n, (lo, hi) in w.items()}
+                   for k, w in scenario.windows.items()}  # reduced windows only come with one factor per name
+        return BasketScenario(scenario.times, paths, scenario.spot0, scenario.history, windows)
     if _no_change(factor):
         return scenario
-    return Scenario(scenario.name, scenario.times, scenario.paths * factor, scenario.spot0, scenario.history)
+    windows = {k: (lo * factor, hi * factor) for k, (lo, hi) in scenario.windows.items()}
+    return Scenario(scenario.name, scenario.times, scenario.paths * factor, scenario.spot0, scenario.history, windows)
 
 
 def _controls(ev: Evaluation, scenario):
@@ -179,24 +182,65 @@ def evaluation_threads(backend: str) -> int:
     return max(1, min(8, native.cpu_threads() // 2)) if backend == "gpu" else 1
 
 
+def reduction(times, evaluations) -> tuple:
+    """(kept observation indices, windows as (first, last) indices, their keys) when the scripts read the daily dates
+    of at most native.MAX_WINDOWS windows only through their lowest and highest spots (the only way the language
+    reads a window): the engine then returns the event dates and two columns per window instead of one per day.
+    (None, (), ()) when there is nothing to gain or a window is not a contiguous run of simulated dates."""
+    from .scenario import window_key
+    for ev in evaluations:  # a factor per date (a forward bump) would scale a window's days unequally
+        factors = ev.spot_factor.values() if isinstance(ev.spot_factor, dict) else [ev.spot_factor]
+        if any(np.ndim(f) > 0 for f in factors):
+            return None, (), ()
+    times = np.asarray(times, dtype=float)
+    index = {round(float(t), 12): j for j, t in enumerate(times)}
+    found = {}
+    for ev in evaluations:
+        for wtimes in ev.timeline.windows.values():
+            future = np.asarray(wtimes, dtype=float)
+            future = future[future > 0]
+            if len(future) < 3:
+                continue
+            j = [index.get(round(float(t), 12)) for t in future]
+            if None in j or j != list(range(j[0], j[0] + len(j))):
+                return None, (), ()
+            found[window_key(future)] = (j[0], j[-1])
+    if not found or len(found) > native.MAX_WINDOWS:
+        return None, (), ()
+    needed = set()
+    for ev in evaluations:
+        needed |= {round(float(t), 12) for t in ev.timeline.event_times if t > 0}
+        needed |= {round(float(t), 12) for _, t, _ in ev.controls if t > 0}
+    keep = sorted(index[t] for t in needed if t in index)
+    if len(keep) + 2 * len(found) >= len(times):
+        return None, (), ()
+    return keep, tuple(found.values()), tuple(found)
+
+
 def _run_native(backend, model, market, name, times, n_paths, seed, spot0, history, evaluations, sim_kwargs):
     from .multiasset import Basket
     t_start = time.perf_counter()
     plan = native.plan(model, market, times, sim_kwargs.get("dt_max", 1 / 252), sim_kwargs.get("dt_min", 1 / 2000))
     key = native.seed64(seed)
     threads = int(sim_kwargs.get("eval_threads") or evaluation_threads(backend))
-    sizes = native_pair_batches(n_paths // 2, len(plan.names) * plan.n_obs, 2 * threads if threads > 1 else 1)
+    keep, windows, wkeys = reduction(times, evaluations) if sim_kwargs.get("reduce", True) else (None, (), ())
+    kept_times = np.asarray(times, dtype=float) if keep is None else np.asarray(times, dtype=float)[keep]
+    columns = len(kept_times) + 2 * len(windows)
+    sizes = native_pair_batches(n_paths // 2, len(plan.names) * columns, 2 * threads if threads > 1 else 1)
     starts = np.concatenate([[0], np.cumsum(sizes)[:-1]]).astype(int)
     basket = isinstance(model, Basket)
     n = len(sizes)
 
     def produce(k):
         t = time.perf_counter()
-        spots, timing = native.run(plan, sizes[k], key, int(starts[k]), backend, int(sim_kwargs.get("threads", 0)))
+        spots, extremes, timing = native.run(plan, sizes[k], key, int(starts[k]), backend,
+                                             int(sim_kwargs.get("threads", 0)), keep, windows)
         if basket:
-            scenario = BasketScenario(times, dict(zip(plan.names, spots)), spot0, history)
+            reduced = {wk: {nm: extremes[a][w] for a, nm in enumerate(plan.names)} for w, wk in enumerate(wkeys)}
+            scenario = BasketScenario(kept_times, dict(zip(plan.names, spots)), spot0, history, reduced)
         else:
-            scenario = Scenario(name, times, spots[0], spot0, history)
+            reduced = {wk: extremes[0][w] for w, wk in enumerate(wkeys)}
+            scenario = Scenario(name, kept_times, spots[0], spot0, history, reduced)
         return scenario, time.perf_counter() - t, timing["kernel_ms"]
 
     def evaluate(scenario):
@@ -230,7 +274,7 @@ def _run_native(backend, model, market, name, times, n_paths, seed, spot0, histo
         for j in sorted(evals):
             collect(j)
     return totals, {"simulation": t_sim, "evaluation": t_eval, "wall": time.perf_counter() - t_start, "workers": threads,
-                    "engine": backend, "kernel_ms": kernel, "batches": n}
+                    "engine": backend, "kernel_ms": kernel, "batches": n, "columns": columns, "windows": len(windows)}
 
 
 def run(model, market, name, times, n_paths: int, seed, batch, spot0, history, evaluations: list,
