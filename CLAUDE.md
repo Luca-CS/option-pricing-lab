@@ -38,7 +38,7 @@ python -m venv .venv
   `scripts/lake_update.py` (public sources; `--import-sample zip`, `--dolt default`, `--yahoo-chains` during US hours only: Yahoo blanks
   bid and ask otherwise), `scripts/lake_derive.py` (curves, carry, bank, surfaces, correlation, pairs, observed fits),
   `scripts/lake_surface_test.py` (reconstruction against real chains), `scripts/lake_regime_test.py` (the same by level of the VIX, crash held out),
-  `scripts/lake_replay.py cost|run`, `scripts/seed_showcase.py` (a dozen trades in their own store, `optlab-data/showcase`; guide in `reports/showcase.md`).
+  `scripts/lake_replay.py cost|run [--costs]`, `scripts/seed_showcase.py` (a dozen trades in their own store, `optlab-data/showcase`; guide in `reports/showcase.md`).
   `tests/test_lake_real.py` checks the exit criteria on the real lake and skips without it.
 - Lint config: ruff, line length 120 (`pyproject.toml`). No build step for `docs/` (static, dependency-free JS).
 
@@ -80,13 +80,14 @@ python -m venv .venv
   so scripts reproduce `products.py` bit for bit; several = `SeedSequence(seed).spawn`), `Note`/`Swap` wrappers,
   `dates.py` (Mon-Fri calendar). Builder: `schema.py` (sections, fields with `visible_if`, masks `autocall` and
   `bullet`, `TermSheet`, `describe()` for a front end), `compiler.py` (term sheet → script), `presets.py`.
-  Analysis: `profile.py` classifies the AST (european, path_dependent, callable), `policy.py` maps the class to a
-  model (european → `replication.py` on the SVI smile; otherwise SLV Monte Carlo with an LV control),
-  `solve.py` (coupon affine on common random numbers), `quote.py`, `greeks.py`, `report.py`. Independent
+  Analysis: `profile.py` classifies the AST (european, path_dependent, callable), `policy.py` maps the class to a base
+  (european → `replication.py` on the SVI smile; otherwise local vol Monte Carlo) and to its models of provision (SLV, and local correlation on a basket),
+  `solve.py` (coupon affine on common random numbers), `quote.py`, `greeks.py`, `report.py`. `costs.py` is the desk price (results in `reports/pricing.md`): base + provisions
+  floored at zero + bumps signed by the trader + digitals as call spreads (`digitals.py`), every line on the base's random numbers, the coupon solved on the client price. `defaults.py`
+  holds the table by group of underlyings and size (versioned in the store, edited at `#/costs`), `reserves.py` what a trade freezes at issue, `localcorr.py` the correlation skew. Independent
   references for the tests are in `tests/_structured_refs.py` (closed forms, autocall backward quadrature).
   On top: `portfolio.py` (`Book` of `Position`s on one shared simulation, book Greeks), `cashflows.FundedSwap`
-  (floating funding leg until redemption), `multiasset.py` (`Basket` of correlated names, `BasketContext`; the
-  `basket` policy rule is LV per name with a BS control), and past `fixings` for running products.
+  (floating funding leg until redemption), `multiasset.py` (`Basket` of correlated names, `BasketContext`, SLV with a leverage per name), and past `fixings` for running products.
   Batches run through `engine.py` (`Evaluation`s on each simulated batch, sequential or `workers=` on a persistent
   spawn process pool, same numbers bit for bit; spot factors scale the paths for the Greeks). Also `trade.py`,
   `calendars.py` (NYSE), `lifecycle.py`, `surfaces.py` (`FastSVISurface`, bit-identical), `fastmodels.py` and

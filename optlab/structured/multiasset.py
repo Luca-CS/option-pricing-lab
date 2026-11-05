@@ -5,7 +5,8 @@ simulated in its log-forward coordinate exactly like `models.simulate`. The spot
 matrix square root of the correlation. A name with a variance process has its own spot-vol correlation rho_i: its variance's
 driver is rho_i z_i + sqrt(1 - rho_i^2) w_i. With `vol_corr="same"`, the residuals w_i take the spots' correlation, so two variances have the correlation
 c_ij (rho_i rho_j + sqrt((1 - rho_i^2)(1 - rho_j^2))), close to c_ij for similar rho, and identical names at a correlation of 1 have the same paths. With
-"independent", it is rho_i rho_j c_ij, about half of c_ij on indices. Discounting uses the curve of the first name (one currency).
+"independent", it is rho_i rho_j c_ij, about half of c_ij on indices. A `mixer` (localcorr.py) gives a correlation that moves with the state, each name keeping its law.
+Discounting uses the curve of the first name (one currency).
 With one name and Black-Scholes, the draws are those of `simulate`, so prices match it bit for bit.
 """
 
@@ -54,6 +55,7 @@ class Basket:
     markets: dict  # name → Market (spot and forward curve)
     corr: np.ndarray
     vol_corr: str = "same"  # how the residuals of the variances correlate: "same" as the spots, or "independent"
+    mixer: object = None  # localcorr.LocalCorrelation or StochasticMix: a correlation that moves with the state
 
     def __post_init__(self):
         if self.vol_corr not in ("same", "independent"):
@@ -91,9 +93,14 @@ def simulate_basket(basket: Basket, times, n_paths: int, rng=None, dt_max=1 / 25
     out = np.empty((k, n, len(times)))
 
     # A spot-driven model takes its residuals from a stream of its own, so the spots' normals are those of a model without variance on this seed.
-    spot_driven = any(getattr(m, "spot_driven", False) for m in models)
+    mixer = basket.mixer
+    spot_driven = any(getattr(m, "spot_driven", False) for m in models) or mixer is not None
     residual = rng.spawn(1)[0] if spot_driven else rng
     same = basket.vol_corr == "same" and any(hp is not None for hp in hps)
+    if mixer is not None:
+        from .localcorr import aligned_factors
+        root_low, market_sign, turn = aligned_factors(basket.corr, basket.root, mixer.w0)
+        state = mixer.start(n)
 
     def normals(shape, source=rng):
         z = source.standard_normal(shape)
@@ -102,7 +109,17 @@ def simulate_basket(basket: Basket, times, n_paths: int, rng=None, dt_max=1 / 25
     j = 0
     for i in range(1, len(grid)):
         t0, dt = grid[i - 1], grid[i] - grid[i - 1]
-        z = basket.root @ normals((k, half))
+        raw = normals((k, half))
+        if mixer is None:
+            z = basket.root @ raw
+        else:  # at w0 the factors line up with the constant matrix's draws: common random numbers with it where the weight has not moved
+            market, fresh = market_sign * raw[-1], normals(half, residual)
+            common = np.cos(turn) * market + np.sin(turn) * fresh
+            other = raw.copy()
+            other[-1] = np.sin(turn) * market - np.cos(turn) * fresh
+            weight = mixer.weight(t0, np.log(np.mean(np.exp(x), axis=0)), state)
+            z = np.sqrt(weight) * common + np.sqrt(1.0 - weight) * (root_low @ other)
+            state = mixer.advance(state, dt, market, normals(half, residual)) if state is not None else None
         w = basket.root @ normals((k, half), residual) if same else None
         for a, (m, hp) in enumerate(zip(models, hps)):
             var = m.inst_var(t0, x[a], v[a] if v[a] is not None else np.zeros(n))
@@ -206,6 +223,7 @@ class BasketContext:
     corr: np.ndarray
     valuation: dt.date
     contexts: dict = field(default_factory=dict, repr=False)  # name → PricingContext, which keeps that name's SLV leverages
+    correlation_cache: dict = field(default_factory=dict, repr=False)  # calibrated local correlations
 
     def __post_init__(self):
         self.names = tuple(self.names)
@@ -234,13 +252,13 @@ class BasketContext:
         if vol_shift:
             v = vols[name]
             vols[name] = v + vol_shift if np.isscalar(v) else ShiftedSurface(v, vol_shift)
-        return BasketContext(self.names, markets, vols, self.corr, self.valuation, self.contexts)
+        return BasketContext(self.names, markets, vols, self.corr, self.valuation, self.contexts, self.correlation_cache)
 
     def with_bumps(self, vol: float = 0.0, skew: float = 0.0, corr: float = 0.0) -> "BasketContext":
         """The same context with every name's implied vols moved, and every pair's correlation, the matrix repaired if needed."""
         from .surfaces import BumpedSurface
         vols = {n: (v + vol if np.isscalar(v) else BumpedSurface(v, vol, skew)) if vol or skew else v for n, v in self.vols.items()}
-        return BasketContext(self.names, self.markets, vols, moved_correlation(self.corr, corr) if corr else self.corr, self.valuation, self.contexts)
+        return BasketContext(self.names, self.markets, vols, moved_correlation(self.corr, corr) if corr else self.corr, self.valuation, self.contexts, self.correlation_cache)
 
     @property
     def t_max(self) -> float:
@@ -267,7 +285,17 @@ class BasketContext:
             self.contexts[name] = got
         return got
 
-    def model(self, name: str, T: float = 1.0, names=None, mix: float | None = None, spot_driven: bool = False, vol_corr: str = "same") -> Basket:
+    def local_correlation(self, names=None, T: float = 1.0) -> dict:
+        """The local correlation calibrated on the pseudo-quotes of these names at this date, kept: {"mixer", "lines", "rmse", "origin", "note"}."""
+        from .localcorr import calibrate
+        names = tuple(names or self.names)
+        idx = [self.names.index(n) for n in names]
+        key = (names, self.valuation, np.asarray(self.corr)[np.ix_(idx, idx)].tobytes(), T)
+        if key not in self.correlation_cache:
+            self.correlation_cache[key] = calibrate(self, names, T)
+        return self.correlation_cache[key]
+
+    def model(self, name: str, T: float = 1.0, names=None, mix: float | None = None, spot_driven: bool = False, vol_corr: str = "same", mixer=None) -> Basket:
         """'bs' (ATM vol at T for every name), 'lv' (Dupire on each surface) or 'slv' (each name's leverage, calibrated on its own marginal and kept per name
         and date). A flat name stays Black-Scholes. `spot_driven` runs SLV on the spot draws of local vol: common random numbers with 'lv' on one seed."""
         names = tuple(names or self.names)
@@ -283,4 +311,4 @@ class BasketContext:
             else:
                 raise ValueError(f"basket model {name!r} is not available, expected bs, lv or slv")
         idx = [self.names.index(n) for n in names]
-        return Basket(names, models, {n: self.markets[n] for n in names}, np.asarray(self.corr)[np.ix_(idx, idx)], vol_corr)
+        return Basket(names, models, {n: self.markets[n] for n in names}, np.asarray(self.corr)[np.ix_(idx, idx)], vol_corr, mixer)

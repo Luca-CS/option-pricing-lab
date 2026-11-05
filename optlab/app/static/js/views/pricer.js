@@ -353,6 +353,7 @@ export function costCard(q) {
   const used = (x) => {
     if (x.used == null) return "";
     if (x.kind === "model") return `mix ${num(x.used, 2)}`;
+    if (x.key === "corr_skew") return `${signed(100 * x.used, 2)} pt / sd`;
     const factor = x.key === "repo" || x.key === "spot" ? 1e4 : 100;
     return `${signed(factor * x.used, 2)} ${unitOf[x.key] || ""}`;
   };
@@ -364,7 +365,8 @@ export function costCard(q) {
       h("tr", {}, h("th", {}, "Line"), h("th", {}, "Used"), h("th", {}, "Default"), h("th", { class: "num" }, "Cost"), h("th", { class: "num" }, "SE"),
         h("th", { class: "num" }, "Coupon, bp")),
       row(h("b", {}, "Base"), "", "", num(d.base_price, 3), num(d.base_se, 3), ""),
-      d.lines.map((x) => row(x.kind === "model" ? h("span", {}, x.label, h("span", { class: "faint" }, ` · gap ${signed(x.gap, 3)}${x.cost === 0 ? ", in the desk's favour" : ""}`))
+      d.lines.map((x) => row(x.kind === "model" ? h("span", {}, x.label, h("span", { class: "faint" }, ` · gap ${signed(x.gap, 3)}${x.cost === 0 ? ", in the desk's favour" : ""} `),
+        x.origin ? originBadge(x.origin) : null)
         : x.kind === "digital" ? h("span", {}, x.label, h("span", { class: "faint" }, ` · ${x.note}`))
           : x.note ? h("span", { title: x.note }, x.label) : x.label,
         h("span", {}, used(x), " ", x.overridden ? h("span", { class: "badge warn" }, "overridden") : null),
@@ -377,6 +379,12 @@ export function costCard(q) {
     d.lines.some((x) => x.kind === "model") ? h("p", { class: "muted" }, q.basket && q.basket.kind === "basket"
       ? "The SLV mix is not calibrated, and neither is the correlation of the variances, taken as the spots' correlation: independent variances gave a gap about half this size on a phoenix of three indices (reports/pricing.md)."
       : "The SLV mix is not calibrated: turn on SLV mix band to see what it moves.") : null,
+    d.lines.filter((x) => x.fit && x.fit.length).map((x) => h("div", { class: "notice", style: { marginTop: "8px" } },
+      h("p", {}, "The correlation skew is an assumption here: ", x.note, "."),
+      h("div", { class: "table-wrap" }, h("table", { class: "data nosort" },
+        h("tr", {}, ["Line", "Strike", "Pseudo-quote %", "Model %", "SE", "Assumed correlation"].map((c, i) => h("th", { class: i > 1 ? "num" : "" }, c))),
+        x.fit.map((f) => h("tr", {}, h("td", {}, f.kind.toUpperCase()), h("td", {}, `${num(100 * f.strike, 0)} %`), h("td", { class: "num" }, num(f.pseudo_quote, 3)),
+          h("td", { class: "num" }, num(f.model, 3)), h("td", { class: "num" }, num(f.se, 3)), h("td", { class: "num" }, num(f.assumed_rho, 3)))))))),
     d.lines.some((x) => x.kind === "digital") ? h("details", { class: "more" }, h("summary", {}, "Digitals, date by date"),
       h("div", { class: "table-wrap" }, h("table", { class: "data" },
         h("tr", {}, ["Digital", "Date", "Level", "Jump", "Width", "Side", "Cost alone"].map((c, i) => h("th", { class: i > 1 && i !== 5 ? "num" : "" }, c))),

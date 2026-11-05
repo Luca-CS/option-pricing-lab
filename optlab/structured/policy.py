@@ -36,8 +36,9 @@ RULES = {
                      ("slv",)),
     "basket": Rule("monte_carlo", "lv", "slv",
                    "worst-of: each name on its own smile (Dupire local vol), correlated spots, with a measured correlation; the smile dynamics "
-                   "of each name are not in it, so the gap to SLV, with a leverage per name, is a provision when it goes against the desk",
-                   ("slv",)),
+                   "of each name are not in it, nor is a correlation that rises when the basket falls: the gaps to SLV, with a leverage per name, and to "
+                   "local correlation are provisions when they go against the desk",
+                   ("slv", "local_corr")),
 }
 MODELS = ("bs", "heston", "lv", "slv")
 

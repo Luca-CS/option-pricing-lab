@@ -469,7 +469,7 @@ class Desk:
                 else:
                     value, rho_source[key] = BASKET_DEFAULTS["corr"], "default"
                 corr[i, j] = corr[j, i] = rho[key] = value
-        return BasketContext(order, markets, vols, corr, day, contexts), {"kind": "basket", "names": shown, "corr": rho, "corr_source": rho_source,
+        return BasketContext(order, markets, vols, corr, day, contexts, self.names.correlations), {"kind": "basket", "names": shown, "corr": rho, "corr_source": rho_source,
                                                                 "correlation": meta, "calibrated": ctx.underlying}
 
     def _context_for(self, sheet: TermSheet, ctx: PricingContext):

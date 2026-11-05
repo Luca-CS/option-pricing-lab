@@ -39,7 +39,7 @@ from .surfaces import BumpedSurface, surface_arbitrage
 # Fractions, like every level of the library: vol 0.005 is half a vol point, corr 0.01 is one correlation point, dividend 0.1 is 10 % of
 # the dividends, repo 0.001 is 10 bp.
 BUMPS = {"vol": "Volatility, parallel", "skew": "Volatility skew (90-110 % at 1 year)", "corr": "Correlation", "dividend": "Dividends",
-         "repo": "Repo", "spot": "Spot, delta bid-ask"}
+         "repo": "Repo", "spot": "Spot, delta bid-ask", "corr_skew": "Correlation skew"}
 FORWARD_BUMPS = ("dividend", "repo", "spot")
 SIMULATION_BUMPS = ("vol", "skew", "corr")
 SIDES = {"sell": 1.0, "buy": -1.0}
@@ -75,7 +75,12 @@ class CostInputs:
 
     @property
     def active(self) -> dict:
-        return {k: float(v) for k, v in self.bumps.items() if v}
+        """The bumps of the market: the correlation skew moves a model of provision, and has a line of its own."""
+        return {k: float(v) for k, v in self.bumps.items() if v and k != "corr_skew"}
+
+    @property
+    def corr_skew(self) -> float:
+        return float(self.bumps.get("corr_skew") or 0.0)
 
     @property
     def overridden_mix(self) -> bool:
@@ -101,6 +106,8 @@ class CostLine:
     note: str = ""
     gap: float | None = None  # a model: the gap before the floor, seen from the desk
     detail: list = field(default_factory=list)  # digitals: date, level, jump, width, side, alone
+    origin: str | None = None  # a model calibrated on an assumption says so
+    fit: list = field(default_factory=list)  # local correlation: the pseudo-quotes and the model
 
     @property
     def in_price(self) -> bool:
@@ -131,7 +138,7 @@ class DeskPrice:
                 "coupon_base": self.coupon_base, "coupon_final": self.coupon_final, "seconds": self.seconds, "passes": self.passes,
                 "digital_passes": self.digital_passes,
                 "lines": [{"key": x.key, "label": x.label, "kind": x.kind, "cost": x.cost, "se": x.se, "coupon_bp": x.coupon_bp, "used": x.used,
-                           "default": x.default, "overridden": x.overridden, "note": x.note, "in_price": x.in_price, "gap": x.gap, "detail": x.detail}
+                           "default": x.default, "overridden": x.overridden, "note": x.note, "in_price": x.in_price, "gap": x.gap, "detail": x.detail, "origin": x.origin, "fit": x.fit}
                           for x in self.lines]}
 
     def table(self) -> str:
@@ -220,8 +227,21 @@ class _Lines:
         n = len(self.sets)
         return [_Run(out[i * n:(i + 1) * n]) for i in range(len(forwards))]
 
+    def _run_basket(self, model) -> _Run:
+        d = self.decision
+        return _Run(price_many(self.program, model, self.ctx.market, self.sets, self.fmt, d.n_paths, d.seed, d.batch, valuation=self.product.valuation,
+                               fixings=self.fixings, calendar=self.product.calendar, workers=self.workers, initial_fixing=self.initial))
+
+    def local_corr_run(self, slope: float = 0.0) -> _Run:
+        """Local vol per name with the local correlation of these names, its slope moved by `slope`."""
+        got = self.ctx.local_correlation(self.names)
+        mixer = got["mixer"].bumped(slope) if slope else got["mixer"]
+        return self._run_basket(self.ctx.model("lv", self.horizon, self.names, mixer=mixer))
+
     def model_run(self, name: str, mix: float | None) -> _Run:
         """A model of provision on the spot draws of the base, for the same sets of parameters."""
+        if name == "local_corr":
+            return self.local_corr_run()
         if name != "slv":
             raise ValueError(f"no provision model {name!r} on this context")
         if self.basket:
@@ -376,10 +396,16 @@ def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target:
     everything = lines.run({"all": values})["all"] if len(values) > 1 else None
     moved = everything if everything is not None else next(iter(single.values()), None)
     no_smile = lines.basket and all(np.isscalar(ctx.vols[n]) for n in lines.names)  # flat names: every model is the same Black-Scholes
-    models = {} if no_smile else {name: lines.model_run(name, inputs.mix) for name in decision.provisions}
+    any_flat = lines.basket and any(np.isscalar(ctx.vols[n]) for n in lines.names)  # no pseudo-quote of a name without a surface
+    wanted = () if no_smile else tuple(m for m in decision.provisions if not (m == "local_corr" and any_flat))
+    models = {name: lines.model_run(name, inputs.mix) for name in wanted}
+    skew_up = None
+    if inputs.corr_skew and "local_corr" in models:
+        skew_up = lines.local_corr_run(inputs.corr_skew)
 
     def effect(x):
-        return 0.0 if moved is None else moved.price(x) - base.price(x)
+        moved_part = 0.0 if moved is None else moved.price(x) - base.price(x)
+        return moved_part + (0.0 if skew_up is None else skew_up.price(x) - models["local_corr"].price(x))
 
     def in_force(x):
         return {k: r for k, r in models.items() if inputs.sign * (r.price(x) - base.price(x)) > 0}
@@ -427,11 +453,24 @@ def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target:
         on = inputs.sign * gap > 0
         if on:
             final_extra = final_extra + pairs
-        mix = lines.mix_used(inputs.mix) if name == "slv" else None
+        slv = name == "slv"
+        mix = lines.mix_used(inputs.mix) if slv else None
         note = "" if on else "the gap is in the desk's favour: no provision"
-        c = line(name, f"Model: {name.upper()}" + (f" (mix {mix:g})" if mix is not None else ""), "model", pairs, gap if on else 0.0, note=note, gap=inputs.sign * gap,
-                 used=mix, default=inputs.defaults.get("slv_mix"), overridden=inputs.overridden_mix)
+        label = f"Model: SLV (mix {mix:g})" if slv else "Model: correlation skew (local correlation)"
+        c = line(name, label, "model", pairs, gap if on else 0.0, note=note, gap=inputs.sign * gap, used=mix, default=inputs.defaults.get("slv_mix") if slv else None,
+                 overridden=inputs.overridden_mix if slv else False)
+        if name == "local_corr":
+            c.origin = lines.ctx.local_correlation(lines.names)["origin"]
+            c.note = (note + " · " if note else "") + lines.ctx.local_correlation(lines.names)["note"]
+            c.fit = lines.ctx.local_correlation(lines.names)["lines"]
         out.append(c)
+    if skew_up is not None:
+        r, rm = skew_up.at(x), models["local_corr"].at(x)
+        pairs = None if base_pairs is None else _pct_pairs(r) - _pct_pairs(rm)
+        d = float(pairs.mean()) if pairs is not None else r.price - rm.price
+        final_extra = final_extra + pairs
+        out.append(line("corr_skew", BUMPS["corr_skew"], "bump", pairs, d, used=inputs.corr_skew, default=inputs.defaults.get("corr_skew"),
+                        overridden=inputs.defaults.get("corr_skew") not in (None, inputs.corr_skew), note="the slope of the local correlation, on its own paths"))
     for key, label in BUMPS.items():
         if key not in single:
             continue

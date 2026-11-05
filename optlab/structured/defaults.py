@@ -26,15 +26,15 @@ def _tiers(**columns) -> list:
 
 STARTING = {
     "index_us": {"label": "US index", "currency": "USD", "tiers": _tiers(
-        vol=(-0.0025, -0.005, -0.01), skew=(-0.0025, -0.005, -0.01), corr=(0.01, 0.02, 0.04), dividend=(-0.05, -0.10, -0.15),
+        vol=(-0.0025, -0.005, -0.01), skew=(-0.0025, -0.005, -0.01), corr=(0.01, 0.02, 0.04), corr_skew=(0.01, 0.02, 0.04), dividend=(-0.05, -0.10, -0.15),
         repo=(-0.0005, -0.001, -0.002), spot=(0.0002, 0.0005, 0.001), slv_mix=(0.5, 0.5, 0.5), min_spread=(0.005, 0.01, 0.02),
         delta_max_coupon=(1.0, 1.0, 0.5), delta_max_autocall=(1.0, 1.0, 0.5), delta_max_barrier=(5.0, 5.0, 2.5), delta_max_upside=(1.0, 1.0, 0.5))},
     "index_eu": {"label": "European index", "currency": "EUR", "tiers": _tiers(
-        vol=(-0.0025, -0.005, -0.01), skew=(-0.0025, -0.005, -0.01), corr=(0.01, 0.02, 0.04), dividend=(-0.10, -0.15, -0.20),
+        vol=(-0.0025, -0.005, -0.01), skew=(-0.0025, -0.005, -0.01), corr=(0.01, 0.02, 0.04), corr_skew=(0.01, 0.02, 0.04), dividend=(-0.10, -0.15, -0.20),
         repo=(-0.0005, -0.001, -0.002), spot=(0.0003, 0.0007, 0.0015), slv_mix=(0.5, 0.5, 0.5), min_spread=(0.005, 0.01, 0.02),
         delta_max_coupon=(1.0, 1.0, 0.5), delta_max_autocall=(1.0, 1.0, 0.5), delta_max_barrier=(5.0, 5.0, 2.5), delta_max_upside=(1.0, 1.0, 0.5))},
     "equity_us": {"label": "US large-cap share", "currency": "USD", "tiers": _tiers(
-        vol=(-0.005, -0.01, -0.02), skew=(-0.005, -0.01, -0.02), corr=(0.02, 0.03, 0.05), dividend=(-0.05, -0.10, -0.20),
+        vol=(-0.005, -0.01, -0.02), skew=(-0.005, -0.01, -0.02), corr=(0.02, 0.03, 0.05), corr_skew=(0.02, 0.03, 0.05), dividend=(-0.05, -0.10, -0.20),
         repo=(-0.001, -0.002, -0.004), spot=(0.0005, 0.001, 0.002), slv_mix=(0.5, 0.5, 0.5), min_spread=(0.01, 0.02, 0.03),
         delta_max_coupon=(1.0, 1.0, 0.5), delta_max_autocall=(1.0, 1.0, 0.5), delta_max_barrier=(5.0, 5.0, 2.5), delta_max_upside=(1.0, 1.0, 0.5))},
 }

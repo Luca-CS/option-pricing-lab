@@ -25,6 +25,7 @@ class NameMarkets:
     def __init__(self, lake: Lake, layer: str | None = LAYER, kept: int = KEPT):
         self.lake, self.layer, self.kept = lake, layer, kept
         self._cache: OrderedDict = OrderedDict()
+        self.correlations: dict = {}  # local correlations calibrated per basket and date: BasketContext.correlation_cache
         self._lock = threading.Lock()
 
     def context(self, name: str, day) -> tuple:

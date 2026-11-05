@@ -140,7 +140,7 @@ def _hedging(d: dict | None) -> str:
         used = "" if x.get("used") is None else f"{x['used']:+.4g}" + (" (overridden)" if x.get("overridden") else "")
         bp = "" if x.get("coupon_bp") is None else f"{x['coupon_bp']:+.1f}"
         label = x["label"] + (f" (gap {x['gap']:+.3f}: {x['note']})" if x.get("kind") == "model" and x.get("note") else "")
-        label += f" ({x['note']})" if x.get("kind") == "digital" else ""
+        label += f" ({x['note']})" if x.get("kind") == "digital" or x.get("origin") else ""
         rows.append(row(label, x["cost"], x["se"], used, bp))
     rows.append(f"<tr><td style='text-align:left'><b>Client price ({_e(d['side'])})</b></td><td></td><td><b>{d['final_price']:.3f}</b></td>"
                 f"<td>{d['final_se']:.3f}</td><td></td></tr>")

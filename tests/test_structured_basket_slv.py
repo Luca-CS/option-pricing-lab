@@ -89,7 +89,7 @@ def test_the_worst_of_has_its_slv_provision_on_common_numbers(ctx):
     s = preset("phoenix", **{"general.basket": "worst_of", "general.underlyings": ["SPX", "AAA"], "general.maturity_months": 12})
     q = quote(s, ctx, n_paths=40_000, batch=10_000, costs=CostInputs(mix=0.5))
     line = q.desk.line("slv")
-    assert q.decision.model == "lv" and q.decision.provisions == ("slv",) and line.kind == "model" and line.used == 0.5
+    assert q.decision.model == "lv" and q.decision.provisions == ("slv", "local_corr") and line.kind == "model" and line.used == 0.5
     assert q.desk.final_price == pytest.approx(98.0, abs=1e-9)
     assert q.control.price - q.result.price == pytest.approx(line.gap, abs=1e-9)
     assert line.se < 0.8 * np.hypot(q.control.stderr, q.result.stderr)

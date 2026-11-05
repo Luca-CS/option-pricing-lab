@@ -29,7 +29,7 @@ A structurer or trader, alone, on a desk-like workflow:
 
 ## 3. Information architecture
 
-A left navigation rail with nine destinations, each one screen, plus a global status bar.
+A left navigation rail with ten destinations, each one screen, plus a global status bar.
 
 | Screen | Purpose | Main components |
 |---|---|---|
@@ -37,6 +37,7 @@ A left navigation rail with nine destinations, each one screen, plus a global st
 | **Pricer** | Build and quote a product | Product picker (masks and presets as cards) · term-sheet form generated from the schema, by section · quote panel · actions (book it, export, view script) |
 | **Book** | Positions and risk | Trades table (sortable, filterable by status) · totals bar · per-trade detail drawer · "price the book" with risk |
 | **Lifecycle** | Fixings and events | Fixings editor (paste a column, CSV import, real to model scale) · per-trade timeline of past and next events |
+| **Cost defaults** | What the Pricer loads | Bumps, SLV mix and digital limits by group of underlyings and size, starting values in italics, saved as versions |
 | **Market** | The calibration behind the prices | Snapshot list and details · smile chart per maturity · ATM term structure · model-risk table (BS, LV, Heston, SLV) |
 | **Script lab** | Products outside the schema | Editor with line numbers, errors at line and column, price under a chosen model |
 | **Vol lab** | Models against real quotes | Quotes and day picker · smile with bid and ask · error against the spread by model and maturity · stored runs, each one replayable |
@@ -150,7 +151,22 @@ sample that allows evaluation without redistribution: nothing of it goes into `d
 
 **Location.** `OPTLAB_DATA`, or the `optlab-data` folder beside the main checkout, so that lake and store survive worktrees.
 
-## 8. Delivery plan and status
+## 8. Desk price
+
+Each quote shows a base and what is added to it (`structured/costs.py`, numbers in `reports/pricing.md`).
+
+| Line | How | On screen |
+|---|---|---|
+| Base | Local vol, or replication for a European product | Price with its SE |
+| Model provisions | Gap to SLV, and to local correlation on a worst-of, kept when against the desk | Gap, cost, SE, `synthetic` where the input is an assumption |
+| Bumps | Vol, vol skew, correlation, correlation skew, dividends, repo, spot, each signed by the trader | Used, default, overridden, cost, SE, effect on the coupon |
+| Digitals | Call spreads on the side against the desk, width = max(min spread, jump / delta max); a daily barrier moved by the min spread | Width and cost per kind, date by date |
+
+Defaults come from the table of `#/costs`, by group and size. A worst-of takes the most prudent of its groups. Above the last tier the Pricer asks for the values. The trader overrides a default in the term sheet's
+Hedging costs section, and the override stays with the sheet. A trade booked from a quote freezes its lines (`structured/reserves.py`): the Book values at the base and shows the reserve left, trade by trade. The
+replay adds a line of reserve released to the explained P&L.
+
+## 9. Delivery plan and status
 
 1. Server, jobs, repository, serialization, API, with tests (no browser needed: the API is called directly). Done:
    `tests/test_app_api.py`.
@@ -197,7 +213,6 @@ every call).
 
 Limits that remain, from the library rather than the page:
 
-- SLV is not extended to baskets, so worst-ofs are priced with local vol per name.
 - A market snapshot is a calibration: a new market needs `scripts/run_calibration.py`, or the Data screen for a market from the lake.
   Names other than the one in use come from the lake at the same date (`marketdata/names.py`, surface layer `reconstructed`, kept
   per name and date, leverage calibrated on first SLV use). A name typed in Market > Other underlyings wins over the lake; a name the
