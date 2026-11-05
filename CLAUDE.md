@@ -107,7 +107,7 @@ python -m venv .venv
   makes every `table.data` sortable.
 - **`optlab/marketdata/`**: `lake.py` (raw manifest, append-only Parquet with `origin` on every row, idempotent and bitemporal loads, DuckDB
   reads), `sources/` (one pure `parse` per source, tested offline), `universe.py` (the instrument registry, which `schema.py` reads),
-  `derive/` (curves, carry, fictitious bank, surfaces in three layers, correlation and pseudo CvC/PvP), `quotes.py` (one cleaning chain,
+  `derive/` (curves, carry, fictitious bank, surfaces in three layers, correlation and pseudo CvC/PvP: option on a basket against the same option on its members), `quotes.py` (one cleaning chain,
   `optlab.data.clean_chain`, for every source), `pit.py` (`market_at`: only rows dated at or before the date), `replay.py` (a trade's life on
   real closes), `vollab.py` (fits as stored, replayable runs). The model stays at spot 100: real levels cross at the boundary through
   `spot_scale`. Pricing a sheet on another name's market is an error.

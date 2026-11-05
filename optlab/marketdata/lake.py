@@ -67,8 +67,9 @@ TABLES = {
     "credit_spreads": Table({"entity": "str", "tenor": "float"}, {"spread": "float"}),
     "correl_implied": Table({"index_name": "str", "tenor": "float"}, {"correlation": "float"}),
     "correl_realized": Table({"name_a": "str", "name_b": "str", "window": "int"}, {"correlation": "float"}),
-    "pair_quotes": Table({"name_a": "str", "name_b": "str", "kind": "str", "tenor": "float", "moneyness": "float"}, {
-        "price": "float", "price_se": "float", "rho": "float", "implied_rho": "float"}),
+    "basket_spreads": Table({"basket": "str", "kind": "str", "tenor": "float", "strike": "float"}, {
+        "price": "float", "price_se": "float", "basket_price": "float", "members_price": "float", "basket_vol": "float",
+        "rho": "float", "implied_rho": "float"}),
     "vol_surfaces": Table({"underlying": "str", "layer": "str"}, {
         "surface": "str", "t_max_observed": "float", "extrapolated_from": "float", "inputs": "str", "fit": "str"},
         partition=("underlying",)),

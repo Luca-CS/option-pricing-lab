@@ -5,24 +5,29 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
 import argparse
 import time
 
 import pandas as pd
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from optlab.marketdata.derive.bank import build_bank
 from optlab.marketdata.derive.carry import build_carry, build_parity_carry
-from optlab.marketdata.derive.correl import build_pair_quotes, build_premium, build_realized
+from optlab.marketdata.derive.correl import build_basket_quotes, build_premium, build_realized
 from optlab.marketdata.derive.curves import build_discount_curves
 from optlab.marketdata.derive.surfaces import build_observed, build_reconstructed
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.quotes import quote_days
 from optlab.marketdata.universe import enabled, enabled_names
 
-PAIRS = (("SPX", "NDX"), ("SPX", "RUT"), ("SPX", "AAPL"), ("SPX", "SX5E"))
+BASKETS = (("SPX", "NDX"), ("SPX", "RUT"), ("SPX", "AAPL"), ("SPX", "SX5E"), ("SPX", "NDX", "RUT", "SX5E"),
+           ("AAPL", "AMZN", "GOOGL", "GS", "IBM"))
 
 
-def pair_days(lake):
+def spread_days(lake):
     """Month ends since 2018: pseudo-quotes for the Lab and the worst-ofs do not need every day."""
     days = lake.read("prices_eod", where="instrument = 'SPX' AND obs_date >= DATE '2018-02-01'", columns="obs_date")["obs_date"]
     days = pd.Series(pd.to_datetime(days).sort_values().to_numpy())
@@ -40,7 +45,7 @@ def observed(lake):
 STEPS = {"curves": build_discount_curves, "carry": lambda lake: build_carry(lake, enabled()), "bank": build_bank,
          "reconstructed": lambda lake: build_reconstructed(lake, enabled_names()),
          "realized": lambda lake: build_realized(lake, enabled_names()), "premium": build_premium,
-         "pairs": lambda lake: build_pair_quotes(lake, PAIRS, pair_days(lake)), "observed": observed,
+         "baskets": lambda lake: build_basket_quotes(lake, BASKETS, spread_days(lake), log=print), "observed": observed,
          "parity": lambda lake: build_parity_carry(lake, "SPX", "historicaldata")}
 
 

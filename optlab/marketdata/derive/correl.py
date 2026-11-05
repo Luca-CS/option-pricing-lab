@@ -1,4 +1,4 @@
-"""Correlation: realised from prices, implied through the Cboe COR indices, and pseudo CvC/PvP quotes.
+"""Correlation: realised from prices, implied through the Cboe COR indices, and pseudo CvC/PvP spreads.
 
 Realised: closes of US and European names are hours apart, so pairs across zones use overlapping multi-day returns.
 
@@ -6,11 +6,19 @@ Implied: COR indices quote an average implied correlation of large SPX members. 
 of the universe's US shares gives lambda, applied to any pair as rho' = rho + lambda (1 - rho). With lambda in [0, 1]
 this is a mix of the matrix with the all-ones matrix, so a positive semi-definite matrix stays so.
 
-CvC and PvP are broker quotes with no free source, so these are pseudo-quotes (origin = synthetic), never to be read as
-broker prices. Definitions used here, on S_i(T) / F_i(T): CvC(m) = max(min(X1, X2) - m, 0), paying when both names end
-above m; PvP(m) = max(m - max(X1, X2), 0), paying when both end below m. Marginals come from the two surfaces, joined by a
-Gaussian copula with a correlation rho(m) that is an assumption, higher in the joint down tail. They give the Lab and the
-worst-ofs a correlation skew to fit.
+CvC and PvP are the way correlation trades: an option on an equally weighted basket against the same option on each member,
+struck in % of spot, usually 100 or 110 % for calls and 100 or 90 % for puts. With X_i = S_i(T) / S_i(0):
+    CvC(K) = max(mean X_i - K, 0) - mean max(X_i - K, 0)      PvP(K) = max(K - mean X_i, 0) - mean max(K - X_i, 0)
+Both are written long the basket: they gain with correlation and are never positive. The members do not depend on the
+correlation and take out most of the volatility, so the correlation reads directly off the basket's implied volatility.
+
+By put-call parity, CvC(K) = PvP(K): on one strike they are one instrument and carry one correlation. Long one and short the
+other on one strike is flat, and the skew of correlation shows only between 110 % and 90 %.
+
+There are no free quotes, so these are pseudo-quotes (origin = synthetic), never to be read as broker prices. Marginals come
+from each name's surface, joined by a Gaussian copula with a correlation that is an assumption per strike, so reading it back
+gives that assumption and no market information. What they do measure is how far the direct reading is from the correlation
+that was put in, once the surfaces have a smile. Performances are in each name's own currency, with no quanto adjustment.
 """
 
 from __future__ import annotations
@@ -19,15 +27,21 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-from scipy.optimize import brentq
 from scipy.special import ndtr
 
+from ...blackscholes import black_price, implied_vol
+from ...log import get_logger
 from ..lake import Lake, new_run_id, sql_str
 from ..universe import instrument
+
+LOG = get_logger(__name__)
 
 WINDOWS = (60, 120, 250)
 CROSS_ZONE_HORIZON = 3  # days of overlapping returns between places with different closing hours
 TENOR_WINDOW = {"COR1M": 21, "COR3M": 63, "COR6M": 126, "COR1Y": 252}
+STRIKES = {"cvc": (1.0, 1.1), "pvp": (1.0, 0.9)}  # in % of spot, where they trade
+CP = {"cvc": "call", "pvp": "put"}
+SEED = 2026
 
 
 def closes_wide(lake: Lake, names, day=None, as_of=None) -> pd.DataFrame:
@@ -178,74 +192,127 @@ def copula_expectation(payoff, q_a, q_b, rho: float, n: int = 200) -> float:
     return float(np.sum(w[:, None] * w[None, :] * payoff(x1, x2)))
 
 
-def pair_payoff(kind: str, m: float):
-    if kind == "cvc":
-        return lambda a, b: np.maximum(np.minimum(a, b) - m, 0.0)
-    if kind == "pvp":
-        return lambda a, b: np.maximum(m - np.maximum(a, b), 0.0)
-    raise ValueError(f"unknown two-asset kind {kind!r}, expected cvc or pvp")
-
-
+# --- CvC and PvP: an option on a basket against the same options on its members ---
 @dataclass(frozen=True)
 class CorrelationSkew:
-    """rho(m) assumed for the pseudo-quotes: more correlated in the joint down tail, less in the joint up tail."""
-    atm_down: float = 0.05  # PvP above the base correlation at m = 1
+    """The assumption behind the pseudo-quotes: an offset to the correlation that depends on the strike only, higher below
+    the spot and lower above. It cannot depend on the kind, since a CvC and a PvP on one strike are one instrument."""
     slope_down: float = 0.5
     slope_up: float = 0.25
-    atm_up: float = -0.05  # CvC below it at m = 1
 
-    def rho(self, kind: str, m: float, base: float) -> float:
-        if kind == "pvp":
-            value = base + self.atm_down + self.slope_down * max(1.0 - m, 0.0)
-        else:
-            value = base + self.atm_up - self.slope_up * max(m - 1.0, 0.0)
-        return float(np.clip(value, -0.95, 0.99))
+    def offset(self, strike: float) -> float:
+        return self.slope_down * max(1.0 - strike, 0.0) - self.slope_up * max(strike - 1.0, 0.0)
 
 
-def skewed_matrix(matrix, m: float, kind: str = "pvp", skew: CorrelationSkew = CorrelationSkew()) -> np.ndarray:
-    """A constant-correlation matrix for a product living around moneyness m: every pair moved along the assumed
-    rho(m), then back to a valid matrix. A worst-of with a low barrier lives in the joint down tail, so it takes the PvP
-    side. This is how the one correlation of `BasketContext` carries a skew until the simulation has a local correlation."""
-    m_ = np.array(matrix, dtype=float)
-    n = len(m_)
-    for i in range(n):
-        for j in range(i + 1, n):
-            m_[i, j] = m_[j, i] = skew.rho(kind, m, float(matrix[i, j]))
-    return nearest_correlation(m_)
+def skewed_matrix(matrix, strike: float, skew: CorrelationSkew = CorrelationSkew()) -> np.ndarray:
+    """A valid correlation matrix for a product living around this strike, every pair moved by the same offset. This is how
+    the one correlation of `BasketContext` can carry a skew until the simulation has a local correlation."""
+    moved = np.clip(np.asarray(matrix, dtype=float) + skew.offset(strike), -0.95, 0.99)
+    np.fill_diagonal(moved, 1.0)
+    return nearest_correlation(moved)
 
 
-def implied_pair_rho(price: float, kind: str, m: float, q_a, q_b, n: int = 200) -> float:
-    """The constant copula correlation that gives this undiscounted price (the Lab fits these). Both kinds increase
-    with the correlation."""
-    payoff = pair_payoff(kind, m)
-    gap = lambda r: copula_expectation(payoff, q_a, q_b, r, n) - price
-    return float(brentq(gap, -0.95, 0.995, xtol=1e-5))
+def basket_paths(quantiles, forwards, matrix, n_pairs: int, seed: int = SEED) -> np.ndarray:
+    """Antithetic pairs of S_i(T) / S_i(0): the marginals of the surfaces joined by a Gaussian copula."""
+    from ...structured.multiasset import correlation_root
+    z = np.random.default_rng(seed).standard_normal((n_pairs, len(quantiles)))
+    u = ndtr(np.concatenate([z, -z]) @ correlation_root(np.asarray(matrix, dtype=float)).T)
+    return np.column_stack([f * q(u[:, i]) for i, (f, q) in enumerate(zip(forwards, quantiles))])
 
 
-def pair_rows(day, a: str, b: str, surf_a, surf_b, base_rho: float, tenors=(0.25, 0.5, 1.0),
-              moneyness=(0.8, 0.9, 1.0, 1.1, 1.2), skew: CorrelationSkew = CorrelationSkew()) -> list[dict]:
-    """Prices in % of the forward, undiscounted; price_se is the change when the quadrature is refined, a numerical
-    error with no sampling in it."""
+def spread_payoff(kind: str, strike: float, x) -> np.ndarray:
+    """Option on the equally weighted basket less the average of the same option on each member, path by path."""
+    if kind not in CP:
+        raise ValueError(f"unknown spread {kind!r}, expected cvc or pvp")
+    phi = 1.0 if kind == "cvc" else -1.0
+    return np.maximum(phi * (x.mean(axis=1) - strike), 0.0) - np.maximum(phi * (x - strike), 0.0).mean(axis=1)
+
+
+def member_vols(surfaces, forwards, strike: float, T: float) -> np.ndarray:
+    """Each member's implied volatility at the one strike of the structure, whatever its own moneyness to the forward."""
+    k = np.log(strike / np.asarray(forwards, dtype=float))
+    return np.array([float(np.sqrt(np.asarray(s.w(np.array([ki]), T))[0] / T)) for s, ki in zip(surfaces, k)])
+
+
+def average_correlation(matrix, forwards, vols) -> float:
+    """The one correlation that a basket's variance sees: pairs weighted by a_i a_j s_i s_j, with a_i the share of a member."""
+    a = np.asarray(forwards, dtype=float) / np.sum(forwards) * np.asarray(vols, dtype=float)
+    weights = np.outer(a, a)
+    np.fill_diagonal(weights, 0.0)
+    return float((weights * np.asarray(matrix, dtype=float)).sum() / weights.sum())
+
+
+def read_correlation(basket_price: float, kind: str, strike: float, T: float, forwards, vols) -> tuple[float, float]:
+    """(correlation, basket volatility) read off an undiscounted basket option. No model: the basket's implied volatility,
+    then rho = (s_B^2 - sum a_i^2 s_i^2) / ((sum a_i s_i)^2 - sum a_i^2 s_i^2). The basket is taken as lognormal, and each
+    member's volatility is the one at this strike: that is what would be applied to a real quote."""
+    f = np.asarray(forwards, dtype=float)
+    s_b = float(implied_vol(basket_price, f.mean(), strike, T, 1.0, CP[kind]))
+    a = f / f.sum() * np.asarray(vols, dtype=float)
+    diagonal = float((a * a).sum())
+    return (s_b * s_b - diagonal) / (float(a.sum()) ** 2 - diagonal), s_b
+
+
+def spread_quote(surfaces, forwards, x, matrix, kind: str, strike: float, T: float) -> dict:
+    """One line, in % of notional and undiscounted. `price` is long the basket and short the members, so never positive.
+    The spread comes from the paths, the members from the surfaces in closed form, and the basket from the two."""
+    half = len(x) // 2
+    pairs = spread_payoff(kind, strike, x)
+    pairs = 0.5 * (pairs[:half] + pairs[half:])
+    vols = member_vols(surfaces, forwards, strike, T)
+    members = float(np.mean(black_price(np.asarray(forwards, dtype=float), strike, T, vols, 1.0, CP[kind])))
+    spread = float(pairs.mean())
+    implied, basket_vol = read_correlation(members + spread, kind, strike, T, forwards, vols)
+    return {"kind": kind, "strike": strike, "tenor": T, "price": 100 * spread, "price_se": 100 * float(pairs.std(ddof=1)) / np.sqrt(half),
+            "basket_price": 100 * (members + spread), "members_price": 100 * members, "basket_vol": basket_vol,
+            "rho": average_correlation(matrix, forwards, vols), "implied_rho": implied}
+
+
+def basket_rows(day, names, surfaces, forward, base_matrix, tenors=(0.25, 0.5, 1.0), strikes=STRIKES, n_pairs: int = 100_000,
+                skew: CorrelationSkew = CorrelationSkew(), seed: int = SEED) -> list[dict]:
+    """Every line of one basket on one day. `forward(T)` gives S_i-forward over spot per member. Simulated once per strike, so
+    a CvC and a PvP on one strike share their paths and differ by nothing."""
+    label = "+".join(names)
     rows = []
     for T in tenors:
-        qa, qb = forward_quantile(surf_a, T), forward_quantile(surf_b, T)
-        for kind in ("cvc", "pvp"):
-            for m in moneyness:
-                rho = skew.rho(kind, m, base_rho)
-                payoff = pair_payoff(kind, m)
-                coarse = copula_expectation(payoff, qa, qb, rho, 100)
-                fine = copula_expectation(payoff, qa, qb, rho, 200)
-                rows.append({"name_a": a, "name_b": b, "kind": kind, "tenor": T, "moneyness": m, "obs_date": day,
-                             "price": 100 * fine, "price_se": 100 * abs(fine - coarse), "rho": rho, "implied_rho": rho})
+        f = np.asarray(forward(T), dtype=float)
+        quantiles = [forward_quantile(s, T) for s in surfaces]
+        for strike in sorted({k for ks in strikes.values() for k in ks}):
+            matrix = skewed_matrix(base_matrix, strike, skew)
+            x = basket_paths(quantiles, f, matrix, n_pairs, seed)
+            for kind, ks in strikes.items():
+                if strike in ks:
+                    rows.append({"basket": label, "obs_date": day, **spread_quote(surfaces, f, x, matrix, kind, strike, T)})
     return rows
 
 
-def build_pair_quotes(lake: Lake, pairs, days) -> list[dict]:
+def build_basket_quotes(lake: Lake, baskets, days, n_pairs: int = 100_000, as_of=None, log=None) -> list[dict]:
+    """Pseudo-quotes on the reconstructed layer only, so that the series never changes layer. A day missing a member's market
+    is skipped and counted: nothing is carried over."""
+    from ..pit import MODEL_SPOT, market_curves
     from .surfaces import surface_at
-    rows = []
+    rows, skipped = [], 0
     for day in days:
-        for a, b in pairs:
-            base, _ = correlation_at(lake, [a, b], day)
-            sa, sb = surface_at(lake, a, day), surface_at(lake, b, day)
-            rows += pair_rows(pd.Timestamp(day).date(), a, b, sa.surface, sb.surface, float(base[0, 1]))
-    return [lake.ingest("pair_quotes", pd.DataFrame(rows), "copula_on_surfaces", "synthetic", new_run_id("derive_pairs"))]
+        cache = {}
+
+        def parts(name):
+            if name not in cache:
+                cache[name] = (surface_at(lake, name, day, as_of, layer="reconstructed").surface, market_curves(lake, name, day, as_of)[0])
+            return cache[name]
+
+        for names in baskets:
+            try:
+                surfaces, markets = zip(*(parts(n) for n in names))
+                base, _ = correlation_at(lake, names, day, as_of=as_of)
+            except KeyError:
+                skipped += 1
+                continue
+            rows += basket_rows(pd.Timestamp(day).date(), names, surfaces, lambda T, m=markets: [float(x.F(T)) / MODEL_SPOT for x in m], base,
+                                n_pairs=n_pairs)
+        if log:
+            log(f"{pd.Timestamp(day).date()}: {len(rows)} lines, {skipped} skipped")
+    if skipped:
+        LOG.warning("basket quotes: %d basket-days skipped, a member had no market", skipped)
+    if not rows:
+        return []
+    return [lake.ingest("basket_spreads", pd.DataFrame(rows), "copula_on_surfaces", "synthetic", new_run_id("derive_baskets"))]

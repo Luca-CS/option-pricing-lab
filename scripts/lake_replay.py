@@ -8,9 +8,13 @@ Writes results/replay.json: performances, events, flows and P&L in % of notional
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
 import argparse
 import datetime as dt
 import json
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from optlab.config import paths
 from optlab.marketdata.lake import Lake

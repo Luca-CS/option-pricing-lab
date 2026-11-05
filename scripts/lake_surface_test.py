@@ -7,6 +7,8 @@ quote): results/surface_reconstruction.json, read by reports/surface_reconstruct
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
 import argparse
 import datetime as dt
 import json
@@ -14,6 +16,8 @@ import time
 
 import numpy as np
 import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from optlab.config import paths
 from optlab.marketdata.derive.surfaces import fit_observed, fit_shape, index_panel, reconstruct_on, static_prior
