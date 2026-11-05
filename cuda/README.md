@@ -8,6 +8,16 @@ CPU reference that runs the same path code. Every GPU price is checked against a
 448 GB/s, FP64 at 1/32 of the FP32 rate), driver 617.42, CUDA 12.9. CPU: AMD Ryzen 5 3600 (6 cores, 12 threads).
 Windows 11, MSVC 19.44.
 
+Two engines share this directory. The first one, documented below, prices fixed products (European, Asian,
+down-and-out) under Black-Scholes and Heston QE, and carries the optimisation study. The second one is the **path
+engine of the Python library** (`paths.hpp`, `leverage.hpp`): it simulates every model of `optlab` (Black-Scholes,
+Dupire local vol, Heston and SLV, alone or in baskets of up to 8 correlated names with a local correlation) with the
+library's own discretisation, calibrates the SLV leverage by the particle method, and hands the paths to the
+structured products pricer. It runs in double on every CPU thread, or in float on the GPU, from the same header, and
+builds without CUDA for machines without an NVIDIA card. Its results, its validation and the plan that drives it are
+in [ROADMAP.md](ROADMAP.md): a Phoenix at one million paths goes from 31.9 s on NumPy to 0.19 s on this GPU, and a
+worst-of on three names from 104.5 s to 0.29 s.
+
 ## Results
 
 **Speed.** Heston with Andersen's QE scheme, down-and-out call, 10^7 paths × 252 daily steps: **91 ms** on the
@@ -142,6 +152,8 @@ and the logarithm of the exponential side. The BS kernels profile identically be
 
 ## Limitations
 
+These concern the fixed-product engine; the path engine covers every model of the library.
+
 - **Two models, three products.** No local or stochastic-local volatility, no American exercise
   (Longstaff-Schwartz needs the stored paths and a regression, which is a different kernel shape), no Greeks.
   Parameters are flat: constant rate, dividend yield and Heston parameters.
@@ -155,13 +167,16 @@ and the logarithm of the exponential side. The BS kernels profile identically be
 
 ## Running
 
-Requires CUDA 12.x, CMake ≥ 3.24 and a C++17 compiler. On Windows: Visual Studio 2022 Build Tools, with
-`CUDA_PATH` set. The architecture is fixed to `sm_75` in `CMakeLists.txt`.
+Requires CMake ≥ 3.24 and a C++17 compiler; CUDA 12.x for the GPU (found automatically). On Windows: Visual Studio
+2022 Build Tools, with `CUDA_PATH` set. `-DOPTLAB_CUDA_ARCHS=native` (the default) compiles for the GPUs of the
+machine, `portable` for sm_61 to sm_120 plus PTX; `-DOPTLAB_WITH_CUDA=OFF` builds the CPU engines only, which is
+what a machine without an NVIDIA card needs.
 
 ```bash
 cmake -S cuda -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release
-ctest --test-dir build -C Release                     # validation table (CPU and GPU) and the 10^8-path QE bias test
+ctest --test-dir build -C Release                     # path engine checks, validation table, 10^8-path QE bias test
+python scripts/bench_accel.py                         # NumPy, CPU engine and GPU engine on structured products
 build/Release/test_prices.exe gpu                     # one suite: cpu | gpu | double | closed | qe-bias
 python cuda/bench/bench_numpy.py                      # NumPy timings of optlab (venv), read by bench.exe
 build/Release/bench.exe                               # benchmark table above
@@ -213,5 +228,9 @@ optlab::McResult r = optlab::gpu_price(rq);         // r.out[0]: barrier, r.out[
 | `src/cpu_mc.cpp` | double-precision multithreaded reference |
 | `src/capi.cpp`, `include/optlab_cuda/capi.h` | C interface of the shared library, for `optlab/gpu.py` |
 | `src/closed_forms.cpp` | Black-Scholes, geometric Asian, Reiner-Rubinstein barrier, BGK shift |
+| `include/optlab_cuda/philox.hpp` | Philox4x32-10 and Box-Muller, the same normals on CPU and GPU |
+| `include/optlab_cuda/paths.hpp`, `src/paths_cpu.cpp`, `src/paths_gpu.cu` | path engine of the Python library (`optlab/native.py`) |
+| `include/optlab_cuda/leverage.hpp`, `src/leverage.cpp`, `src/leverage_gpu.cu` | SLV leverage by the particle method |
 | `tests/test_prices.cpp` | validation table, float against double, QE bias at 10^8 paths |
+| `tests/test_paths.cpp` | path engine: forwards, Black's formula, correlation, windows, GPU against CPU |
 | `bench/` | benchmark, optimisation study, NumPy timings, Nsight Compute target |

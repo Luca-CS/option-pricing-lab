@@ -44,7 +44,8 @@ from .jobs import Jobs
 from .repository import Repository
 from .serialize import book_json, clean, events_json, quote_json, result_json, trade_json
 
-PRECISION = {"quick": (20_000, 10_000), "standard": (100_000, 25_000), "precise": (200_000, 25_000)}
+PRECISION = {"quick": (20_000, 10_000), "standard": (100_000, 25_000), "precise": (200_000, 25_000),
+             "max": (2_000_000, 25_000)}  # max: for the compiled engine (the page offers it only then)
 FIELD = re.compile(r"^([a-z_]+\.[a-z_]+)\b")
 # Names the lake cannot give: flat Black-Scholes markets rescaled to 100, with these defaults until the user sets them
 # (Market screen). The rate defaults to the 1-year zero rate of the market in use.

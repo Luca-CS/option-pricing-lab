@@ -8,6 +8,9 @@ import { clear, dateLabel, dialog, errorNotice, field, h, int, num, originBadge,
   switchControl, toast } from "../ui.js";
 
 const PRECISION = [["quick", "Quick · 20k"], ["standard", "Standard · 100k"], ["precise", "Precise · 200k"]];
+// Two million paths only when the compiled engine simulates (seconds on the GPU, minutes on NumPy).
+const precisions = () => (desk.health && desk.health.engine && desk.health.engine.resolved !== "numpy"
+  ? [...PRECISION, ["max", `Max · 2M${desk.health.engine.resolved === "gpu" ? " (GPU)" : ""}`]] : PRECISION);
 const BLURB = {
   reverse_convertible: "Fixed coupons, capital at risk below a barrier at maturity",
   barrier_reverse_convertible: "Fixed coupons, daily knock-in barrier",
@@ -183,7 +186,7 @@ export async function render(page, arg) {
       h("div", { class: "card-head" }, h("h2", {}, "Quote"),
         h("span", { class: "muted" }, "Ctrl + Enter")),
       h("div", { class: "btn-row", style: { justifyContent: "space-between" } },
-        segmented(PRECISION, state.precision, (v) => { save({ precision: v }); drawOptions(); }, "Precision"),
+        segmented(precisions(), state.precision, (v) => { save({ precision: v }); drawOptions(); }, "Precision"),
         h("button", { class: "btn primary lg", type: "button", id: "quote-btn", onclick: doQuote,
           disabled: lastForm && lastForm.error ? true : undefined }, "Quote")),
       h("div", { class: "btn-row", style: { marginTop: "12px", gap: "18px" } },

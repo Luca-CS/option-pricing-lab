@@ -107,7 +107,7 @@ def main():
     rows = []
     print(f"cpu count {os.cpu_count()}, paths {args.paths:,}, batch {args.batch:,}")
     runs = [(e, int(w)) for e in args.engines.split(",") for w in (args.workers.split(",") if e == "numpy" else ["1"])]
-    for key in args.cases.split(","):
+    for key in [c for c in args.cases.split(",") if c]:
         run_case(ctx, key, 20_000, 1, args.batch, "gpu" if "gpu" in args.engines else "numpy")  # warm-up: tables, CUDA context
         for e, w in runs:
             r = run_case(ctx, key, args.paths, w, args.batch, e)

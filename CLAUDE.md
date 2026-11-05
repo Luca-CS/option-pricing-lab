@@ -31,6 +31,9 @@ python -m venv .venv
   Benchmarks, from the repo root: `cuda/bench/bench_numpy.py` (venv) then `build\Release\bench.exe`;
   `build\Release\ablation.exe` (plus `ablation_ieee`, `ablation_fastmath`: same library, other nvcc math flags).
   Time the GPU only after a sustained warm-up (seconds of CPU work drop it to the 300 MHz idle clock).
+  `-DOPTLAB_WITH_CUDA=OFF` builds the CPU engines only; `-DOPTLAB_CUDA_ARCHS=portable` targets sm_61 to sm_120.
+  `build\Release\test_paths.exe` checks the path engine; `scripts/bench_accel.py [--desk standard]` times NumPy against
+  the CPU and GPU engines; `tests/test_native.py` validates the engine from Python (skipped without the library).
   Profiling: `ncu --set full -k regex:mc_kernel -o build/ncu_profile build\Release\profile.exe` from an
   administrator shell (GPU counters are admin-only on this machine); read it with
   `ncu -i build/ncu_profile.ncu-rep --page raw --csv --metrics ...` (`--page details` fails under the French locale).
@@ -74,6 +77,16 @@ python -m venv .venv
   NumPy pricers without the library, without a GPU, or outside the engine's cases. Engine errors are C++
   exceptions turned into an error code, never `exit`: the engine runs inside the Python process.
   `tests/test_gpu.py` skips the engine tests when the library or the GPU is missing.
+- **`optlab/native.py`** drives the path engine of `cuda/` (`paths.hpp`: one header for the CPU in double and the GPU in
+  float; `leverage.hpp`: the SLV particle method): `plan()` turns a model or a `Basket` into arrays (local variance and
+  squared leverage as uniform rows per step), `run()` simulates a range of pairs. Normals are Philox, a function of
+  (seed, pair, rank of the normal), so prices depend on (seed, n_paths) only and the CPU and GPU share their draws.
+  `engine=` (numpy, cpu, gpu, auto) on `price_many`, `native.set_default`, or `$OPTLAB_ENGINE` picks the source; the
+  default is numpy, so the library's numbers and its bit-for-bit tests are unchanged; `structured/engine.py` falls
+  back to NumPy with the reason in `timings["engine_note"]`. On the engine, batches are sized by memory, evaluated on
+  several threads while the next one simulates, and daily windows come back as their lowest and highest spot.
+  `slv.calibrate_leverage(engine=...)` uses the same switch. The desk starts with `--engine auto`. Keep the
+  `_PathsRequest` and `_LeverageRequest` structures field by field equal to `capi.h`.
 - **`optlab/structured/`** prices structured products in three layers. Engine: a payoff script language
   (`script/`: hand-written lexer and recursive-descent parser, AST in `nodes.py`, printer, `validate`, `timeline`,
   vectorised `evaluator` with float masks: `x = e` under a mask m is `m*e + (1-m)*x`, `pay` adds `m*alive*e`,

@@ -67,6 +67,22 @@ intrinsics rejected for a 0.13 SE bias, Kahan float sums, stored against fused p
 profile: it found warps half idle in the QE step, and the fix cut the Heston kernel time by 31 %. From Python,
 `optlab.gpu` calls the engine through `ctypes` and falls back to the NumPy pricers without a GPU.
 
+The same directory holds the **path engine of the library** (`optlab.native`): every model (Black-Scholes, local
+vol, Heston, SLV, correlated baskets with a local correlation) simulated with the library's discretisation on every
+CPU thread or on the GPU, and the SLV leverage by the particle method. The structured products and the desk use it
+with `engine="auto"`; NumPy stays the default of the library and the reference of the tests. At one million paths:
+
+| | NumPy, 1 core | NumPy, 6 workers | CPU engine | GPU engine |
+|---|---|---|---|---|
+| Phoenix 2 years, local vol | 31.9 s | 11.5 s | 2.8 s | 0.19 s |
+| Worst-of Phoenix on 3 names | 104.5 s | 34.8 s | 6.4 s | 0.29 s |
+| BRC 1 year, daily barrier | 23.2 s | 6.2 s | 1.8 s | 0.08 s |
+| SLV leverage, 1 year, 200,000 particles | 4.5 s | | 1.3 s | 0.16 s |
+
+Prices agree with NumPy within the Monte Carlo error; the machine, the method and the next steps are in
+[cuda/ROADMAP.md](cuda/ROADMAP.md). Without an NVIDIA card the engine builds for the CPU alone
+(`-DOPTLAB_WITH_CUDA=OFF`), and without a compiler everything stays on NumPy.
+
 ## Structured products
 
 [`optlab/structured/`](optlab/structured) prices equity structured products (autocalls Athena and Phoenix,
