@@ -62,6 +62,7 @@ TABLES = {
     "discount_curves": Table({"curve": "str", "tenor": "float"}, {"zero_rate": "float", "discount": "float"}),
     "fx_spots": Table({"pair": "str"}, {"rate": "float"}),
     "fx_forwards": Table({"pair": "str", "tenor": "float"}, {"forward": "float", "points": "float"}),
+    "fx_vols": Table({"pair": "str", "window": "int", "method": "str"}, {"vol": "float"}),
     "carry_implied": Table({"underlying": "str", "tenor": "float", "method": "str"}, {
         "carry": "float", "discount": "float", "forward_ratio": "float"}),
     "credit_spreads": Table({"entity": "str", "tenor": "float"}, {"spread": "float"}),

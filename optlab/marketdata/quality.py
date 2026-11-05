@@ -77,6 +77,26 @@ def check_splits(prices: pd.DataFrame, actions: pd.DataFrame, max_jump: float = 
     return issues
 
 
+def check_fx(spots: pd.DataFrame, today: dt.date, max_gap: float = 0.02, max_move: float = 0.05) -> list[dict]:
+    """Rates of each pair: one-day moves, stale series, and the gap between two sources on one date. The ECB fixes at 14:15 CET and
+    H.10 at noon in New York, so a gap of some tenths of a percent is only the hours between them."""
+    issues = []
+    for (pair, source), g in spots.groupby(["pair", "source"]):
+        g = g.sort_values("obs_date")
+        days = pd.to_datetime(g["obs_date"])
+        moves = np.abs(np.diff(np.log(g["rate"].to_numpy(dtype=float))))
+        for i in np.where(moves > max_move)[0]:
+            issues.append(_issue("fx_spots", pair, "large_move", "warning", f"{source}: {moves[i]:.1%} log move", days.iloc[i + 1]))
+        if (today - days.iloc[-1].date()).days > STALE_DAYS:
+            issues.append(_issue("fx_spots", pair, "stale", "warning", f"{source}: last rate {days.iloc[-1].date()}", days.iloc[-1]))
+    wide = spots.pivot_table(index=["pair", "obs_date"], columns="source", values="rate")
+    if wide.shape[1] == 2:
+        gap = np.log(wide.iloc[:, 0] / wide.iloc[:, 1]).abs().dropna()
+        for (pair, day), value in gap[gap > max_gap].items():
+            issues.append(_issue("fx_spots", pair, "sources_disagree", "warning", f"{value:.2%} between {' and '.join(wide.columns)}", day))
+    return issues
+
+
 def check_calendar(lake: Lake) -> list[dict]:
     """Weekdays where the rule calendar of a place and the traded days disagree. A traded day missing from Yahoo shows
     here too: the fixings of that day have to be filled before a replay crosses it."""
@@ -104,6 +124,8 @@ def run_report(lake: Lake, today: dt.date | None = None, store: bool = True) -> 
                                lake.read("corporate_actions"))
     if lake.has("calendars"):
         issues += check_calendar(lake)
+    if lake.has("fx_spots"):
+        issues += check_fx(lake.read("fx_spots", columns="pair, source, obs_date, rate"), today)
     frame = pd.DataFrame(issues, columns=["dataset", "item", "check_name", "severity", "detail", "obs_date"])
     if store and len(frame):
         lake.ingest("quality_issues", frame, "quality", "derived", new_run_id("quality"))

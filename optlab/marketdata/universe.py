@@ -46,9 +46,10 @@ UNIVERSE = (
     Instrument("ASML", "ASML", "equity", "EUR", "EURONEXT", "ASML.AS", enabled=False),
     Instrument("LVMH", "LVMH", "equity", "EUR", "EURONEXT", "MC.PA", enabled=False),
     Instrument("SAP", "SAP", "equity", "EUR", "XETRA", "SAP.DE", enabled=False),
-    Instrument("EURUSD", "Euro / US dollar", "fx", "USD", "FX", "EURUSD=X", enabled=False),
-    Instrument("USDJPY", "US dollar / yen", "fx", "JPY", "FX", "USDJPY=X", enabled=False),
-    Instrument("GBPUSD", "Sterling / US dollar", "fx", "USD", "FX", "GBPUSD=X", enabled=False),
+    # Pairs: base then quote, the rate is quote per base. Loaded from the ECB and FRED (sources/fx.py), not from their Yahoo tickers.
+    Instrument("EURUSD", "Euro / US dollar", "fx", "USD", "FX", "EURUSD=X"),
+    Instrument("USDJPY", "US dollar / yen", "fx", "JPY", "FX", "USDJPY=X"),
+    Instrument("GBPUSD", "Sterling / US dollar", "fx", "USD", "FX", "GBPUSD=X"),
 )
 _BY_ID = {i.id: i for i in UNIVERSE}
 REFERENCE_INSTRUMENT = {"NYSE": "SPX", "EUREX": "SX5E"}  # whose traded days define a place's observed calendar
@@ -66,9 +67,21 @@ def enabled(asset_class: str | None = None) -> tuple:
     return tuple(i for i in UNIVERSE if i.enabled and (asset_class is None or i.asset_class == asset_class))
 
 
+def enabled_underlyings() -> tuple:
+    """The enabled instruments with prices and a surface: indices and shares, not the FX pairs."""
+    return tuple(i for i in enabled() if i.asset_class != "fx")
+
+
 def enabled_names() -> tuple:
     """Names offered by the term-sheet form."""
-    return tuple(i.id for i in enabled())
+    return tuple(i.id for i in enabled_underlyings())
+
+
+def pair_currencies(pair: str) -> tuple[str, str]:
+    """(base, quote) of a pair: its rate is quote per base, so domestic per foreign with foreign = base."""
+    if len(pair) != 6:
+        raise ValueError(f"{pair!r} is not a currency pair")
+    return pair[:3], pair[3:]
 
 
 def as_rows(as_of) -> pd.DataFrame:

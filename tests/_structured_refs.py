@@ -179,6 +179,36 @@ def autocall_reference(sheet, market=FLAT, vol=VOL, valuation="2026-10-27", dx=0
     return float(propagate(W, val, dates[0], from_x=0.0)[0, 0])
 
 
+# --- quanto under Black-Scholes ---
+
+def quanto_forward(S, T, r_foreign, q, vol, vol_fx, rho):
+    """Forward of a foreign asset under the domestic measure, written out rather than read from the library."""
+    return S * np.exp((r_foreign - q - rho * vol * vol_fx) * T)
+
+
+def quanto_call_undiscounted(S, K, T, r_foreign, q, vol, vol_fx, rho):
+    """Closed form of E^d[(S_T - K)+]: Black on the quanto forward (Reiner 1992, Derman, Karasinski and Wecker 1990)."""
+    F = quanto_forward(S, T, r_foreign, q, vol, vol_fx, rho)
+    sd = vol * np.sqrt(T)
+    d1 = np.log(F / K) / sd + 0.5 * sd
+    return float(F * norm.cdf(d1) - K * norm.cdf(d1 - sd))
+
+
+def quanto_call_by_change_of_measure(S, K, T, r_foreign, r_domestic, q, vol, vol_fx, rho, n=2_000_000, seed=2026):
+    """(price, se) with no quanto drift anywhere: S and X = domestic per foreign are drawn under the foreign measure, where S drifts
+    by r_foreign - q and X by r_domestic - r_foreign + vol_fx^2. A domestic payoff Y at T is Y / X_T foreign units, so its domestic
+    value today is X_0 D_foreign E^f[Y / X_T]. X_0 cancels."""
+    rng = np.random.default_rng(seed)
+    z = rng.standard_normal((2, n // 2))
+    z = np.concatenate([z, -z], axis=1)
+    z_s, z_x = z[0], rho * z[0] + np.sqrt(1 - rho**2) * z[1]
+    s = S * np.exp((r_foreign - q - 0.5 * vol**2) * T + vol * np.sqrt(T) * z_s)
+    x_ratio = np.exp((r_domestic - r_foreign + 0.5 * vol_fx**2) * T + vol_fx * np.sqrt(T) * z_x)  # X_T / X_0
+    pv = np.exp(-r_foreign * T) * np.maximum(s - K, 0.0) / x_ratio
+    pairs = 0.5 * (pv[: n // 2] + pv[n // 2:])
+    return float(pairs.mean()), float(pairs.std(ddof=1) / np.sqrt(len(pairs)))
+
+
 # --- worst-of of two names under Black-Scholes ---
 
 def _log_params(T, vol, r, q):

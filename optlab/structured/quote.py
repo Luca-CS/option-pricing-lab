@@ -17,6 +17,7 @@ from .multiasset import BasketContext
 from .pricer import StructuredResult, check_fixing_scale, history_times, price_many
 from .profile import ProductProfile, profile
 from .replication import replication_result
+from .quanto import payment_warnings
 from .schema import TermSheet
 from .script.nodes import Param, Program
 from .script.printer import to_text
@@ -193,6 +194,7 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
     if not basket and getattr(ctx, "underlying", None) not in (None, *sheet.underlyings):
         raise ValueError(f"the market in use is {ctx.underlying}, the term sheet is on {sheet.underlyings[0]}: "
                          "choose a market of that name")
+    payment_notes = payment_warnings(sheet, ctx)
     decision = decide(prof, ctx.t_max, model, control, n_paths, batch, seed,
                       has_surfaces=getattr(ctx, "has_surfaces", True))
     fmt = wrapper(sheet, product)
@@ -220,7 +222,7 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
         ctrl_run = _pricer(product, ctx, fmt, decision, prof, decision.control, "monte_carlo",
                            control_paths or decision.n_paths, fixings, workers, fast=fast)
         (ctrl,) = ctrl_run([params])
-    warnings = list(decision.warnings)
+    warnings = list(decision.warnings) + payment_notes
     if rate is not None and rate < 0:
         warnings.append("the solved coupon is negative: the product cannot reach the target price with a coupon")
     g = None

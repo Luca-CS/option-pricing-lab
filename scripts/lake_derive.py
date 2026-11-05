@@ -1,6 +1,6 @@
 """Compute the derived and synthetic tables of the lake from what it holds: curves, carry, bank, surfaces, correlation.
 
-    python scripts/lake_derive.py [--only curves carry bank ...] [--lake PATH]
+    python scripts/lake_derive.py [--only curves carry bank fx ...] [--lake PATH]
 """
 
 from __future__ import annotations
@@ -18,10 +18,11 @@ from optlab.marketdata.derive.bank import build_bank
 from optlab.marketdata.derive.carry import build_carry, build_parity_carry
 from optlab.marketdata.derive.correl import build_basket_quotes, build_premium, build_realized
 from optlab.marketdata.derive.curves import build_discount_curves
+from optlab.marketdata.derive.fx import build_fx_correl, build_fx_forwards, build_fx_vols
 from optlab.marketdata.derive.surfaces import build_observed, build_reconstructed
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.quotes import quote_days
-from optlab.marketdata.universe import enabled, enabled_names
+from optlab.marketdata.universe import enabled_names, enabled_underlyings
 
 BASKETS = (("SPX", "NDX"), ("SPX", "RUT"), ("SPX", "AAPL"), ("SPX", "SX5E"), ("SPX", "NDX", "RUT", "SX5E"),
            ("AAPL", "AMZN", "GOOGL", "GS", "IBM"))
@@ -42,7 +43,12 @@ def observed(lake):
     return out
 
 
-STEPS = {"curves": build_discount_curves, "carry": lambda lake: build_carry(lake, enabled()), "bank": build_bank,
+def fx(lake):
+    """Forwards by covered parity, realised volatility, and each name against each pair."""
+    return build_fx_forwards(lake) + build_fx_vols(lake) + build_fx_correl(lake)
+
+
+STEPS = {"curves": build_discount_curves, "carry": lambda lake: build_carry(lake, enabled_underlyings()), "bank": build_bank, "fx": fx,
          "reconstructed": lambda lake: build_reconstructed(lake, enabled_names()),
          "realized": lambda lake: build_realized(lake, enabled_names()), "premium": build_premium,
          "baskets": lambda lake: build_basket_quotes(lake, BASKETS, spread_days(lake), log=print), "observed": observed,

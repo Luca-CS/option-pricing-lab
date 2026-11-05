@@ -12,7 +12,7 @@ import datetime as dt
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..marketdata.universe import enabled_names
+from ..marketdata.universe import _BY_ID, enabled_names
 
 
 @dataclass(frozen=True)
@@ -55,6 +55,8 @@ SECTIONS = {s.name: s for s in [
         Field("underlyings", "names", ("SPX", "SX5E"), "Basket (worst-of)",
               visible_if=_v("general.basket", "worst_of")),
         Field("notional", "number", 100.0, "Notional", minimum=0.0),
+        Field("payment_currency", "choice", "native", "Payment currency (native: of the first name)",
+              choices=("native", "USD", "EUR")),
         Field("strike_date", "date", None, "Strike date (default: valuation date)"),
         Field("maturity_months", "int", 24, "Maturity", "months", minimum=1),
         Field("pay_lag", "int", 5, "Payment lag", "business days", minimum=0),
@@ -276,6 +278,16 @@ class TermSheet:
         if self.get("general.basket") == "worst_of":
             return self.get("general.underlyings")
         return (self.get("general.underlying"),)
+
+    @property
+    def payment_currency(self) -> str | None:
+        """The currency of the payments: as set, or the first name's. A name in another currency is then a quanto.
+        None for a native sheet on a name outside the registry."""
+        chosen = self.get("general.payment_currency")
+        if chosen != "native":
+            return chosen
+        first = _BY_ID.get(self.underlyings[0])
+        return first.currency if first else None
 
     def to_dict(self, json_safe: bool = False) -> dict:
         """{"type": mask, section: {field: value}}; with json_safe, dates are ISO strings and tuples lists."""

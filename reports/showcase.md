@@ -82,7 +82,8 @@ script, then **Book this trade**.
 
 ## What this does not show
 
-- **No FX and no quanto.** The tables and the parity formula exist, with no FX source loaded. A worst-of on SPX and SX5E mixes performances in their own currencies, with no adjustment.
+- **FX is loaded, and the quanto reaches the replay only.** The lake has ECB spots since 2015 (H.10 as a check), EURUSD forwards by covered parity, and realised FX volatility and correlation. A term sheet has a payment currency. On the lake's market, so in a replay, a worst-of on SPX and SX5E has SX5E on its quanto forward and the dollar curve. The Pricer and the Book still take flat worst-ofs: the quote says the performances are not adjusted, an explicit payment currency is refused, and SHOW-09 stays unadjusted. [fx_check.md](fx_check.md).
+- **The FX inputs have limits.** The volatility is realised (`derived`): no free source quotes an implied one. USDJPY and GBPUSD have no forward, for lack of a curve. From six months out, EURUSD forwards sit about 22 bp a year above the CME future, on Treasury and AAA curves with no basis. The adjustment is a deterministic drift, exact under Black-Scholes. Under local vol the state-dependent term is left out: on a 2-year 80 % put, 5 to 16 bp, a half or more of the adjustment itself.
 - **Worst-ofs of the Pricer and the Book take flat inputs for the other names**, filled from the lake by the seed script. Only the replay gives each name its own surface.
 - **Reconstructed surfaces are not quotes.** Above a VIX of 60 the at-the-money level is still about 3.5 points low. From 70 to 95 % of the forward they ran about 2 points high in 2022, so coupons
   solved on them are a little high. [surface_reconstruction.md](surface_reconstruction.md).

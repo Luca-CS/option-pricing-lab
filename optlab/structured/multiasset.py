@@ -3,7 +3,8 @@
 Each name keeps its own model (Black-Scholes, Dupire local vol, Heston or SLV) and its own forward curve, and is
 simulated in its log-forward coordinate exactly like `models.simulate`. The spot drivers are correlated by a
 matrix square root of the correlation; a name with a variance process draws it with its own spot-vol
-correlation, independently across names. Discounting uses the curve of the first name (one currency).
+correlation, independently across names. Discounting uses the curve of the first name: names in another currency come here on a
+quanto market (`quanto.quanto_market`), which carries the discount curve of the payment currency.
 With one name and Black-Scholes, the draws are those of `simulate`, so prices match it bit for bit.
 """
 
@@ -184,6 +185,7 @@ class BasketContext:
     vols: dict  # name → SVISurface or float (flat Black-Scholes vol)
     corr: np.ndarray
     valuation: dt.date
+    payment_currency: str | None = None  # the currency its markets pay in; None when they were not built with FX in mind
 
     def __post_init__(self):
         self.names = tuple(self.names)
@@ -212,7 +214,7 @@ class BasketContext:
         if vol_shift:
             v = vols[name]
             vols[name] = v + vol_shift if np.isscalar(v) else ShiftedSurface(v, vol_shift)
-        return BasketContext(self.names, markets, vols, self.corr, self.valuation)
+        return BasketContext(self.names, markets, vols, self.corr, self.valuation, self.payment_currency)
 
     @property
     def t_max(self) -> float:

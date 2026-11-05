@@ -33,6 +33,20 @@ def test_splits_are_continuous_in_the_real_closes():
     assert check_splits(prices, actions) == []
 
 
+def test_a_worst_of_spx_sx5e_on_the_real_lake_is_quanto_with_its_labels():
+    if not LAKE.has("fx_vols"):
+        pytest.skip("no FX in this lake: scripts/lake_update.py --only fx, then scripts/lake_derive.py --only fx")
+    day = dt.date(2022, 7, 1)
+    ctx, snaps, meta = basket_at(LAKE, ["SPX", "SX5E"], day)
+    link = meta["quanto"]["SX5E"]
+    assert ctx.payment_currency == "USD" and set(meta["quanto"]) == {"SX5E"} and link["pair"] == "EURUSD"
+    assert link["vol_origin"] == "derived" and link["vol_method"] == "realized" and link["rho_origin"] == "derived"
+    own = market_at(LAKE, "SX5E", day)
+    own_forward = float(np.interp(1.0, own.market["pillars"], own.market["forwards"]))
+    assert np.sign(float(ctx.markets["SX5E"].F(1.0)) - own_forward) == -np.sign(link["rho"])
+    assert float(ctx.markets["SX5E"].D(1.0)) == pytest.approx(float(ctx.markets["SPX"].D(1.0)), rel=1e-4)
+
+
 def test_every_nyse_trading_day_has_a_close_and_no_other_day_does():
     days = closes("SPX")
     cal = CALENDARS["nyse"]

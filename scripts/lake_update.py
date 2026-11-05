@@ -1,6 +1,6 @@
 """Update the historical data lake from the public sources and print the quality report.
 
-    python scripts/lake_update.py [--only cboe stoxx fred treasury ecb yahoo universe] [--lake PATH]
+    python scripts/lake_update.py [--only cboe stoxx fred treasury ecb fx yahoo universe] [--lake PATH]
 
 Data goes to OPTLAB_LAKE, or the stable `optlab-data` folder: never into the repository.
 """

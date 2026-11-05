@@ -187,7 +187,11 @@ class Desk:
             prices = lake.read("prices_eod", columns="instrument, obs_date, origin")
             last = {str(name): {"last": g["obs_date"].max(), "n": len(g), "origin": g["origin"].iloc[0]}
                     for name, g in prices.groupby("instrument")}
-        by_check = issues.groupby(["dataset", "check_name", "severity"]).size().reset_index(name="n") if len(issues) else None
+        if lake.has("fx_spots"):
+            rates = lake.read("fx_spots", where="source = 'ecb'", columns="pair, obs_date, origin")
+            last.update({str(name): {"last": g["obs_date"].max(), "n": len(g), "origin": g["origin"].iloc[0]}
+                         for name, g in rates.groupby("pair")})
+        by_check =issues.groupby(["dataset", "check_name", "severity"]).size().reset_index(name="n") if len(issues) else None
         return clean({"available": True, "shared": self.shared, "lake": None if self.shared else str(lake.root),
                       "coverage": cov.astype({"first": str, "last": str, "ingested": str}).to_dict("records"),
                       "instruments": [{"id": i.id, "name": i.name, "asset_class": i.asset_class, "currency": i.currency, "place": i.place,
