@@ -40,6 +40,7 @@ class Evaluation:
     check_redemption: bool = True
     spot_factor: float | np.ndarray | dict = 1.0  # one factor or one per simulated date; {name: factor} for a basket
     controls: tuple = ()  # (name, time, forward): S(t) / F(t) - 1 has mean zero, a control variate
+    ramps: dict | None = None  # (event index, line) -> Ramp: digitals read as call spreads
 
 
 @dataclass
@@ -103,7 +104,7 @@ def _controls(ev: Evaluation, scenario):
 
 def _summary(ev: Evaluation, scenario, market):
     scenario = _scaled(scenario, ev.spot_factor)
-    out = Evaluator(ev.program, ev.timeline, ev.params, ev.smoothing, ev.check_redemption).run(scenario)
+    out = Evaluator(ev.program, ev.timeline, ev.params, ev.smoothing, ev.check_redemption, ev.ramps).run(scenario)
     pairs = pair_averages(ev.fmt.present_values(out, market, ev.notional))
     terminated = np.array([np.sum(d) for d in out.terminated])
     flows = {key: float(np.sum(f)) for key, f in out.flows.items()}

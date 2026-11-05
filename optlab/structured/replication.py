@@ -116,13 +116,13 @@ def nodes(f, surface, market: Market, T: float, n_cells: int = 4_000, levels: in
 
 def replication_result(program, timeline: Timeline, surface, market: Market, T_obs: float, fmt=None, params=None,
                        notional=None, n_cells: int = 4_000, levels: int = 6, initial_fixing: float | None = None,
-                       history: dict | None = None):
+                       history: dict | None = None, ramps: dict | None = None):
     """Price on the surface. The numerical error is the change when the coarse grid is halved."""
     from .pricer import StructuredResult
 
     t0 = time.perf_counter()
     fmt = fmt or Note()
-    ev = Evaluator(program, timeline, params)
+    ev = Evaluator(program, timeline, params, ramps=ramps)
     N = float(notional if notional is not None else ev.params.get("N", 1.0))
     col = int(np.searchsorted(timeline.sim_times, T_obs))
     name = program.underlying_names[0]

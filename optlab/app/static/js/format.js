@@ -1,7 +1,7 @@
 // Term-sheet values: the API works in fractions, the page shows percent where a field is a level or a rate.
 
 const PERCENT_UNITS = new Set(["of initial", "per annum", "of notional", "vol points", "points", "of dividends"]);
-const SUFFIX = { "vol points": "pt", points: "pt", "of dividends": "%", bp: "bp" };
+const SUFFIX = { "vol points": "pt", points: "pt", "of dividends": "%", bp: "bp", "% per 1 %": "% / 1 %" };
 
 // What one unit of the library's fraction is on screen.
 function scale(f) {

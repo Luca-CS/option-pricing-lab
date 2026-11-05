@@ -79,7 +79,7 @@ def desk_json(desk) -> dict | None:
     return clean({"side": desk.side, "base_price": desk.base_price, "base_se": desk.base_se, "final_price": desk.final_price,
                   "final_se": desk.final_se, "coupon_base": desk.coupon_base, "coupon_final": desk.coupon_final, "seconds": desk.seconds, "passes": desk.passes,
                   "lines": [{"key": x.key, "label": x.label, "kind": x.kind, "cost": x.cost, "se": x.se, "coupon_bp": x.coupon_bp, "used": x.used,
-                             "default": x.default, "overridden": x.overridden, "note": x.note, "in_price": x.in_price, "gap": x.gap} for x in desk.lines]})
+                             "default": x.default, "overridden": x.overridden, "note": x.note, "in_price": x.in_price, "gap": x.gap, "detail": x.detail} for x in desk.lines], "digital_passes": desk.digital_passes})
 
 
 def quote_json(q) -> dict:

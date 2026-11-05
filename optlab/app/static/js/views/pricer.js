@@ -365,7 +365,8 @@ export function costCard(q) {
         h("th", { class: "num" }, "Coupon, bp")),
       row(h("b", {}, "Base"), "", "", num(d.base_price, 3), num(d.base_se, 3), ""),
       d.lines.map((x) => row(x.kind === "model" ? h("span", {}, x.label, h("span", { class: "faint" }, ` · gap ${signed(x.gap, 3)}${x.cost === 0 ? ", in the desk's favour" : ""}`))
-        : x.note ? h("span", { title: x.note }, x.label) : x.label,
+        : x.kind === "digital" ? h("span", {}, x.label, h("span", { class: "faint" }, ` · ${x.note}`))
+          : x.note ? h("span", { title: x.note }, x.label) : x.label,
         h("span", {}, used(x), " ", x.overridden ? h("span", { class: "badge warn" }, "overridden") : null),
         x.default == null || x.kind === "interaction" ? "" : used({ ...x, used: x.default }),
         signed(x.cost, 3), num(x.se, 3), x.coupon_bp == null ? "" : signed(x.coupon_bp, 1))),
@@ -373,7 +374,13 @@ export function costCard(q) {
     d.coupon_final != null ? h("p", { class: "muted", style: { marginTop: "8px" } },
       `Coupon ${num(100 * d.coupon_base, 3)} % p.a. on the base alone, ${num(100 * d.coupon_final, 3)} % p.a. with the costs. `
       + "Each line runs on the random numbers of the base.") : null,
-    d.lines.some((x) => x.kind === "model") ? h("p", { class: "muted" }, "The SLV mix is not calibrated: turn on SLV mix band to see what it moves.") : null);
+    d.lines.some((x) => x.kind === "model") ? h("p", { class: "muted" }, "The SLV mix is not calibrated: turn on SLV mix band to see what it moves.") : null,
+    d.lines.some((x) => x.kind === "digital") ? h("details", { class: "more" }, h("summary", {}, "Digitals, date by date"),
+      h("div", { class: "table-wrap" }, h("table", { class: "data" },
+        h("tr", {}, ["Digital", "Date", "Level", "Jump", "Width", "Side", "Cost alone"].map((c, i) => h("th", { class: i > 1 && i !== 5 ? "num" : "" }, c))),
+        d.lines.filter((x) => x.kind === "digital").map((x) => x.detail.map((c) => h("tr", {}, h("td", {}, x.label), h("td", {}, dateLabel(c.date)),
+          h("td", { class: "num" }, `${num(100 * c.level, 1)} %`), h("td", { class: "num" }, c.shift ? "–" : `${num(100 * c.jump, 2)} %`),
+          h("td", { class: "num" }, `${num(100 * c.width, 2)} pt`), h("td", {}, c.side), h("td", { class: "num" }, signed(c.alone, 3)))))))) : null);
 }
 
 // What a price used for each name: its market, where it comes from, and the correlations.

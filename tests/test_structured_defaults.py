@@ -50,12 +50,12 @@ def test_above_the_last_tier_it_alerts_and_asks_for_the_values():
     big = preset("phoenix", **{"general.notional": 1e9})
     got = resolve(None, big)
     assert got.tiers["index_us"] is None and "above the last tier" in got.alerts[0]
-    assert set(got.missing) == {"vol", "skew", "dividend", "repo", "spot", "slv_mix"}
+    assert {"vol", "skew", "dividend", "repo", "spot", "slv_mix", "min_spread", "delta_max_autocall"} <= set(got.missing)
     with pytest.raises(ValueError, match="no default"):
         got.inputs()
-    filled = big.replace(**{f"costs.{k}": 0.001 for k in got.missing})
+    filled = big.replace(**{f"costs.{k}": 0.02 for k in got.missing})
     done = resolve(None, filled)
-    assert not done.missing and done.inputs().bumps["vol"] == 0.001 and done.params["vol"]["overridden"]
+    assert not done.missing and done.inputs().bumps["vol"] == 0.02 and done.params["vol"]["overridden"]
 
 
 def test_an_override_replaces_the_default_with_its_sign():

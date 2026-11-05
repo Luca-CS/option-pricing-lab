@@ -57,13 +57,14 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
                batch: int | None = None, smoothing: float = 0.0, valuation=None, calendar=None, notional=None,
                check_redemption: bool = True, initial_fixing: float | dict | None = None,
                fixings: dict | None = None, workers: int | None = None, spot_factors: list | None = None,
-               smoothings: list | None = None, control_forwards: bool = False,
+               smoothings: list | None = None, control_forwards: bool = False, ramps: list | None = None,
                **sim_kwargs) -> list[StructuredResult]:
     """Price one script for several parameter sets on the same paths (common random numbers). `fixings` gives the
     past fixings of a running product as {underlying: {date: level}}; flows paid up to the valuation date are
     excluded from the value. `workers` runs the batches on a process pool (same numbers bit for bit);
     `spot_factors` evaluates each parameter set on the paths scaled by its factor (a sticky-moneyness spot bump,
-    the product keeping its initial fixing); `smoothings` gives each parameter set its own smoothing.
+    the product keeping its initial fixing); `smoothings` gives each parameter set its own smoothing; `ramps` its digitals read as call
+    spreads ({(event index, line): Ramp}, see digitals.py).
     `control_forwards` uses S(t) / F(t) - 1 at the script's observation dates as control variates (exact mean
     zero in every model): the coefficients are fitted on the same paths, per parameter set, so the corrected price
     stays affine in the coupon; the variance ratio is reported in `timings`."""
@@ -97,9 +98,9 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
         spot0 = market.spot if initial_fixing is None else initial_fixing
     n_sets = len(param_sets)
     controls = _forward_controls(program, timeline, model, market) if control_forwards else ()
-    evaluations = [Evaluation(program, timeline, p, fmt, N, eps, check_redemption, f, controls)
-                   for p, N, f, eps in zip(param_sets, notionals, spot_factors or [1.0] * n_sets,
-                                           smoothings or [smoothing] * n_sets)]
+    evaluations = [Evaluation(program, timeline, p, fmt, N, eps, check_redemption, f, controls, r)
+                   for p, N, f, eps, r in zip(param_sets, notionals, spot_factors or [1.0] * n_sets,
+                                              smoothings or [smoothing] * n_sets, ramps or [None] * n_sets)]
     totals, timings = engine.run(model, market, name, timeline.sim_times, n_paths, seed, batch, spot0, history,
                                  evaluations, workers, **sim_kwargs)
     t_sim, t_eval = timings["simulation"], timings["evaluation"]

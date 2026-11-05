@@ -3,6 +3,7 @@
     Base            the policy's model: local vol, or replication for a European product
     + Provisions    max(0, gap against the desk) per model of the product's family
     + Bumps         one cost per market parameter, signed by the trader and applied as given
+    + Digitals      the cost of reading each digital as a call spread (digitals.py)
     = Client price  the coupon is solved on this price and the margin
 
 Every line runs on the random numbers of the base (same seed, same batches), so a small cost is not lost in the noise: its standard
@@ -11,7 +12,8 @@ x = ln(S / F): the surface stays in moneyness, so these lines are new evaluation
 the correlation needs a simulation of its own. The price uses all the bumps together; the interaction line is that price less the sum
 of the single bumps. A model of provision runs on the spot draws of the base (`SLVModel.spot_driven`). Each price is affine in the coupon
 on these paths, but a provision is floored at zero, so the solve iterates on which provisions are on: a provision at a gap of zero has a small
-positive bias, about 0.4 of the gap's standard error, which is not removed by a threshold.
+positive bias, about 0.4 of the gap's standard error, which is not removed by a threshold. The width of a coupon's digital depends on the
+coupon, so the digitals take a second solve when their widths have moved.
 
 Prices are the investor's value in % of notional. The cost of a line is seen from the desk: what it adds to the price of what the
 desk sells, or takes from the price of what it buys.
@@ -26,6 +28,7 @@ import numpy as np
 
 from ..market import Market
 from ..models import LocalVolModel
+from .digitals import KINDS
 from .multiasset import BasketContext
 from .pricer import StructuredResult, history_times, price_many
 from .replication import replication_result
@@ -60,6 +63,8 @@ class CostInputs:
     defaults: dict = field(default_factory=dict)
     candidates: dict = field(default_factory=dict)
     mix: float | None = None  # mixing fraction of the SLV provision; None keeps the market's
+    min_spread: float | None = None  # digitals as call spreads when given, with `delta_max` by kind of digital
+    delta_max: dict = field(default_factory=dict)
 
     def __post_init__(self):
         if self.side not in SIDES:
@@ -86,7 +91,7 @@ class CostInputs:
 class CostLine:
     key: str
     label: str
-    kind: str  # model, bump or interaction
+    kind: str  # model, bump, digital or interaction
     cost: float  # % of notional, seen from the desk: positive is against it
     se: float
     coupon_bp: float | None = None  # effect on the solved coupon, in bp per annum
@@ -95,6 +100,7 @@ class CostLine:
     overridden: bool = False
     note: str = ""
     gap: float | None = None  # a model: the gap before the floor, seen from the desk
+    detail: list = field(default_factory=list)  # digitals: date, level, jump, width, side, alone
 
     @property
     def in_price(self) -> bool:
@@ -115,6 +121,7 @@ class DeskPrice:
     warnings: list = field(default_factory=list)
     passes: int = 0  # solves until the provisions in force stopped changing
     model_results: dict = field(default_factory=dict, repr=False)  # model -> its StructuredResult at the coupon
+    digital_passes: int = 0  # simulations until the widths of the digitals stopped moving
 
     def line(self, key: str) -> CostLine:
         return next(x for x in self.lines if x.key == key)
@@ -217,6 +224,22 @@ class _Lines:
         return _Run(price_many(self.program, model, self.ctx.market, self.sets, self.fmt, d.n_paths, d.seed, d.batch, valuation=self.product.valuation,
                                fixings=self.fixings, calendar=self.product.calendar, workers=self.workers, initial_fixing=self.initial))
 
+    def ramp_run(self, requests: list, params: list | None = None) -> list[_Run]:
+        """One line per set of ramps, on one simulation of the base: for each set of parameters, or at the `params` given."""
+        sets = params if params is not None else self.sets
+        d = self.decision
+        if d.method == "replication":
+            name = self.names[0]
+            history = history_times(self.fixings, name, self.clock) or None
+            return [_Run([replication_result(self.program, self.timeline, self.ctx.surface, self.ctx.market, self.T_obs, self.fmt, p, initial_fixing=self.initial,
+                                             history=history, ramps=r) for p in sets]) for r in requests]
+        expanded = [(p, r) for r in requests for p in sets]
+        out = price_many(self.program, self._model({}), self.ctx.market, [p for p, _ in expanded], self.fmt, d.n_paths, d.seed, d.batch,
+                         valuation=self.product.valuation, fixings=self.fixings, calendar=self.product.calendar, workers=self.workers,
+                         initial_fixing=self.initial, ramps=[r for _, r in expanded])
+        n = len(sets)
+        return [_Run(out[i * n:(i + 1) * n]) for i in range(len(requests))]
+
     def run(self, requests: dict) -> dict:
         """{key: run} for {key: bumps}, one simulation per distinct set of simulation bumps."""
         groups: dict = {}
@@ -251,6 +274,54 @@ def _solved(base: _Run, effect, provisions: dict, sign: float, target: float) ->
             break
         on = now
     return x, passes
+
+
+def _event_index(lines: _Lines, digital) -> int:
+    return next(k for k, ev in enumerate(lines.program.events) if str(getattr(ev.when, "value", "")) == digital.date)
+
+
+class _DigitalRun:
+    """The digitals of one product as call spreads: the side of each one measured alone, against the desk, then the widths at the solved coupon."""
+
+    def __init__(self, inputs: CostInputs, lines: _Lines, coupon_param: str | None, base: _Run):
+        self.inputs, self.lines, self.param, self.base = inputs, lines, coupon_param, base
+        self.sides: dict = {}
+        self.alone: dict = {}
+
+    def found(self, x: float | None) -> list:
+        from .digitals import find_digitals
+        return find_digitals(self.lines.product, {self.param: x} if x is not None and self.param else None)
+
+    def _ramp(self, d, side):
+        return d.ramp(side, self.inputs.min_spread, self.inputs.delta_max)
+
+    def _key(self, d):
+        return (_event_index(self.lines, d), d.line)
+
+    def settle_sides(self, x: float | None) -> None:
+        """Each digital alone on both sides at the coupon x: the side against the desk stays."""
+        digitals = self.found(x)
+        requests = [{self._key(d): self._ramp(d, side)} for d in digitals for side in ("up", "down")]
+        if not requests:
+            return
+        params = [{self.param: x}] if x is not None else [{}]
+        runs = self.lines.ramp_run(requests, params)
+        s = self.inputs.sign
+        base_price = self.base.price(x)
+        for i, d in enumerate(digitals):
+            up, down = runs[2 * i].results[0], runs[2 * i + 1].results[0]
+            against_up = s * (up.price - base_price) >= s * (down.price - base_price)
+            self.sides[self._key(d)] = "up" if against_up else "down"
+            self.alone[self._key(d)] = s * ((up if against_up else down).price - base_price)
+
+    def ramps(self, digitals) -> dict:
+        return {self._key(d): self._ramp(d, self.sides[self._key(d)]) for d in digitals if self._key(d) in self.sides}
+
+    def by_kind(self, digitals) -> dict:
+        kinds: dict = {}
+        for d in digitals:
+            kinds.setdefault(d.kind, []).append(d)
+        return kinds
 
 
 def _settled(inputs: CostInputs, lines: _Lines, base_requests: dict, target, sets_solving: bool) -> tuple[dict, dict]:
@@ -298,6 +369,27 @@ def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target:
         return sum((r.price(x) - base.price(x) for r in in_force(x).values()), 0.0)
 
     x, passes = _solved(base, effect, models, inputs.sign, target) if solving else (None, 0)
+    digital_run = digital_all = None
+    digital_passes = 0
+    if inputs.min_spread is not None:
+        digital_run = _DigitalRun(inputs, lines, coupon_param, base)
+        digital_run.settle_sides(x)
+        widths = None
+        for _ in range(3):
+            found = digital_run.found(x)
+            now = [d.width(inputs.min_spread, inputs.delta_max) for d in found]
+            if widths is not None and np.allclose(now, widths, rtol=1e-2, atol=1e-6):
+                break
+            widths = now
+            ramps = digital_run.ramps(found)
+            if not ramps:
+                break
+            digital_passes += 1
+            digital_all = lines.ramp_run([ramps])[0]
+            if not solving:
+                break
+            moved_with_digitals = lambda y, r=digital_all: effect(y) + r.price(y) - base.price(y)  # noqa: E731
+            x, passes = _solved(base, moved_with_digitals, models, inputs.sign, target)
     at_base = base.at(x)
     base_pairs = _pct_pairs(at_base)
     s = inputs.sign
@@ -337,6 +429,30 @@ def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target:
         out.append(line(key, label, "bump", pairs, d, used=used, default=default,
                         overridden=default is not None and key not in inputs.candidates and default != used, note=note))
     final_pairs = base_pairs
+    digital_effect = 0.0
+    digital_pairs = None if base_pairs is None else np.zeros_like(base_pairs)
+    if digital_all is not None:
+        r = digital_all.at(x)
+        digital_effect = r.price - at_base.price
+        digital_pairs = None if base_pairs is None else _pct_pairs(r) - base_pairs
+        found = digital_run.found(x)
+        kinds = digital_run.by_kind([d for d in found if digital_run._key(d) in digital_run.sides])
+        runs = lines.ramp_run([digital_run.ramps(ds) for ds in kinds.values()])
+        total_kinds = 0.0
+        for (kind, ds), run in zip(kinds.items(), runs):
+            rk = run.at(x)
+            pairs = None if base_pairs is None else _pct_pairs(rk) - base_pairs
+            d = float(pairs.mean()) if pairs is not None else rk.price - at_base.price
+            total_kinds += d
+            detail = [{"date": g.date, "level": g.level, "jump": g.jump, "width": g.width(inputs.min_spread, inputs.delta_max),
+                       "side": digital_run.sides[digital_run._key(g)], "alone": digital_run.alone[digital_run._key(g)], "shift": g.kind == "daily"} for g in ds]
+            widths_seen = sorted({round(c["width"], 6) for c in detail})
+            what = "moved by" if kind == "daily" else "width"
+            note = f"{len(ds)} date{'s' if len(ds) > 1 else ''}, {what} " + (f"{100 * widths_seen[0]:.2f} pt" if len(widths_seen) == 1 else f"{100 * widths_seen[0]:.2f} to {100 * widths_seen[-1]:.2f} pt")
+            out.append(line(kind, KINDS[kind], "digital", pairs, d, note=note, detail=detail))
+        if len(kinds) > 1:
+            singles = None if base_pairs is None else sum(_pct_pairs(run.at(x)) - base_pairs for run in runs)
+            out.append(line("digital_interaction", "Interaction of the digitals", "interaction", None if base_pairs is None else digital_pairs - singles, digital_effect - total_kinds))
     if moved is not None:
         r = moved.at(x)
         final_pairs = _pct_pairs(r)
@@ -345,8 +461,8 @@ def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target:
             d = (float(pairs.mean()) if pairs is not None else r.price - at_base.price) - total_single
             singles = None if pairs is None else sum(_pct_pairs(single[k].at(x)) - base_pairs for k in single)
             out.append(line("interaction", "Interaction of the bumps", "interaction", None if pairs is None else pairs - singles, d))
-    final_price = at_base.price + effect(x) + provided(x)
-    final_pairs = None if final_pairs is None else final_pairs + final_extra
+    final_price = at_base.price + effect(x) + provided(x) + digital_effect
+    final_pairs = None if final_pairs is None else final_pairs + final_extra + digital_pairs
     final_se = _se(final_pairs)
     warnings = _arbitrage_warnings(ctx, values, lines.horizon, lines.names) if "vol" in values or "skew" in values else []
     rate_se = None
@@ -354,10 +470,12 @@ def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target:
         on = in_force(x)
         slope_x = (base.price(1.0) + effect(1.0) + sum(r.price(1.0) - base.price(1.0) for r in on.values())) - (
             base.price(0.0) + effect(0.0) + sum(r.price(0.0) - base.price(0.0) for r in on.values()))
+        if digital_all is not None:
+            slope_x += (digital_all.price(1.0) - base.price(1.0)) - (digital_all.price(0.0) - base.price(0.0))
         rate_se = final_se / abs(slope_x)
     desk = DeskPrice(inputs.side, at_base.price, at_base.stderr, final_price, final_se, out,
                      (target - base.price(0.0)) / (base.price(1.0) - base.price(0.0)) / coupon_scale if solving else None,
-                     x / coupon_scale if solving else None, time.perf_counter() - t0, warnings, passes, {k: r.at(x) for k, r in models.items()})
+                     x / coupon_scale if solving else None, time.perf_counter() - t0, warnings, passes, {k: r.at(x) for k, r in models.items()}, digital_passes)
     return desk, base, x, rate_se
 
 

@@ -38,6 +38,31 @@ class BatchFlows:
     warnings: list = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class Ramp:
+    """A comparison a >= b or a < b read as a call or put spread on one side of b: over [b, b (1 + width)] on side "up", over [b (1 - width), b] on
+    side "down". With `shift`, the level moves to the far end of that interval and the comparison stays hard."""
+    side: str  # up or down
+    width: float  # relative to |b|
+    shift: bool = False
+
+
+def _ramped(op, a, b, ramp: Ramp):
+    w = ramp.width * np.abs(b)
+    lo = np.where(np.asarray(ramp.side == "up"), b, np.subtract(b, w))
+    if ramp.shift:
+        level = np.add(b, w) if ramp.side == "up" else np.subtract(b, w)
+        out = HARD[op](a, level).astype(float) if isinstance(a, np.ndarray) or isinstance(level, np.ndarray) else float(HARD[op](a, level))
+    else:
+        with np.errstate(divide="ignore", invalid="ignore"):
+            position = np.clip((np.subtract(a, lo)) / w, 0.0, 1.0)
+        out = position if op in (">", ">=") else 1.0 - position
+        out = np.where(w > 0, out, HARD[op](a, b).astype(float))
+    if _any_nan(a, b):
+        out = np.where(np.isnan(a) | np.isnan(b), np.nan, out)
+    return out
+
+
 def _compare(op, a, b, eps):
     hard = HARD[op](a, b).astype(float) if isinstance(a, np.ndarray) or isinstance(b, np.ndarray) \
         else float(HARD[op](a, b))
@@ -58,7 +83,7 @@ def _any_nan(a, b) -> bool:
 
 class Evaluator:
     def __init__(self, program: Program, timeline: Timeline, params: dict | None = None, smoothing: float = 0.0,
-                 check_redemption: bool = True):
+                 check_redemption: bool = True, ramps: dict | None = None):
         self.program = program
         self.timeline = timeline
         self.params = {**program.param_values, **(params or {})}
@@ -67,6 +92,8 @@ class Evaluator:
             raise KeyError(f"unknown parameter(s): {', '.join(sorted(unknown))}")
         self.eps = float(smoothing)
         self.check_redemption = check_redemption
+        self.ramps = ramps or {}  # (event index, line of the comparison) -> Ramp
+        self.smooth = self.eps != 0 or any(not r.shift for r in self.ramps.values())
 
     def run(self, scenario) -> BatchFlows:
         self.scenario = scenario
@@ -77,17 +104,18 @@ class Evaluator:
             for k, ev in enumerate(self.program.events):
                 self.t_obs = float(self.timeline.event_times[k])
                 self.t_pay = self.timeline.pay_times[k]
+                self.k = k
                 before = out.alive
                 self.block(ev.body, 1.0)
                 out.terminated.append(before - out.alive)
         if self.check_redemption:
             total = sum(out.redemption_weights.values(), np.zeros(scenario.n_paths))
-            tol = 1e-12 if self.eps == 0 else 1e-9
+            tol = 1e-12 if not self.smooth else 1e-9
             bad = ~(np.abs(total - 1.0) <= tol)  # NaN weights fail too
             if bad.any():
                 message = (f"the redemption is not paid exactly once on {bad.mean():.2%} of the paths "
                            "(a valid product pays one 'redemption' per path)")
-                if self.eps == 0 or not np.all(np.isfinite(total)):
+                if not self.smooth or not np.all(np.isfinite(total)):
                     raise ScriptError(message, self.program.events[-1].line)
                 out.warnings.append(message + " in the smoothing ramps")
         return out
@@ -101,7 +129,7 @@ class Evaluator:
                     self.vars[s.name] = e
                 else:
                     old = self.vars.get(s.name, 0.0)
-                    if self.eps == 0:
+                    if not self.smooth:
                         self.vars[s.name] = np.where(m == 1.0, e, old)
                     else:  # values outside the mask may be NaN: never multiply them by a zero weight
                         self.vars[s.name] = np.where(m == 1.0, e, np.where(m == 0.0, old, m * e + (1 - m) * old))
@@ -150,6 +178,9 @@ class Evaluator:
                 return np.where((a == 0) | (b == 0), 0.0, a * b) if _any_nan(a, b) else a * b
             if e.op == "or":
                 return np.where((a == 1) | (b == 1), 1.0, a + b - a * b) if _any_nan(a, b) else a + b - a * b
+            ramp = self.ramps.get((self.k, e.line)) if self.ramps else None
+            if ramp is not None:
+                return _ramped(e.op, a, b, ramp)
             return _compare(e.op, a, b, self.eps)
         if isinstance(e, Unary):
             v = self.expr(e.operand)

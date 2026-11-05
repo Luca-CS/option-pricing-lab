@@ -123,6 +123,11 @@ SECTIONS = {s.name: s for s in [
         Field("repo", "number", None, "Repo", "bp", minimum=-0.05, maximum=0.05),
         Field("spot", "number", None, "Spot, delta bid-ask", "bp", minimum=-0.02, maximum=0.02),
         Field("slv_mix", "number", None, "SLV mix (not calibrated)", "", minimum=0.0, maximum=1.0),
+        Field("min_spread", "number", None, "Digitals: minimum spread", "of initial", minimum=0.0, maximum=0.5),
+        Field("delta_max_coupon", "number", None, "Delta max, coupon barrier", "% per 1 %", minimum=0.01, maximum=100.0, visible_if=_v("coupon.type", "conditional")),
+        Field("delta_max_autocall", "number", None, "Delta max, autocall trigger", "% per 1 %", minimum=0.01, maximum=100.0),
+        Field("delta_max_barrier", "number", None, "Delta max, final barrier", "% per 1 %", minimum=0.01, maximum=100.0, visible_if=_v("downside.type", "pdi")),
+        Field("delta_max_upside", "number", None, "Delta max, upside digital", "% per 1 %", minimum=0.01, maximum=100.0, visible_if=_v("upside.type", "digital")),
     )),
 ]}
 
@@ -140,7 +145,7 @@ MASKS = {
     "autocall": Mask("autocall", "Autocallable", ("general", "wrapper", "autocall", "coupon", "downside", "costs"),
                      {"coupon.type": ("fixed", "conditional", "snowball")}),
     "bullet": Mask("bullet", "Bullet (non-callable)", ("general", "wrapper", "coupon", "upside", "downside", "costs"),
-                   {"coupon.type": ("none", "fixed", "conditional")}),
+                   {"coupon.type": ("none", "fixed", "conditional")}, ("costs.delta_max_autocall",)),
 }
 
 

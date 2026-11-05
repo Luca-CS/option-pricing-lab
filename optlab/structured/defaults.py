@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 
 from ..marketdata.universe import instrument
 from .costs import BUMPS, CostInputs
+from .digitals import DELTA_FIELD
 from .schema import SECTIONS, TermSheet
 
 TIERS = (10e6, 50e6, 250e6)
@@ -26,15 +27,19 @@ def _tiers(**columns) -> list:
 STARTING = {
     "index_us": {"label": "US index", "currency": "USD", "tiers": _tiers(
         vol=(-0.0025, -0.005, -0.01), skew=(-0.0025, -0.005, -0.01), corr=(0.01, 0.02, 0.04), dividend=(-0.05, -0.10, -0.15),
-        repo=(-0.0005, -0.001, -0.002), spot=(0.0002, 0.0005, 0.001), slv_mix=(0.5, 0.5, 0.5))},
+        repo=(-0.0005, -0.001, -0.002), spot=(0.0002, 0.0005, 0.001), slv_mix=(0.5, 0.5, 0.5), min_spread=(0.005, 0.01, 0.02),
+        delta_max_coupon=(1.0, 1.0, 0.5), delta_max_autocall=(1.0, 1.0, 0.5), delta_max_barrier=(5.0, 5.0, 2.5), delta_max_upside=(1.0, 1.0, 0.5))},
     "index_eu": {"label": "European index", "currency": "EUR", "tiers": _tiers(
         vol=(-0.0025, -0.005, -0.01), skew=(-0.0025, -0.005, -0.01), corr=(0.01, 0.02, 0.04), dividend=(-0.10, -0.15, -0.20),
-        repo=(-0.0005, -0.001, -0.002), spot=(0.0003, 0.0007, 0.0015), slv_mix=(0.5, 0.5, 0.5))},
+        repo=(-0.0005, -0.001, -0.002), spot=(0.0003, 0.0007, 0.0015), slv_mix=(0.5, 0.5, 0.5), min_spread=(0.005, 0.01, 0.02),
+        delta_max_coupon=(1.0, 1.0, 0.5), delta_max_autocall=(1.0, 1.0, 0.5), delta_max_barrier=(5.0, 5.0, 2.5), delta_max_upside=(1.0, 1.0, 0.5))},
     "equity_us": {"label": "US large-cap share", "currency": "USD", "tiers": _tiers(
         vol=(-0.005, -0.01, -0.02), skew=(-0.005, -0.01, -0.02), corr=(0.02, 0.03, 0.05), dividend=(-0.05, -0.10, -0.20),
-        repo=(-0.001, -0.002, -0.004), spot=(0.0005, 0.001, 0.002), slv_mix=(0.5, 0.5, 0.5))},
+        repo=(-0.001, -0.002, -0.004), spot=(0.0005, 0.001, 0.002), slv_mix=(0.5, 0.5, 0.5), min_spread=(0.01, 0.02, 0.03),
+        delta_max_coupon=(1.0, 1.0, 0.5), delta_max_autocall=(1.0, 1.0, 0.5), delta_max_barrier=(5.0, 5.0, 2.5), delta_max_upside=(1.0, 1.0, 0.5))},
 }
-RULES = {"slv_mix": "max"}  # parameter -> how groups combine when it is not a signed bump: "max" or "min"
+# Parameter -> how groups combine when it is not a signed bump: the widest spread and the tightest delta limit are the prudent ones.
+RULES = {"slv_mix": "max", "min_spread": "max", "delta_max_coupon": "min", "delta_max_autocall": "min", "delta_max_barrier": "min", "delta_max_upside": "min"}
 SKIP = ("side",)
 
 
@@ -129,7 +134,9 @@ class Resolved:
         defaults = {k: p["default"] for k, p in self.params.items()}
         candidates = {k: p["conflict"] for k, p in self.params.items() if p["conflict"] and not p["overridden"]}
         mix = self.params["slv_mix"]["value"] if "slv_mix" in self.params else None
-        return CostInputs(bumps, self.side, defaults, candidates, mix)
+        delta = {kind: self.params[f]["value"] for kind, f in DELTA_FIELD.items() if f in self.params}
+        spread = self.params["min_spread"]["value"] if "min_spread" in self.params else None
+        return CostInputs(bumps, self.side, defaults, candidates, mix, spread, delta)
 
     def as_json(self) -> dict:
         return {"groups": self.groups, "tiers": self.tiers, "params": self.params, "side": self.side, "alerts": self.alerts, "missing": self.missing}
