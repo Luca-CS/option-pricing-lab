@@ -12,13 +12,18 @@ so that the slice's own model-free variance equals the index: the skew's contrib
 The shape prior used for the past comes from one calibration (27/10/2026), so it is an assumption on the shape, known
 later than the dates it is applied to: no market level of those dates depends on it, but "reconstructed" does not mean
 "what was known then" for the shape. The test of section 4 of the plan measures what it costs.
+
+That shape comes from a calm day, and its slope grows too fast with the level: at a VIX above 60 it overstated the put skew by
+6 points of volatility, and since the variance of the index is fixed, the at-the-money level came out 7 points too low. So the
+slope falls slowly with the day's own 30-day level (`LEVEL_POWER`), a number known at that date. Fitted on real chains
+away from the 2020 crash and tested on it (reports/surface_reconstruction.md).
 """
 
 from __future__ import annotations
 
 import datetime as dt
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 
 import numpy as np
 import pandas as pd
@@ -35,6 +40,7 @@ from ..universe import instrument
 LOG = get_logger(__name__)
 TERM_INDICES = {"VIX9D": 9 / 365, "VIX": 30 / 365, "VIX3M": 93 / 365, "VIX6M": 183 / 365, "VIX1Y": 365 / 365}
 EXTRAPOLATED = (1.5, 2.0, 3.0, 4.0, 5.0)
+LEVEL_POWER, LEVEL_REF = 0.12, 0.12  # 0.118 fitted without the crash, 0.121 with it; the reference sits at the bound of the fit
 LAST_OBSERVABLE = 1.0  # VIX1Y: beyond it the term structure is an assumption
 OBSERVED_TARGETS = (1 / 24, 1 / 12, 1 / 6, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0)
 Z = np.linspace(-8.0, 8.0, 321)  # integration grid, in at-the-money standard deviations
@@ -48,9 +54,16 @@ class ShapePrior:
     v_inf: float  # long-run forward variance beyond one year
     kappa: float = 0.7  # speed at which the forward variance goes there
     source: str = ""
+    level_power: float = 0.0  # the slope falls as the 30-day level rises above level_ref, by (level / level_ref) ^ -level_power
+    level_ref: float = 0.2
 
     def scaled_rho(self, factor: float) -> "ShapePrior":
-        return ShapePrior(self.rho * factor, self.eta, self.gamma, self.v_inf, self.kappa, self.source)
+        return replace(self, rho=self.rho * factor)
+
+    def eta_at(self, level: float, rho: float | None = None) -> float:
+        """The curvature parameter at a 30-day level (fraction), kept free of butterfly arbitrage for every theta."""
+        rho = self.rho if rho is None else rho
+        return min(self.eta * max(level / self.level_ref, 1.0) ** -self.level_power, 2.0 / (1 + abs(rho)))
 
 
 def _phi(theta, eta, gamma):
@@ -164,11 +177,10 @@ def reconstruct(levels: dict, prior: ShapePrior, skew: float | None = None, scal
     Ts = np.array([TERM_INDICES[n] for n in names])
     vols = np.array([levels[n] for n in names]) * scale / 100.0
     rho = prior.rho
-    eta = prior.eta
+    th30 = float(np.interp(30 / 365, Ts, vols**2 * Ts))
     if skew is not None:
-        th30 = float(np.interp(30 / 365, Ts, vols**2 * Ts))
         rho = rho_from_skew(skew, th30, prior)
-        eta = min(eta, 2.0 / (1 + abs(rho)))
+    eta = prior.eta_at(np.sqrt(th30 / (30 / 365)), rho)
     thetas = solve_thetas(vols, Ts, rho, eta, prior.gamma)
     fv_last = (thetas[-1] - thetas[-2]) / (Ts[-1] - Ts[-2])
     T_ext = np.array(EXTRAPOLATED)
@@ -186,7 +198,8 @@ def static_prior(path=None) -> ShapePrior:
     """The shape of the versioned SPX calibration (27/10/2026)."""
     from ...config import paths
     cal = json.loads((path or paths().results / "spx_calibration.json").read_text(encoding="utf-8"))
-    return fit_shape(SVISurface.from_dict(cal["surface"]), source=f"calibration of {cal['meta'].get('snapshot', '')[:10]}")
+    shape = fit_shape(SVISurface.from_dict(cal["surface"]), source=f"calibration of {cal['meta'].get('snapshot', '')[:10]}")
+    return replace(shape, level_power=LEVEL_POWER, level_ref=LEVEL_REF)
 
 
 EQUITY_RHO_FACTOR = 0.6  # single names have less skew than indices: an assumption of the reconstruction
@@ -197,13 +210,16 @@ def prior_for(name: str, prior: ShapePrior) -> ShapePrior:
 
 
 def index_panel(lake: Lake, start=None, end=None, names=None) -> pd.DataFrame:
-    """Levels per date and index, forward-filled for at most five days: only past levels can fill a gap."""
+    """Levels per date and index, forward-filled for at most five days: only past levels can fill a gap. It stops at the last
+    VIX: every other name is scaled by it, so a day when the other files are already out and the VIX is not would mix two days."""
     where = ["source <> 'dolthub'"]
     if names:
         where.append("index_name IN (" + ", ".join(f"'{n}'" for n in names) + ")")
     rows = lake.read("vol_indices", where=" AND ".join(where), columns="index_name, obs_date, close")
     panel = rows.pivot_table(index="obs_date", columns="index_name", values="close").sort_index()
     panel.index = pd.to_datetime(panel.index)
+    if "VIX" in panel.columns and panel["VIX"].notna().any():
+        panel = panel[panel.index <= panel["VIX"].last_valid_index()]
     panel = panel.ffill(limit=5)
     if start is not None:
         panel = panel[panel.index >= pd.Timestamp(start)]

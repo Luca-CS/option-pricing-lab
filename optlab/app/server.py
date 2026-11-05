@@ -59,6 +59,7 @@ def routes(desk: Desk):
         ("POST", r"/api/market/use", lambda m, q, b: desk.use_snapshot(b)),
         ("GET", r"/api/data/overview", lambda m, q, b: desk.data_overview()),
         ("GET", r"/api/data/vol", lambda m, q, b: desk.data_vol_index(q1(q, "name", "VIX"), q1(q, "start"))),
+        ("GET", r"/api/data/baskets", lambda m, q, b: desk.data_baskets()),
         ("POST", r"/api/data/market", lambda m, q, b: desk.market_from_lake(b)),
         ("POST", r"/api/data/fixings", lambda m, q, b: desk.fixings_from_lake(b)),
         ("GET", r"/api/vollab/days", lambda m, q, b: desk.lab_days()),

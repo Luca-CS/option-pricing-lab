@@ -5,10 +5,10 @@
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 import argparse
+import sys
 import time
+from pathlib import Path
 
 import pandas as pd
 

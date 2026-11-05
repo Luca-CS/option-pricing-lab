@@ -120,7 +120,7 @@ export async function render(page) {
           h("span", { class: "muted" }, "immutable, identified by their content")),
         h("div", { class: "table-wrap" }, h("table", { class: "data" },
           h("tr", {}, ["Valuation", "Source", "Snapshot", "File", ""].map((c) => h("th", {}, c))),
-          snaps.snapshots.map((s) => h("tr", {}, h("td", {}, dateLabel(s.valuation)), h("td", {}, pretty(s.source)),
+          snaps.snapshots.map((s) => h("tr", {}, h("td", {}, dateLabel(s.valuation)), h("td", {}, pretty(s.source.replace(":", " "))),
             h("td", {}, h("code", {}, s.snapshot_id)), h("td", { class: "muted" }, s.file || "–"),
             h("td", { class: "num" }, s.active ? h("span", { class: "badge pos" }, "In use")
               : h("button", { class: "btn sm", type: "button", onclick: () => use(s) }, "Use"))))))),

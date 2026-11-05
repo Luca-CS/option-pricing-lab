@@ -3,6 +3,7 @@
 import datetime as dt
 import json
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -124,3 +125,28 @@ def test_flows_reconcile_with_the_lifecycle_events(name):
     assert sum(d["cash"] for d in r["daily"]) == pytest.approx(rec["cash_from_events"])
     assert "spot" not in r["daily"][0]  # no real level in a versioned result
     assert r["explain"]["steps"] == len(r["daily"]) - 1
+
+
+def test_the_crash_keeps_its_at_the_money_level():
+    """23/03/2020, against real SPY chains: at about a month the reconstruction was 5.6 points low before the slope fell with the level."""
+    from optlab.marketdata.derive.surfaces import surface_at
+    from optlab.marketdata.quotes import clean_day
+    day = dt.date(2020, 3, 23)
+    surface = surface_at(LAKE, "SPX", day, layer="reconstructed").surface
+    chain = clean_day(LAKE, "SPY", day, "dolthub", spot=0.1 * real_close(LAKE, "SPX", day)[0])
+    for s in chain.slices:
+        if 0.05 < s["T"] < 0.2:
+            order = np.argsort(s["k"])
+            atm = float(np.interp(0.0, np.asarray(s["k"])[order], np.asarray(s["iv"])[order]))
+            model = float(np.sqrt(surface.theta(s["T"]) / s["T"]))
+            assert abs(model - atm) < 0.04
+
+
+def test_dividends_give_the_forward_its_steps():
+    from optlab.marketdata.pit import market_curves
+    market, _, prov = market_curves(LAKE, "IBM", dt.date(2022, 7, 1))
+    assert prov["carry"]["method"] == "dividend_dates"
+    assert 0.03 < prov["carry"]["dividend_yield"] < 0.07
+    T = np.linspace(0.01, 1.0, 400)
+    jumps = np.log(market.F(T[1:]) / market.F(T[:-1]))
+    assert (jumps < -0.005).sum() >= 3  # IBM pays four times a year, each over one percent of spot

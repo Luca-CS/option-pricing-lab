@@ -49,7 +49,7 @@ def test_health_context_and_market(desk):
     s = desk.smile(1.0)
     assert len(s["moneyness"]) == len(s["iv"]) == 61 and all(0 < v < 1.5 for v in s["iv"])
     t = desk.term_structure()
-    assert len(t["T"]) == 40 and t["discount"][0] > t["discount"][-1]
+    assert len(t["T"]) == 120 and t["discount"][0] > t["discount"][-1]
     risk = desk.model_risk()
     assert "exotics" in risk and risk["errors"]
 

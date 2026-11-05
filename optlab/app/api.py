@@ -157,7 +157,7 @@ class Desk:
 
     def term_structure(self) -> dict:
         ctx = self.ctx
-        T = np.linspace(0.05, ctx.t_max, 40)
+        T = np.linspace(0.05, ctx.t_max, 120)
         return clean({"T": T, "atm_vol": [ctx.atm_vol(t) for t in T],
                       "forward": ctx.market.F(T) / ctx.market.spot, "discount": ctx.market.D(T)})
 
@@ -205,6 +205,18 @@ class Desk:
         rows = self.lake.read("vol_indices", where=where, columns="obs_date, close, origin, source", order="obs_date")
         return clean({"name": name, "dates": rows["obs_date"].astype(str).tolist(), "close": rows["close"].tolist(),
                       "origin": rows["origin"].iloc[0] if len(rows) else None, "source": rows["source"].iloc[0] if len(rows) else None})
+
+    def data_baskets(self) -> dict:
+        """The latest CvC and PvP pseudo-quotes, at one year: origin synthetic, in % of notional."""
+        if not self.lake.has("basket_spreads"):
+            return {"rows": [], "day": None}
+        rows = self.lake.read("basket_spreads", where="tenor = 1.0", order="obs_date DESC, basket, kind, strike")
+        if rows.empty:
+            return {"rows": [], "day": None}
+        day = rows["obs_date"].iloc[0]
+        last = rows[rows["obs_date"] == day]
+        keep = ["basket", "kind", "strike", "price", "price_se", "basket_vol", "rho", "implied_rho", "origin"]
+        return clean({"day": str(day)[:10], "rows": last[keep].to_dict("records")})
 
     def market_from_lake(self, body: dict) -> dict:
         """A market at a past date (a job: the leverage takes seconds), stored like any snapshot; /api/market/use prices on it."""
@@ -486,8 +498,14 @@ class Desk:
         strike = sheet.get("general.strike_date")
         if strike is None or strike >= ctx.valuation:
             return None
+        return self._known_fixings(sheet.underlyings, ctx.valuation)
+
+    def _known_fixings(self, names, valuation) -> dict | None:
+        """The stored fixings of a product's names up to a date: the store holds other names, and later dates when the market
+        in use is an older one."""
         stored = self.repo.fixings()
-        return {n: stored[n] for n in sheet.underlyings if n in stored} or None
+        out = {n: {d: v for d, v in stored[n].items() if dt.date.fromisoformat(str(d)) <= valuation} for n in names if n in stored}
+        return {n: levels for n, levels in out.items() if levels} or None
 
     def job(self, job_id: str) -> dict:
         try:
@@ -582,7 +600,6 @@ class Desk:
         o = self._options(body.get("options") or {})
         greeks = bool((body.get("options") or {}).get("greeks", True))
         ctx = self.ctx
-        stored = self.repo.fixings()
         singles, baskets, names = [], [], []
         for t in self.repo.trades():
             if t.status != "live":
@@ -590,7 +607,7 @@ class Desk:
             sheet = t.term_sheet()
             fix = None
             if t.strike_date < ctx.valuation and sheet is not None:
-                fix = {n: stored[n] for n in sheet.underlyings if n in stored} or None
+                fix = self._known_fixings(sheet.underlyings, ctx.valuation)
             if sheet is not None and len(sheet.underlyings) > 1:
                 baskets.append(t.to_position(fix))
                 names += [n for n in sheet.underlyings if n not in names]
@@ -661,7 +678,7 @@ class Desk:
         past, missing = [], None
         if trade.strike_date < ctx.valuation:
             try:
-                past = events_json(events(trade, self.repo.fixings(), ctx.valuation))
+                past = events_json(events(trade, self._known_fixings(sheet.underlyings, ctx.valuation) or {}, ctx.valuation))
             except KeyError as exc:  # names the dates, or only the underlying when it has no fixing at all
                 missing = str(exc).strip("'\"")
                 if missing in sheet.underlyings:

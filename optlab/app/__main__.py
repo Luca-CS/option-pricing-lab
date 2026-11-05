@@ -23,6 +23,7 @@ def main():
     ap.add_argument("--workers", type=int, default=None, help="process pool for Monte Carlo batches (e.g. 6)")
     ap.add_argument("--store", help="SQLite file of trades, fixings and quotes (default data/store/desk.sqlite)")
     ap.add_argument("--calibration", help="results/*.json calibration (default: the SPX one)")
+    ap.add_argument("--market", help="start on this snapshot of the store instead of the calibration")
     ap.add_argument("--tunnel", action="store_true",
                     help="public https address through an SSH tunnel to localhost.run (third-party relay, token on)")
     ap.add_argument("--open", action="store_true", help="open the page in the default browser")
@@ -34,6 +35,8 @@ def main():
         token = secrets.token_urlsafe(16)
     desk = Desk(args.store, args.calibration, args.workers)
     desk.shared = bool(args.tunnel or args.host not in ("127.0.0.1", "localhost", "::1"))
+    if args.market:
+        desk.use_snapshot({"snapshot_id": args.market})
     httpd = serve(desk, args.host, args.port, token)
     port = httpd.server_address[1]
     shown = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host

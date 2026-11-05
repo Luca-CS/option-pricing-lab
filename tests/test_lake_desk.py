@@ -161,3 +161,74 @@ def test_routes_and_screens_are_wired(desk):
         assert f'data-route="{view}"' in index and f"{view}: () => import" in main
     for view in ("vollab", "replay", "data", "overview"):
         assert "originBadge" in (STATIC / "js" / "views" / f"{view}.js").read_text(encoding="utf-8")
+
+
+def test_showcase_seed_fills_a_store_with_trades_struck_on_their_own_markets(tmp_path):
+    import importlib.util
+    from pathlib import Path
+
+    from optlab.app.api import Desk
+    from _lake_fixture import synthetic_lake
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / "seed_showcase.py"
+    spec = importlib.util.spec_from_file_location("seed_showcase", path)
+    mod = importlib.util.module_from_spec(spec)
+    import sys
+    sys.modules["seed_showcase"] = mod
+    spec.loader.exec_module(mod)
+    lake, days, _ = synthetic_lake(tmp_path / "lake", "2019-01-01", "2021-06-30")
+    desk = Desk(tmp_path / "store" / "desk.sqlite", lake=tmp_path / "lake")
+    try:
+        deals = (mod.Deal("SHOW-A", "phoenix", ("SPX",), "2020-06-15", 24, 1e6, "Client", {"coupon.barrier": 0.8}),
+                 mod.Deal("SHOW-B", "barrier_reverse_convertible", ("SPX",), "2020-09-15", 18, 2e6, "Client"))
+        import time
+
+        import pandas as pd
+        from optlab.marketdata.derive.bank import spread_at
+        day = pd.Timestamp("2021-06-30").date()
+        added = mod.seed(desk, lake, day, deals, n_paths=2000, log=lambda s: None, look_back=(), basket_names=())
+        assert added == ["SHOW-A", "SHOW-B"]
+        assert desk.ctx.valuation == day and desk.ctx.market.spot == 100.0
+        trades = {t.trade_id: t for t in desk.repo.trades()}
+        assert trades["SHOW-A"].strike_date.isoformat() == "2020-06-15" and trades["SHOW-A"].quantity == -1.0
+        sheet = trades["SHOW-A"].term_sheet()
+        assert sheet.get("wrapper.solve") == "upfront" and 0 < sheet.get("coupon.rate") < 1
+        assert sheet.get("wrapper.issuer_spread") == pytest.approx(spread_at(lake, "2020-06-15", 2.0))
+        stored = desk.repo.fixings("SPX")["SPX"]
+        assert stored[day] == pytest.approx(100.0)  # the fixings are in the scale of the market in use
+        assert desk.trade_events("SHOW-A")["missing"] is None
+        # fixings of another name, or later than the market in use, do not concern this trade
+        desk.repo.put_fixings("NDX", {"2021-01-04": 100.0}, "test")
+        desk.repo.put_fixings("SPX", {"2021-07-01": 100.0}, "test")
+        got = desk.trade_events("SHOW-A")
+        assert got["missing"] is None and got["past"]
+        job = desk.price_book({"options": {"precision": "fast", "greeks": False}})["job"]
+        for _ in range(240):
+            state = desk.jobs.get(job)
+            if state["state"] in ("done", "error"):
+                break
+            time.sleep(0.5)
+        assert state["state"] == "done", state["error"]
+        live = {t.trade_id for t in desk.repo.trades() if t.status == "live"}
+        assert live and {p["name"] for p in state["result"]["positions"]} == live
+        # a second run keeps what is there
+        assert mod.seed(desk, lake, day, deals, n_paths=2000, log=lambda s: None, look_back=(), basket_names=()) == []
+    finally:
+        desk.jobs.shutdown()
+
+
+def test_data_screen_shows_the_latest_basket_spreads_as_synthetic(tmp_path):
+    import pandas as pd
+    from optlab.app.api import Desk
+    from optlab.marketdata.lake import Lake
+    desk = Desk(tmp_path / "store" / "desk.sqlite", lake=tmp_path / "lake")
+    try:
+        assert desk.data_baskets() == {"rows": [], "day": None}
+        row = {"basket": "SPX+NDX", "kind": "cvc", "strike": 1.1, "price": -0.1, "price_se": 0.01, "basket_price": 5.0, "members_price": 5.1,
+               "basket_vol": 0.2, "rho": 0.8, "implied_rho": 0.82}
+        rows = pd.DataFrame([{**row, "tenor": 1.0, "obs_date": d} for d in ("2026-09-30", "2026-10-30")] + [{**row, "tenor": 0.5, "obs_date": "2026-10-30"}])
+        Lake(tmp_path / "lake").ingest("basket_spreads", rows, "copula_on_surfaces", "synthetic")
+        got = desk.data_baskets()
+        assert got["day"] == "2026-10-30" and len(got["rows"]) == 1 and got["rows"][0]["origin"] == "synthetic"
+    finally:
+        desk.jobs.shutdown()

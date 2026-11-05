@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 from ..market import Market
-from .derive.carry import dividend_yield_at
+from .derive.carry import DividendStream, dividend_stream
 from .derive.correl import correlation_at
 from .derive.surfaces import surface_at
 from .lake import TABLES, Lake, sql_str
@@ -25,6 +25,8 @@ from .snapshot import MarketSnapshot
 from .universe import instrument
 
 PILLARS = np.array([1 / 52, 1 / 12, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 7.0])
+STEPS_UP_TO = 3.0  # years over which a forward keeps its dividend steps; beyond it, the pillars smooth them
+ONE_DAY = 1 / 365
 MODEL_SPOT = 100.0
 MIX = 0.5
 PRIOR_DYNAMICS = {"kappa": 3.09, "xi": 1.31, "rho": -0.69}  # of the versioned SPX calibration (27/10/2026)
@@ -48,19 +50,27 @@ def real_fixings(lake: Lake, name: str, start, end, as_of=None) -> dict:
     return {pd.Timestamp(d).date().isoformat(): float(v) for d, v in zip(rows["obs_date"], rows["close"])}
 
 
+def curve_pillars(stream: DividendStream) -> np.ndarray:
+    """The usual pillars, and one on each side of a dividend while it can still be told apart."""
+    near = stream.times[stream.times <= STEPS_UP_TO]
+    near = near[near > ONE_DAY]
+    return np.unique(np.concatenate([PILLARS, near - ONE_DAY, near]))  # exact times: a rounded one could fall before its dividend
+
+
 def market_curves(lake: Lake, name: str, day, as_of=None) -> tuple[Market, float, dict]:
     """(market at spot 100, real spot, provenance): discount curve and carry known at `day`."""
     inst = instrument(name)
     day = pd.Timestamp(day).date()
     spot, spot_day = real_close(lake, name, day, as_of)
     disc = discount_function(lake, inst.currency, day, as_of)
-    q, q_origin, q_method = dividend_yield_at(lake, name, day, as_of)
-    discounts = np.asarray(disc(PILLARS), dtype=float)
-    forwards = MODEL_SPOT * np.exp(-q * PILLARS) / discounts
-    return Market(MODEL_SPOT, PILLARS.copy(), discounts, forwards), spot, {
+    stream = dividend_stream(lake, name, day, spot, as_of)
+    pillars = curve_pillars(stream)
+    discounts = np.asarray(disc(pillars), dtype=float)
+    forwards = MODEL_SPOT * stream.factor(pillars) / discounts
+    return Market(MODEL_SPOT, pillars, discounts, forwards), spot, {
         "spot": {"origin": "observed", "date": spot_day.isoformat(), "source": "prices_eod"},
         "discount": {"origin": "derived", "curve": inst.currency},
-        "carry": {"origin": q_origin, "method": q_method, "dividend_yield": q}}
+        "carry": {"origin": stream.origin, "method": stream.method, "dividend_yield": stream.annual_yield}}
 
 
 def flat_leverage(T_max: float) -> dict:

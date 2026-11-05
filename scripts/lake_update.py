@@ -7,9 +7,9 @@ Data goes to OPTLAB_LAKE, or the stable `optlab-data` folder: never into the rep
 
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
-import argparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 

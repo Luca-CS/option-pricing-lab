@@ -37,7 +37,8 @@ python -m venv .venv
 - Data lake (`optlab/marketdata/`, needs `duckdb` and `pyarrow`; data in `OPTLAB_DATA`, default `optlab-data` beside the main checkout):
   `scripts/lake_update.py` (public sources; `--import-sample zip`, `--dolt default`, `--yahoo-chains` during US hours only: Yahoo blanks
   bid and ask otherwise), `scripts/lake_derive.py` (curves, carry, bank, surfaces, correlation, pairs, observed fits),
-  `scripts/lake_surface_test.py` (reconstruction against real chains), `scripts/lake_replay.py cost|run`.
+  `scripts/lake_surface_test.py` (reconstruction against real chains), `scripts/lake_regime_test.py` (the same by level of the VIX, crash held out),
+  `scripts/lake_replay.py cost|run`, `scripts/seed_showcase.py` (a dozen trades in their own store, `optlab-data/showcase`; guide in `reports/showcase.md`).
   `tests/test_lake_real.py` checks the exit criteria on the real lake and skips without it.
 - Lint config: ruff, line length 120 (`pyproject.toml`). No build step for `docs/` (static, dependency-free JS).
 
@@ -108,7 +109,7 @@ python -m venv .venv
 - **`optlab/marketdata/`**: `lake.py` (raw manifest, append-only Parquet with `origin` on every row, idempotent and bitemporal loads, DuckDB
   reads), `sources/` (one pure `parse` per source, tested offline), `universe.py` (the instrument registry, which `schema.py` reads),
   `derive/` (curves, carry, fictitious bank, surfaces in three layers, correlation and pseudo CvC/PvP: option on a basket against the same option on its members), `quotes.py` (one cleaning chain,
-  `optlab.data.clean_chain`, for every source), `pit.py` (`market_at`: only rows dated at or before the date), `replay.py` (a trade's life on
+  `optlab.data.clean_chain`, for every source), `pit.py` (`market_at`: only rows dated at or before the date; the forward repeats last year's dividends, `carry.dividend_stream`), `replay.py` (a trade's life on
   real closes), `vollab.py` (fits as stored, replayable runs). The model stays at spot 100: real levels cross at the boundary through
   `spot_scale`. Pricing a sheet on another name's market is an error.
 - **`space/app.py`** is a local Gradio front-end (needs `pip install gradio`), not deployed.

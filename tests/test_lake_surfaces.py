@@ -151,3 +151,38 @@ def test_index_panel_fills_only_from_the_past(tmp_path):
     lake.ingest("vol_indices", pd.concat([rows, other]), "cboe", "observed")
     panel = index_panel(lake)
     assert panel.loc["2020-03-03", "VIX"] == 10.0
+
+
+def test_the_slope_falls_with_the_level_and_stays_free_of_butterfly_arbitrage():
+    from optlab.marketdata.derive.surfaces import ShapePrior
+    prior = ShapePrior(-0.6, 1.2, 0.45, 0.03, level_power=0.12, level_ref=0.12)
+    assert prior.eta_at(0.10) == prior.eta_at(0.12) == pytest.approx(1.2)  # below the reference, nothing changes
+    assert prior.eta_at(0.60) == pytest.approx(1.2 * 5.0**-0.12)
+    assert prior.eta_at(0.60) < prior.eta_at(0.30) < prior.eta_at(0.15)
+    tight = ShapePrior(-0.9, 3.0, 0.45, 0.03)
+    assert tight.eta_at(0.2) == pytest.approx(2.0 / 1.9)
+
+
+def test_at_a_high_level_the_slope_gives_back_at_the_money_level():
+    """The index fixes the variance: less skew leaves more of it at the money."""
+    from optlab.marketdata.derive.surfaces import ShapePrior, reconstruct
+    levels = {"VIX9D": 79.0, "VIX": 62.0, "VIX3M": 57.0, "VIX6M": 47.0, "VIX1Y": 36.0}
+    calm = ShapePrior(-0.6, 1.2, 0.45, 0.03)
+    moved = ShapePrior(-0.6, 1.2, 0.45, 0.03, level_power=0.12, level_ref=0.12)
+    a, b = reconstruct(levels, calm).surface, reconstruct(levels, moved).surface
+    assert b.theta(1 / 12) > 1.05 * a.theta(1 / 12)
+    low = {k: v / 6 for k, v in levels.items()}
+    assert reconstruct(low, moved).surface.theta(0.25) == pytest.approx(reconstruct(low, calm).surface.theta(0.25), rel=2e-3)
+
+
+def test_the_panel_stops_at_the_last_vix(tmp_path):
+    from optlab.marketdata.derive.surfaces import index_panel
+    from optlab.marketdata.lake import Lake
+    lake = Lake(tmp_path)
+    days = pd.bdate_range("2026-11-02", periods=3)
+    rows = [pd.DataFrame({"index_name": "RVX", "obs_date": days, "close": [24.0, 23.0, 20.0]}),
+            pd.DataFrame({"index_name": "VIX", "obs_date": days[:2], "close": [21.0, 20.0]})]
+    lake.ingest("vol_indices", pd.concat(rows), "cboe", "observed")
+    panel = index_panel(lake)
+    assert panel.index.max() == days[1]  # the RVX of the last day has no VIX to be compared with yet
+    assert panel.loc[days[1], "RVX"] == 23.0

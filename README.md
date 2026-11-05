@@ -261,7 +261,7 @@ anti-look-ahead test erases the future and checks that no past price changes.
 
 No free source gives long surface history after 2023. Surfaces are therefore rebuilt from volatility indices and an assumed smile
 shape, and tested against real chains: [reports/surface_reconstruction.md](reports/surface_reconstruction.md) gives the error by
-moneyness and maturity (about 0.5 volatility point near the money beyond six months, 1 to 2 in the wings, with a biased
+moneyness and maturity (0.7 to 0.9 volatility point near the money beyond six months, 1 to 2 in the wings, with a biased
 wing). [reports/replay.md](reports/replay.md) follows a BRC and a Phoenix through their lives on the real closes.
 
 ## Running

@@ -86,11 +86,12 @@ def strike_trade(lake: Lake, trade_id: str, sheet: TermSheet, strike, quantity: 
     names = sheet.underlyings
     ctx, scales, prov = market_for(lake, names, strike, cfg, T_max=max(sheet.get("general.maturity_months") / 12, 0.5))
     info = {"strike": strike.isoformat(), "provenance": prov}
-    if coupon is None:
+    has_coupon = sheet.get("coupon.type") != "none"  # an airbag or a capital-protected note has nothing to solve
+    if coupon is None and has_coupon:
         q = quote(sheet, ctx, model=cfg.model, control=None, n_paths=max(cfg.n_paths, 20_000), batch=cfg.batch, seed=cfg.seed)
         coupon, info["coupon_se"], info["policy"] = q.coupon_rate, q.coupon_rate_se, q.decision.label
     info.update(coupon=coupon, seconds=time.perf_counter() - t0)
-    fixed = sheet.replace(**{"wrapper.solve": "upfront", "coupon.rate": coupon})
+    fixed = sheet.replace(**{"wrapper.solve": "upfront", **({"coupon.rate": coupon} if has_coupon else {})})
     return Trade.from_term_sheet(trade_id, fixed, quantity, strike, strike), info
 
 

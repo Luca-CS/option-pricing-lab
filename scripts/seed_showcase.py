@@ -1,0 +1,180 @@
+"""Fill a separate desk store with a realistic book: a dozen products sold on past dates, each solved on the market of its own
+strike date, with real closes as fixings and the market of the last date in the lake. Nothing touches the default store.
+
+    python scripts/seed_showcase.py [--store PATH] [--day 2026-11-04] [--n-paths 20000]
+
+It prints the command that opens the desk on this book. Trades already in the store are kept as they are.
+"""
+
+from __future__ import annotations
+
+import argparse
+import dataclasses
+import sys
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from optlab.app.api import Desk
+from optlab.config import paths
+from optlab.marketdata.derive.bank import wrapper_spreads
+from optlab.marketdata.derive.carry import dividend_stream
+from optlab.marketdata.derive.correl import correlation_at
+from optlab.marketdata.derive.surfaces import surface_at
+from optlab.marketdata.lake import Lake
+from optlab.marketdata.pit import market_at, market_curves, real_close
+from optlab.marketdata.replay import ReplayConfig, filled_fixings, strike_trade
+from optlab.structured import preset
+
+BASKET_NAMES = ("NDX", "RUT", "SX5E")  # the calibrated name is SPX
+LOOK_BACK = ("2020-03-23", "2022-07-01")  # markets kept beside the current one: a crash, and a day with a real chain
+
+
+@dataclass(frozen=True)
+class Deal:
+    trade_id: str
+    preset: str
+    names: tuple
+    strike: str
+    months: int
+    notional: float
+    counterparty: str
+    changes: dict = field(default_factory=dict)
+    quantity: float = -1.0  # the desk sold it
+    coupon: float | None = None  # solved on the strike date's market when None
+
+
+DEALS = (
+    # Already called: a history in the Lifecycle screen, worth nothing today.
+    Deal("SHOW-01", "phoenix", ("SPX",), "2024-11-15", 24, 10e6, "Private bank A"),
+    # Struck before the fall of April 2025. A monthly coupon at 85 % was missed then paid back by its memory, no call before 2 years.
+    Deal("SHOW-02", "phoenix", ("SPX",), "2025-02-19", 36, 8e6, "Private bank B",
+         {"coupon.frequency_months": 1, "coupon.barrier": 0.85, "autocall.first_call": 8, "downside.barrier": 0.65}),
+    # Same date, a daily barrier at 85 %: knocked in, and redeemed against the put at maturity if the index is below its strike.
+    Deal("SHOW-03", "barrier_reverse_convertible", ("SPX",), "2025-02-19", 24, 5e6, "Retail network C", {"downside.barrier": 0.85}),
+    Deal("SHOW-04", "reverse_convertible", ("SPX",), "2026-03-16", 12, 3e6, "Retail network C", {"downside.strike": 0.95, "downside.barrier": 0.95}),
+    Deal("SHOW-05", "airbag", ("SPX",), "2025-06-16", 36, 4e6, "Insurer D"),
+    Deal("SHOW-06", "capital_protected", ("SPX",), "2023-06-15", 60, 12e6, "Insurer D", {"upside.participation": 0.6}),
+    Deal("SHOW-07", "athena", ("SPX",), "2026-02-17", 36, 6e6, "Private bank A", {"autocall.first_call": 4}),
+    # Worst-ofs: priced on the basket settings of the Market screen.
+    Deal("SHOW-08", "phoenix", ("SPX", "NDX", "RUT"), "2025-09-15", 36, 7e6, "Family office E",
+         {"autocall.first_call": 6, "coupon.barrier": 0.65, "downside.barrier": 0.55}),
+    Deal("SHOW-09", "phoenix", ("SPX", "SX5E"), "2026-03-16", 24, 5e6, "Private bank B", {"autocall.first_call": 4}),
+    Deal("SHOW-10", "barrier_reverse_convertible", ("SPX", "NDX"), "2026-06-15", 18, 2.5e6, "Family office E", {"downside.barrier": 0.65}),
+    # A swap with a floating funding leg, and a position the desk holds long.
+    Deal("SHOW-11", "phoenix", ("SPX",), "2025-12-15", 36, 15e6, "Hedge fund F",
+         {"wrapper.format": "swap", "wrapper.funding": "floating", "wrapper.funding_frequency_months": 3, "autocall.first_call": 5}),
+    Deal("SHOW-12", "phoenix", ("SPX",), "2026-04-15", 24, 4e6, "Bought back from G", {"autocall.first_call": 4, "coupon.barrier": 0.75}, quantity=0.5),
+)
+
+
+def sheet_of(lake: Lake, deal: Deal):
+    """The term sheet of a deal, with the issuer's funding of its strike date."""
+    who = {"general.underlying": deal.names[0]} if len(deal.names) == 1 else {"general.basket": "worst_of", "general.underlyings": list(deal.names)}
+    values = {**who, "general.maturity_months": deal.months, "general.notional": deal.notional, **deal.changes}
+    spreads = wrapper_spreads(lake, deal.strike, deal.months / 12)
+    if deal.changes.get("wrapper.format") == "swap":
+        values["wrapper.funding_spread"] = spreads["wrapper.funding_spread"]
+    else:
+        values["wrapper.issuer_spread"] = spreads["wrapper.issuer_spread"]
+    return preset(deal.preset, **values)
+
+
+def store_markets(desk: Desk, lake: Lake, day, look_back=LOOK_BACK, t_max: float = 3.0) -> str:
+    """The market of the last date, in use from now on, and those kept beside it."""
+    for past in look_back:
+        desk.market_store.put(market_at(lake, "SPX", past, leverage="calibrate", T_max=t_max))
+    snap = market_at(lake, "SPX", day, leverage="calibrate", T_max=t_max)
+    sid = desk.market_store.put(snap)
+    desk.use_snapshot({"snapshot_id": sid})
+    return sid
+
+
+def store_fixings(desk: Desk, lake: Lake, start, day, names) -> tuple[int, int]:
+    """Real closes in the model's scale, where today's close is 100. A day with no close takes the last one."""
+    levels, filled = filled_fixings(lake, names, start, day, "weekend")
+    stored = 0
+    for name in names:
+        scale = real_close(lake, name, day)[0] / 100.0
+        stored += desk.repo.put_fixings(name, {d: v / scale for d, v in levels[name].items()}, "lake")
+    return stored, len(filled)
+
+
+def store_basket(desk: Desk, lake: Lake, day, names=BASKET_NAMES, calibrated: str = "SPX") -> dict:
+    """What the Pricer's worst-ofs take for the other names: their level, carry and correlation on that date, as flat inputs."""
+    every = [calibrated, *names]
+    corr, meta = correlation_at(lake, every, day)
+    settings = {"names": {}, "corr": {}}
+    for n in names:
+        market, spot, _ = market_curves(lake, n, day)
+        surface = surface_at(lake, n, day, layer="reconstructed").surface
+        settings["names"][n] = {"vol": float(surface.theta(1.0)) ** 0.5, "q": dividend_stream(lake, n, day, spot).annual_yield,
+                                "r": float(market.zero_rate(1.0))}
+    for i, a in enumerate(every):
+        for j in range(i + 1, len(every)):
+            settings["corr"]["|".join(sorted((a, every[j])))] = float(corr[i, j])
+    desk.put_basket(settings)
+    return meta
+
+
+def seed(desk: Desk, lake: Lake, day, deals=DEALS, n_paths: int = 20_000, log=print, look_back=LOOK_BACK, basket_names=BASKET_NAMES) -> list:
+    """Markets, fixings, basket settings and trades. Returns the ids of the trades added."""
+    day = pd.Timestamp(day).date()
+    sid = store_markets(desk, lake, day, look_back)
+    log(f"market in use: {sid}")
+    names = sorted({n for d in deals for n in d.names} | {"SPX"})
+    start = min(pd.Timestamp(d.strike).date() for d in deals)
+    stored, filled = store_fixings(desk, lake, start, day, names)
+    log(f"fixings: {stored} real closes of {', '.join(names)}, {filled} days without a close took the day before")
+    if basket_names:
+        log(f"basket settings: {store_basket(desk, lake, day, basket_names)}")
+    known = {t.trade_id for t in desk.repo.trades()}
+    cfg = ReplayConfig(model="lv", n_paths=n_paths, greeks=False)
+    added = []
+    for deal in deals:
+        if deal.trade_id in known:
+            log(f"{deal.trade_id}: already in the store")
+            continue
+        t0 = time.perf_counter()
+        trade, info = strike_trade(lake, deal.trade_id, sheet_of(lake, deal), deal.strike, deal.quantity, cfg, deal.coupon)
+        tags = ("showcase", f"preset:{deal.preset}")
+        desk.repo.save_trade(dataclasses.replace(trade, counterparty=deal.counterparty, tags=tags, book="showcase"))
+        if any(e["kind"] == "called" for e in desk.trade_events(deal.trade_id)["past"]):
+            desk.update_trade(deal.trade_id, {"status": "called"})
+        added.append(deal.trade_id)
+        coupon = "no coupon" if info["coupon"] is None else f"coupon {100 * info['coupon']:.2f} %"
+        log(f"{deal.trade_id}: {deal.preset} on {'/'.join(deal.names)}, struck {deal.strike}, {coupon}, {time.perf_counter() - t0:.1f} s")
+    return added
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--store", default=str(paths().store.parent / "showcase" / "desk.sqlite"))
+    ap.add_argument("--day", default=None, help="valuation date (default: the last SPX close in the lake)")
+    ap.add_argument("--n-paths", type=int, default=20_000)
+    args = ap.parse_args()
+    lake = Lake()
+    last = lake.read("prices_eod", where="instrument = 'SPX'", columns="max(obs_date) AS d")["d"].iloc[0]
+    day = pd.Timestamp(args.day or last).date()
+    desk = Desk(args.store)
+    try:
+        seed(desk, lake, day, n_paths=args.n_paths)
+        sid = desk.ctx.snapshot_id
+        trades = desk.repo.trades()
+        for t in trades:
+            events = desk.trade_events(t.trade_id)
+            kinds = pd.Series([e["kind"] for e in events["past"]], dtype=str).value_counts().to_dict()
+            print(f"{t.trade_id}: {t.counterparty}, past events {kinds}, {len(events['upcoming'])} to come"
+                  + (f", missing: {events['missing']}" if events["missing"] else ""))
+    finally:
+        desk.jobs.shutdown()
+    print("\nOpen the desk on this book:")
+    print(f'python -m optlab.app --store "{desk.repo.path}" --market {sid} --open')
+
+
+if __name__ == "__main__":
+    main()

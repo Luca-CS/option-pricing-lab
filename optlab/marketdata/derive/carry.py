@@ -4,19 +4,30 @@ No free source gives repo or index dividends. Where chains exist, parity gives a
 dividend and repo for an index. A share's repo is what remains after its known dividends. Elsewhere the carry is an
 estimate from the past (the realised yield of a total-return index, trailing dividends) or a labelled assumption.
 Everything used at a date is known at that date: future dividends are never read.
+
+A market's forward uses a dividend stream: the dividends of the past year in points, as a share of today's spot, repeated
+on the same dates of the years to come. So the curve has its steps and its season, and a fall of the spot raises the yield at
+once, as it does for dividends that were already announced. A yield averaged over the past year does neither.
 """
 
 from __future__ import annotations
 
 import datetime as dt
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 
 from ..lake import Lake, new_run_id, sql_str
+from ..universe import instrument
 
 # Assumed dividend yields of indices with neither chains nor a total-return index (origin = synthetic).
 SYNTHETIC_YIELD = {"NDX": 0.008, "SX5E": 0.03}
+# Assumed share of the year's dividends per month, January first. European dividends fall in spring; no source gives this.
+ASSUMED_SEASON = {"SX5E": (0.03, 0.03, 0.03, 0.20, 0.30, 0.25, 0.02, 0.03, 0.03, 0.03, 0.03, 0.02)}
+EVEN_SEASON = (1 / 12,) * 12
+STREAM_YEARS = 8
+MIN_HISTORY_DAYS = 300  # less than that does not show a year of dividends
 
 
 def cip_forward(spot, discount_domestic, discount_foreign):
@@ -129,6 +140,72 @@ def build_parity_carry(lake: Lake, name: str, source: str, days=None, currency: 
     if not rows:
         return {"n_new": 0, "n_changed": 0, "n_input": 0}
     return lake.ingest("carry_implied", pd.concat(rows, ignore_index=True), f"parity_on_{source}", "derived", new_run_id("derive_parity"))
+
+
+@dataclass(frozen=True)
+class DividendStream:
+    """Dividends to come as shares of today's spot: `times` in years from the date, `shares` paid at each."""
+    times: np.ndarray
+    shares: np.ndarray
+    origin: str
+    method: str
+
+    @property
+    def annual_yield(self) -> float:
+        return float(self.shares[self.times <= 1.001].sum())  # a dividend of today comes back in 365.25 days
+
+    def factor(self, T) -> np.ndarray:
+        """What is left of a unit of spot at T once the dividends paid by then are gone."""
+        T = np.atleast_1d(np.asarray(T, dtype=float))
+        if not len(self.times):
+            return np.ones_like(T)
+        order = np.argsort(self.times)
+        cumulated = np.concatenate([[0.0], np.cumsum(np.log1p(-self.shares[order]))])
+        return np.exp(cumulated[np.searchsorted(self.times[order], T, side="right")])
+
+
+def _repeat_year(day: dt.date, dates, shares, origin: str, method: str, years: int = STREAM_YEARS) -> DividendStream:
+    times, out = [], []
+    for n in range(1, years + 1):
+        for d, s in zip(dates, shares):
+            times.append(((pd.Timestamp(d) - pd.Timestamp(day)).days + 365.25 * n) / 365.0)
+            out.append(float(s))
+    return DividendStream(np.array(times, dtype=float), np.array(out, dtype=float), origin, method)
+
+
+def _monthly_stream(day: dt.date, annual: float, season, origin: str, method: str) -> DividendStream:
+    """A year's yield on the middle of the months of the coming years, from a season."""
+    first = pd.Timestamp(day).replace(day=15) - pd.DateOffset(years=1)
+    months = pd.date_range(first, periods=12, freq=pd.DateOffset(months=1))
+    months = [m if m > pd.Timestamp(day) - pd.DateOffset(years=1) else m + pd.DateOffset(years=1) for m in months]
+    return _repeat_year(day, months, [annual * season[m.month - 1] for m in months], origin, method)
+
+
+def dividend_stream(lake: Lake, name: str, day, spot: float, as_of=None) -> DividendStream:
+    """The dividends to come of a name, from what is known at `day`. A total-return index gives its dividends in points day by
+    day, a share its ex-dates; other names have an assumed yield, with its season."""
+    day = pd.Timestamp(day).date()
+    inst = instrument(name)
+    start = day - dt.timedelta(days=365)
+    window = f"obs_date > DATE '{start}' AND obs_date <= DATE '{day}'"
+    if inst.total_return:
+        rows = lake.read("prices_eod", where=f"instrument IN ({sql_str(name)}, {sql_str(name + '.TR')}) AND {window}",
+                         columns="instrument, obs_date, close", as_of=as_of)
+        wide = rows.pivot_table(index="obs_date", columns="instrument", values="close").sort_index().dropna() if len(rows) else None
+        if wide is not None and name + ".TR" in wide.columns and len(wide) > 1:
+            wide.index = pd.to_datetime(wide.index)
+            if (wide.index[-1] - wide.index[0]).days >= MIN_HISTORY_DAYS:
+                points = wide[name] * (np.exp(np.log(wide[name + ".TR"]).diff() - np.log(wide[name]).diff()) - 1.0)
+                months = points.dropna().groupby(pd.Grouper(freq="ME")).sum().clip(lower=0.0)
+                dates = [min(d, pd.Timestamp(day)) for d in months.index]
+                return _repeat_year(day, dates, months.to_numpy() / spot, "derived", "dividend_points")
+    elif inst.asset_class == "equity":
+        rows = lake.read("corporate_actions", where=f"instrument = {sql_str(name)} AND kind = 'dividend' AND {window}",
+                         columns="obs_date, value", as_of=as_of)
+        return _repeat_year(day, rows["obs_date"], rows["value"].to_numpy(dtype=float) / spot, "derived", "dividend_dates")
+    annual, origin, method = dividend_yield_at(lake, name, day, as_of)
+    season = ASSUMED_SEASON.get(name, EVEN_SEASON)
+    return _monthly_stream(day, annual, season, origin, "assumed_season" if name in ASSUMED_SEASON else method)
 
 
 def dividend_yield_at(lake: Lake, name: str, day: dt.date, as_of=None) -> tuple[float, str, str]:

@@ -93,7 +93,7 @@ def test_snapshot_is_in_the_model_scale_and_says_where_each_part_comes_from(worl
     p = snap.provenance
     assert p["spot"]["origin"] == "observed" and p["discount"]["origin"] == "derived"
     assert p["surface"] == {"origin": "reconstructed", "layer": "reconstructed", "date": str(DAY), "extrapolated_from": 1.0}
-    assert p["carry"]["method"] == "total_return"
+    assert p["carry"]["method"] == "dividend_points"
     assert snap.source == "lake:reconstructed"
     restored = MarketSnapshot.from_json(snap.to_json())
     assert restored.snapshot_id == snap.snapshot_id
@@ -103,8 +103,9 @@ def test_forward_and_discount_follow_the_curves(world):
     root, lake, days, paths = world
     ctx, snap = context_at(lake, "SPX", DAY)
     q = snap.provenance["carry"]["dividend_yield"]
+    assert q == pytest.approx(0.015, abs=0.003)  # the fixture's total return runs 1.5 % a year above the price
     for T in (0.25, 1.0, 3.0):
-        assert ctx.market.F(T) * ctx.market.D(T) == pytest.approx(100.0 * np.exp(-q * T), rel=1e-6)
+        assert ctx.market.F(T) * ctx.market.D(T) == pytest.approx(100.0 * np.exp(-q * T), rel=2e-3)
     assert ctx.valuation == DAY and ctx.underlying == "SPX" and ctx.t_max == 5.0
 
 

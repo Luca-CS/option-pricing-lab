@@ -13,7 +13,8 @@ function table(headers, rows) {
 export async function render(page) {
   clear(page, h("div", { class: "page-head" }, h("div", {}, h("h1", {}, "Data"))), h("div", { class: "skeleton", style: { height: "240px" } }));
   let d;
-  try { d = await api("/api/data/overview"); } catch (e) { clear(page, errorNotice(e)); return; }
+  let baskets;
+  try { [d, baskets] = await Promise.all([api("/api/data/overview"), api("/api/data/baskets")]); } catch (e) { clear(page, errorNotice(e)); return; }
   if (!d.available) {
     clear(page, h("div", { class: "page-head" }, h("div", {}, h("h1", {}, "Data"))),
       h("div", { class: "notice" }, `The lake is empty: ${d.hint}.`));
@@ -82,6 +83,12 @@ export async function render(page) {
       h("div", { class: "btn-row" }, h("button", { class: "btn primary", type: "button", onclick: buildMarket }, "Build the market")),
       resultCard),
     volCard,
+    baskets.rows.length ? h("div", { class: "card" }, h("div", { class: "card-head" }, h("h2", {}, `CvC and PvP, 1 year, ${dateLabel(baskets.day)}`), originBadge("synthetic")),
+      h("p", {}, "Option on the equally weighted basket against the same option on each member, long the basket, in % of notional. "
+        + "Pseudo-quotes: the assumed correlation goes in, and the reading only shows how far the direct formula lands once the surfaces have a smile. On one strike a CvC and a PvP are one instrument."),
+      table(["Basket", "Kind", "Strike", "Spread", "SE", "Basket vol", "Assumed correlation", "Read back"], baskets.rows.map((r) => h("tr", {},
+        h("td", {}, r.basket), h("td", {}, r.kind.toUpperCase()), h("td", { class: "num" }, `${num(100 * r.strike, 0)} %`), h("td", { class: "num" }, num(r.price, 3)),
+        h("td", { class: "num" }, num(r.price_se, 3)), h("td", { class: "num" }, `${num(100 * r.basket_vol, 1)} %`), h("td", { class: "num" }, num(r.rho, 2)), h("td", { class: "num" }, num(r.implied_rho, 2)))))) : null,
     h("div", { class: "card" }, h("div", { class: "card-head" }, h("h2", {}, "Universe")),
       h("p", {}, "Chosen in 2026, so a replay on it carries a survivorship bias. Names not loaded yet are declared and off."),
       table(["Name", "Class", "Currency", "Place", "Vol index", "Prices", "Last close", "Status"], d.instruments.map((i) => h("tr", {},
