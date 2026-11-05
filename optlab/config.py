@@ -1,7 +1,8 @@
 """Where the library reads and writes: one place instead of paths spread over the modules.
 
 `OPTLAB_HOME` moves the root (default: the repository), `OPTLAB_STORE` the local store of snapshots, trades and
-runs (default: data/store, git-ignored like all of data/).
+runs, `OPTLAB_LAKE` the historical data lake. Both default to a folder that survives worktrees: `OPTLAB_DATA`, or
+`optlab-data` beside the main checkout when it exists, else data/ (git-ignored).
 """
 
 from __future__ import annotations
@@ -20,9 +21,24 @@ class Paths:
     results: Path  # versioned calibrations (parameters only, spot rescaled to 100)
     data: Path  # personal-use market data, never versioned
     store: Path  # local snapshots, trades, fixings and runs
+    lake: Path  # historical lake: raw files and curated Parquet, never versioned
+
+
+def _stable_data(home: str | None) -> Path | None:
+    """The folder that outlives a worktree, unless OPTLAB_HOME asks for a self-contained root."""
+    if os.environ.get("OPTLAB_DATA"):
+        return Path(os.environ["OPTLAB_DATA"])
+    if home:
+        return None
+    main = REPO_ROOT.parents[2] if REPO_ROOT.parent.name == "worktrees" else REPO_ROOT
+    sibling = main.parent / "optlab-data"
+    return sibling if sibling.is_dir() else None
 
 
 def paths() -> Paths:
-    root = Path(os.environ.get("OPTLAB_HOME") or REPO_ROOT)
+    home = os.environ.get("OPTLAB_HOME")
+    root = Path(home or REPO_ROOT)
     data = root / "data"
-    return Paths(root, root / "results", data, Path(os.environ.get("OPTLAB_STORE") or data / "store"))
+    stable = _stable_data(home) or data
+    return Paths(root, root / "results", data, Path(os.environ.get("OPTLAB_STORE") or stable / "store"),
+                 Path(os.environ.get("OPTLAB_LAKE") or stable / "lake"))

@@ -1,0 +1,76 @@
+"""The registry of instruments: one declarative table, so that loads, calendars and the term-sheet form follow it.
+
+Only `enabled` names are loaded and offered. The others are declared with their tickers and switched on by changing
+one word. The list is chosen today, so history built on it has a survivorship bias: these names all survived to 2026,
+and the bias grows the further back a replay starts.
+"""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
+
+import pandas as pd
+
+
+@dataclass(frozen=True)
+class Instrument:
+    id: str
+    name: str
+    asset_class: str  # index, equity or fx
+    currency: str
+    place: str  # calendar of its fixings
+    yahoo: str
+    vol_index: str = ""  # implied volatility index (30 days), empty when none is free
+    total_return: str = ""  # Yahoo ticker of the total-return index, gives the realised dividend yield
+    enabled: bool = True
+
+
+UNIVERSE = (
+    Instrument("SPX", "S&P 500", "index", "USD", "NYSE", "^GSPC", "VIX", "^SP500TR"),
+    Instrument("NDX", "Nasdaq 100", "index", "USD", "NYSE", "^NDX", "VXN"),
+    Instrument("RUT", "Russell 2000", "index", "USD", "NYSE", "^RUT", "RVX", "^RUTTR"),
+    Instrument("SX5E", "Euro Stoxx 50", "index", "EUR", "EUREX", "^STOXX50E", "V2TX"),
+    Instrument("AAPL", "Apple", "equity", "USD", "NYSE", "AAPL", "VXAPL"),
+    Instrument("AMZN", "Amazon", "equity", "USD", "NYSE", "AMZN", "VXAZN"),
+    Instrument("GOOGL", "Alphabet", "equity", "USD", "NYSE", "GOOGL", "VXGOG"),
+    Instrument("GS", "Goldman Sachs", "equity", "USD", "NYSE", "GS", "VXGS"),
+    Instrument("IBM", "IBM", "equity", "USD", "NYSE", "IBM", "VXIBM"),
+    # Declared, not loaded yet (scope agreed on 5 November 2026: names with a free implied volatility first).
+    Instrument("DAX", "DAX", "index", "EUR", "XETRA", "^GDAXI", enabled=False),
+    Instrument("CAC", "CAC 40", "index", "EUR", "EURONEXT", "^FCHI", enabled=False),
+    Instrument("FTSE", "FTSE 100", "index", "GBP", "LSE", "^FTSE", enabled=False),
+    Instrument("NKY", "Nikkei 225", "index", "JPY", "TSE", "^N225", enabled=False),
+    Instrument("MSFT", "Microsoft", "equity", "USD", "NYSE", "MSFT", enabled=False),
+    Instrument("NVDA", "Nvidia", "equity", "USD", "NYSE", "NVDA", enabled=False),
+    Instrument("JPM", "JPMorgan Chase", "equity", "USD", "NYSE", "JPM", enabled=False),
+    Instrument("ASML", "ASML", "equity", "EUR", "EURONEXT", "ASML.AS", enabled=False),
+    Instrument("LVMH", "LVMH", "equity", "EUR", "EURONEXT", "MC.PA", enabled=False),
+    Instrument("SAP", "SAP", "equity", "EUR", "XETRA", "SAP.DE", enabled=False),
+    Instrument("EURUSD", "Euro / US dollar", "fx", "USD", "FX", "EURUSD=X", enabled=False),
+    Instrument("USDJPY", "US dollar / yen", "fx", "JPY", "FX", "USDJPY=X", enabled=False),
+    Instrument("GBPUSD", "Sterling / US dollar", "fx", "USD", "FX", "GBPUSD=X", enabled=False),
+)
+_BY_ID = {i.id: i for i in UNIVERSE}
+REFERENCE_INSTRUMENT = {"NYSE": "SPX", "EUREX": "SX5E"}  # whose trading days define a place's observed calendar
+
+
+def instrument(name: str) -> Instrument:
+    try:
+        return _BY_ID[name]
+    except KeyError:
+        raise KeyError(f"unknown instrument {name!r}, known: {', '.join(_BY_ID)}") from None
+
+
+def enabled(asset_class: str | None = None) -> tuple:
+    return tuple(i for i in UNIVERSE if i.enabled and (asset_class is None or i.asset_class == asset_class))
+
+
+def enabled_names() -> tuple:
+    """Names offered by the term-sheet form."""
+    return tuple(i.id for i in enabled())
+
+
+def as_rows(as_of) -> pd.DataFrame:
+    """The registry as rows of the `instruments` table, dated `as_of`."""
+    rows = [{**asdict(i), "instrument": i.id, "obs_date": as_of, "cboe": i.vol_index} for i in UNIVERSE]
+    return pd.DataFrame(rows).drop(columns=["id"])
