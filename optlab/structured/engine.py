@@ -170,8 +170,10 @@ NATIVE_BATCH_BYTES = 256 * 2**20  # paths of one engine batch: memory, not numbe
 
 def native_pair_batches(n_pairs: int, n_columns: int, parts: int = 1) -> list[int]:
     """Pairs per engine batch: at most what fits in NATIVE_BATCH_BYTES of double spots, and at most n_pairs / parts
-    so that `parts` evaluations can run at once; at least 4096."""
-    per = max(4096, min(NATIVE_BATCH_BYTES // max(1, 2 * 8 * n_columns), -(-n_pairs // max(1, parts))))
+    so that `parts` evaluations can run at once; at least 4096, or 16384 when split for parallel evaluation (the
+    script's interpretation costs about the same per batch whatever its size)."""
+    floor = 4096 if parts <= 1 else 16384
+    per = max(floor, min(NATIVE_BATCH_BYTES // max(1, 2 * 8 * n_columns), -(-n_pairs // max(1, parts))))
     return [per] * (n_pairs // per) + ([n_pairs % per] if n_pairs % per else [])
 
 

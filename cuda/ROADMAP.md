@@ -35,6 +35,12 @@ One million paths, Phoenix and BRC on the SPX calibration, worst-of on three loc
 | Worst-of Phoenix on 3 names, local vol | 104.5 | 34.8 | 6.4 | 0.29 |
 | SLV leverage, 1 year, 200,000 particles | 4.5 | | 1.3 | 0.16 |
 
+A full desk quote of the Phoenix (standard precision, 100,000 paths: local vol base, SLV provision, Greeks with the
+SLV vega, the SLV mix band and the hedging costs, so about twenty simulations and seven leverage calibrations):
+107.5 s on NumPy (no process pool), 17.5 s on the CPU engine, 4.4 s on the GPU engine. The coupons agree: 4.122 % ±
+0.075 on NumPy, 4.053 % ± 0.077 on the engine. The rest of the GPU quote is the NumPy evaluation of the script and the
+building of the local variance tables of the bumped surfaces.
+
 Prices agree with NumPy within the Monte Carlo error on independent draws (SLV Phoenix at 4 million paths: 99.4583 ±
 0.0054 on NumPy in 22.8 s, 99.4549 ± 0.0054 on the GPU in 2.0 s, 0.45 standard errors apart). The CPU and the GPU use
 the same normals: local vol and SLV paths agree to 5e-8 (median, relative), Heston paths too except the 3 % where
@@ -53,7 +59,7 @@ amounts as NumPy's (within 1.1 standard errors of each other per strike, at 400,
 | 5 | Evaluation on several threads while the GPU simulates the next batch | done: ×4.7 on the Phoenix |
 | 6 | Daily windows reduced to lowest and highest spot in the kernel (two columns instead of 252) | done: BRC ×8 on the GPU |
 | 7 | Normals read as one stream per pair (no draw wasted) | done: CPU engine ×1.7 to ×2.1 |
-| 8 | Desk on the engine: `--engine auto`, status bar, a 2 million paths precision | done |
+| 8 | Desk on the engine: `--engine auto`, status bar, a 2 million paths precision; the vanilla checks of the mix band (`validation.mc_smile`) on the engine | done: desk quote 107.5 s to 4.4 s |
 | 9 | Fused payoff on the GPU: the script's AST compiled to CUDA C and loaded with NVRTC, so only pair sums cross PCIe; the evaluation (now 60 to 90 % of a GPU quote) disappears | next; gate: equal numbers to the NumPy evaluator on the same paths |
 | 10 | All the bumps of a quote in one launch: vol, skew and correlation scenarios as extra tables on the same draws (exact common random numbers, one transfer) | planned |
 | 11 | CPU engine vectorised over tiles of pairs (AVX2, structure of arrays) | planned: the CPU tier is still 15 times slower than the GPU |

@@ -70,7 +70,7 @@ def desk_quote(engine, precision):
     from optlab import native
     from optlab.app.api import Desk
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         desk = Desk(store=Path(tmp) / "desk.sqlite", engine=engine)
         try:
             s = preset("phoenix").to_dict(json_safe=True)
