@@ -193,3 +193,17 @@ def test_optionsdx_parser_splits_the_two_sides():
 def test_clean_input_columns():
     out = as_clean_input(synthetic_rows()[:2])
     assert set(out.columns) == {"root", "strike", "bid", "ask", "type", "expiry"} and out["type"].tolist() == ["call", "put"]
+
+
+def test_a_yahoo_snapshot_outside_market_hours_is_flagged(tmp_path):
+    from optlab.marketdata.ingest import load_yahoo_chains
+    lake = Lake(tmp_path)
+
+    def closed(ticker):
+        frame = yahoo_frame(synthetic_rows()[:20])
+        return frame.assign(bid=0.0, ask=0.0), SPOT, DAY
+
+    out = load_yahoo_chains(lake, names=("SPX",), download=closed)
+    assert out[0]["two_sided"] == 0.0
+    assert set(lake.read("option_quotes")["quality"]) == {"suspect"}
+    assert lake.read("quality_issues")["check_name"].tolist() == ["market_closed"]

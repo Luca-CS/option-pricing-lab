@@ -19,6 +19,7 @@ from .universe import REFERENCE_INSTRUMENT, as_rows, enabled
 
 LOG = get_logger(__name__)
 START = "2015-01-01"  # the replay period starts in 2018; earlier history feeds rolling windows
+MIN_TWO_SIDED = 0.3
 
 
 def load_cboe(lake: Lake, fetch=http_get) -> list[dict]:
@@ -122,7 +123,14 @@ def load_yahoo_chains(lake: Lake, names=("SPX", "NDX", "RUT", "AAPL"), tickers=N
         raw_frame, spot, day = download(ticker)
         raw = lake.store_raw("yahoo_chain", f"{name}_{day}.parquet", _parquet_bytes(raw_frame), f"yahoo:{ticker}")
         rows = yahoo.parse_chain(raw_frame, name, day, spot)
-        out.append(lake.ingest("option_quotes", rows, "yahoo", "observed", raw_sha256=raw.sha256))
+        two_sided = float(((rows["bid"] > 0) & (rows["ask"] > rows["bid"])).mean())
+        quality = "ok" if two_sided >= MIN_TWO_SIDED else "suspect"
+        if quality == "suspect":  # Yahoo blanks bid and ask outside US market hours
+            issue = pd.DataFrame([{"dataset": "option_quotes", "item": name, "check_name": "market_closed", "severity": "warning",
+                                   "detail": f"{two_sided:.1%} two-sided quotes: taken outside US market hours", "obs_date": day}])
+            lake.ingest("quality_issues", issue, "ingest", "derived", new_run_id("ingest"))
+        out.append({**lake.ingest("option_quotes", rows, "yahoo", "observed", quality=quality, raw_sha256=raw.sha256),
+                    "two_sided": two_sided})
     return out
 
 
