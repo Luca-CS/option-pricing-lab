@@ -202,6 +202,18 @@ class CorrelationSkew:
         return float(np.clip(value, -0.95, 0.99))
 
 
+def skewed_matrix(matrix, m: float, kind: str = "pvp", skew: CorrelationSkew = CorrelationSkew()) -> np.ndarray:
+    """A constant-correlation matrix for a product living around moneyness m: every pair moved along the assumed
+    rho(m), then back to a valid matrix. A worst-of with a low barrier lives in the joint down tail, so it takes the PvP
+    side. This is how the one correlation of `BasketContext` carries a skew until the simulation has a local correlation."""
+    m_ = np.array(matrix, dtype=float)
+    n = len(m_)
+    for i in range(n):
+        for j in range(i + 1, n):
+            m_[i, j] = m_[j, i] = skew.rho(kind, m, float(matrix[i, j]))
+    return nearest_correlation(m_)
+
+
 def implied_pair_rho(price: float, kind: str, m: float, q_a, q_b, n: int = 200) -> float:
     """The constant copula correlation that gives this undiscounted price (the Lab fits these). Both kinds increase
     with the correlation."""

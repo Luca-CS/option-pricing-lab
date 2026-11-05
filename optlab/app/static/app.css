@@ -22,6 +22,8 @@
   --chart-2: #e07a1f;
   --chart-3: #14a37f;
   --chart-4: #8a4fd8;
+  --chart-5: #b3246e;
+  --chart-6: #5f6b7a;
   --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .08);
   --shadow-pop: 0 10px 30px rgba(16, 24, 40, .18);
   --radius: 10px;
@@ -53,6 +55,8 @@
   --chart-2: #f5a052;
   --chart-3: #4fd0ac;
   --chart-4: #b48cff;
+  --chart-5: #ff86c0;
+  --chart-6: #a6b0bd;
   --shadow: 0 1px 2px rgba(0, 0, 0, .4);
   --shadow-pop: 0 12px 34px rgba(0, 0, 0, .55);
   color-scheme: dark;
@@ -81,6 +85,8 @@
     --chart-2: #f5a052;
     --chart-3: #4fd0ac;
     --chart-4: #b48cff;
+  --chart-5: #ff86c0;
+  --chart-6: #a6b0bd;
     --shadow: 0 1px 2px rgba(0, 0, 0, .4);
     --shadow-pop: 0 12px 34px rgba(0, 0, 0, .55);
     color-scheme: dark;
@@ -250,6 +256,9 @@ table.data tr.selected td { background: var(--accent-soft); }
 .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 12px;
   font-weight: 600; background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
 .badge.pos { background: var(--pos-soft); color: var(--pos); border-color: transparent; }
+.badge.origin.observed { background: var(--pos-soft); color: var(--pos); border-color: transparent; }
+.badge.origin.reconstructed { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.badge.origin.synthetic { background: var(--neg-soft); color: var(--neg); border-color: transparent; }
 .badge.neg { background: var(--neg-soft); color: var(--neg); border-color: transparent; }
 .badge.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
 .badge.accent { background: var(--accent-soft); color: var(--accent); border-color: transparent; }

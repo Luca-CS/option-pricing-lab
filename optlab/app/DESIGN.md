@@ -29,7 +29,7 @@ A structurer or trader, alone, on a desk-like workflow:
 
 ## 3. Information architecture
 
-A left navigation rail with six destinations, each one screen, plus a global status bar.
+A left navigation rail with nine destinations, each one screen, plus a global status bar.
 
 | Screen | Purpose | Main components |
 |---|---|---|
@@ -39,6 +39,9 @@ A left navigation rail with six destinations, each one screen, plus a global sta
 | **Lifecycle** | Fixings and events | Fixings editor (paste a column, CSV import, real to model scale) · per-trade timeline of past and next events |
 | **Market** | The calibration behind the prices | Snapshot list and details · smile chart per maturity · ATM term structure · model-risk table (BS, LV, Heston, SLV) |
 | **Script lab** | Products outside the schema | Editor with line numbers, errors at line and column, price under a chosen model |
+| **Vol lab** | Models against real quotes | Quotes and day picker · smile with bid and ask · error against the spread by model and maturity · stored runs, each one replayable |
+| **Replay** | A product through its life on real closes | Preset, strike date, frequency · value and cash · events · reconciliation · P&L explained with its residual |
+| **Data** | What the lake holds | Coverage by table, origin and source · universe · quality · a market at a past date, with the origin of each part |
 
 Global: a status bar (server connection, snapshot in use, running jobs with progress), a settings sheet (precision
 preset, workers, fast models, control variates, theme), keyboard shortcuts (`g o`, `g p`, `g b`, `g l`, `g m`, `?`).
@@ -117,7 +120,37 @@ API (JSON):
 | `POST /api/script/check`, `POST /api/script/price` | script lab |
 | `GET /report/quote/{id}`, `GET /report/book` | standalone HTML reports |
 
-## 7. Delivery plan and status
+## 7. Data lake
+
+The historical layer under the desk, in `optlab/marketdata/`. SQLite stays the desk's operational store (short concurrent
+writes from the server); the lake is read-mostly history. Portable and serverless, as the rest of the desk.
+
+| Layer | Technology | Content |
+|---|---|---|
+| Raw | files as downloaded, `raw/manifest.jsonl` (URL, date, sha256) | everything, replayable |
+| Curated | Parquet, `curated/<table>/[underlying=X/]year=YYYY/` | 19 normalised tables |
+| Queries | DuckDB in memory, views on the Parquet | latest versions, `as_of`, point in time |
+| Operational | SQLite (`desk.sqlite`) | trades, fixings, quotes, settings |
+
+Every curated row has `obs_date`, `ingested_at`, `source`, `run_id`, `quality` and `origin`. Loads are idempotent and
+bitemporal: the same content adds nothing, a changed value adds a version, and the old one stays readable with `as_of`.
+
+**Origin goes up to the screen.** `observed` (read from a market source), `derived` (computed from observed data),
+`reconstructed` (rebuilt from indices and an assumed shape, no option quote read), `synthetic` (an assumption). The three layers
+of surfaces are never mixed, and the term structure beyond one year is shown as an assumption.
+
+**Point in time.** `pit.market_at(lake, name, day, as_of)` reads only rows dated at or before `day`, and returns a
+`MarketSnapshot` at spot 100 with the real level in `spot_scale`. The anti-look-ahead tests compare it with a lake whose future was
+erased, on synthetic and on real data. What the erasing cannot catch is configuration estimated later: the shape prior and the Heston
+dynamics, calibrated in 2026.
+
+**Sharing.** A desk listening beyond this machine (`--host`, `--tunnel`) sets `desk.shared`: option quotes and index levels answer 403,
+fits and errors stay. Results hold performances in % of the initial fixing, never a level. The data is Yahoo personal-use data and a licensed
+sample that allows evaluation without redistribution: nothing of it goes into `docs/`, the reports or git.
+
+**Location.** `OPTLAB_DATA`, or the `optlab-data` folder beside the main checkout, so that lake and store survive worktrees.
+
+## 8. Delivery plan and status
 
 1. Server, jobs, repository, serialization, API, with tests (no browser needed: the API is called directly). Done:
    `tests/test_app_api.py`.

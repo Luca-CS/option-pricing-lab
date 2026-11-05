@@ -3,7 +3,7 @@
 import { api, withToken } from "../api.js";
 import { describeSheet } from "../format.js";
 import { desk, state } from "../state.js";
-import { badgeFor, clear, dateLabel, errorNotice, h, num, pct, pm, pretty } from "../ui.js";
+import { badgeFor, clear, dateLabel, errorNotice, h, num, originBadge, pct, pm, pretty } from "../ui.js";
 
 export async function render(page) {
   clear(page, h("div", { class: "page-head" }, h("div", {}, h("h1", {}, "Overview"),
@@ -24,7 +24,7 @@ export async function render(page) {
 
   clear(page,
     h("div", { class: "page-head" }, h("div", {}, h("h1", {}, "Overview"),
-      h("p", {}, `Valuation date ${dateLabel(ctx.valuation)} · market ${ctx.snapshot_id}`)),
+      h("p", {}, `Valuation date ${dateLabel(ctx.valuation)} · market ${ctx.snapshot_id} · surface `, originBadge(ctx.origin && ctx.origin.surface))),
       h("div", { class: "btn-row" }, h("a", { class: "btn primary", href: "#/pricer" }, "New quote"),
         h("a", { class: "btn", href: "#/book" }, "Open the book"),
         h("a", { class: "btn ghost", href: withToken("/report/desk"), target: "_blank", rel: "noopener",

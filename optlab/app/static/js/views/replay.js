@@ -25,7 +25,7 @@ function draw(out, r) {
         `${int(r.n_valuations)} valuations, ${num(r.seconds?.total ?? 0, 0)} s (${num(r.seconds?.per_valuation ?? 0, 2)} s each)`,
         r.filled_fixings ? `, ${r.filled_fixings} missing closes filled with the day before` : "", "."),
       prov ? h("p", {}, "Fixings ", originBadge("observed"), " · curve ", originBadge(prov.discount.origin), " · carry ", originBadge(prov.carry.origin),
-        ` (${pretty(prov.carry.method)}) · surface `, originBadge(prov.surface.origin), ` beyond ${num(prov.surface.extrapolated_from, 2)} y the term structure is an assumption.`) : null,
+        ` (${pretty(prov.carry.method)}) · surface `, originBadge(prov.surface.origin), `: beyond ${num(prov.surface.extrapolated_from, 2)} y the term structure is an assumption.`) : null,
       lineChart([value, wealth], { xFormat: dateAxis, yFormat: (v) => v.toFixed(0), xLabel: "date", label: "Value and cash of the trade over its life" }),
       legend([value, wealth]),
       lineChart(perf, { xFormat: dateAxis, yFormat: (v) => `${v.toFixed(0)} %`, xLabel: "date", label: "Performance of the underlying since the strike" }),
@@ -63,7 +63,7 @@ export async function render(page) {
   };
   const drawList = (runs) => clear(list, runs.length ? h("div", { class: "table-wrap" }, h("table", { class: "data" },
     h("tr", {}, ["Run", "Kept in", "Strike", "Valuations", "Events", "Seconds", ""].map((t) => h("th", {}, t))),
-    runs.map((r) => h("tr", {}, h("td", {}, r.trade_id), h("td", {}, r.kind), h("td", {}, r.strike || "–"), h("td", { class: "num" }, int(r.n_valuations || 0)),
+    runs.map((r) => h("tr", {}, h("td", {}, r.id), h("td", {}, r.kind), h("td", {}, r.strike || "–"), h("td", { class: "num" }, int(r.n_valuations || 0)),
       h("td", { class: "num" }, int(r.events)), h("td", { class: "num" }, num(r.seconds || 0, 0)),
       h("td", { class: "num" }, h("button", { class: "btn sm", type: "button", onclick: () => open(r.id) }, "Open")))))) : h("p", {}, "No run yet."));
   drawList(info.runs);
@@ -71,15 +71,15 @@ export async function render(page) {
     clear(out, progress("Replaying: one valuation per step, on the market of that day"));
     try {
       const { job } = await api("/api/replay/run", { method: "POST", body: { preset: preset.value, underlying: name.value, strike: strike.value, every: +every.value, model: model.value } });
-      const j = await runJob(job, () => {});
-      draw(out, j.result);
+      const result = await runJob(job, () => {});
+      draw(out, result);
       drawList((await api("/api/replay/runs")).runs);
     } catch (e) { clear(out, errorNotice(e)); }
   };
   clear(page,
     h("div", { class: "page-head" }, h("div", {}, h("h1", {}, "Replay"),
       h("p", {}, "Deal a preset on a past date, then follow it on the real closes. Each value uses only what was known that day."))),
-    h("div", { class: "card" }, h("div", { class: "form-row" }, field("Product", preset), field("Underlying", name), field("Strike date", strike),
+    h("div", { class: "card" }, h("div", { class: "fields" }, field("Product", preset), field("Underlying", name), field("Strike date", strike),
       field("Value every", every, { hint: "business days; event days are always valued" }), field("Model", model)),
       h("div", { class: "btn-row" }, h("button", { class: "btn primary", type: "button", onclick: run, disabled: !info.available }, "Replay"))),
     out,

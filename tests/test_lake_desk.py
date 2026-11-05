@@ -88,7 +88,7 @@ def test_the_calibrated_market_says_it_is_a_fit_on_observed_quotes(desk):
 
 def test_lab_lists_fits_and_replays_runs(desk):
     days = desk.lab_days()
-    assert days["sets"][0]["underlying"] == "SPX" and days["models"] == ("svi", "ssvi", "heston", "slv")
+    assert days["sets"][0]["underlying"] == "SPX" and list(days["models"]) == ["svi", "ssvi", "heston", "slv"]
     q = desk.lab_quotes("SPX", str(DAY), "archive")
     assert q["origin"] == "observed" and q["slices"]
     res = wait(desk, desk.lab_fit({"underlying": "SPX", "day": str(DAY), "source": "archive", "models": ["svi", "heston"]})["job"])

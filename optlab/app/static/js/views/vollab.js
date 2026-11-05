@@ -2,12 +2,12 @@
 
 import { api, runJob } from "../api.js";
 import { legend, lineChart } from "../charts.js";
-import { clear, errorNotice, field, h, int, num, originBadge, pretty, progress, toast } from "../ui.js";
+import { clear, errorNotice, field, h, int, num, originBadge, progress, toast } from "../ui.js";
 
 const pc = (x, d = 0) => (x === null || x === undefined ? "–" : `${num(100 * x, d)} %`);
 const bp = (x) => (x === null || x === undefined ? "–" : num(x, 1));
 
-export async function render(page, arg) {
+export async function render(page) {
   clear(page, h("div", { class: "page-head" }, h("div", {}, h("h1", {}, "Vol lab"))), h("div", { class: "skeleton", style: { height: "240px" } }));
   let days, runs;
   try { [days, runs] = await Promise.all([api("/api/vollab/days"), api("/api/vollab/runs")]); } catch (e) { clear(page, errorNotice(e)); return; }
@@ -19,7 +19,7 @@ export async function render(page, arg) {
   const sets = days.sets;
   const preferred = sets.find((s) => s.underlying === "SPX" && s.source === "historicaldata") || sets[0];
   const setSel = h("select", { id: "lab-set" }, sets.map((s, i) => h("option", { value: i, selected: s === preferred },
-    `${s.underlying} · ${s.source} · ${s.n} days`)));
+    `${s.underlying} · ${s.source} · ${s.n} days${s.quality.includes("suspect") ? " · taken outside market hours" : ""}`)));
   const daySel = h("select", { id: "lab-day" });
   const fillDays = () => {
     const s = sets[+setSel.value];
@@ -46,8 +46,8 @@ export async function render(page, arg) {
           ev.target.textContent = "Replaying";
           try {
             const { job } = await api(`/api/vollab/runs/${r.calibration_id}/reproduce`, { method: "POST", body: {} });
-            const j = await runJob(job, () => {});
-            const x = j.result;
+            const result = await runJob(job, () => {});
+            const x = result;
             toast(x.same_quotes && x.largest_parameter_gap < 1e-8 ? `${r.calibration_id}: same parameters` : `${r.calibration_id}: differs by ${x.largest_parameter_gap}`);
             ev.target.textContent = x.largest_parameter_gap < 1e-8 ? "Same" : "Differs";
           } catch (e) { toast(e.message); ev.target.textContent = "Failed"; }
@@ -107,9 +107,9 @@ export async function render(page, arg) {
     clear(out, progress(`Fitting ${models.map((m) => m.toUpperCase()).join(", ")}`));
     try {
       const { job } = await api("/api/vollab/fit", { method: "POST", body: { underlying: s.underlying, day: daySel.value, source: s.source, models } });
-      const j = await runJob(job, () => {});
+      const result = await runJob(job, () => {});
       const quotes = days.shared ? null : await api(`/api/vollab/quotes?underlying=${s.underlying}&day=${daySel.value}&source=${s.source}`);
-      draw(j.result, quotes);
+      draw(result, quotes);
       drawRuns((await api("/api/vollab/runs")).runs);
     } catch (e) { clear(out, errorNotice(e)); }
   };
@@ -117,8 +117,8 @@ export async function render(page, arg) {
   clear(page,
     h("div", { class: "page-head" }, h("div", {}, h("h1", {}, "Vol lab"),
       h("p", {}, "Real quotes against four models, day by day. Only days with a real chain appear here: reconstructed surfaces have nothing to be fitted to."))),
-    h("div", { class: "card" }, h("div", { class: "form-row" }, field("Quotes", setSel), field("Day", daySel)),
+    h("div", { class: "card" }, h("div", { class: "fields" }, field("Quotes", setSel), field("Day", daySel)),
       h("div", { style: { margin: "8px 0" } }, boxes.map((b) => b.label)),
       h("div", { class: "btn-row" }, h("button", { class: "btn primary", type: "button", onclick: fit }, "Fit"))),
-    out, runsCard, pretty(arg || "") ? null : null);
+    out, runsCard);
 }

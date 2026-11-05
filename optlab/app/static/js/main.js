@@ -12,10 +12,13 @@ const VIEWS = {
   lifecycle: () => import("./views/lifecycle.js"),
   market: () => import("./views/market.js"),
   script: () => import("./views/script.js"),
+  vollab: () => import("./views/vollab.js"),
+  replay: () => import("./views/replay.js"),
+  data: () => import("./views/data.js"),
   settings: () => import("./views/settings.js"),
 };
 const TITLES = { overview: "Overview", pricer: "Pricer", book: "Book", trade: "Trade", lifecycle: "Lifecycle",
-  market: "Market", script: "Script lab", settings: "Settings" };
+  market: "Market", script: "Script lab", vollab: "Vol lab", replay: "Replay", data: "Data", settings: "Settings" };
 const SECTION = { trade: "book" };  // pages without their own entry in the navigation
 
 const main = document.getElementById("main");
@@ -75,7 +78,7 @@ async function refreshStatus() {
 
 function showHelp() {
   const rows = [["g o", "Overview"], ["g p", "Pricer"], ["g b", "Book"], ["g l", "Lifecycle"], ["g m", "Market"],
-    ["g s", "Script lab"], ["Ctrl + Enter", "Quote (in the pricer)"], ["t", "Switch theme"], ["?", "This help"]];
+    ["g s", "Script lab"], ["g v", "Vol lab"], ["g r", "Replay"], ["g d", "Data"], ["Ctrl + Enter", "Quote (in the pricer)"], ["t", "Switch theme"], ["?", "This help"]];
   dialog({ title: "Keyboard shortcuts", ok: "Close", cancel: "Back",
     body: h("table", { class: "data" }, rows.map(([k, v]) => h("tr", {}, h("td", {}, h("span", { class: "kbd-hint" }, k)),
       h("td", {}, v)))) });
@@ -94,7 +97,7 @@ document.addEventListener("keydown", (e) => {
   if (["input", "select", "textarea"].includes(tag) || e.ctrlKey || e.metaKey || e.altKey) return;
   if (pendingG) {
     pendingG = false;
-    const map = { o: "overview", p: "pricer", b: "book", l: "lifecycle", m: "market", s: "script" };
+    const map = { o: "overview", p: "pricer", b: "book", l: "lifecycle", m: "market", s: "script", v: "vollab", r: "replay", d: "data" };
     if (map[e.key]) { location.hash = `#/${map[e.key]}`; e.preventDefault(); }
     return;
   }

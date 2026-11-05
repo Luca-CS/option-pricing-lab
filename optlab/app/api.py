@@ -18,6 +18,7 @@ import numpy as np
 from ..config import DEFAULT_SEED, paths
 from ..log import get_logger
 from ..marketdata import MarketSnapshot, MarketStore
+from ..marketdata.lake import Lake
 from ..structured import PRESETS, MASKS, PricingContext, TermSheet, TermSheetError, describe, preset, quote
 from ..structured.compiler import compile_sheet
 from ..structured.context import DEFAULT_CALIBRATION
@@ -65,8 +66,10 @@ def _pair(a: str, b: str) -> str:
 
 
 class Desk:
-    def __init__(self, store=None, calibration=None, workers: int | None = None, max_jobs: int = 2):
+    def __init__(self, store=None, calibration=None, workers: int | None = None, max_jobs: int = 2, lake=None):
         self.repo = Repository(store)
+        self.lake = Lake(lake)
+        self.shared = False  # listening beyond this machine: raw quotes and levels stay private
         self.market_store = MarketStore(self.repo.path.parent / "market")
         self.calibration = Path(calibration) if calibration else DEFAULT_CALIBRATION
         self.ctx = PricingContext.from_calibration(self.calibration)
@@ -106,11 +109,25 @@ class Desk:
         c = self.ctx
         tenors = [0.25, 0.5, 1.0, 1.5, 2.0]
         return clean({"snapshot_id": c.snapshot_id, "valuation": c.valuation, "underlying": c.underlying,
+                      "origin": self._origin(c.snapshot_id),
                       "spot": c.market.spot, "t_max": c.t_max, "maturities": c.surface.maturities,
                       "atm_vols": {f"{T:g}": c.atm_vol(T) for T in tenors},
                       "zero_rates": {f"{T:g}": float(c.market.zero_rate(T)) for T in tenors},
                       "carry": {f"{T:g}": float(c.market.carry_rate(T)) for T in tenors},
                       "slv_mix": c.slv.mix, "heston": c.heston.to_dict()})
+
+    def _origin(self, snapshot_id: str | None) -> dict:
+        """How much of the active market was observed, from its provenance."""
+        try:
+            snap = self.market_store.get(str(snapshot_id).split("+")[0])
+        except KeyError:
+            return {"surface": "unknown", "source": None}
+        prov = snap.provenance or {}
+        if "surface" in prov:
+            return {"surface": prov["surface"]["origin"], "layer": prov["surface"]["layer"], "source": snap.source,
+                    "extrapolated_from": prov["surface"]["extrapolated_from"], "carry": prov["carry"]["origin"],
+                    "discount": prov["discount"]["origin"], "heston": prov["heston"]["origin"], "leverage": prov["leverage"]["origin"]}
+        return {"surface": "synthetic" if snap.source == "simulated" else "observed", "layer": "calibration", "source": snap.source}
 
     def snapshots(self) -> dict:
         rows = self.market_store.list()
@@ -150,6 +167,168 @@ class Desk:
         cal = json.loads(path.read_text(encoding="utf-8"))
         return clean({"exotics": cal.get("exotics", {}), "errors": cal.get("errors", []),
                       "note": cal.get("meta", {}).get("note")})
+
+    # --- the data lake ---
+    def _private(self, what: str) -> None:
+        if self.shared:
+            raise ApiError(f"{what} stay on the owner's machine: this desk is shared beyond it", 403)
+
+    def data_overview(self) -> dict:
+        from ..marketdata.universe import UNIVERSE
+        lake = self.lake
+        if not lake.has("instruments") and not lake.has("prices_eod"):
+            return {"available": False, "hint": "run scripts/lake_update.py"}
+        cov = lake.coverage()
+        cov = cov[~cov["dataset"].isin(("ingestion_runs",))]
+        issues = lake.read("quality_issues", order="obs_date DESC")
+        last = {}
+        if lake.has("prices_eod"):
+            prices = lake.read("prices_eod", columns="instrument, obs_date, origin")
+            last = {str(name): {"last": g["obs_date"].max(), "n": len(g), "origin": g["origin"].iloc[0]}
+                    for name, g in prices.groupby("instrument")}
+        by_check = issues.groupby(["dataset", "check_name", "severity"]).size().reset_index(name="n") if len(issues) else None
+        return clean({"available": True, "shared": self.shared, "lake": None if self.shared else str(lake.root),
+                      "coverage": cov.astype({"first": str, "last": str, "ingested": str}).to_dict("records"),
+                      "instruments": [{"id": i.id, "name": i.name, "asset_class": i.asset_class, "currency": i.currency, "place": i.place,
+                                       "vol_index": i.vol_index, "enabled": i.enabled, **last.get(i.id, {})} for i in UNIVERSE],
+                      "issues": by_check.to_dict("records") if by_check is not None else [],
+                      "recent_issues": issues.head(30)[["dataset", "item", "check_name", "severity", "detail", "obs_date"]].astype(
+                          {"obs_date": str}).to_dict("records") if len(issues) else [],
+                      "raw_files": len(lake.manifest())})
+
+    def data_vol_index(self, name: str, start: str | None = None) -> dict:
+        self._private("Index levels")
+        where = f"index_name = '{re.sub(r'[^A-Z0-9.]', '', name.upper())}'"
+        if start:
+            where += f" AND obs_date >= DATE '{dt.date.fromisoformat(start)}'"
+        rows = self.lake.read("vol_indices", where=where, columns="obs_date, close, origin, source", order="obs_date")
+        return clean({"name": name, "dates": rows["obs_date"].astype(str).tolist(), "close": rows["close"].tolist(),
+                      "origin": rows["origin"].iloc[0] if len(rows) else None, "source": rows["source"].iloc[0] if len(rows) else None})
+
+    def market_from_lake(self, body: dict) -> dict:
+        """A market at a past date (a job: the leverage takes seconds), stored like any snapshot; /api/market/use prices on it."""
+        from ..marketdata.pit import market_at
+        name, day = str(body.get("underlying", "SPX")), body.get("date")
+        calibrate = bool(body.get("leverage", True))
+        try:
+            day = dt.date.fromisoformat(str(day))
+        except ValueError:
+            raise ApiError("a date such as 2020-03-23 is needed", 422, "date")
+
+        def run():
+            snap = market_at(self.lake, name, day, leverage="calibrate" if calibrate else "flat", T_max=float(body.get("t_max", 3.0)))
+            sid = self.market_store.put(snap)
+            return clean({"snapshot_id": sid, "valuation": day, "underlying": name, "provenance": snap.provenance,
+                          "source": snap.source})
+
+        return {"job": self.jobs.submit("market", run)}
+
+    def fixings_from_lake(self, body: dict) -> dict:
+        """Real closes of the lake as desk fixings, in the active market's scale."""
+        from ..marketdata.pit import real_close, real_fixings
+        und = str(body.get("underlying", self.ctx.underlying)).upper()
+        ctx = self.ctx
+        start = body.get("start") or (ctx.valuation - dt.timedelta(days=800)).isoformat()
+        real = real_fixings(self.lake, und, start, ctx.valuation)
+        if not real:
+            raise ApiError(f"no close of {und} in the lake between {start} and {ctx.valuation}", 404)
+        snap = self.market_store.get(str(ctx.snapshot_id).split("+")[0])
+        scale = snap.spot_scale if und == ctx.underlying else None
+        if not scale:
+            scale = real_close(self.lake, und, ctx.valuation)[0] / float(ctx.market.spot)
+        levels = {d: v / scale for d, v in real.items()}
+        return {"ok": True, "stored": self.repo.put_fixings(und, levels, "lake"), "first": min(levels), "last": max(levels), "origin": "observed"}
+
+    # --- Vol Fitting Lab ---
+    def lab_days(self) -> dict:
+        from ..marketdata.vollab import DEFAULTS, MODELS, lab_days
+        return clean({"available": self.lake.has("option_quotes"), "sets": lab_days(self.lake), "models": MODELS, "defaults": DEFAULTS,
+                      "shared": self.shared})
+
+    def lab_quotes(self, name: str, day: str, source: str | None = None) -> dict:
+        from ..marketdata.vollab import quote_table
+        self._private("Option quotes")
+        try:
+            return clean(quote_table(self.lake, name, day, source))
+        except (KeyError, ValueError) as exc:
+            raise ApiError(str(exc).strip("'\""), 404)
+
+    def lab_fit(self, body: dict) -> dict:
+        from ..marketdata.vollab import MODELS, public_summary, run_fit
+        name, day, source = str(body.get("underlying", "SPX")), str(body.get("day", "")), body.get("source")
+        models = tuple(m for m in (body.get("models") or MODELS) if m in MODELS)
+        if not models:
+            raise ApiError("choose at least one model", 422)
+        settings = {k: body[k] for k in ("n_particles", "n_paths", "mix", "seed") if k in body}
+
+        def run():
+            return clean(public_summary(run_fit(self.lake, name, day, source, models, settings)))
+
+        return {"job": self.jobs.submit("fit", run)}
+
+    def lab_runs(self, underlying: str | None = None) -> dict:
+        from ..marketdata.vollab import list_runs
+        return clean({"runs": list_runs(self.lake, underlying)})
+
+    def lab_reproduce(self, calibration_id: str) -> dict:
+        from ..marketdata.vollab import reproduce
+        return {"job": self.jobs.submit("reproduce", lambda: clean(reproduce(self.lake, calibration_id)))}
+
+    # --- replay ---
+    def _replay_dir(self) -> Path:
+        path = self.repo.path.parent / "replay"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def replay_runs(self) -> dict:
+        runs = []
+        for folder, kind in ((self._replay_dir(), "desk"), (paths().results, "versioned")):
+            for path in sorted(folder.glob("replay*.json")):
+                data = json.loads(path.read_text(encoding="utf-8"))
+                for key, r in (data.items() if kind == "versioned" else (("run", data),)):
+                    runs.append({"id": f"{path.stem}/{key}" if kind == "versioned" else path.stem, "kind": kind,
+                                 "trade_id": r.get("trade_id"), "underlyings": r.get("underlyings"), "n_valuations": r.get("n_valuations"),
+                                 "strike": (r.get("inception") or {}).get("strike"),
+                                 "events": len(r.get("events") or []), "seconds": (r.get("seconds") or {}).get("total")})
+        return clean({"available": self.lake.has("prices_eod"), "runs": runs, "presets": list(PRESETS)})
+
+    def replay_get(self, run_id: str) -> dict:
+        stem, _, key = run_id.partition("/")
+        if not re.fullmatch(r"[\w.-]+", stem):
+            raise ApiError("unknown run", 404)
+        path = (paths().results if key else self._replay_dir()) / f"{stem}.json"
+        if not path.exists():
+            raise ApiError(f"no replay run {run_id}", 404)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return clean(data[key] if key else data)
+
+    def replay_run(self, body: dict) -> dict:
+        from ..marketdata.replay import ReplayConfig, replay, result_json, strike_trade
+        name = str(body.get("preset", "barrier_reverse_convertible"))
+        if name not in PRESETS:
+            raise ApiError(f"unknown preset {name!r}", 422, "preset")
+        changes = {k: v for k, v in (body.get("changes") or {}).items() if k.count(".") == 1}
+        underlying = str(body.get("underlying", "SPX"))
+        try:
+            sheet = preset(name, **{"general.underlying": underlying, **changes})
+            strike = dt.date.fromisoformat(str(body.get("strike", "")))
+            end = dt.date.fromisoformat(body["end"]) if body.get("end") else None
+        except (TermSheetError, ValueError) as exc:
+            raise ApiError(str(exc), 422)
+        cfg = ReplayConfig(model=str(body.get("model", "lv")), n_paths=int(body.get("n_paths", 20_000)), batch=10_000,
+                           reval_every=max(int(body.get("every", 5)), 1), leverage_every=max(int(body.get("leverage_every", 5)), 1),
+                           greeks=bool(body.get("greeks", True)))
+        if cfg.model not in ("lv", "slv"):
+            raise ApiError("the replay runs under lv or slv", 422, "model")
+        trade_id = f"{name}-{underlying}-{strike}".replace("_", "-")
+
+        def run():
+            trade, info = strike_trade(self.lake, trade_id, sheet, strike, float(body.get("quantity", 1.0)), cfg)
+            out = result_json(replay(self.lake, trade, end, cfg, info))
+            (self._replay_dir() / f"replay-{trade_id}-{cfg.model}.json").write_text(json.dumps(clean(out)), encoding="utf-8")
+            return clean(out)
+
+        return {"job": self.jobs.submit("replay", run)}
 
     # --- other underlyings, for worst-ofs ---
     def basket_settings(self) -> dict:

@@ -14,7 +14,7 @@ import json
 
 from optlab.config import paths
 from optlab.marketdata.lake import Lake
-from optlab.marketdata.replay import ReplayConfig, cost_table, replay, strike_trade
+from optlab.marketdata.replay import ReplayConfig, cost_table, replay, result_json, strike_trade
 from optlab.structured import preset
 
 # A daily BRC struck before the fall of March 2020, and a Phoenix struck at the top of January 2022.
@@ -53,15 +53,7 @@ def main():
         trade, info = strike_trade(lake, name, sheet, strike, 1.0, cfg)
         print(name, "coupon", info["coupon"], "+/-", info.get("coupon_se"), flush=True)
         r = replay(lake, trade, cfg=cfg, inception=info)
-        s = r.summary()
-        d = r.daily
-        first = {n: d["spot"].iloc[0][n] for n in sheet.underlyings}
-        s["daily"] = [{"date": x["date"].isoformat(), "value": round(x["value"], 4), "se": round(x["value_se"], 4),
-                       "cash": round(x["cash"], 4), "perf": {n: round(x["spot"][n] / first[n], 5) for n in first},
-                       "pnl": None if x.get("pnl") != x.get("pnl") else x.get("pnl"),
-                       "explain": x.get("explain") if isinstance(x.get("explain"), dict) else None,
-                       "residual": None if x.get("residual") != x.get("residual") else x.get("residual"),
-                       "greeks": x["greeks"]} for _, x in d.iterrows()]
+        s = result_json(r)
         results[name] = s
         print(json.dumps({k: s[k] for k in ("events", "reconciliation", "explain", "seconds")}, indent=1), flush=True)
     path = paths().results / (args.out or "replay.json")

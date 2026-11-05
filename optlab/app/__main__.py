@@ -33,6 +33,7 @@ def main():
     if (args.tunnel or args.host not in ("127.0.0.1", "localhost", "::1")) and not token:
         token = secrets.token_urlsafe(16)
     desk = Desk(args.store, args.calibration, args.workers)
+    desk.shared = bool(args.tunnel or args.host not in ("127.0.0.1", "localhost", "::1"))
     httpd = serve(desk, args.host, args.port, token)
     port = httpd.server_address[1]
     shown = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host

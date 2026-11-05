@@ -28,8 +28,8 @@ export async function render(page) {
     clear(resultCard, progress("Building the market of that date"));
     try {
       const { job } = await api("/api/data/market", { method: "POST", body: { underlying: name.value, date: date.value, leverage: lever.checked } });
-      const j = await runJob(job, () => {});
-      const r = j.result;
+      const result = await runJob(job, () => {});
+      const r = result;
       const p = r.provenance;
       clear(resultCard,
         h("h3", {}, `${r.underlying} on ${dateLabel(r.valuation)}: ${r.snapshot_id}`),
@@ -72,7 +72,7 @@ export async function render(page) {
         h("td", {}, c.first.slice(0, 10)), h("td", {}, c.last.slice(0, 10)))))),
     h("div", { class: "card" }, h("div", { class: "card-head" }, h("h2", {}, "A market at a past date"), originBadge("derived")),
       h("p", {}, "Only rows dated at or before that date are read. The result is stored like any market snapshot."),
-      h("div", { class: "form-row" }, field("Underlying", name), field("Date", date), field("Calibrate the SLV leverage", lever)),
+      h("div", { class: "fields" }, field("Underlying", name), field("Date", date), field("Calibrate the SLV leverage", lever)),
       h("div", { class: "btn-row" }, h("button", { class: "btn primary", type: "button", onclick: buildMarket }, "Build the market")),
       resultCard),
     volCard,

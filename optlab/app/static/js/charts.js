@@ -70,7 +70,7 @@ export function lineChart(series, { height = 240, xFormat = (v) => v.toFixed(1),
   if (xLabel) svg.append(s("text", { x: (L + W - R) / 2, y: H - 6, "text-anchor": "middle" }, xLabel));
   if (yLabel) svg.append(s("text", { x: 12, y: T + 8 }, yLabel));
   series.forEach((ser, k) => {
-    const color = ser.color || `var(--chart-${(k % 4) + 1})`;
+    const color = ser.color || `var(--chart-${(k % 6) + 1})`;
     const d = ser.points.map((p, i) => `${i ? "L" : "M"}${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join("");
     svg.append(s("path", { d, fill: "none", stroke: color, "stroke-width": 2, "stroke-linejoin": "round" }));
     for (const p of ser.points.filter((_, i) => ser.markers || i % Math.ceil(ser.points.length / 30) === 0)) {
@@ -89,7 +89,7 @@ export function legend(series) {
   series.forEach((ser, k) => {
     const item = document.createElement("span");
     const sw = document.createElement("i");
-    sw.style.background = ser.color || `var(--chart-${(k % 4) + 1})`;
+    sw.style.background = ser.color || `var(--chart-${(k % 6) + 1})`;
     item.append(sw, ser.name);
     el.append(item);
   });

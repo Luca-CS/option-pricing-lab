@@ -116,6 +116,15 @@ export function switchControl(label, checked, onChange, id) {
     h("span", {}, label));
 }
 
+// How far a value is from a market observation: shown with it on every screen, in words (not by colour alone).
+const ORIGIN_HELP = { observed: "read from a real market source", derived: "computed from observed data",
+  reconstructed: "rebuilt from volatility indices and an assumed smile shape, no option quote read",
+  synthetic: "an assumption or a simulation, not market data" };
+export function originBadge(origin) {
+  const name = origin || "unknown";
+  return h("span", { class: `badge origin ${name}`, title: ORIGIN_HELP[name] || "origin unknown" }, name);
+}
+
 export function badgeFor(state) {
   const map = { live: "pos", called: "accent", matured: "", cancelled: "neg" };
   return h("span", { class: `badge ${map[state] ?? ""}` }, pretty(state));

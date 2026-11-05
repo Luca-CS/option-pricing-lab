@@ -8,6 +8,7 @@ import pytest
 from scipy.special import ndtr
 
 from optlab.marketdata.derive.correl import (CorrelationSkew, apply_premium, build_premium, build_realized, closes_wide,
+                                             skewed_matrix,
                                              copula_expectation, correlation_at, forward_quantile, implied_pair_rho,
                                              nearest_correlation, pair_horizon, pair_payoff, pair_rows, premium_series,
                                              realised_matrix, rolling_pair)
@@ -157,3 +158,12 @@ def test_tables_load_and_correlation_at_reads_only_the_past(tmp_path):
     same, _ = correlation_at(lake2, ["SPX", "NDX"], day, implied=False)
     assert same == pytest.approx(realised, abs=1e-14)
     assert len(later) > 0
+
+
+def test_a_low_barrier_takes_a_higher_correlation_and_the_matrix_stays_valid():
+    m = np.array([[1.0, 0.9, 0.5], [0.9, 1.0, 0.5], [0.5, 0.5, 1.0]])
+    down = skewed_matrix(m, 0.6, "pvp")
+    up = skewed_matrix(m, 1.2, "cvc")
+    assert down[0, 2] > 0.5 > up[0, 2]
+    assert np.linalg.eigvalsh(down).min() >= -1e-10 and np.allclose(np.diag(down), 1.0)
+    correlation_root(down)

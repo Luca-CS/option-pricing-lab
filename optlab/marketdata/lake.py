@@ -281,7 +281,8 @@ class Lake:
         return con
 
     def coverage(self) -> pd.DataFrame:
-        """Per table, origin and source: rows, first and last dates. What the Data screen shows."""
+        """Per table, origin and source: stored rows (restated versions count), first and last dates. Read straight from
+        the files, without resolving versions: the option quotes would take seconds. What the Data screen shows."""
         frames = []
         for table in TABLES:
             if not self.has(table):
@@ -290,8 +291,8 @@ class Lake:
             try:
                 frames.append(con.execute(
                     f"SELECT '{table}' AS dataset, origin, source, count(*) AS n, min(obs_date) AS first, "
-                    f"max(obs_date) AS last, max(ingested_at) AS ingested FROM {self.sql_source(table)} "
-                    "GROUP BY origin, source ORDER BY source").df())
+                    f"max(obs_date) AS last, max(ingested_at) AS ingested FROM read_parquet('{self._pattern(table)}', "
+                    "union_by_name=true, hive_partitioning=false) GROUP BY origin, source ORDER BY source").df())
             finally:
                 con.close()
         if not frames:

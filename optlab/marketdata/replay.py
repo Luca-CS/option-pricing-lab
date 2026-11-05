@@ -194,6 +194,25 @@ class ReplayResult:
                 "provenance": self.provenance}
 
 
+def result_json(r: ReplayResult) -> dict:
+    """Events, flows and P&L as JSON: performances of the fixings rather than levels, which are personal-use data."""
+    out = r.summary()
+    names = r.trade.term_sheet().underlyings
+    d = r.daily
+    first = {n: d["spot"].iloc[0][n] for n in names}
+
+    def number(x):
+        return None if x is None or x != x else float(x)
+
+    out["underlyings"] = list(names)
+    out["sheet"] = r.trade.term_sheet().to_dict(json_safe=True)
+    out["daily"] = [{"date": x["date"].isoformat(), "value": float(x["value"]), "se": float(x["value_se"]), "cash": float(x["cash"]),
+                     "perf": {n: x["spot"][n] / first[n] for n in names}, "pnl": number(x.get("pnl")),
+                     "explain": x.get("explain") if isinstance(x.get("explain"), dict) else None,
+                     "residual": number(x.get("residual")), "greeks": x["greeks"], "layer": x["layer"]} for _, x in d.iterrows()]
+    return out
+
+
 def replay(lake: Lake, trade: Trade, end=None, cfg: ReplayConfig = ReplayConfig(), inception: dict | None = None) -> ReplayResult:
     """The loop over a trade's life, up to `end` or the last close in the lake."""
     t_all = time.perf_counter()
