@@ -11,8 +11,8 @@ from optlab.marketdata.derive.bank import ENTITY, BankParams, bank_spreads, buil
 from optlab.marketdata.derive.carry import (build_carry, cip_forward, dividend_stream, dividend_yield_at, equity_forward,
                                             parity_carry_rows, parity_forward_discount, realised_yield,
                                             trailing_dividend_yield)
-from optlab.marketdata.derive.curves import (EUR_CURVE, USD_CURVE, bootstrap_par, build_discount_curves, eur_curve_rows,
-                                             usd_curve_rows)
+from optlab.marketdata.derive.curves import (EUR_CURVE, USD_CURVE, bootstrap_par, build_discount_curves, par_curve_rows,
+                                             zero_curve_rows)
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.universe import instrument
 
@@ -37,11 +37,11 @@ def test_flat_par_curve_gives_the_equivalent_continuous_rate():
 def test_curve_rows_put_the_overnight_rate_first_and_are_consistent():
     treasury = pd.DataFrame({"obs_date": ["2020-03-02"] * 3, "tenor": [0.25, 1.0, 2.0], "rate": [1.0, 1.1, 1.2]})
     overnight = pd.DataFrame({"obs_date": [dt.date(2020, 3, 2)], "rate": [1.5]})
-    usd = usd_curve_rows(treasury, overnight)
+    usd = par_curve_rows(treasury, overnight, USD_CURVE)
     assert usd["curve"].iloc[0] == USD_CURVE and usd["tenor"].iloc[0] == pytest.approx(1 / 365)
     assert usd["discount"].to_numpy() == pytest.approx(np.exp(-usd["zero_rate"] * usd["tenor"]).to_numpy())
     aaa = pd.DataFrame({"obs_date": ["2020-03-02"] * 2, "tenor": [1.0, 2.0], "rate": [-0.5, -0.4]})
-    eur = eur_curve_rows(aaa, overnight.iloc[:0])
+    eur = zero_curve_rows(aaa, overnight.iloc[:0], EUR_CURVE)
     assert eur["curve"].iloc[0] == EUR_CURVE and eur["zero_rate"].iloc[0] == pytest.approx(-0.005)
 
 

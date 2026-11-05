@@ -175,13 +175,14 @@ class Desk:
             raise ApiError(f"{what} stay on the owner's machine: this desk is shared beyond it", 403)
 
     def data_overview(self) -> dict:
+        from ..marketdata.quality import open_issues
         from ..marketdata.universe import UNIVERSE
         lake = self.lake
         if not lake.has("instruments") and not lake.has("prices_eod"):
             return {"available": False, "hint": "run scripts/lake_update.py"}
         cov = lake.coverage()
         cov = cov[~cov["dataset"].isin(("ingestion_runs",))]
-        issues = lake.read("quality_issues", order="obs_date DESC")
+        issues = open_issues(lake, order="obs_date DESC")
         last = {}
         if lake.has("prices_eod"):
             prices = lake.read("prices_eod", columns="instrument, obs_date, origin")

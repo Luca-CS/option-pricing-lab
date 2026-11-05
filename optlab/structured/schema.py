@@ -56,7 +56,7 @@ SECTIONS = {s.name: s for s in [
               visible_if=_v("general.basket", "worst_of")),
         Field("notional", "number", 100.0, "Notional", minimum=0.0),
         Field("payment_currency", "choice", "native", "Payment currency (native: of the first name)",
-              choices=("native", "USD", "EUR")),
+              choices=("native", "USD", "EUR", "JPY", "GBP")),
         Field("strike_date", "date", None, "Strike date (default: valuation date)"),
         Field("maturity_months", "int", 24, "Maturity", "months", minimum=1),
         Field("pay_lag", "int", 5, "Payment lag", "business days", minimum=0),

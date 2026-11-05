@@ -12,6 +12,14 @@ from .lake import Lake, new_run_id
 MAX_MOVE = {"index": 0.2, "equity": 0.3}  # one-day moves beyond these are flagged, not removed
 STALE_DAYS = 10
 VOL_RANGE = (3.0, 200.0)
+RESOLVED = "resolved"
+
+
+def open_issues(lake: Lake, where: str = "", order: str = "") -> pd.DataFrame:
+    """The issues not closed since. Closing one adds a version with the severity `resolved`, and the lake filters before it picks the latest
+    version: a `where` on the severity would find the old open version of a closed issue. So `where` holds keys only, and this filter comes after."""
+    rows = lake.read("quality_issues", where=where, order=order)
+    return rows[rows["severity"] != RESOLVED].reset_index(drop=True)
 
 
 def _issue(dataset, item, check, severity, detail, day) -> dict:

@@ -35,8 +35,8 @@ python -m venv .venv
   administrator shell (GPU counters are admin-only on this machine); read it with
   `ncu -i build/ncu_profile.ncu-rep --page raw --csv --metrics ...` (`--page details` fails under the French locale).
 - Data lake (`optlab/marketdata/`, needs `duckdb` and `pyarrow`; data in `OPTLAB_DATA`, default `optlab-data` beside the main checkout):
-  `scripts/lake_update.py` (public sources; `--import-sample zip`, `--dolt default`, `--yahoo-chains` during US hours only: Yahoo blanks
-  bid and ask otherwise), `scripts/lake_derive.py` (curves, carry, bank, surfaces, correlation, pairs, observed fits),
+  `scripts/lake_update.py` (public sources, yen and sterling rates in the steps `mof`, `boj`, `boe`; `--import-sample zip`, `--dolt default`,
+  `--yahoo-chains` during US hours only: Yahoo blanks bid and ask otherwise), `scripts/lake_derive.py` (curves, carry, bank, surfaces, correlation, pairs, observed fits),
   `scripts/lake_fx_check.py` (FX against H.10 and CME futures, size of the quanto adjustment: `reports/fx_check.md`),
   `scripts/lake_surface_test.py` (reconstruction against real chains), `scripts/lake_regime_test.py` (the same by level of the VIX, crash held out),
   `scripts/lake_replay.py cost|run`, `scripts/seed_showcase.py` (a dozen trades in their own store, `optlab-data/showcase`; guide in `reports/showcase.md`).

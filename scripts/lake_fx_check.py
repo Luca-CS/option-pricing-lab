@@ -19,11 +19,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from optlab.market import Market
 from optlab.marketdata.derive.correl import closes_wide
+from optlab.marketdata.derive.curves import CURVE_OF_CURRENCY
 from optlab.marketdata.derive.fx import fx_correlation_at, fx_vol_at, name_pair_series, quanto_link_at, realised_vol, spot_series
 from optlab.marketdata.derive.surfaces import surface_at
-from optlab.marketdata.lake import Lake
+from optlab.marketdata.lake import Lake, sql_str
 from optlab.marketdata.pit import basket_at, market_at
+from optlab.marketdata.quality import open_issues
 from optlab.marketdata.quotes import discount_function
+from optlab.marketdata.sources import curl_get
+from optlab.marketdata.sources.simple import fred_url, parse_fred
+from optlab.marketdata.universe import pair_currencies
 from optlab.models import LocalVolModel, time_grid
 from optlab.structured.context import PricingContext
 from optlab.structured.multiasset import BasketContext
@@ -34,6 +39,7 @@ from optlab.structured.quote import quote
 REPORT = Path(__file__).resolve().parents[1] / "reports" / "fx_check.md"
 DATES = ("2020-03-23", "2022-07-01", "2026-11-04")
 SEEDS = (2026, 2027, 2028, 2029, 2030)
+FUTURES = {"EURUSD": ("6E", "EURUSD=X", False), "GBPUSD": ("6B", "GBPUSD=X", False), "USDJPY": ("6J", "JPY=X", True)}  # root, spot, the contract is the inverse of the pair
 
 
 def table(header, rows) -> str:
@@ -54,7 +60,7 @@ def source_gaps(lake: Lake) -> str:
 
 
 def imm_date(year: int, month: int) -> pd.Timestamp:
-    """Last trading day of a CME EUR future: two business days before the third Wednesday."""
+    """Last trading day of a CME currency future: two business days before the third Wednesday."""
     first = pd.Timestamp(year, month, 1)
     wednesday = first + pd.Timedelta(days=(2 - first.weekday()) % 7 + 14)
     return wednesday - pd.offsets.BDay(2)
@@ -70,45 +76,74 @@ def history(ticker: str) -> pd.Series:
     return out
 
 
-def cip_against_futures(lake: Lake) -> tuple[str, str, dict]:
-    """Each quarterly CME EUR contract over Yahoo's spot, against the same carry from our curves at its exact maturity, in bp of rate
-    differential per year. `6E=F` is no use for this: it follows the nearest monthly contract, so its maturity is about two weeks
+def futures_gaps(lake: Lake, pair: str) -> tuple[pd.DataFrame, int]:
+    """Each quarterly CME contract of a pair over Yahoo's spot, against the same carry from our curves at its exact maturity, in the pair's
+    own quotation. `6E=F` and the like are no use for this: they follow the nearest monthly contract, so the maturity is about two weeks
     and the hours between the two closes swamp the carry. From three months out they do not."""
-    spot = history("EURUSD=X")
+    root, spot_ticker, inverted = FUTURES[pair]
+    spot = history(spot_ticker)
     curves = {}
-    for label, curve in (("usd", "USD.DISC"), ("eur", "EUR.DISC")):
-        frame = lake.read("discount_curves", where=f"curve = '{curve}'", columns="obs_date, tenor, zero_rate", order="obs_date, tenor")
+    base, quote = pair_currencies(pair)
+    for currency in (base, quote):
+        frame = lake.read("discount_curves", where=f"curve = '{CURVE_OF_CURRENCY[currency]}'", columns="obs_date, tenor, zero_rate", order="obs_date, tenor")
         frame["obs_date"] = pd.to_datetime(frame["obs_date"])
-        curves[label] = {d: (g["tenor"].to_numpy(), g["zero_rate"].to_numpy()) for d, g in frame.groupby("obs_date")}
-    rows, tickers = [], []
+        curves[currency] = {d: (g["tenor"].to_numpy(), g["zero_rate"].to_numpy()) for d, g in frame.groupby("obs_date")}
+    rows, contracts = [], 0
     for year in range(2020, 2032):
         for code, month in (("H", 3), ("M", 6), ("U", 9), ("Z", 12)):
-            ticker = f"6E{code}{year % 100:02d}.CME"
-            fut = history(ticker)
+            fut = history(f"{root}{code}{year % 100:02d}.CME")
             if fut.empty:
                 continue
-            tickers.append(ticker)
+            contracts += 1
             expiry = imm_date(year, month)
             for day, f in fut.items():
                 T = (expiry - day).days / 365.0
-                if T < 0.25 or day not in spot.index or day not in curves["usd"] or day not in curves["eur"]:
+                if T < 0.25 or day not in spot.index or day not in curves[base] or day not in curves[quote]:
                     continue
-                rows.append((day, ticker, T, np.log(f / spot[day]) / T, np.interp(T, *curves["usd"][day]) - np.interp(T, *curves["eur"][day])))
-    frame = pd.DataFrame(rows, columns=["day", "ticker", "T", "market", "cip"]).set_index("day")
+                forward = 1.0 / f if inverted else f
+                rows.append((day, T, np.log(forward / spot[day]) / T, np.interp(T, *curves[quote][day]) - np.interp(T, *curves[base][day])))
+    frame = pd.DataFrame(rows, columns=["day", "T", "market", "cip"]).set_index("day")
     frame["gap"] = 1e4 * (frame["market"] - frame["cip"])
+    return frame, contracts
 
-    def line(label, g):
-        return (label, len(g), f"{1e4 * g['market'].median():.0f}", f"{1e4 * g['cip'].median():.0f}", f"{g['gap'].median():+.0f}",
+
+def cip_against_futures(lake: Lake) -> tuple[str, str, str]:
+    def line(pair, label, g):
+        return (pair, label, len(g), f"{1e4 * g['market'].median():.0f}", f"{1e4 * g['cip'].median():.0f}", f"{g['gap'].median():+.0f}",
                 f"{g['gap'].abs().quantile(0.9):.0f}", f"{g['market'].corr(g['cip']):.2f}")
 
     head = ("Days", "Futures carry (bp/yr)", "CIP on our curves (bp/yr)", "Median gap (bp/yr)", "90 % of absolute gap (bp/yr)", "Correlation")
     buckets = (("3 to 6 months", 0.25, 0.5), ("6 to 12 months", 0.5, 1.0), ("1 to 2 years", 1.0, 2.0), ("2 to 5 years", 2.0, 5.5))
-    by_t = [line(label, frame[frame["T"].between(lo, hi, inclusive="left")]) for label, lo, hi in buckets if frame["T"].between(lo, hi, inclusive="left").any()]
-    far = frame[frame["T"] >= 0.5]
-    by_year = [line(str(y), g) for y, g in far.groupby(far.index.year)]
-    stats = {"n": len(frame), "contracts": len(tickers), "first": frame.index.min().date(), "last": frame.index.max().date(),
-             "far_gap": far["gap"].median(), "far_corr": far["market"].corr(far["cip"])}
-    return table(("Time to expiry", *head), by_t), table(("Year, 6 months and more", *head), by_year), stats
+    by_t, by_year, notes = [], [], []
+    for pair in FUTURES:
+        frame, contracts = futures_gaps(lake, pair)
+        by_t += [line(pair, label, frame[frame["T"].between(lo, hi, inclusive="left")]) for label, lo, hi in buckets if frame["T"].between(lo, hi, inclusive="left").any()]
+        far = frame[frame["T"] >= 0.5]
+        by_year += [line(pair, str(y), g) for y, g in far.groupby(far.index.year)]
+        notes.append(f"{pair}: {contracts} contracts, {len(frame)} contract-days, {frame.index.min().date()} to {frame.index.max().date()}; from six months out, "
+                     f"median gap {far['gap'].median():+.0f} bp a year, correlation {far['market'].corr(far['cip']):.2f}.")
+    return table(("Pair", "Time to expiry", *head), by_t), table(("Pair", "Year, 6 months and more", *head), by_year), "\n".join(f"- {n}" for n in notes)
+
+
+def monthly_mean(rows: pd.DataFrame) -> pd.Series:
+    return rows.set_index(pd.to_datetime(rows["obs_date"]))["rate"].astype(float).resample("MS").mean()
+
+
+def new_curves(lake: Lake) -> str:
+    """Coverage of the two curves, and the ten-year point against the OECD's monthly long rates through FRED, an independent compilation."""
+    rows = []
+    for label, curve, points, series in (("Yen", "JPY.DISC", "JPY.JGB", "IRLTLT01JPM156N"), ("Sterling", "GBP.DISC", "GBP.GLC", "IRLTLT01GBM156N")):
+        pillars = lake.read("discount_curves", where=f"curve = '{curve}'", columns="obs_date, tenor")
+        by_day = pillars.groupby("obs_date")["tenor"]
+        first = by_day.apply(lambda t: np.sort(t.to_numpy())[1] if (t < 2 / 365).any() and len(t) > 1 else np.nan)
+        overnight = by_day.apply(lambda t: bool((t < 2 / 365).any()))
+        ten = lake.read("rate_points", where=f"curve = '{points}' AND tenor = 10", columns="obs_date, rate")
+        oecd = parse_fred(curl_get(fred_url(series)), series)
+        both = pd.concat({"ours": monthly_mean(ten), "oecd": oecd.set_index(pd.to_datetime(oecd["obs_date"]))["value"].astype(float)}, axis=1, sort=True).dropna()
+        gap = 1e2 * (both["ours"] - both["oecd"])
+        rows.append((label, f"{pd.Timestamp(pillars['obs_date'].min()).date()} to {pd.Timestamp(pillars['obs_date'].max()).date()}", by_day.ngroups, f"{100 * overnight.mean():.1f} %",
+                     f"{12 * first.median():.0f} months", f"{12 * first.quantile(0.95):.0f} months", len(both), f"{gap.median():+.0f}", f"{gap.abs().max():.0f}"))
+    return table(("Curve", "Period", "Days", "Days with an overnight rate", "Next pillar, median", "95 %", "Months against the OECD", "Median gap at 10 years (bp)", "Largest (bp)"), rows)
 
 
 def correlation_sources(lake: Lake) -> str:
@@ -127,7 +162,7 @@ def correlation_sources(lake: Lake) -> str:
 def links(lake: Lake) -> tuple[str, str]:
     vols, rows = realised_vol(spot_series(lake, "EURUSD"), 120), []
     for day in DATES:
-        for label, name, payment in (("SX5E paid in USD", "SX5E", "USD"), ("SPX paid in EUR", "SPX", "EUR")):
+        for label, name, payment in (("SX5E paid in USD", "SX5E", "USD"), ("SPX paid in EUR", "SPX", "EUR"), ("SPX paid in JPY", "SPX", "JPY"), ("SPX paid in GBP", "SPX", "GBP")):
             snap = market_at(lake, name, day, payment=payment)
             q = snap.provenance["quanto"]
             ctx, own = PricingContext.from_snapshot(snap), PricingContext.from_snapshot(market_at(lake, name, day))
@@ -203,11 +238,13 @@ def main():
     args = ap.parse_args()
     lake = Lake(args.lake)
     day = DATES[-1]
-    by_t, by_year, stats = cip_against_futures(lake)
+    by_t, by_year, futures_notes = cip_against_futures(lake)
+    curve_table = new_curves(lake)
     adjust, vol_line = links(lake)
     effect, effect_note = worst_of_effect(lake, day, args.n_paths)
     lv = "\n\n".join(lv_error(lake, d) for d in ("2022-07-01", day))
-    fwd = lake.read("fx_forwards", where="pair = 'EURUSD'", columns="obs_date", order="obs_date DESC LIMIT 1")
+    last_forwards = "; ".join(f"{p} {pd.to_datetime(lake.read('fx_forwards', where=f'pair = {sql_str(p)}', columns='obs_date')['obs_date']).max().date()}" for p in FUTURES)
+    no_curve = open_issues(lake, "check_name = 'no_curve'")
     vol, vol_origin, vol_method = fx_vol_at(lake, "EURUSD", day)
     rho, rho_origin = fx_correlation_at(lake, "SX5E", "EURUSD", day)
     surface = surface_at(lake, "SX5E", day)
@@ -223,15 +260,17 @@ Written by `scripts/lake_fx_check.py`, {dt.date.today().isoformat()}. Gaps and s
 | EURUSD spot | ECB reference rate, 14:15 CET | observed |
 | USDJPY, GBPUSD spots | Crosses of two ECB rates of one fix | derived |
 | The three spots, again | Fed H.10 noon rates through FRED, kept as a check | observed |
-| EURUSD forwards, 1 month to 5 years | Covered parity on the Treasury and AAA curves | derived |
+| Forwards of the three pairs, 1 month to 5 years | Covered parity on the desk's government curves | derived |
+| Yen curve | Ministry of Finance JGB par yields, bootstrapped, with the Bank of Japan's overnight call rate as the shortest pillar | derived |
+| Sterling curve | Bank of England fitted gilt spot rates (GLC), with SONIA as the shortest pillar | derived |
 | FX volatility | Realised, 60, 120 and 250 days | derived, method `realized` |
 | Name against pair correlation | Realised on overlapping 3-day returns | derived |
 
-**No forward for USDJPY and GBPUSD:** the desk has no yen or sterling curve. The lake holds a `no_curve` quality issue for each, and a term sheet can only pay in USD or EUR.
+**Payment currencies.** A term sheet can pay in USD, EUR, JPY or GBP, and {len(no_curve)} `no_curve` issues are open. A name and its payment currency need a pair between them, and the registry holds EURUSD, USDJPY and GBPUSD. So a dollar name pays in any of the four and a euro name in EUR or USD: SX5E in yen or sterling is refused (`no enabled pair`), not computed through a cross.
 
 **No implied FX volatility.** Cboe answers 403 on EVZ and Yahoo no longer serves it. A realised volatility leaves out the FX volatility premium, and the provenance of each quanto market says what it used through `vol_origin` and `vol_method`.
 
-Latest forward date: {pd.Timestamp(fwd['obs_date'].iloc[0]).date()}. On {day}: EURUSD volatility {100 * vol:.1f} % ({vol_origin}, {vol_method}), SX5E against EURUSD {rho:+.2f} ({rho_origin}), SX5E surface `{surface.layer}` ({surface.origin}).
+Latest forward dates: {last_forwards}. On {day}: EURUSD volatility {100 * vol:.1f} % ({vol_origin}, {vol_method}), SX5E against EURUSD {rho:+.2f} ({rho_origin}), SX5E surface `{surface.layer}` ({surface.origin}).
 
 ## Spots: ECB against H.10
 
@@ -239,15 +278,23 @@ Latest forward date: {pd.Timestamp(fwd['obs_date'].iloc[0]).date()}. On {day}: E
 
 The two sources are about four hours apart, which alone decorrelates one-day returns; five-day returns much less. The quality report lists the days above 2 %.
 
+## Yen and sterling curves
+
+{curve_table}
+
+Below a year the yen curve is a straight line from the call rate to the one-year zero rate, as the Ministry's file starts at one year. The sterling short end only holds the maturities gilts reach that day. The ten-year comparison is a par yield for yen and a zero rate for sterling, against a monthly average of benchmark yields: it checks levels and units, not the bootstrap, which the tests check by repricing par bonds. The Bank of England's spot rates are continuous: integrating the forward sheet of its own workbook gives them to 0.0001 bp, against 8 bp if they were semi-annual.
+
 ## Forwards: covered parity against the CME future
 
-Each quarterly EUR contract over the spot, against the same carry from our curves at the contract's exact maturity: {stats['contracts']} contracts, {stats['n']} contract-days, {stats['first']} to {stats['last']}, three months or more from expiry. Yahoo's two closes are hours apart and that noise is divided by the maturity, so the longer buckets are the ones to read.
+Each quarterly contract over the spot, against the same carry from our curves at the contract's exact maturity, three months or more from expiry and in the pair's own quotation (a 6J contract is the inverse of USDJPY). Yahoo's two closes are hours apart and that noise is divided by the maturity, so the longer buckets are the ones to read.
+
+{futures_notes}
 
 {by_t}
 
 {by_year}
 
-From six months out: median gap {stats['far_gap']:+.0f} bp a year, correlation {stats['far_corr']:.2f}. A negative gap means our curves overstate the dollar-euro differential the market pays. Our curves are Treasury and AAA, not OIS, and the forwards carry no cross-currency basis.
+A negative gap means the market's forward sits below ours, in the pair's quotation. Our curves are government curves, not OIS, and the forwards carry no cross-currency basis. The three pairs share these limits, and from a year out the yen and sterling gaps have the size of the euro's. Below a year this check says little for any pair: at 3 to 6 months the noise of the closes swamps the carry (correlation 0.08 to 0.33), so the straight line of the yen short end is not validated by it.
 
 ## Correlation: does the hour of the fix matter?
 
@@ -282,6 +329,7 @@ Read the two middle columns together. In absolute terms the term left out is sma
 ## Limits
 
 - rho and the FX volatility are constants over the life of a product, read on one date, with no term structure.
+- Gilts and JGBs discount a yen or sterling payment at the government's rate, not at a funding rate. The Bank of England does publish an OIS curve, unused here as the dollar side has none.
 - A vol bump keeps the adjustment of the base market: the vega misses about {abs(link.rho) * link.vol_fx * 0.01 * 2.0 * 1e4:.1f} bp of 2-year forward per vol point on SX5E in USD, on {day}.
 - The pseudo CvC and PvP of `basket_spreads` stay in each name's own currency, as their docstring says.
 - The Pricer and the Book still build worst-ofs on flat inputs (`Desk._basket_ctx`): a quote says the performances are not adjusted, and an explicit payment currency is refused until they read the lake's market.

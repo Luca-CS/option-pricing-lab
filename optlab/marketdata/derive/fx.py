@@ -1,7 +1,8 @@
 """FX: forwards by covered parity, realised volatility, correlation of a name with a pair, and what a quanto reads at a date.
 
-Forwards use the desk's two curves, Treasury and AAA, not OIS or cross-currency curves, so they carry no basis. A pair without a curve
-on both sides has spots, volatility and correlation but no forward: it is reported as a quality issue, not filled.
+Forwards use the desk's government curves, not OIS or cross-currency curves, so they carry no basis. A pair without a curve in the lake
+on both sides has spots, volatility and correlation but no forward: it is reported as a quality issue, not filled, and the first load
+that has both closes the issue. A closed issue keeps its history: a later version of the row, with the severity `resolved`.
 
 No free source quotes FX implied volatility: Cboe refuses EVZ and Yahoo no longer serves it. The volatility is therefore realised, with
 origin = derived and method = realized, and a quanto carries both labels up to its provenance. Nothing here is an implied level.
@@ -19,6 +20,7 @@ import numpy as np
 import pandas as pd
 
 from ..lake import Lake, new_run_id, sql_str
+from ..quality import RESOLVED, open_issues
 from ..universe import enabled, enabled_names, instrument, pair_currencies
 from .carry import cip_forward
 from .correl import WINDOWS, closes_wide, rolling_pair
@@ -70,24 +72,33 @@ def forward_rows(spots: pd.Series, base_curves: dict, quote_curves: dict, tenors
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["obs_date", "tenor", "forward", "points"])
 
 
+def _closed_no_curve(lake: Lake, pair: str) -> pd.DataFrame:
+    """The new version of the pair's open `no_curve` issues."""
+    still_open = open_issues(lake, f"dataset = 'fx_forwards' AND check_name = 'no_curve' AND item = {sql_str(pair)}")
+    return still_open[["dataset", "item", "check_name", "obs_date"]].assign(severity=RESOLVED, detail=still_open["detail"] + "; curves loaded since")
+
+
 def build_fx_forwards(lake: Lake, pairs=None) -> list[dict]:
-    """Forwards of the pairs with a curve on both sides. The others get a quality issue."""
+    """Forwards of the pairs with a curve on both sides in the lake. The others get a quality issue."""
     run = new_run_id("derive_fx")
-    out, issues = [], []
+    out, issues, closed = [], [], []
     for pair in pairs if pairs is not None else [i.id for i in enabled("fx")]:
         spots = spot_series(lake, pair)
         if spots.empty:
             continue
         base, quote = pair_currencies(pair)
-        missing = [c for c in (base, quote) if c not in CURVE_OF_CURRENCY]
+        curves = {c: _curve_days(lake, c) if c in CURVE_OF_CURRENCY else {} for c in (base, quote)}
+        missing = [c for c, days in curves.items() if not days]
         if missing:
             issues.append({"dataset": "fx_forwards", "item": pair, "check_name": "no_curve", "severity": "warning",
                            "detail": f"no forward: no discount curve in {', '.join(missing)}", "obs_date": spots.index[-1].date()})
             continue
-        rows = forward_rows(spots, _curve_days(lake, base), _curve_days(lake, quote))
+        rows = forward_rows(spots, curves[base], curves[quote])
         out.append(lake.ingest("fx_forwards", rows.assign(pair=pair), "cip_on_ecb", "derived", run))
-    if issues:
-        lake.ingest("quality_issues", pd.DataFrame(issues), "derive_fx", "derived", run)
+        closed.append(_closed_no_curve(lake, pair))
+    updates = [pd.DataFrame(issues)] * bool(issues) + [c for c in closed if len(c)]
+    if updates:
+        lake.ingest("quality_issues", pd.concat(updates, ignore_index=True), "derive_fx", "derived", run)
     return out
 
 

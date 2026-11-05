@@ -190,7 +190,7 @@ def test_the_field_resolves_to_the_first_names_currency():
     assert preset("phoenix", **{"general.basket": "worst_of", "general.underlyings": ("SX5E", "SPX")}).payment_currency == "EUR"
     assert preset("phoenix", **{"general.underlying": "SX5E", "general.payment_currency": "USD"}).payment_currency == "USD"
     with pytest.raises(TermSheetError, match="payment_currency"):
-        preset("phoenix", **{"general.payment_currency": "JPY"})
+        preset("phoenix", **{"general.payment_currency": "CHF"})
 
 
 def test_a_stored_sheet_without_the_field_stays_native_and_round_trips():

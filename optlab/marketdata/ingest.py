@@ -14,7 +14,7 @@ import pandas as pd
 
 from ..log import get_logger
 from .lake import Lake, new_run_id
-from .sources import curl_get, fx, http_get, simple, yahoo
+from .sources import curl_get, fx, http_get, rates, simple, yahoo
 from .universe import REFERENCE_INSTRUMENT, as_rows, enabled_underlyings
 
 LOG = get_logger(__name__)
@@ -93,6 +93,43 @@ def load_fx(lake: Lake, fetch=http_get, fred_fetch=curl_get, pause=lambda: time.
     return out
 
 
+def _since_start(rows: pd.DataFrame) -> pd.DataFrame:
+    return rows[pd.to_datetime(rows["obs_date"]) >= START]
+
+
+def load_mof(lake: Lake, fetch=http_get) -> list[dict]:
+    """JGB par yields: the history, which stops at the end of the last month, then the current month."""
+    out = []
+    for name, url in (("jgbcme_all.csv", rates.MOF_HISTORY_URL), ("jgbcme.csv", rates.MOF_CURRENT_URL)):
+        raw = lake.store_raw("mof", name, fetch(url), url)
+        rows = _since_start(rates.parse_mof_jgb(raw.content)).assign(curve=rates.JGB_CURVE)
+        out.append(lake.ingest("rate_points", rows, "mof", "observed", raw_sha256=raw.sha256))
+    return out
+
+
+def load_boj(lake: Lake, fetch=http_get) -> list[dict]:
+    url = rates.boj_call_url(START[:4] + START[5:7])
+    raw = lake.store_raw("boj", "call_rate.csv", fetch(url), url)
+    rows = _since_start(rates.parse_boj_call(raw.content)).rename(columns={"value": "rate"}).assign(curve=rates.CALL_CURVE, tenor=1 / 365)
+    return [lake.ingest("rate_points", rows, "boj", "observed", raw_sha256=raw.sha256)]
+
+
+def load_boe(lake: Lake, fetch=http_get) -> list[dict]:
+    """The gilt curve, history then current month, and SONIA. Each workbook is kept as its own raw file, not the zip: a zip of 39 MB
+    changes every month, while the workbooks of past years do not."""
+    out = []
+    for url in (rates.GLC_HISTORY_URL, rates.GLC_CURRENT_URL):
+        for name, book in rates.glc_workbooks(fetch(url), int(START[:4])).items():
+            raw = lake.store_raw("boe", name, book, url)
+            rows = _since_start(rates.parse_glc_workbook(raw.content)).assign(curve=rates.GLC_CURVE)
+            out.append(lake.ingest("rate_points", rows, "boe", "observed", raw_sha256=raw.sha256))
+    url = rates.boe_series_url()
+    raw = lake.store_raw("boe", f"{rates.SONIA_SERIES}.csv", fetch(url), url)
+    rows = _since_start(rates.parse_boe_series(raw.content)).rename(columns={"value": "rate"}).assign(curve=rates.SONIA_CURVE, tenor=1 / 365)
+    out.append(lake.ingest("rate_points", rows, "boe", "observed", raw_sha256=raw.sha256))
+    return out
+
+
 def _parquet_bytes(frame: pd.DataFrame) -> bytes:
     buf = io.BytesIO()
     frame.to_parquet(buf)
@@ -154,7 +191,8 @@ def load_yahoo_chains(lake: Lake, names=("SPX", "NDX", "RUT", "AAPL"), tickers=N
 
 
 STEPS = {"universe": load_universe, "cboe": load_cboe, "stoxx": load_stoxx, "fred": load_fred,
-         "treasury": load_treasury, "ecb": load_ecb, "fx": load_fx, "yahoo": load_yahoo, "calendars": load_calendars}
+         "treasury": load_treasury, "ecb": load_ecb, "mof": load_mof, "boj": load_boj, "boe": load_boe, "fx": load_fx, "yahoo": load_yahoo,
+         "calendars": load_calendars}
 
 
 def update_all(lake: Lake, only=None, log=LOG.info) -> dict:
