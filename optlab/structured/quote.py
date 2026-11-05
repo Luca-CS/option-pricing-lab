@@ -204,6 +204,9 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
                   workers=workers, control_forwards=control_forwards, fast=fast)
     cpn = product.coupon_param
     target = rate = rate_se = upfront = desk = None
+    if costs is not None and decision.model not in ("lv", "surface"):
+        costs = None
+        decision.warnings.append(f"no hedging costs under {decision.model.upper()}: they are measured on a base in local vol or replication")
     if costs is not None:
         aim = (100 - margin if fmt.name == "note" else -margin) if sheet.get("wrapper.solve") == "coupon" else None
         desk, base, x, x_se = desk_price(product, ctx, fmt, decision, prof, costs, aim, cpn, product.coupon_scale, fixings, workers, fast)

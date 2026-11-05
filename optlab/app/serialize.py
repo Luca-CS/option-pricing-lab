@@ -73,6 +73,15 @@ def greeks_json(g) -> dict | None:
                   "per_name": g.per_name})
 
 
+def desk_json(desk) -> dict | None:
+    if desk is None:
+        return None
+    return clean({"side": desk.side, "base_price": desk.base_price, "base_se": desk.base_se, "final_price": desk.final_price,
+                  "final_se": desk.final_se, "coupon_base": desk.coupon_base, "coupon_final": desk.coupon_final, "seconds": desk.seconds,
+                  "lines": [{"key": x.key, "label": x.label, "kind": x.kind, "cost": x.cost, "se": x.se, "coupon_bp": x.coupon_bp, "used": x.used,
+                             "default": x.default, "overridden": x.overridden, "note": x.note, "in_price": x.in_price} for x in desk.lines]})
+
+
 def quote_json(q) -> dict:
     p, d = q.product, q.decision
     if q.coupon_rate is not None:
@@ -80,7 +89,7 @@ def quote_json(q) -> dict:
         headline = {"kind": "coupon", "value": 100 * q.coupon_rate, "se": 100 * q.coupon_rate_se, "unit": "% p.a.",
                     "label": f"Coupon solved for {target}"}
     else:
-        headline = {"kind": "upfront", "value": q.upfront, "se": q.result.stderr, "unit": "%",
+        headline = {"kind": "upfront", "value": q.upfront, "se": q.desk.final_se if q.desk else q.result.stderr, "unit": "%",
                     "label": "Note price" if q.fmt == "note" else "Upfront paid by the investor"}
     return clean({
         "headline": headline,
@@ -93,7 +102,7 @@ def quote_json(q) -> dict:
         "target": q.target, "coupon_rate": q.coupon_rate, "coupon_rate_se": q.coupon_rate_se, "upfront": q.upfront,
         "margin": q.margin, "result": result_json(q.result), "control": result_json(q.control),
         "control_gap_se": q.control_gap_se, "greeks": greeks_json(q.greeks), "mix_band": q.mix_band,
-        "schedule": schedule(p, q.result), "snapshot_id": q.snapshot_id, "warnings": q.warnings,
+        "schedule": schedule(p, q.result), "snapshot_id": q.snapshot_id, "warnings": q.warnings, "desk": desk_json(q.desk),
         "seconds": q.seconds, "params": {p.coupon_param: q.coupon_rate * p.coupon_scale}
         if q.coupon_rate is not None and p.coupon_param else {},
     })

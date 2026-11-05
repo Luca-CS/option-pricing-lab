@@ -70,6 +70,8 @@ def routes(desk: Desk):
         ("GET", r"/api/replay/runs", lambda m, q, b: desk.replay_runs()),
         ("POST", r"/api/replay/run", lambda m, q, b: desk.replay_run(b)),
         ("GET", r"/api/replay/runs/([\w./-]+)", lambda m, q, b: desk.replay_get(m[1])),
+        ("GET", r"/api/costs/defaults", lambda m, q, b: desk.cost_defaults()),
+        ("PUT", r"/api/costs/defaults", lambda m, q, b: desk.put_cost_defaults(b)),
         ("GET", r"/api/basket", lambda m, q, b: desk.basket_settings()),
         ("PUT", r"/api/basket", lambda m, q, b: desk.put_basket(b)),
         ("POST", r"/api/script/check", lambda m, q, b: desk.script_check(b)),

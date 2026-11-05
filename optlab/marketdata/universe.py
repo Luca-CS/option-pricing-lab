@@ -23,26 +23,27 @@ class Instrument:
     vol_index: str = ""  # implied volatility index (30 days), empty when none is free
     total_return: str = ""  # Yahoo ticker of the total-return index, gives the realised dividend yield
     enabled: bool = True
+    group: str = ""  # whose defaults of the hedging costs it takes (structured/defaults.py)
 
 
 UNIVERSE = (
-    Instrument("SPX", "S&P 500", "index", "USD", "NYSE", "^GSPC", "VIX", "^SP500TR"),
-    Instrument("NDX", "Nasdaq 100", "index", "USD", "NYSE", "^NDX", "VXN"),
-    Instrument("RUT", "Russell 2000", "index", "USD", "NYSE", "^RUT", "RVX", "^RUTTR"),
-    Instrument("SX5E", "Euro Stoxx 50", "index", "EUR", "EUREX", "^STOXX50E", "V2TX"),
-    Instrument("AAPL", "Apple", "equity", "USD", "NYSE", "AAPL", "VXAPL"),
-    Instrument("AMZN", "Amazon", "equity", "USD", "NYSE", "AMZN", "VXAZN"),
-    Instrument("GOOGL", "Alphabet", "equity", "USD", "NYSE", "GOOGL", "VXGOG"),
-    Instrument("GS", "Goldman Sachs", "equity", "USD", "NYSE", "GS", "VXGS"),
-    Instrument("IBM", "IBM", "equity", "USD", "NYSE", "IBM", "VXIBM"),
+    Instrument("SPX", "S&P 500", "index", "USD", "NYSE", "^GSPC", "VIX", "^SP500TR", group="index_us"),
+    Instrument("NDX", "Nasdaq 100", "index", "USD", "NYSE", "^NDX", "VXN", group="index_us"),
+    Instrument("RUT", "Russell 2000", "index", "USD", "NYSE", "^RUT", "RVX", "^RUTTR", group="index_us"),
+    Instrument("SX5E", "Euro Stoxx 50", "index", "EUR", "EUREX", "^STOXX50E", "V2TX", group="index_eu"),
+    Instrument("AAPL", "Apple", "equity", "USD", "NYSE", "AAPL", "VXAPL", group="equity_us"),
+    Instrument("AMZN", "Amazon", "equity", "USD", "NYSE", "AMZN", "VXAZN", group="equity_us"),
+    Instrument("GOOGL", "Alphabet", "equity", "USD", "NYSE", "GOOGL", "VXGOG", group="equity_us"),
+    Instrument("GS", "Goldman Sachs", "equity", "USD", "NYSE", "GS", "VXGS", group="equity_us"),
+    Instrument("IBM", "IBM", "equity", "USD", "NYSE", "IBM", "VXIBM", group="equity_us"),
     # Declared, not loaded yet (scope agreed on 5 November 2026: names with a free implied volatility first).
-    Instrument("DAX", "DAX", "index", "EUR", "XETRA", "^GDAXI", enabled=False),
-    Instrument("CAC", "CAC 40", "index", "EUR", "EURONEXT", "^FCHI", enabled=False),
+    Instrument("DAX", "DAX", "index", "EUR", "XETRA", "^GDAXI", enabled=False, group="index_eu"),
+    Instrument("CAC", "CAC 40", "index", "EUR", "EURONEXT", "^FCHI", enabled=False, group="index_eu"),
     Instrument("FTSE", "FTSE 100", "index", "GBP", "LSE", "^FTSE", enabled=False),
     Instrument("NKY", "Nikkei 225", "index", "JPY", "TSE", "^N225", enabled=False),
-    Instrument("MSFT", "Microsoft", "equity", "USD", "NYSE", "MSFT", enabled=False),
-    Instrument("NVDA", "Nvidia", "equity", "USD", "NYSE", "NVDA", enabled=False),
-    Instrument("JPM", "JPMorgan Chase", "equity", "USD", "NYSE", "JPM", enabled=False),
+    Instrument("MSFT", "Microsoft", "equity", "USD", "NYSE", "MSFT", enabled=False, group="equity_us"),
+    Instrument("NVDA", "Nvidia", "equity", "USD", "NYSE", "NVDA", enabled=False, group="equity_us"),
+    Instrument("JPM", "JPMorgan Chase", "equity", "USD", "NYSE", "JPM", enabled=False, group="equity_us"),
     Instrument("ASML", "ASML", "equity", "EUR", "EURONEXT", "ASML.AS", enabled=False),
     Instrument("LVMH", "LVMH", "equity", "EUR", "EURONEXT", "MC.PA", enabled=False),
     Instrument("SAP", "SAP", "equity", "EUR", "XETRA", "SAP.DE", enabled=False),
@@ -74,4 +75,4 @@ def enabled_names() -> tuple:
 def as_rows(as_of) -> pd.DataFrame:
     """The registry as rows of the `instruments` table, dated `as_of`."""
     rows = [{**asdict(i), "instrument": i.id, "obs_date": as_of, "cboe": i.vol_index} for i in UNIVERSE]
-    return pd.DataFrame(rows).drop(columns=["id"])
+    return pd.DataFrame(rows).drop(columns=["id", "group"])

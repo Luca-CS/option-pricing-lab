@@ -21,6 +21,7 @@ SCHEMA = (
        PRIMARY KEY (underlying, date))""",
     """CREATE TABLE IF NOT EXISTS quotes (quote_id TEXT PRIMARY KEY, created_at TEXT, sheet TEXT, result TEXT)""",
     """CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT, recorded_at TEXT)""",
+    """CREATE TABLE IF NOT EXISTS cost_defaults (version INTEGER PRIMARY KEY, payload TEXT, recorded_at TEXT)""",
 )
 
 
@@ -164,3 +165,24 @@ class Repository:
     def put_setting(self, key: str, value) -> None:
         with self._lock, self._db() as con:
             con.execute("INSERT OR REPLACE INTO settings VALUES (?, ?, ?)", (key, json.dumps(value), _now()))
+
+    # --- defaults of the hedging costs (every version kept) ---
+    def save_defaults(self, groups: dict) -> int:
+        with self._lock, self._db() as con:
+            version = (con.execute("SELECT MAX(version) FROM cost_defaults").fetchone()[0] or 0) + 1
+            con.execute("INSERT INTO cost_defaults VALUES (?, ?, ?)", (version, json.dumps({"groups": groups}), _now()))
+        return version
+
+    def defaults(self, version: int | None = None) -> dict | None:
+        """{"version", "groups", "recorded_at"} of the latest table or of a version, None when none was saved."""
+        with self._db() as con:
+            if version is None:
+                row = con.execute("SELECT * FROM cost_defaults ORDER BY version DESC LIMIT 1").fetchone()
+            else:
+                row = con.execute("SELECT * FROM cost_defaults WHERE version = ?", (version,)).fetchone()
+        return None if row is None else {"version": row["version"], "recorded_at": row["recorded_at"], **json.loads(row["payload"])}
+
+    def default_versions(self) -> list[dict]:
+        with self._db() as con:
+            rows = con.execute("SELECT version, recorded_at FROM cost_defaults ORDER BY version DESC").fetchall()
+        return [dict(r) for r in rows]

@@ -113,6 +113,16 @@ SECTIONS = {s.name: s for s in [
         Field("gearing", "number", None, "Gearing (1 / strike)", derived=True,
               visible_if=_v("downside.type", "geared_put")),
     )),
+    # Empty takes the default of the groups and the size (defaults.py); a value overrides it, with its sign.
+    Section("costs", "Hedging costs", (
+        Field("side", "choice", "sell", "The desk", choices=("sell", "buy")),
+        Field("vol", "number", None, "Volatility, parallel", "vol points", minimum=-0.2, maximum=0.2),
+        Field("skew", "number", None, "Volatility skew, 90-110 % at 1 year", "vol points", minimum=-0.2, maximum=0.2),
+        Field("corr", "number", None, "Correlation", "points", minimum=-0.5, maximum=0.5, visible_if=_v("general.basket", "worst_of")),
+        Field("dividend", "number", None, "Dividends", "of dividends", minimum=-1.0, maximum=1.0),
+        Field("repo", "number", None, "Repo", "bp", minimum=-0.05, maximum=0.05),
+        Field("spot", "number", None, "Spot, delta bid-ask", "bp", minimum=-0.02, maximum=0.02),
+    )),
 ]}
 
 
@@ -122,12 +132,13 @@ class Mask:
     label: str
     sections: tuple
     choices: dict = field(default_factory=dict)  # dotted field → allowed choices under this mask
+    hidden: tuple = ()  # dotted fields this mask does not show
 
 
 MASKS = {
-    "autocall": Mask("autocall", "Autocallable", ("general", "wrapper", "autocall", "coupon", "downside"),
+    "autocall": Mask("autocall", "Autocallable", ("general", "wrapper", "autocall", "coupon", "downside", "costs"),
                      {"coupon.type": ("fixed", "conditional", "snowball")}),
-    "bullet": Mask("bullet", "Bullet (non-callable)", ("general", "wrapper", "coupon", "upside", "downside"),
+    "bullet": Mask("bullet", "Bullet (non-callable)", ("general", "wrapper", "coupon", "upside", "downside", "costs"),
                    {"coupon.type": ("none", "fixed", "conditional")}),
 }
 
@@ -224,6 +235,8 @@ class TermSheet:
     def visible(self, path: str) -> bool:
         s, name = _split(path)
         if s not in self.mask.sections:
+            return False
+        if path in self.mask.hidden:
             return False
         f = SECTIONS[s].field(name)
         for dep, allowed in f.visible_if:
@@ -329,7 +342,8 @@ def json_schema() -> dict:
                 if f.derived:
                     continue
                 path = f"{sname}.{f.name}"
-                spec: dict = {"type": kinds[f.kind], "description": f.label + (f" ({f.unit})" if f.unit else "")}
+                optional = f.kind == "number" and f.default is None
+                spec: dict = {"type": [kinds[f.kind], "null"] if optional else kinds[f.kind], "description": f.label + (f" ({f.unit})" if f.unit else "")}
                 if f.kind == "choice":
                     spec["enum"] = list(mask.choices.get(path, f.choices))
                 if f.kind == "date":
@@ -363,6 +377,6 @@ def describe(mask: str, sheet: TermSheet | None = None) -> dict:
                 continue
             fields.append({"name": f.name, "path": path, "label": f.label, "kind": f.kind, "unit": f.unit,
                            "choices": list(MASKS[mask].choices.get(path, f.choices)), "value": _json(sheet.get(path)),
-                           "read_only": f.derived})
+                           "read_only": f.derived, "optional": f.kind == "number" and f.default is None and not f.derived})
         out["sections"].append({"name": s, "label": SECTIONS[s].label, "fields": fields})
     return out

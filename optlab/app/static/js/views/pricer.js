@@ -75,9 +75,11 @@ export async function render(page, arg) {
     const focused = document.activeElement && document.activeElement.id;
     const sections = resp.form.sections.map((sec) => {
       const fields = sec.fields.map((f) => control(f, resp));
+      const alerts = sec.name === "costs" && resp.costs ? resp.costs.alerts.map((a) => h("div", { class: "notice err", role: "alert" }, a)) : null;
       return h("fieldset", { class: "section" },
-        h("div", { class: "section-head" }, h("h3", { style: { margin: 0 } }, sec.label)),
-        h("div", { class: "fields" }, fields));
+        h("div", { class: "section-head" }, h("h3", { style: { margin: 0 } }, sec.label),
+          sec.name === "costs" ? h("a", { class: "muted", href: "#/costs" }, "Defaults") : null),
+        alerts, h("div", { class: "fields" }, fields));
     });
     const top = resp.error && !resp.error.field ? errorNotice(resp.error.message) : null;
     const general = (resp.sheet && resp.sheet.general) || draft.values.general || {};
@@ -92,8 +94,9 @@ export async function render(page, arg) {
     if (focused) { const el = document.getElementById(focused); if (el) el.focus(); }
     const qb = document.getElementById("quote-btn");
     if (qb && !running) {
-      qb.disabled = !!resp.error;
-      qb.title = resp.error ? "Correct the term sheet first" : "";
+      const blocked = !!resp.error || (resp.costs && resp.costs.missing.length > 0);
+      qb.disabled = blocked;
+      qb.title = blocked ? "Correct the term sheet first" : "";
     }
   };
 
@@ -131,8 +134,22 @@ export async function render(page, arg) {
           onchange: (e) => set(parse(f, e.target.value)) }),
         sfx ? h("span", { class: "suffix" }, sfx) : null);
     }
-    const hint = f.path === "general.strike_date" && !value && desk.context ? `Empty: the valuation date ${desk.context.valuation}` : null;
-    return field(f.label, ctl, { error: err, hint, wide: f.kind === "names" });
+    const cost = f.path.startsWith("costs.") && resp.costs ? resp.costs.params[f.name] : null;
+    if (cost && ctl.querySelector) {
+      const input = ctl.querySelector("input");
+      if (input && cost.default != null) input.placeholder = display(f, cost.default);
+    }
+    const hint = f.path === "general.strike_date" && !value && desk.context ? `Empty: the valuation date ${desk.context.valuation}` : costHint(f, cost);
+    return field(f.label, ctl, { error: err || (cost && cost.missing ? "Enter a value: no default here." : null), hint, wide: f.kind === "names" });
+  };
+
+  const costHint = (f, cost) => {
+    if (!cost || cost.default == null) return null;
+    const show = `${display(f, cost.default)} ${suffix(f)}`.trim();
+    const group = Object.keys(cost.by_group).length > 1 ? " · most prudent of the groups" : "";
+    const conflict = cost.conflict ? " · the groups disagree: the one against the desk, measured" : "";
+    const label = cost.starting ? " · starting value" : "";
+    return cost.overridden ? `Overridden · default ${show}` : `Default ${show}${label}${group}${conflict}`;
   };
 
   // Bound errors in the units on screen (the library speaks in fractions: 0.6 for 60 %).
@@ -171,7 +188,7 @@ export async function render(page, arg) {
           disabled: lastForm && lastForm.error ? true : undefined }, "Quote")),
       h("div", { class: "btn-row", style: { marginTop: "12px", gap: "18px" } },
         opt("control", "Control model", "o-control"), opt("greeks", "Delta and vega", "o-greeks"),
-        opt("mixBand", "SLV mix band", "o-mix")),
+        opt("mixBand", "SLV mix band", "o-mix"), opt("costs", "Hedging costs", "o-costs")),
       h("details", { class: "more" }, h("summary", {}, "Advanced"),
         h("div", { class: "fields" },
           field("Model", h("select", { onchange: (e) => save({ model: e.target.value }) },
@@ -200,7 +217,7 @@ export async function render(page, arg) {
         h("button", { class: "btn sm", type: "button", onclick: () => ctrl.abort() }, "Cancel"))));
     try {
       const { job } = await api("/api/quote", { method: "POST", body: { sheet: { type: draft.type, values: draft.values },
-        options: { precision: state.precision, control: state.control, greeks: state.greeks, mix_band: state.mixBand,
+        options: { precision: state.precision, control: state.control, greeks: state.greeks, mix_band: state.mixBand, costs: state.costs,
           fast: state.fast, control_forwards: state.controlForwards, sticky: state.sticky, model: state.model || null,
           slv_vega: state.slvVega } } });
       const q = await runJob(job, (j) => {
@@ -265,6 +282,7 @@ export async function render(page, arg) {
           h("tr", {}, h("th", {}, "Name"), h("th", { class: "num" }, "Delta %"), h("th", { class: "num" }, "Vega %")),
           Object.entries(g.per_name).map(([n, v]) => h("tr", {}, h("td", {}, n), h("td", { class: "num" }, pm(v.delta, v.delta_se, 4)),
             h("td", { class: "num" }, pm(v.vega, v.vega_se, 4)))))) : null) : null,
+      q.desk ? costCard(q) : null,
       q.basket ? basketCard(q.basket) : null,
       q.mix_band ? h("div", { class: "card" }, h("h2", {}, "SLV mixing fraction"),
         h("p", { class: "muted" }, "The share of stochastic vol of vol is not calibrated; the vanillas stay on the surface."),
@@ -292,7 +310,8 @@ export async function render(page, arg) {
     const res = await dialog({
       title: "Book this trade", ok: "Book",
       body: [h("p", { class: "muted" }, `${describeSheet(q.sheet)}${q.coupon_rate != null ? ` · coupon ${num(100 * q.coupon_rate, 3)} % p.a.` : ""}`),
-        field("Quantity (units of the notional)", h("input", { type: "number", name: "quantity", value: "1", step: "any", required: true })),
+        field("Quantity (units of the notional, negative when the desk sells)", h("input", { type: "number", name: "quantity",
+          value: q.desk && q.desk.side === "buy" ? "1" : "-1", step: "any", required: true })),
         h("div", { class: "fields" },
           field("Trade date", h("input", { type: "date", name: "trade_date", value: ctxDate })),
           field("Strike date", h("input", { type: "date", name: "strike_date", value: strike }))),
@@ -325,6 +344,33 @@ export async function render(page, arg) {
         `${last.product} · ${pm(last.headline.value, last.headline.se)} ${last.headline.unit}`)) : null));
   }
   return () => document.removeEventListener("keydown", onKey);
+}
+
+// Base, every line with its error and its effect on the coupon, and the client price. Costs are seen from the desk.
+export function costCard(q) {
+  const d = q.desk;
+  const unitOf = { vol: "pt", skew: "pt", corr: "pt", dividend: "%", repo: "bp", spot: "bp" };
+  const used = (x) => {
+    if (x.used == null) return "";
+    const factor = x.key === "repo" || x.key === "spot" ? 1e4 : 100;
+    return `${signed(factor * x.used, 2)} ${unitOf[x.key] || ""}`;
+  };
+  const row = (label, u, def, cost, se, bp, cls) => h("tr", { class: cls || null }, h("td", {}, label), h("td", {}, u), h("td", {}, def),
+    h("td", { class: "num" }, cost), h("td", { class: "num" }, se), h("td", { class: "num" }, bp));
+  return h("div", { class: "card" },
+    h("div", { class: "card-head" }, h("h2", {}, "Hedging cost"), h("span", { class: "muted" }, `the desk ${d.side}s · % of notional · positive is against the desk`)),
+    h("div", { class: "table-wrap" }, h("table", { class: "data nosort" },
+      h("tr", {}, h("th", {}, "Line"), h("th", {}, "Used"), h("th", {}, "Default"), h("th", { class: "num" }, "Cost"), h("th", { class: "num" }, "SE"),
+        h("th", { class: "num" }, "Coupon, bp")),
+      row(h("b", {}, "Base"), "", "", num(d.base_price, 3), num(d.base_se, 3), ""),
+      d.lines.map((x) => row(x.note ? h("span", { title: x.note }, x.label) : x.label,
+        h("span", {}, used(x), " ", x.overridden ? h("span", { class: "badge warn" }, "overridden") : null),
+        x.default == null || x.kind === "interaction" ? "" : used({ ...x, used: x.default }),
+        signed(x.cost, 3), num(x.se, 3), x.coupon_bp == null ? "" : signed(x.coupon_bp, 1))),
+      row(h("b", {}, "Client price"), "", "", h("b", {}, num(d.final_price, 3)), num(d.final_se, 3), ""))),
+    d.coupon_final != null ? h("p", { class: "muted", style: { marginTop: "8px" } },
+      `Coupon ${num(100 * d.coupon_base, 3)} % p.a. on the base alone, ${num(100 * d.coupon_final, 3)} % p.a. with the costs. `
+      + "Each line runs on the random numbers of the base.") : null);
 }
 
 // What a price used for each name: its market, where it comes from, and the correlations.

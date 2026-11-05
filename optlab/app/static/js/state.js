@@ -7,7 +7,7 @@ const defaults = {
   precision: "standard",
   control: true,
   greeks: false,
-  mixBand: false,
+  mixBand: false, costs: true,
   fast: false,
   controlForwards: false,
   slvVega: false,

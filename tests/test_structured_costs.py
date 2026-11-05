@@ -157,9 +157,9 @@ def test_a_vanilla_put_costs_what_black_scholes_says():
     product = SimpleNamespace(program=program, valuation=SPX.valuation, calendar=None, horizon=T)
     for method, model in (("monte_carlo", "lv"), ("replication", "surface")):
         d = PricingDecision("european", method, model, None, "", 200_000, 25_000, 11)
-        lines = _Lines(product, SPX, Swap(), d, prof, [{}], CostInputs(bumps))
-        base_run, single, _ = lines.run()
-        at = base_run.results[0]
+        lines = _Lines(product, SPX, Swap(), d, prof, [{}])
+        single = lines.run({"base": {}, **{k: {k: v} for k, v in bumps.items()}})
+        at = single["base"].results[0]
         want = {"vol": black_put(F, vol(SPX.surface, F) + 0.01) - base,
                 "skew": black_put(F, vol(BumpedSurface(SPX.surface, 0.0, 0.02), F)) - base}
         for key, value in (("dividend", {"dividend": 0.2}), ("repo", {"repo": 0.005}), ("spot", {"spot": 0.01})):

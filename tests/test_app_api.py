@@ -195,7 +195,7 @@ def test_basket_settings_are_validated(desk):
 
 def test_worst_of_quote_book_and_trade_page(desk):
     desk.put_basket({"names": {"SX5E": {"vol": 0.18, "q": 0.03}}, "corr": {"SPX|SX5E": 0.75}})
-    q = wait(desk, desk.quote({"sheet": worst_of(desk), "options": {"precision": "quick", "greeks": True}})["job"])
+    q = wait(desk, desk.quote({"sheet": worst_of(desk), "options": {"precision": "quick", "greeks": True, "costs": False}})["job"])
     single = wait(desk, desk.quote({"sheet": sheet_of(desk, "phoenix"), "options": {"precision": "quick"}})["job"])
     assert q["basket"]["names"]["SX5E"]["vol"] == 0.18 and q["basket"]["corr"] == {"SPX|SX5E": 0.75}
     assert q["policy"]["model"] == "lv" and set(q["greeks"]["per_name"]) == {"SPX", "SX5E"}

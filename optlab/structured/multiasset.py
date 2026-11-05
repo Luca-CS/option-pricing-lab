@@ -35,6 +35,15 @@ def correlation_root(corr) -> np.ndarray:
     return vec * np.sqrt(np.maximum(lam, 0.0))
 
 
+def moved_correlation(corr, shift: float) -> np.ndarray:
+    """Every pair moved by `shift`, kept within (-0.99, 0.99), and repaired into a correlation matrix when the move breaks it."""
+    from ..marketdata.derive.correl import nearest_correlation
+    c = np.array(corr, dtype=float)
+    moved = np.clip(c + shift, -0.99, 0.99)
+    np.fill_diagonal(moved, 1.0)
+    return nearest_correlation(moved)
+
+
 @dataclass
 class Basket:
     names: tuple
@@ -213,6 +222,12 @@ class BasketContext:
             v = vols[name]
             vols[name] = v + vol_shift if np.isscalar(v) else ShiftedSurface(v, vol_shift)
         return BasketContext(self.names, markets, vols, self.corr, self.valuation)
+
+    def with_bumps(self, vol: float = 0.0, skew: float = 0.0, corr: float = 0.0) -> "BasketContext":
+        """The same context with every name's implied vols moved, and every pair's correlation, the matrix repaired if needed."""
+        from .surfaces import BumpedSurface
+        vols = {n: (v + vol if np.isscalar(v) else BumpedSurface(v, vol, skew)) if vol or skew else v for n, v in self.vols.items()}
+        return BasketContext(self.names, self.markets, vols, moved_correlation(self.corr, corr) if corr else self.corr, self.valuation)
 
     @property
     def t_max(self) -> float:

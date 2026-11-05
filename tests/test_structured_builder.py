@@ -30,9 +30,9 @@ def prof(sheet):
 
 def test_masks_expose_their_sections():
     assert [s["name"] for s in describe("autocall")["sections"]] == ["general", "wrapper", "autocall", "coupon",
-                                                                     "downside"]
+                                                                     "downside", "costs"]
     assert [s["name"] for s in describe("bullet")["sections"]] == ["general", "wrapper", "coupon", "upside",
-                                                                   "downside"]
+                                                                   "downside", "costs"]
 
 
 def test_visible_fields_follow_the_choices():

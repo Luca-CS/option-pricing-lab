@@ -110,13 +110,14 @@ def quote_report(saved: dict) -> str:
             f"<tr><td>{float(m):.2f}</td><td>{(100 * b['value'] if head['kind'] == 'coupon' else b['value']):.3f}"
             f"</td><td>{b['atm_error_bp']:+.1f} bp</td></tr>" for m, b in q["mix_band"].items()) + "</table>"
     warnings = "".join(f'<p class="warn">{_e(w)}</p>' for w in q.get("warnings", []))
+    hedging = _hedging(q.get("desk"))
     body = (f"<h1>{_e(title)}</h1><p class='muted'>{_e(p['format'])}, strike {_e(p['strike_date'])}, maturity "
             f"{_e(p['maturity'])} · market {_e(q.get('snapshot_id'))}</p>"
             f"<p class='muted' style='margin-bottom:0'>{_e(head['label'])}</p>"
             f"<div class='headline'>{head['value']:.3f} {_e(head['unit'])}<span class='muted' "
             f"style='font-size:18px'>{se}</span></div>"
             f"<div class='card'><b>{_e(pol['label'])}</b><br><span class='muted'>{_e(pol['description'])}. "
-            f"{_e(pol['reason'])}.</span></div>{control}{warnings}"
+            f"{_e(pol['reason'])}.</span></div>{control}{warnings}{hedging}"
             f"<h2>Probability that the product ends at each date</h2>"
             f"{_bars(q['schedule'], lambda r: 100 * r['p_end'], 'probability of ending at each date')}"
             f"<h2>Expected flows by date (% of notional, undiscounted)</h2><table><tr><th>Observation</th>"
@@ -124,6 +125,25 @@ def quote_report(saved: dict) -> str:
             f"{band}<h2>Term sheet</h2><table>{sheet_rows}</table>"
             f"<h2>Script</h2><pre>{_e(p['script'])}</pre>")
     return _page(title, body)
+
+
+def _hedging(d: dict | None) -> str:
+    """Base, each line with its error and its effect on the coupon, and the client price."""
+    if not d:
+        return ""
+
+    def row(label, value, se, used="", bp="", cls=""):
+        return (f"<tr{cls}><td style='text-align:left'>{_e(label)}</td><td>{_e(used)}</td><td>{value:+.3f}</td><td>{se:.3f}</td><td>{bp}</td></tr>")
+
+    rows = [f"<tr><td style='text-align:left'>Base</td><td></td><td>{d['base_price']:.3f}</td><td>{d['base_se']:.3f}</td><td></td></tr>"]
+    for x in d["lines"]:
+        used = "" if x.get("used") is None else f"{x['used']:+.4g}" + (" (overridden)" if x.get("overridden") else "")
+        bp = "" if x.get("coupon_bp") is None else f"{x['coupon_bp']:+.1f}"
+        rows.append(row(x["label"], x["cost"], x["se"], used, bp))
+    rows.append(f"<tr><td style='text-align:left'><b>Client price ({_e(d['side'])})</b></td><td></td><td><b>{d['final_price']:.3f}</b></td>"
+                f"<td>{d['final_se']:.3f}</td><td></td></tr>")
+    return ("<h2>Hedging cost</h2><p class='muted'>% of notional, seen from the desk: a positive cost is against it. On the base's random numbers.</p>"
+            "<table><tr><th style='text-align:left'>Line</th><th>Used</th><th>Cost</th><th>SE</th><th>Coupon, bp</th></tr>" + "".join(rows) + "</table>")
 
 
 def book_report(desk) -> str:

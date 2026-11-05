@@ -11,6 +11,7 @@ const VIEWS = {
   trade: () => import("./views/trade.js"),
   lifecycle: () => import("./views/lifecycle.js"),
   market: () => import("./views/market.js"),
+  costs: () => import("./views/costs.js"),
   script: () => import("./views/script.js"),
   vollab: () => import("./views/vollab.js"),
   replay: () => import("./views/replay.js"),
@@ -18,7 +19,7 @@ const VIEWS = {
   settings: () => import("./views/settings.js"),
 };
 const TITLES = { overview: "Overview", pricer: "Pricer", book: "Book", trade: "Trade", lifecycle: "Lifecycle",
-  market: "Market", script: "Script lab", vollab: "Vol lab", replay: "Replay", data: "Data", settings: "Settings" };
+  costs: "Cost defaults", market: "Market", script: "Script lab", vollab: "Vol lab", replay: "Replay", data: "Data", settings: "Settings" };
 const SECTION = { trade: "book" };  // pages without their own entry in the navigation
 
 const main = document.getElementById("main");

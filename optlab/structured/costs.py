@@ -6,8 +6,9 @@
 
 Every line runs on the random numbers of the base (same seed, same batches), so a small cost is not lost in the noise: its standard
 error comes from the differences of the antithetic pairs. A bump of the forward (dividends, repo, spot) keeps the path in
-x = ln(S / F): the surface stays in moneyness, so these lines are new evaluations of the same simulation. A bump of the surface needs
-a simulation of its own. The price uses all the bumps together; the interaction line is that price less the sum of the single bumps.
+x = ln(S / F): the surface stays in moneyness, so these lines are new evaluations of the same simulation. A bump of the surface or of
+the correlation needs a simulation of its own. The price uses all the bumps together; the interaction line is that price less the sum
+of the single bumps.
 
 Prices are the investor's value in % of notional. The cost of a line is seen from the desk: what it adds to the price of what the
 desk sells, or takes from the price of what it buys.
@@ -22,16 +23,19 @@ import numpy as np
 
 from ..market import Market
 from ..models import LocalVolModel
+from .multiasset import BasketContext
 from .pricer import StructuredResult, history_times, price_many
 from .replication import replication_result
 from .script.timeline import Clock, build_timeline
 from .solve import combine
 from .surfaces import BumpedSurface, surface_arbitrage
 
-# Fractions, like every level of the library: vol 0.005 is half a vol point, dividend 0.1 is 10 % of the dividends, repo 0.001 is 10 bp.
-BUMPS = {"vol": "Volatility, parallel", "skew": "Volatility skew (90-110 % at 1 year)", "dividend": "Dividends", "repo": "Repo", "spot": "Spot, delta bid-ask"}
+# Fractions, like every level of the library: vol 0.005 is half a vol point, corr 0.01 is one correlation point, dividend 0.1 is 10 % of
+# the dividends, repo 0.001 is 10 bp.
+BUMPS = {"vol": "Volatility, parallel", "skew": "Volatility skew (90-110 % at 1 year)", "corr": "Correlation", "dividend": "Dividends",
+         "repo": "Repo", "spot": "Spot, delta bid-ask"}
 FORWARD_BUMPS = ("dividend", "repo", "spot")
-SURFACE_BUMPS = ("vol", "skew")
+SIMULATION_BUMPS = ("vol", "skew", "corr")
 SIDES = {"sell": 1.0, "buy": -1.0}
 
 
@@ -46,15 +50,17 @@ def forward_bumped(market: Market, dividend: float = 0.0, repo: float = 0.0, spo
 
 @dataclass(frozen=True)
 class CostInputs:
-    """What to add to a base price. `bumps` holds the values used, signed; `defaults` the ones they replace, for the summary."""
+    """What to add to a base price. `bumps` holds the values used, signed; `defaults` the ones they replace, for the summary.
+    `candidates` holds two values for a parameter whose groups disagree in sign: the one against the desk on this product is kept, measured."""
     bumps: dict = field(default_factory=dict)
     side: str = "sell"
     defaults: dict = field(default_factory=dict)
+    candidates: dict = field(default_factory=dict)
 
     def __post_init__(self):
         if self.side not in SIDES:
             raise ValueError(f"unknown side {self.side!r}, expected sell or buy")
-        unknown = set(self.bumps) - set(BUMPS)
+        unknown = (set(self.bumps) | set(self.candidates)) - set(BUMPS)
         if unknown:
             raise ValueError(f"unknown bump(s): {', '.join(sorted(unknown))}")
 
@@ -78,6 +84,7 @@ class CostLine:
     used: float | None = None
     default: float | None = None
     overridden: bool = False
+    note: str = ""
 
     @property
     def in_price(self) -> bool:
@@ -127,80 +134,78 @@ def _pct_pairs(result: StructuredResult) -> np.ndarray | None:
     return None if result.pairs is None else 100.0 * result.pairs / result.notional
 
 
-def _mean_se(pairs: np.ndarray | None, price: float) -> tuple[float, float]:
-    if pairs is None:
-        return price, 0.0
-    return float(pairs.mean()), float(pairs.std(ddof=1) / np.sqrt(len(pairs)))
+def _se(pairs: np.ndarray | None) -> float:
+    return 0.0 if pairs is None else float(pairs.std(ddof=1) / np.sqrt(len(pairs)))
 
 
 class _Lines:
-    """Runs the base and the bumped lines of one product on common random numbers."""
+    """Runs a product under bumped markets on common random numbers: a request is (bumps of the simulation, bumps of the forward)."""
 
-    def __init__(self, product, ctx, fmt, decision, profile, sets, inputs: CostInputs, fixings=None, workers=None, fast=False):
+    def __init__(self, product, ctx, fmt, decision, profile, sets, fixings=None, workers=None, fast=False):
         self.product, self.ctx, self.fmt, self.decision, self.sets = product, ctx, fmt, decision, sets
-        self.inputs, self.fixings, self.workers, self.fast = inputs, fixings, workers, fast
+        self.fixings, self.workers, self.fast = fixings, workers, fast
         self.program = product.program
         self.clock = Clock(product.valuation, product.calendar)
         self.timeline = build_timeline(self.program, self.clock)
         self.T_obs = (profile.observation_times[-1] if profile.observation_times else self.timeline.horizon)
         self.horizon = max(product.horizon, 1 / 365)
-        self.name = self.program.underlying_names[0]
-        self.S0 = ctx.market.spot
+        self.names = self.program.underlying_names
+        self.basket = isinstance(ctx, BasketContext)
+        self.initial = {n: ctx.markets[n].spot for n in self.names} if self.basket else ctx.market.spot
 
-    def _model(self, surface):
+    def _model(self, bumps: dict):
         if self.decision.model != "lv":
             raise ValueError(f"bumps run under local vol or replication, not {self.decision.model}")
-        if surface is self.ctx.surface:
-            return self.ctx.model("lv", self.horizon, fast=True) if self.fast else self.ctx.model("lv", self.horizon)
+        ctx = self.ctx
+        if self.basket:
+            return (ctx.with_bumps(**bumps) if bumps else ctx).model("lv", self.horizon, self.names)
+        if not bumps:
+            return ctx.model("lv", self.horizon, fast=True) if self.fast else ctx.model("lv", self.horizon)
+        surface = BumpedSurface(ctx.surface, bumps.get("vol", 0.0), bumps.get("skew", 0.0))
         if self.fast:
             from .fastmodels import TabulatedLocalVol
             return TabulatedLocalVol(surface)
         return LocalVolModel(surface)
 
-    def _simulation(self, surface, markets: list) -> list[_Run]:
-        """One simulation on `surface`, one line per bumped market of `markets`."""
-        if self.decision.method == "replication":
-            history = history_times(self.fixings, self.name, self.clock) or None
-            return [_Run([replication_result(self.program, self.timeline, surface, m, self.T_obs, self.fmt, p, initial_fixing=self.S0, history=history)
-                          for p in self.sets]) for m in markets]
+    def _factor(self, forward: dict):
+        """What the paths are multiplied by, per simulated date: one array, or one per name."""
+        if not forward:
+            return 1.0
         times = self.timeline.sim_times
-        base_F = self.ctx.market.F(times)
-        factors = [m.F(times) / base_F if m is not self.ctx.market else 1.0 for m in markets]
-        expanded = [(p, f) for f in factors for p in self.sets]
-        d = self.decision
-        out = price_many(self.program, self._model(surface), self.ctx.market, [p for p, _ in expanded], self.fmt, d.n_paths, d.seed, d.batch,
-                         valuation=self.product.valuation, fixings=self.fixings, calendar=self.product.calendar, workers=self.workers,
-                         spot_factors=[f for _, f in expanded], initial_fixing=self.S0)
-        n = len(self.sets)
-        return [_Run(out[i * n:(i + 1) * n]) for i in range(len(markets))]
+        if self.basket:
+            return {n: forward_bumped(self.ctx.markets[n], **forward).F(times) / self.ctx.markets[n].F(times) for n in self.names}
+        return forward_bumped(self.ctx.market, **forward).F(times) / self.ctx.market.F(times)
 
-    def run(self) -> tuple[_Run, dict, _Run | None]:
-        """(base, {key: run of that bump alone}, run of all the bumps together, or None with fewer than two)."""
-        active = self.inputs.active
-        ctx = self.ctx
-        forward_keys = [k for k in FORWARD_BUMPS if k in active]
-        markets = [ctx.market] + [forward_bumped(ctx.market, **{k: active[k]}) for k in forward_keys]
-        together = len(active) > 1
-        surface_all = None
-        if SURFACE_BUMPS[0] in active or SURFACE_BUMPS[1] in active:
-            surface_all = BumpedSurface(ctx.surface, active.get("vol", 0.0), active.get("skew", 0.0))
-        market_all = forward_bumped(ctx.market, **{k: active[k] for k in forward_keys}) if forward_keys else ctx.market
-        if together and surface_all is None:  # only forward bumps: the same simulation serves them all
-            markets.append(market_all)
-        runs = self._simulation(ctx.surface, markets)
-        base, single = runs[0], dict(zip(forward_keys, runs[1:]))
-        everything = runs[-1] if together and surface_all is None else None
-        for k in SURFACE_BUMPS:
-            if k in active:
-                surface = BumpedSurface(ctx.surface, active[k] if k == "vol" else 0.0, active[k] if k == "skew" else 0.0)
-                if not together or len([b for b in active if b in SURFACE_BUMPS]) > 1:
-                    single[k] = self._simulation(surface, [ctx.market])[0]
-                else:  # one surface bump and forward bumps: the bump alone and all together share a simulation
-                    alone, everything = self._simulation(surface, [ctx.market, market_all])
-                    single[k] = alone
-        if together and everything is None:
-            everything = self._simulation(surface_all, [market_all])[0]
-        return base, single, everything
+    def _simulation(self, bumps: dict, forwards: list) -> list[_Run]:
+        d = self.decision
+        if d.method == "replication":
+            name = self.names[0]
+            history = history_times(self.fixings, name, self.clock) or None
+            surface = BumpedSurface(self.ctx.surface, bumps.get("vol", 0.0), bumps.get("skew", 0.0)) if bumps else self.ctx.surface
+            return [_Run([replication_result(self.program, self.timeline, surface, forward_bumped(self.ctx.market, **f) if f else self.ctx.market,
+                                             self.T_obs, self.fmt, p, initial_fixing=self.initial, history=history) for p in self.sets])
+                    for f in forwards]
+        factors = [self._factor(f) for f in forwards]
+        expanded = [(p, f) for f in factors for p in self.sets]
+        out = price_many(self.program, self._model(bumps), self.ctx.market, [p for p, _ in expanded], self.fmt, d.n_paths, d.seed, d.batch,
+                         valuation=self.product.valuation, fixings=self.fixings, calendar=self.product.calendar, workers=self.workers,
+                         spot_factors=[f for _, f in expanded], initial_fixing=self.initial)
+        n = len(self.sets)
+        return [_Run(out[i * n:(i + 1) * n]) for i in range(len(forwards))]
+
+    def run(self, requests: dict) -> dict:
+        """{key: run} for {key: bumps}, one simulation per distinct set of simulation bumps."""
+        groups: dict = {}
+        for key, bumps in requests.items():
+            active = {k: float(v) for k, v in bumps.items() if v}
+            sim = {k: v for k, v in active.items() if k in SIMULATION_BUMPS}
+            fwd = {k: v for k, v in active.items() if k in FORWARD_BUMPS}
+            groups.setdefault(tuple(sorted(sim.items())), (sim, []))[1].append((key, fwd))
+        out = {}
+        for sim, items in groups.values():
+            for (key, _), run in zip(items, self._simulation(sim, [f for _, f in items])):
+                out[key] = run
+        return out
 
 
 def _solved(base: _Run, effect, target: float) -> float:
@@ -213,6 +218,26 @@ def _solved(base: _Run, effect, target: float) -> float:
     return (target - b0 - e0) / slope
 
 
+def _settled(inputs: CostInputs, lines: _Lines, base_requests: dict, target, sets_solving: bool) -> tuple[dict, dict]:
+    """Run the base, the single bumps and the two sides of each conflict, then keep the side against the desk. Returns ({key: value used},
+    {key: run of that bump alone, "base": run})."""
+    values = dict(inputs.active)
+    requests = {"base": {}, **{k: {k: v} for k, v in values.items()}}
+    for k, (a, b) in inputs.candidates.items():
+        requests[f"{k}:a"], requests[f"{k}:b"] = {k: a}, {k: b}
+    runs = lines.run(requests)
+    base = runs.pop("base")
+    x = None
+    if sets_solving:
+        b0, b1 = base.price(0.0), base.price(1.0)
+        x = (target - b0) / (b1 - b0)
+    for k, (a, b) in inputs.candidates.items():
+        ra, rb = runs.pop(f"{k}:a"), runs.pop(f"{k}:b")
+        keep_a = inputs.sign * ra.price(x) >= inputs.sign * rb.price(x)
+        values[k], runs[k] = (a, ra) if keep_a else (b, rb)
+    return values, {"base": base, **runs}
+
+
 def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target: float | None, coupon_param: str | None, coupon_scale: float,
                fixings=None, workers=None, fast=False) -> tuple[DeskPrice, _Run, float | None, float | None]:
     """The lines of one product. With a `target`, the coupon is solved so that the client price is the target. Returns (the desk price,
@@ -220,8 +245,11 @@ def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target:
     t0 = time.perf_counter()
     solving = target is not None
     sets = [{coupon_param: 0.0}, {coupon_param: 1.0}] if solving else [{}]
-    lines = _Lines(product, ctx, fmt, decision, profile, sets, inputs, fixings, workers, fast)
-    base, single, everything = lines.run()
+    lines = _Lines(product, ctx, fmt, decision, profile, sets, fixings, workers, fast)
+    values, runs = _settled(inputs, lines, {}, target, solving)
+    base = runs.pop("base")
+    single = runs
+    everything = lines.run({"all": values})["all"] if len(values) > 1 else None
     moved = everything if everything is not None else next(iter(single.values()), None)
 
     def effect(x):
@@ -231,13 +259,11 @@ def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target:
     at_base = base.at(x)
     base_pairs = _pct_pairs(at_base)
     s = inputs.sign
-    scale = coupon_scale if solving else 0.0
-    slope_rate = (base.price(1.0) - base.price(0.0)) * scale if solving else 0.0
+    slope_rate = (base.price(1.0) - base.price(0.0)) * coupon_scale if solving else 0.0
 
     def line(key, label, kind, pairs, price_effect, **kw):
-        _, se = _mean_se(pairs, price_effect)
         bp = -1e4 * price_effect / slope_rate if solving else None
-        return CostLine(key, label, kind, s * price_effect, se, bp, **kw)
+        return CostLine(key, label, kind, s * price_effect, _se(pairs), bp, **kw)
 
     out, total_single = [], 0.0
     for key, label in BUMPS.items():
@@ -248,8 +274,13 @@ def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target:
         d = float(pairs.mean()) if pairs is not None else r.price - at_base.price
         total_single += d
         default = inputs.defaults.get(key)
-        used = inputs.active[key]
-        out.append(line(key, label, "bump", pairs, d, used=used, default=default, overridden=default is not None and default != used))
+        used = values[key]
+        note = ""
+        if key in inputs.candidates:
+            a, b = inputs.candidates[key]
+            note = f"the groups disagree ({a:+.4f}, {b:+.4f}): the one against the desk on this product"
+        out.append(line(key, label, "bump", pairs, d, used=used, default=default,
+                        overridden=default is not None and key not in inputs.candidates and default != used, note=note))
     final_pairs = base_pairs
     if moved is not None:
         r = moved.at(x)
@@ -260,10 +291,8 @@ def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target:
             singles = None if pairs is None else sum(_pct_pairs(single[k].at(x)) - base_pairs for k in single)
             out.append(line("interaction", "Interaction of the bumps", "interaction", None if pairs is None else pairs - singles, d))
     final_price = at_base.price + effect(x)
-    _, final_se = _mean_se(final_pairs, final_price)
-    warnings = []
-    if "vol" in inputs.active or "skew" in inputs.active:
-        warnings += _arbitrage_warnings(ctx.surface, inputs, lines.horizon)
+    final_se = _se(final_pairs)
+    warnings = _arbitrage_warnings(ctx, values, lines.horizon, lines.names) if "vol" in values or "skew" in values else []
     rate_se = None
     if solving:
         slope_x = (base.price(1.0) + effect(1.0)) - (base.price(0.0) + effect(0.0))
@@ -274,13 +303,19 @@ def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target:
     return desk, base, x, rate_se
 
 
-def _arbitrage_warnings(surface, inputs: CostInputs, horizon: float) -> list:
+def _arbitrage_warnings(ctx, values: dict, horizon: float, names) -> list:
     """A bump must not add arbitrage: what the unbumped surface already holds is not the bump's doing."""
-    bumped = BumpedSurface(surface, inputs.active.get("vol", 0.0), inputs.active.get("skew", 0.0))
-    got, base = surface_arbitrage(bumped, horizon), surface_arbitrage(surface, horizon)
     out = []
-    if not got["butterfly_free"] and got["min_g"] < min(base["min_g"], 0.0) - 1e-6:
-        out.append(f"the bumped surface has butterfly arbitrage (density g down to {got['min_g']:.3f}): reduce the vol or skew bump")
-    if not got["calendar_free"] and got["min_wT"] < min(base["min_wT"], 0.0) - 1e-6:
-        out.append(f"the bumped surface has calendar arbitrage (dw/dT down to {got['min_wT']:.4f}): reduce the vol or skew bump")
+    surfaces = {n: ctx.vols[n] for n in names} if isinstance(ctx, BasketContext) else {names[0]: ctx.surface}
+    for name, surface in surfaces.items():
+        if np.isscalar(surface):
+            if values.get("skew"):
+                out.append(f"{name} has a flat volatility: the skew bump does not reach it")
+            continue
+        bumped = BumpedSurface(surface, values.get("vol", 0.0), values.get("skew", 0.0))
+        got, base = surface_arbitrage(bumped, horizon), surface_arbitrage(surface, horizon)
+        if not got["butterfly_free"] and got["min_g"] < min(base["min_g"], 0.0) - 1e-6:
+            out.append(f"{name}: the bumped surface has butterfly arbitrage (density g down to {got['min_g']:.3f}): reduce the vol or skew bump")
+        if not got["calendar_free"] and got["min_wT"] < min(base["min_wT"], 0.0) - 1e-6:
+            out.append(f"{name}: the bumped surface has calendar arbitrage (dw/dT down to {got['min_wT']:.4f}): reduce the vol or skew bump")
     return out

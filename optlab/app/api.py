@@ -25,6 +25,7 @@ from ..marketdata.names import NameMarkets
 from ..structured import PRESETS, MASKS, PricingContext, TermSheet, TermSheetError, describe, preset, quote
 from ..structured.compiler import compile_sheet
 from ..structured.context import DEFAULT_CALIBRATION
+from ..structured.defaults import STARTING, merged, parameters, resolve, validate_table
 from ..structured.lifecycle import events
 from ..structured.multiasset import BasketContext
 from ..structured.portfolio import Book
@@ -517,15 +518,40 @@ class Desk:
                 except ApiError as again:
                     field = again.field
         shown = describe(mask, near) if near is not None else describe(mask)
+        costs = resolve(self.repo.defaults(), near).as_json() if near is not None else None
         bounds = {}
         for s in MASKS[mask].sections:
             for f in SECTIONS[s].fields:
                 bounds[f"{s}.{f.name}"] = {"min": f.minimum, "max": f.maximum, "default": f.default}
         return clean({"type": mask, "sheet": sheet.to_dict(json_safe=True) if sheet else None, "form": shown,
-                      "bounds": bounds, "error": error})
+                      "bounds": bounds, "error": error, "costs": costs})
 
     def schema(self) -> dict:
         return json_schema()
+
+    # --- defaults of the hedging costs ---
+    def cost_defaults(self) -> dict:
+        """The table in use, what is still a starting value, the fields of the form and the saved versions."""
+        stored = self.repo.defaults()
+        return clean({"groups": merged(stored), "starting": STARTING, "version": stored["version"] if stored else None,
+                      "recorded_at": stored["recorded_at"] if stored else None, "versions": self.repo.default_versions(),
+                      "fields": [{"name": f.name, "label": f.label, "unit": f.unit, "kind": f.kind, "min": f.minimum, "max": f.maximum}
+                                 for f in parameters()]})
+
+    def put_cost_defaults(self, body: dict) -> dict:
+        try:
+            groups = validate_table(body.get("groups") or {})
+        except (TypeError, KeyError, ValueError) as exc:
+            raise ApiError(str(exc), 422)
+        self.repo.save_defaults(groups)
+        return self.cost_defaults()
+
+    def _cost_inputs(self, sheet: TermSheet):
+        """The costs of a sheet, or an error naming what the trader must enter (above the last tier, or a name without a group)."""
+        got = resolve(self.repo.defaults(), sheet)
+        if got.missing:
+            raise ApiError(" ".join(got.alerts) + f" Missing: {', '.join(got.missing)}.", 422, f"costs.{got.missing[0]}")
+        return got.inputs()
 
     # --- quotes ---
     def _options(self, opts: dict) -> dict:
@@ -535,16 +561,16 @@ class Desk:
                 "with_greeks": bool(opts.get("greeks", False)), "fast": bool(opts.get("fast", False)),
                 "slv_vega": bool(opts.get("slv_vega", False)),
                 "control_forwards": bool(opts.get("control_forwards", False)),
-                "model": opts.get("model") or None, "sticky": opts.get("sticky", "moneyness"),
+                "model": opts.get("model") or None, "sticky": opts.get("sticky", "moneyness"), "costs": bool(opts.get("costs", True)),
                 "mix_band": (0.0, 0.25, 0.5, 0.75) if opts.get("mix_band") else None,
                 "control_paths": min(int(opts.get("n_paths") or n_paths), 100_000)}
 
-    def _quote(self, sheet: TermSheet, ctx: PricingContext, o: dict, fixings):
+    def _quote(self, sheet: TermSheet, ctx: PricingContext, o: dict, fixings, costs=None):
         qctx, basket = self._context_for(sheet, ctx)
         q = quote(sheet, qctx, model=o["model"], control=o["control"], n_paths=o["n_paths"], batch=o["batch"],
                   control_paths=o["control_paths"], fixings=fixings, with_greeks=o["with_greeks"],
                   slv_vega=o["slv_vega"], workers=self.workers, control_forwards=o["control_forwards"],
-                  fast=o["fast"], sticky=o["sticky"], mix_band=None if isinstance(qctx, BasketContext) else o["mix_band"])
+                  fast=o["fast"], sticky=o["sticky"], mix_band=None if isinstance(qctx, BasketContext) else o["mix_band"], costs=costs)
         return q, basket
 
     def quote(self, body: dict) -> dict:
@@ -552,9 +578,10 @@ class Desk:
         ctx = self.ctx
         fixings = self._fixings_for(sheet, ctx)
         o = self._options(body.get("options") or {})
+        costs = self._cost_inputs(sheet) if o["costs"] else None
 
         def run():
-            q, basket = self._quote(sheet, ctx, o, fixings)
+            q, basket = self._quote(sheet, ctx, o, fixings, costs)
             out = quote_json(q)
             out["sheet"] = sheet.to_dict(json_safe=True)
             out["options"] = clean(o)

@@ -50,7 +50,7 @@ def body(name="phoenix", **general):
 
 
 def options(**kw):
-    return {"precision": "quick", "n_paths": PATHS, "greeks": False, "control": False, **kw}
+    return {"precision": "quick", "n_paths": PATHS, "greeks": False, "control": False, "costs": False, **kw}
 
 
 def test_a_sheet_on_another_name_is_priced_on_that_names_market(desk):
