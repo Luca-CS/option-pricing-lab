@@ -13,7 +13,7 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 
-from ..lake import Lake, new_run_id
+from ..lake import Lake, new_run_id, sql_str
 
 # Assumed dividend yields of indices with neither chains nor a total-return index (origin = synthetic).
 SYNTHETIC_YIELD = {"NDX": 0.008, "SX5E": 0.03}
@@ -116,7 +116,7 @@ def build_carry(lake: Lake, instruments) -> list[dict]:
 
 def dividend_yield_at(lake: Lake, name: str, day: dt.date, as_of=None) -> tuple[float, str, str]:
     """(yield, origin, method): the latest estimate at or before `day` in carry_implied, tenor 1 year."""
-    rows = lake.read("carry_implied", where=f"underlying = '{name}' AND tenor = 1.0 AND obs_date <= DATE '{day}' "
+    rows = lake.read("carry_implied", where=f"underlying = {sql_str(name)} AND tenor = 1.0 AND obs_date <= DATE '{day}' "
                      "AND method <> 'parity'", order="obs_date DESC LIMIT 1", as_of=as_of)
     if rows.empty:
         return SYNTHETIC_YIELD.get(name, 0.02), "synthetic", "assumed_yield"

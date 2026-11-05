@@ -11,7 +11,7 @@ import pandas as pd
 from ..data import clean_chain
 from ..market import Market
 from .derive.curves import CURVE_OF_CURRENCY
-from .lake import Lake
+from .lake import Lake, sql_str
 from .sources.archives import snapshot_time
 from .universe import _BY_ID
 
@@ -31,9 +31,9 @@ def discount_function(lake: Lake, currency: str, day: dt.date, as_of=None):
 
 def chain_rows(lake: Lake, underlying: str, day, source: str | None = None) -> pd.DataFrame:
     day = pd.Timestamp(day).date()
-    where = f"underlying = '{underlying}' AND obs_date = DATE '{day}'"
+    where = f"underlying = {sql_str(underlying)} AND obs_date = DATE '{day}'"
     if source:
-        where += f" AND source = '{source}'"
+        where += f" AND source = {sql_str(source)}"
     return lake.read("option_quotes", where=where)
 
 
@@ -75,7 +75,7 @@ def clean_day(lake: Lake, underlying: str, day, source: str | None = None, spot:
         if len(closes):
             spot = float(closes.iloc[0])
         else:
-            px = lake.read("prices_eod", where=f"instrument = '{underlying}' AND obs_date = DATE '{day}'", columns="close")
+            px = lake.read("prices_eod", where=f"instrument = {sql_str(underlying)} AND obs_date = DATE '{day}'", columns="close")
             if px.empty:
                 raise KeyError(f"no close of {underlying} on {day}: give the spot")
             spot = float(px["close"].iloc[0])
@@ -87,7 +87,7 @@ def clean_day(lake: Lake, underlying: str, day, source: str | None = None, spot:
 
 def quote_days(lake: Lake, underlying: str, source: str | None = None) -> list:
     """The dates with quotes of a name, oldest first."""
-    where = f"underlying = '{underlying}'" + (f" AND source = '{source}'" if source else "")
+    where = f"underlying = {sql_str(underlying)}" + (f" AND source = {sql_str(source)}" if source else "")
     con = lake.connect()
     try:
         rows = con.execute(f"SELECT DISTINCT obs_date FROM read_parquet('{lake._pattern('option_quotes')}', hive_partitioning"

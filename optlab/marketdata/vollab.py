@@ -25,7 +25,7 @@ from ..pipeline import _thin, _weights
 from ..slv import calibrate_leverage
 from ..svi import fit_svi_surface, svi_arbitrage_report
 from ..validation import mc_smile
-from .lake import Lake, new_run_id
+from .lake import Lake, new_run_id, sql_str
 from .quotes import CleanDay, clean_day
 
 MODELS = ("svi", "ssvi", "heston", "slv")
@@ -196,7 +196,7 @@ def run_fit(lake: Lake, name: str, day, source: str | None = None, models=MODELS
 def list_runs(lake: Lake, underlying: str | None = None, limit: int = 200) -> list[dict]:
     if not lake.has("calibration_runs"):
         return []
-    where = f"underlying = '{underlying}'" if underlying else ""
+    where = f"underlying = {sql_str(underlying)}" if underlying else ""
     rows = lake.read("calibration_runs", where=where, order="ingested_at DESC", columns="*")
     out = []
     for r in rows.head(limit).itertuples():
@@ -210,7 +210,7 @@ def list_runs(lake: Lake, underlying: str | None = None, limit: int = 200) -> li
 
 def reproduce(lake: Lake, calibration_id: str) -> dict:
     """Refit a run from its stored inputs and compare the parameters with the stored ones."""
-    rows = lake.read("calibration_runs", where=f"calibration_id = '{calibration_id}'")
+    rows = lake.read("calibration_runs", where=f"calibration_id = {sql_str(calibration_id)}")
     if rows.empty:
         raise KeyError(f"no calibration run {calibration_id!r}")
     r = rows.iloc[0]

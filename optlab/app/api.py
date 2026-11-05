@@ -101,6 +101,7 @@ class Desk:
     # --- status and market ---
     def health(self) -> dict:
         return {"ok": True, "snapshot_id": self.ctx.snapshot_id, "valuation": self.ctx.valuation.isoformat(),
+                "origin": self._origin(self.ctx.snapshot_id),
                 "workers": self.workers, "jobs": self.jobs.running(), "store": str(self.repo.path),
                 "started": self.started.isoformat(timespec="seconds"), "public_url": self.public_url,
                 "lan_blockers": self.lan_blockers}
@@ -249,6 +250,7 @@ class Desk:
         from ..marketdata.vollab import quote_table
         self._private("Option quotes")
         try:
+            dt.date.fromisoformat(day)
             return clean(quote_table(self.lake, name, day, source))
         except (KeyError, ValueError) as exc:
             raise ApiError(str(exc).strip("'\""), 404)
@@ -256,6 +258,10 @@ class Desk:
     def lab_fit(self, body: dict) -> dict:
         from ..marketdata.vollab import MODELS, public_summary, run_fit
         name, day, source = str(body.get("underlying", "SPX")), str(body.get("day", "")), body.get("source")
+        try:
+            dt.date.fromisoformat(day)
+        except ValueError:
+            raise ApiError("a day such as 2022-09-15 is needed", 422, "day")
         models = tuple(m for m in (body.get("models") or MODELS) if m in MODELS)
         if not models:
             raise ApiError("choose at least one model", 422)

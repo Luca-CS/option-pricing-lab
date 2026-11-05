@@ -84,6 +84,7 @@ def test_market_at_a_past_date_becomes_a_snapshot_the_desk_can_use(desk):
 
 def test_the_calibrated_market_says_it_is_a_fit_on_observed_quotes(desk):
     assert desk.context()["origin"]["surface"] == "observed"
+    assert desk.health()["origin"]["surface"] == "observed"
 
 
 def test_lab_lists_fits_and_replays_runs(desk):

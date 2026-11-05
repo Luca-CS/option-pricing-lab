@@ -156,3 +156,10 @@ def test_a_calibrated_leverage_comes_with_the_snapshot_and_reprices(world):
     q = quote(preset("barrier_reverse_convertible", **{"general.maturity_months": 6, "general.strike_date": DAY}), ctx, model="slv",
               control=None, n_paths=4000, batch=4000)
     assert q.coupon_rate > 0
+
+
+def test_a_replay_can_stay_on_one_surface_layer(world):
+    root, lake, days, paths = world
+    assert market_at(lake, "SPX", DAY, layer="reconstructed").provenance["surface"]["layer"] == "reconstructed"
+    with pytest.raises(KeyError, match="no observed surface"):
+        market_at(lake, "SPX", DAY, layer="observed")

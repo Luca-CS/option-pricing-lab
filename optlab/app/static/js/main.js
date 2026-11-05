@@ -68,7 +68,8 @@ async function refreshStatus() {
     if (!desk.context) desk.context = await api("/api/context");
     dot.className = "dot ok";
     const jobs = health.jobs.length ? ` · ${health.jobs.length} job${health.jobs.length > 1 ? "s" : ""} running` : "";
-    text.textContent = `Market ${health.snapshot_id} · valuation ${health.valuation}` +
+    const origin = health.origin && health.origin.surface ? ` · surface ${health.origin.surface}` : "";
+    text.textContent = `Market ${health.snapshot_id} · valuation ${health.valuation}${origin}` +
       `${health.workers ? ` · ${health.workers} workers` : ""}${jobs}`;
   } catch (e) {
     dot.className = "dot bad";

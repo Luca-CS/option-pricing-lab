@@ -23,7 +23,7 @@ from ..models import Leverage
 from .derive.carry import dividend_yield_at
 from .derive.correl import correlation_at
 from .derive.surfaces import surface_at
-from .lake import TABLES, Lake
+from .lake import TABLES, Lake, sql_str
 from .quotes import discount_function
 from .snapshot import MarketSnapshot
 from .universe import instrument
@@ -37,7 +37,7 @@ PRIOR_DYNAMICS = {"kappa": 3.09, "xi": 1.31, "rho": -0.69}  # of the versioned S
 def real_close(lake: Lake, name: str, day, as_of=None, max_age_days: int = 5) -> tuple[float, dt.date]:
     """The last close at or before `day`, not older than `max_age_days`: (level, its date)."""
     day = pd.Timestamp(day).date()
-    rows = lake.read("prices_eod", where=f"instrument = '{name}' AND obs_date <= DATE '{day}' AND obs_date >= DATE '{day}'"
+    rows = lake.read("prices_eod", where=f"instrument = {sql_str(name)} AND obs_date <= DATE '{day}' AND obs_date >= DATE '{day}'"
                      f" - INTERVAL {max_age_days} DAY", columns="obs_date, close", order="obs_date DESC LIMIT 1", as_of=as_of)
     if rows.empty:
         raise KeyError(f"no close of {name} in the {max_age_days} days up to {day}")
@@ -47,7 +47,7 @@ def real_close(lake: Lake, name: str, day, as_of=None, max_age_days: int = 5) ->
 def real_fixings(lake: Lake, name: str, start, end, as_of=None) -> dict:
     """{iso date: real close} of a name between two dates."""
     s, e = pd.Timestamp(start).date(), pd.Timestamp(end).date()
-    rows = lake.read("prices_eod", where=f"instrument = '{name}' AND obs_date >= DATE '{s}' AND obs_date <= DATE '{e}'",
+    rows = lake.read("prices_eod", where=f"instrument = {sql_str(name)} AND obs_date >= DATE '{s}' AND obs_date <= DATE '{e}'",
                      columns="obs_date, close", order="obs_date", as_of=as_of)
     return {pd.Timestamp(d).date().isoformat(): float(v) for d, v in zip(rows["obs_date"], rows["close"])}
 
@@ -95,12 +95,13 @@ def fitted_heston(surface, market: Market, x0: dict | None = None) -> dict:
 
 
 def market_at(lake: Lake, name: str, day, as_of=None, heston: str = "prior", leverage: str = "flat", T_max: float = 2.0,
-              n_particles: int = 100_000, seed: int = 2026, mix: float = MIX) -> MarketSnapshot:
+              n_particles: int = 100_000, seed: int = 2026, mix: float = MIX, layer: str | None = None) -> MarketSnapshot:
     """The market of a name at a date. `heston`: prior (dynamics fixed, levels from the surface) or fit. `leverage`: flat
-    (for local vol and replication), or calibrate (particles, up to T_max, several seconds)."""
+    (for local vol and replication), or calibrate (particles, up to T_max, several seconds). `layer` forces a surface layer
+    instead of the best one of the day."""
     day = pd.Timestamp(day).date()
     market, spot, prov = market_curves(lake, name, day, as_of)
-    got = surface_at(lake, name, day, as_of)
+    got = surface_at(lake, name, day, as_of, layer=layer)
     h = quick_heston(got.surface) if heston == "prior" else fitted_heston(got.surface, market)
     if leverage == "calibrate":
         from ..heston import HestonParams
@@ -125,11 +126,11 @@ def context_at(lake: Lake, name: str, day, as_of=None, **kw):
     return PricingContext.from_snapshot(snap), snap
 
 
-def basket_at(lake: Lake, names, day, as_of=None, window: int = 120, implied: bool = True):
+def basket_at(lake: Lake, names, day, as_of=None, window: int = 120, implied: bool = True, layer: str | None = None):
     """(BasketContext, {name: snapshot}, correlation meta): each name on its own surface, correlation known at `day`."""
     from ..structured.context import PricingContext
     from ..structured.multiasset import BasketContext
-    snaps = {n: market_at(lake, n, day, as_of) for n in names}
+    snaps = {n: market_at(lake, n, day, as_of, layer=layer) for n in names}
     corr, meta = correlation_at(lake, names, day, window, implied, as_of)
     ctxs = {n: PricingContext.from_snapshot(s) for n, s in snaps.items()}
     ctx = BasketContext(tuple(names), {n: c.market for n, c in ctxs.items()}, {n: c.surface for n, c in ctxs.items()}, corr,

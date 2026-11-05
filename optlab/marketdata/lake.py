@@ -82,6 +82,11 @@ TABLES = {
 }
 
 
+def sql_str(value) -> str:
+    """A SQL string literal. Names reach the lake's queries from the desk's API: they are data, never SQL."""
+    return "'" + str(value).replace("'", "''") + "'"
+
+
 def _utcnow() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
 

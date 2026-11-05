@@ -28,7 +28,7 @@ from scipy.special import ndtr
 from ...log import get_logger
 from ...pipeline import _weights
 from ...svi import SVISurface, fit_svi_surface, ssvi_slice_to_svi, svi_arbitrage_report
-from ..lake import Lake, new_run_id
+from ..lake import Lake, new_run_id, sql_str
 from ..quotes import clean_day
 from ..universe import instrument
 
@@ -299,14 +299,18 @@ class SurfaceAt:
 LAYER_ORDER = ("observed", "reconstructed", "synthetic")
 
 
-def surface_at(lake: Lake, name: str, day, as_of=None, max_age_days: int = 5, min_t_max: float = 1.0) -> SurfaceAt:
+def surface_at(lake: Lake, name: str, day, as_of=None, max_age_days: int = 5, min_t_max: float = 1.0,
+               layer: str | None = None) -> SurfaceAt:
     """The best surface of a name at a date: an observed fit of that very day when it reaches `min_t_max`, else the
-    latest reconstruction not older than `max_age_days`. Never a later date."""
+    latest reconstruction not older than `max_age_days`. Never a later date. `layer` asks for one layer only: a replay
+    stays on one, since switching between layers would show up as P&L."""
     day = pd.Timestamp(day).date()
-    rows = lake.read("vol_surfaces", where=f"underlying = '{name}' AND obs_date <= DATE '{day}' AND obs_date >= DATE '{day}'"
+    rows = lake.read("vol_surfaces", where=f"underlying = {sql_str(name)} AND obs_date <= DATE '{day}' AND obs_date >= DATE '{day}'"
                      f" - INTERVAL {max_age_days} DAY", as_of=as_of, order="obs_date DESC")
+    if layer:
+        rows = rows[rows["layer"] == layer]
     if rows.empty:
-        raise KeyError(f"no surface of {name} around {day}")
+        raise KeyError(f"no {layer or 'usable'} surface of {name} around {day}")
     observed = rows[(rows["layer"] == "observed") & (pd.to_datetime(rows["obs_date"]).dt.date == day)
                     & (rows["t_max_observed"] >= min_t_max)]
     r = observed.iloc[0] if len(observed) else None

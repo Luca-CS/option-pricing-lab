@@ -26,7 +26,7 @@ from ..structured.portfolio import Book
 from ..structured.quote import quote
 from ..structured.schema import TermSheet
 from ..structured.trade import Trade
-from .lake import Lake
+from .lake import Lake, sql_str
 from .pit import basket_at, context_at, real_fixings
 from .snapshot import to_model_scale
 from .universe import PLACE_CALENDAR, instrument
@@ -48,6 +48,7 @@ class ReplayConfig:
     h_vol: float = 0.01
     fast: bool = True
     as_of: object = None
+    surface_layer: str | None = "reconstructed"  # one layer over a life: a switch of layer is not market P&L
 
 
 def place_calendar(names) -> str:
@@ -63,14 +64,14 @@ def struck_sheet(sheet: TermSheet, strike: dt.date) -> TermSheet:
 def market_for(lake: Lake, names, day, cfg: ReplayConfig, previous=None, T_max: float = 2.0, recalibrate: bool = True):
     """(context, {name: spot scale}, provenance by name). Under SLV the leverage comes from the last recalibration."""
     if len(names) > 1:
-        ctx, snaps, _ = basket_at(lake, list(names), day, cfg.as_of)
+        ctx, snaps, _ = basket_at(lake, list(names), day, cfg.as_of, layer=cfg.surface_layer)
         return ctx, {n: s.spot_scale for n, s in snaps.items()}, {n: s.provenance for n, s in snaps.items()}
     name = names[0]
     if cfg.model == "slv" and recalibrate:
         ctx, snap = context_at(lake, name, day, cfg.as_of, leverage="calibrate", T_max=T_max, n_particles=cfg.n_particles,
-                               seed=cfg.seed)
+                               seed=cfg.seed, layer=cfg.surface_layer)
     else:
-        ctx, snap = context_at(lake, name, day, cfg.as_of)
+        ctx, snap = context_at(lake, name, day, cfg.as_of, layer=cfg.surface_layer)
         if cfg.model == "slv" and previous is not None:
             ctx = dataclasses.replace(ctx, slv=previous.slv, heston=previous.heston)
     return ctx, {name: snap.spot_scale}, {name: snap.provenance}
@@ -220,7 +221,7 @@ def replay(lake: Lake, trade: Trade, end=None, cfg: ReplayConfig = ReplayConfig(
     names = sheet.underlyings
     calendar = sheet.get("general.calendar")
     strike = trade.strike_date
-    last_data = pd.Timestamp(lake.read("prices_eod", where=f"instrument = '{names[0]}'", columns="max(obs_date) AS d")["d"].iloc[0]).date()
+    last_data = pd.Timestamp(lake.read("prices_eod", where=f"instrument = {sql_str(names[0])}", columns="max(obs_date) AS d")["d"].iloc[0]).date()
     end = min(pd.Timestamp(end).date() if end is not None else last_data, last_data)
     fixings_all, filled = filled_fixings(lake, names, strike, end, calendar, cfg.as_of)
     known = {n: {d: v for d, v in fixings_all[n].items() if d <= end.isoformat()} for n in names}

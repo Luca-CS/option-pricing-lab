@@ -4,7 +4,7 @@
 import { api } from "../api.js";
 import { legend, lineChart } from "../charts.js";
 import { desk } from "../state.js";
-import { clear, dateLabel, dialog, errorNotice, h, num, pretty, toast } from "../ui.js";
+import { clear, dateLabel, dialog, errorNotice, h, num, originBadge, pretty, toast } from "../ui.js";
 
 export async function render(page) {
   clear(page, h("div", { class: "page-head" }, h("div", {}, h("h1", {}, "Market"))), h("div", { class: "skeleton", style: { height: "240px" } }));
@@ -111,7 +111,9 @@ export async function render(page) {
   const models = Object.keys(Object.values(risk.exotics)[0] || {});
   clear(page,
     h("div", { class: "page-head" }, h("div", {}, h("h1", {}, "Market"),
-      h("p", {}, `Snapshot ${ctx.snapshot_id} · valuation ${dateLabel(ctx.valuation)}${risk.note ? ` · ${risk.note}` : ""}`))),
+      h("p", {}, `Snapshot ${ctx.snapshot_id} · valuation ${dateLabel(ctx.valuation)}${risk.note ? ` · ${risk.note}` : ""} · surface `,
+        originBadge(ctx.origin && ctx.origin.surface),
+        ctx.origin && ctx.origin.extrapolated_from ? ` · term structure assumed beyond ${num(ctx.origin.extrapolated_from, 2)} y` : ""))),
     h("div", { class: "stack" },
       h("div", { class: "card" },
         h("div", { class: "card-head" }, h("h2", {}, "Market snapshots"),

@@ -46,7 +46,13 @@ export async function render(page) {
           desk.context = await api("/api/market/use", { method: "POST", body: { snapshot_id: r.snapshot_id } });
           window.dispatchEvent(new Event("optlab:jobs"));
           toast(`Now pricing on ${r.snapshot_id}`);
-        } }, "Price on this market")));
+        } }, "Price on this market"),
+        h("button", { class: "btn", type: "button", onclick: async () => {
+          try {
+            const f = await api("/api/data/fixings", { method: "POST", body: { underlying: r.underlying } });
+            toast(`${int(f.stored)} real closes stored as fixings of ${r.underlying}, ${f.first} to ${f.last}, in the active market's scale`);
+          } catch (e) { toast(e.message); }
+        } }, "Load the closes as fixings")));
     } catch (e) { clear(resultCard, errorNotice(e)); }
   };
 

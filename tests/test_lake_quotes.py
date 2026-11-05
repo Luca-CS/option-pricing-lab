@@ -207,3 +207,11 @@ def test_a_yahoo_snapshot_outside_market_hours_is_flagged(tmp_path):
     assert out[0]["two_sided"] == 0.0
     assert set(lake.read("option_quotes")["quality"]) == {"suspect"}
     assert lake.read("quality_issues")["check_name"].tolist() == ["market_closed"]
+
+
+def test_names_reaching_a_query_are_data_not_sql(lake):
+    from optlab.marketdata.quotes import chain_rows
+    lake.ingest("option_quotes", synthetic_rows()[:4], "archive", "observed")
+    assert len(chain_rows(lake, "SPX", DAY)) == 4
+    assert chain_rows(lake, "SPX' OR '1'='1", DAY).empty
+    assert chain_rows(lake, "SPX", DAY, "x' OR '1'='1").empty

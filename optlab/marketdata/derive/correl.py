@@ -22,7 +22,7 @@ import pandas as pd
 from scipy.optimize import brentq
 from scipy.special import ndtr
 
-from ..lake import Lake, new_run_id
+from ..lake import Lake, new_run_id, sql_str
 from ..universe import instrument
 
 WINDOWS = (60, 120, 250)
@@ -31,7 +31,7 @@ TENOR_WINDOW = {"COR1M": 21, "COR3M": 63, "COR6M": 126, "COR1Y": 252}
 
 
 def closes_wide(lake: Lake, names, day=None, as_of=None) -> pd.DataFrame:
-    quoted = ", ".join(f"'{n}'" for n in names)
+    quoted = ", ".join(sql_str(n) for n in names)
     where = f"instrument IN ({quoted})" + (f" AND obs_date <= DATE '{pd.Timestamp(day).date()}'" if day is not None else "")
     rows = lake.read("prices_eod", where=where, columns="instrument, obs_date, close", as_of=as_of)
     wide = rows.pivot_table(index="obs_date", columns="instrument", values="close").sort_index()
