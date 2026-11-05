@@ -113,6 +113,19 @@ def load_calendars(lake: Lake) -> list[dict]:
     return out
 
 
+def load_yahoo_chains(lake: Lake, names=("SPX", "NDX", "RUT", "AAPL"), tickers=None, download=yahoo.download_chain) -> list[dict]:
+    """One snapshot of the day's chains, on request only: Luca chose not to collect them every day."""
+    tickers = tickers or {"SPX": "^SPX", "NDX": "^NDX", "RUT": "^RUT"}
+    out = []
+    for name in names:
+        ticker = tickers.get(name, name)
+        raw_frame, spot, day = download(ticker)
+        raw = lake.store_raw("yahoo_chain", f"{name}_{day}.parquet", _parquet_bytes(raw_frame), f"yahoo:{ticker}")
+        rows = yahoo.parse_chain(raw_frame, name, day, spot)
+        out.append(lake.ingest("option_quotes", rows, "yahoo", "observed", raw_sha256=raw.sha256))
+    return out
+
+
 STEPS = {"universe": load_universe, "cboe": load_cboe, "stoxx": load_stoxx, "fred": load_fred,
          "treasury": load_treasury, "ecb": load_ecb, "yahoo": load_yahoo, "calendars": load_calendars}
 

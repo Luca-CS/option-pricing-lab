@@ -114,10 +114,10 @@ def build_carry(lake: Lake, instruments) -> list[dict]:
     return out
 
 
-def dividend_yield_at(lake: Lake, name: str, day: dt.date) -> tuple[float, str, str]:
+def dividend_yield_at(lake: Lake, name: str, day: dt.date, as_of=None) -> tuple[float, str, str]:
     """(yield, origin, method): the latest estimate at or before `day` in carry_implied, tenor 1 year."""
     rows = lake.read("carry_implied", where=f"underlying = '{name}' AND tenor = 1.0 AND obs_date <= DATE '{day}' "
-                     "AND method <> 'parity'", order="obs_date DESC LIMIT 1")
+                     "AND method <> 'parity'", order="obs_date DESC LIMIT 1", as_of=as_of)
     if rows.empty:
         return SYNTHETIC_YIELD.get(name, 0.02), "synthetic", "assumed_yield"
     r = rows.iloc[0]

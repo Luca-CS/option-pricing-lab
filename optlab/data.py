@@ -106,18 +106,27 @@ def forward_given_discount(calls, puts, spot, D, band=0.02):
 
 
 def build_iv_table(path: Path, max_rel_spread=0.5, k_sd_range=(-3.0, 2.5)):
-    """Return (market, slices, table) from a raw snapshot.
-
-    slices is a list of dicts (T, F, D, K, k, iv, spread_iv) ready for calibration; table is the
-    flat DataFrame of the retained quotes; market carries the parity-implied D(T) and F(T).
-    Strikes are kept when ln(K/F) lies within k_sd_range ATM standard deviations.
-    """
+    """Return (market, slices, table, meta) from a raw snapshot file: see clean_chain."""
     raw = pd.read_csv(path)
     snapshot = dt.datetime.fromisoformat(raw["snapshot"].iloc[0])
     spot = float(raw["spot"].iloc[0])
     raw["root"] = raw["contractSymbol"].str.extract(r"^([A-Z]+)\d")[0]
-    weekly = raw.groupby("expiry")["root"].transform(lambda r: (r == "SPXW").any())
-    raw = raw[(raw["root"] == "SPXW") | (~weekly & (raw["root"] == "SPX"))]
+    return clean_chain(raw, snapshot, spot, max_rel_spread, k_sd_range)
+
+
+def clean_chain(raw: pd.DataFrame, snapshot: dt.datetime, spot: float, max_rel_spread=0.5, k_sd_range=(-3.0, 2.5),
+                discount=None, min_strikes: int = 8):
+    """The cleaning shared by every source. raw: root, strike, bid, ask, type (call or put), expiry (ISO text).
+
+    slices is a list of dicts (T, F, D, K, k, iv, spread_iv) ready for calibration; table is the
+    flat DataFrame of the retained quotes; market carries D(T) and F(T); a name without SPX contracts keeps all of
+    its roots. Strikes are kept when ln(K/F) lies within k_sd_range ATM standard deviations. By default D(T) comes
+    from parity, smoothed into a zero curve; `discount` (T -> D(T)) takes it from a curve instead, which short-dated
+    chains need: they carry almost no information on rates.
+    """
+    if (raw["root"] == "SPXW").any() or (raw["root"] == "SPX").any():
+        weekly = raw.groupby("expiry")["root"].transform(lambda r: (r == "SPXW").any())
+        raw = raw[(raw["root"] == "SPXW") | (~weekly & (raw["root"] == "SPX"))]
     raw = raw[(raw["bid"] > 0) & (raw["ask"] > raw["bid"])].copy()
     raw["mid"] = 0.5 * (raw["bid"] + raw["ask"])
     raw = raw[(raw["ask"] - raw["bid"]) / raw["mid"] < max_rel_spread]
@@ -127,21 +136,32 @@ def build_iv_table(path: Path, max_rel_spread=0.5, k_sd_range=(-3.0, 2.5)):
     for expiry, grp in raw.groupby("expiry"):
         am = bool((grp["root"] == "SPX").all())
         T = _year_fraction(snapshot, expiry, am)
+        if T <= 0:
+            continue
         calls = grp[grp["type"] == "call"][["strike", "mid", "bid", "ask"]]
         puts = grp[grp["type"] == "put"][["strike", "mid", "bid", "ask"]]
+        if discount is not None:
+            if len(_near_atm_pairs(calls, puts, spot, 0.06)) >= 3:
+                groups.append((expiry, T, calls, puts, float(discount(T))))
+            continue
         fit = parity_forward(calls, puts, spot)
         if fit is not None:
             groups.append((expiry, T, calls, puts, fit[0]))
-    Ts = np.array([g[1] for g in groups])
-    zeros = np.array([-np.log(g[4]) / g[1] for g in groups])
-    use = (Ts > 2 / 12) & (zeros > -0.02) & (zeros < 0.15)
-    a, b = np.polyfit(Ts[use], zeros[use], 1, w=np.sqrt(Ts[use])) if use.sum() >= 3 else (0.0, np.median(zeros[use]))
-    zero_curve = {"slope": float(a), "intercept": float(b), "n_maturities": int(use.sum())}
+    if not groups:
+        raise ValueError(f"no maturity with enough two-sided quotes around {spot:g} on {snapshot.date()}")
+    if discount is None:
+        Ts = np.array([g[1] for g in groups])
+        zeros = np.array([-np.log(g[4]) / g[1] for g in groups])
+        use = (Ts > 2 / 12) & (zeros > -0.02) & (zeros < 0.15)
+        a, b = np.polyfit(Ts[use], zeros[use], 1, w=np.sqrt(Ts[use])) if use.sum() >= 3 else (0.0, np.median(zeros[use]))
+        zero_curve = {"slope": float(a), "intercept": float(b), "n_maturities": int(use.sum())}
+    else:
+        zero_curve = {"given": True}
 
     # pass 2: forwards with the smoothed discount factors, then implied vols
     pillars, slices, tables = [], [], []
-    for expiry, T, calls, puts, _ in groups:
-        D = float(np.exp(-(a * T + b) * T))
+    for expiry, T, calls, puts, D_given in groups:
+        D = D_given if discount is not None else float(np.exp(-(a * T + b) * T))
         F = forward_given_discount(calls, puts, spot, D)
         otm = pd.concat([puts[puts["strike"] < F].assign(cp="put"), calls[calls["strike"] >= F].assign(cp="call")])
         otm = otm.sort_values("strike")
@@ -151,7 +171,7 @@ def build_iv_table(path: Path, max_rel_spread=0.5, k_sd_range=(-3.0, 2.5)):
         otm = otm.assign(iv=iv, iv_bid=iv_bid, iv_ask=iv_ask, k=np.log(otm["strike"] / F), T=T, F=F, D=D,
                          expiry=expiry)
         otm = otm.dropna(subset=["iv"])
-        if len(otm) < 8:
+        if len(otm) < min_strikes:
             continue
         atm = float(np.interp(0.0, otm["k"], otm["iv"]))
         sd = atm * np.sqrt(T)
@@ -162,9 +182,11 @@ def build_iv_table(path: Path, max_rel_spread=0.5, k_sd_range=(-3.0, 2.5)):
                        "iv": otm["iv"].to_numpy(),
                        "spread_iv": (otm["iv_ask"] - otm["iv_bid"]).to_numpy(), "expiry": expiry})
 
+    if not pillars:
+        raise ValueError(f"no maturity with {min_strikes} usable strikes on {snapshot.date()}")
     pillars = np.array(sorted(pillars))
     # spot consistent with the option quotes: intercept of ln F(T) on the three shortest pillars
-    implied_spot = float(np.exp(np.polyfit(pillars[:3, 0], np.log(pillars[:3, 2]), 1)[1]))
+    implied_spot = float(np.exp(np.polyfit(pillars[:3, 0], np.log(pillars[:3, 2]), 1)[1])) if len(pillars) >= 3 else spot
     market = Market(implied_spot, pillars[:, 0], pillars[:, 1], pillars[:, 2])
     table = pd.concat(tables, ignore_index=True)
     meta = {"snapshot": snapshot.isoformat(), "yahoo_spot": spot, "implied_spot": implied_spot,
