@@ -59,12 +59,51 @@ def check_vol_indices(vols: pd.DataFrame, today: dt.date) -> list[dict]:
     return issues
 
 
+def check_splits(prices: pd.DataFrame, actions: pd.DataFrame, max_jump: float = 0.25) -> list[dict]:
+    """Closes must be continuous across a split (Yahoo restates them): a return of about the split's size means an
+    unadjusted series, and products on it would be struck at the wrong level."""
+    issues = []
+    for a in actions[actions["kind"] == "split"].itertuples():
+        g = prices[prices["instrument"] == a.instrument].sort_values("obs_date")
+        days = pd.to_datetime(g["obs_date"])
+        after = days >= pd.Timestamp(a.obs_date)
+        if not after.any() or after.all():
+            continue
+        i = int(np.argmax(after.to_numpy()))
+        move = float(np.log(g["close"].iloc[i] / g["close"].iloc[i - 1]))
+        if abs(move) > max_jump:
+            issues.append(_issue("prices_eod", a.instrument, "split_not_adjusted", "error",
+                                 f"split {a.value:g} on {a.obs_date}: close moves {move:.1%}", a.obs_date))
+    return issues
+
+
+def check_calendar(lake: Lake) -> list[dict]:
+    """Weekdays where the rule calendar of a place and the traded days disagree. A traded day missing from Yahoo shows
+    here too: the fixings of that day have to be filled before a replay crosses it."""
+    from ..structured.calendars import CALENDARS
+    from .universe import PLACE_CALENDAR
+    issues = []
+    for place, name in PLACE_CALENDAR.items():
+        rows = lake.read("calendars", where=f"place = '{place}'", order="obs_date")
+        for r in rows.itertuples():
+            expected = CALENDARS[name].is_business_day(pd.Timestamp(r.obs_date).date())
+            if bool(r.is_open) != expected:
+                what = "traded on a holiday of the calendar" if r.is_open else "no price on an expected trading day"
+                issues.append(_issue("calendars", place, "calendar_mismatch", "warning", what, r.obs_date))
+    return issues
+
+
 def run_report(lake: Lake, today: dt.date | None = None, store: bool = True) -> pd.DataFrame:
     today = today or dt.date.today()
     issues = check_prices(lake.read("prices_eod", columns="instrument, obs_date, high, low, close"), today) \
         if lake.has("prices_eod") else []
     if lake.has("vol_indices"):
         issues += check_vol_indices(lake.read("vol_indices", columns="index_name, obs_date, close"), today)
+    if lake.has("corporate_actions") and lake.has("prices_eod"):
+        issues += check_splits(lake.read("prices_eod", columns="instrument, obs_date, close"),
+                               lake.read("corporate_actions"))
+    if lake.has("calendars"):
+        issues += check_calendar(lake)
     frame = pd.DataFrame(issues, columns=["dataset", "item", "check_name", "severity", "detail", "obs_date"])
     if store and len(frame):
         lake.ingest("quality_issues", frame, "quality", "derived", new_run_id("quality"))

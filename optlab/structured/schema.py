@@ -12,6 +12,8 @@ import datetime as dt
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..marketdata.universe import enabled_names
+
 
 @dataclass(frozen=True)
 class Field:
@@ -48,7 +50,7 @@ def _v(path: str, *values) -> tuple:
 SECTIONS = {s.name: s for s in [
     Section("general", "General", (
         Field("basket", "choice", "single", "Underlying type", choices=("single", "worst_of")),
-        Field("underlying", "choice", "SPX", "Underlying", choices=("SPX",),
+        Field("underlying", "choice", "SPX", "Underlying", choices=enabled_names(),
               visible_if=_v("general.basket", "single")),
         Field("underlyings", "names", ("SPX", "SX5E"), "Basket (worst-of)",
               visible_if=_v("general.basket", "worst_of")),
@@ -56,7 +58,7 @@ SECTIONS = {s.name: s for s in [
         Field("strike_date", "date", None, "Strike date (default: valuation date)"),
         Field("maturity_months", "int", 24, "Maturity", "months", minimum=1),
         Field("pay_lag", "int", 5, "Payment lag", "business days", minimum=0),
-        Field("calendar", "choice", "weekend", "Business-day calendar", choices=("weekend", "nyse")),
+        Field("calendar", "choice", "weekend", "Business-day calendar", choices=("weekend", "nyse", "eurex")),
         Field("convention", "choice", "modified_following", "Roll convention",
               choices=("modified_following", "following", "preceding", "unadjusted")),
     )),

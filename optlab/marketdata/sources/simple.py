@@ -64,8 +64,8 @@ FRED_RATES = {"DFF": ("USD.FF", 1 / 365), "SOFR": ("USD.SOFR", 1 / 365), "ECBEST
               "DGS10": ("USD.CMT10", 10.0), "DBAA": ("USD.BAA", 20.0), "DAAA": ("USD.AAA", 20.0)}
 
 
-def fred_url(series: str) -> str:
-    return f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}"
+def fred_url(series: str, start: str = "2015-01-01") -> str:
+    return f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}&cosd={start}"
 
 
 def parse_fred(content, series: str) -> pd.DataFrame:

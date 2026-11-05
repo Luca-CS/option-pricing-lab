@@ -6,11 +6,12 @@ lake (never versioned), and only calibrated parameters and charts may leave the 
 
 from __future__ import annotations
 
+import subprocess
 import time
 
 import requests
 
-USER_AGENT = "Mozilla/5.0 (compatible; optlab-data/0.1)"
+USER_AGENT = "optlab-data/0.1"
 
 
 def http_get(url: str, timeout: float = 90.0, retries: int = 3, headers: dict | None = None) -> bytes:
@@ -27,3 +28,16 @@ def http_get(url: str, timeout: float = 90.0, retries: int = 3, headers: dict | 
             last = exc
         time.sleep(2.0 * (attempt + 1))
     raise last
+
+
+def curl_get(url: str, timeout: float = 90.0, retries: int = 3) -> bytes:
+    """GET through the system's curl: FRED drops the connections of Python HTTP clients and answers curl at once."""
+    last = ""
+    for attempt in range(retries):
+        out = subprocess.run(["curl", "-sSL", "--fail", "-A", USER_AGENT, "-m", str(int(timeout)), url],
+                             capture_output=True, timeout=timeout + 10)
+        if out.returncode == 0:
+            return out.stdout
+        last = out.stderr.decode(errors="replace").strip()
+        time.sleep(3.0 * (attempt + 1))
+    raise ConnectionError(f"{url}: {last}")

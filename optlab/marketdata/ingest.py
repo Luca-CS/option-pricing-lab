@@ -8,13 +8,14 @@ from __future__ import annotations
 
 import datetime as dt
 import io
+import time
 
 import pandas as pd
 
 from ..log import get_logger
 from .lake import Lake, new_run_id
-from .sources import http_get, simple, yahoo
-from .universe import UNIVERSE, as_rows, enabled
+from .sources import curl_get, http_get, simple, yahoo
+from .universe import REFERENCE_INSTRUMENT, as_rows, enabled
 
 LOG = get_logger(__name__)
 START = "2015-01-01"  # the replay period starts in 2018; earlier history feeds rolling windows
@@ -40,11 +41,12 @@ def load_stoxx(lake: Lake, fetch=http_get) -> list[dict]:
     return [lake.ingest("vol_indices", rows, "stoxx", "observed", raw_sha256=raw.sha256)]
 
 
-def load_fred(lake: Lake, fetch=http_get) -> list[dict]:
+def load_fred(lake: Lake, fetch=curl_get, pause=lambda: time.sleep(3.0)) -> list[dict]:
     out = []
     for series, (curve, tenor) in simple.FRED_RATES.items():
-        url = simple.fred_url(series)
+        url = simple.fred_url(series, START)
         raw = lake.store_raw("fred", f"{series}.csv", fetch(url), url)
+        pause()  # FRED drops the connection on quick series of requests
         rows = simple.parse_fred(raw.content, series).rename(columns={"value": "rate"}).assign(curve=curve, tenor=tenor)
         rows = rows[pd.to_datetime(rows["obs_date"]) >= START]
         out.append(lake.ingest("rate_points", rows, "fred", "observed", raw_sha256=raw.sha256))
@@ -97,8 +99,22 @@ def load_universe(lake: Lake, as_of=None) -> dict:
     return lake.ingest("instruments", as_rows(as_of or dt.date(2018, 1, 1)), "registry", "observed")
 
 
+def load_calendars(lake: Lake) -> list[dict]:
+    """Per place, the weekdays traded by its reference instrument: open when a close exists, closed otherwise."""
+    out = []
+    for place, name in REFERENCE_INSTRUMENT.items():
+        days = lake.read("prices_eod", where=f"instrument = '{name}' AND source = 'yahoo'", columns="obs_date")["obs_date"]
+        if days.empty:
+            continue
+        days = pd.to_datetime(days)
+        weekdays = pd.bdate_range(days.min(), days.max())
+        rows = pd.DataFrame({"place": place, "obs_date": weekdays, "is_open": weekdays.isin(days)})
+        out.append(lake.ingest("calendars", rows, "derived_prices", "derived"))
+    return out
+
+
 STEPS = {"universe": load_universe, "cboe": load_cboe, "stoxx": load_stoxx, "fred": load_fred,
-         "treasury": load_treasury, "ecb": load_ecb, "yahoo": load_yahoo}
+         "treasury": load_treasury, "ecb": load_ecb, "yahoo": load_yahoo, "calendars": load_calendars}
 
 
 def update_all(lake: Lake, only=None, log=LOG.info) -> dict:
@@ -121,6 +137,3 @@ def update_all(lake: Lake, only=None, log=LOG.info) -> dict:
         log(f"{name}: {report[name]}")
     return report
 
-
-__all__ = ["update_all", "STEPS", "UNIVERSE", "load_cboe", "load_stoxx", "load_fred", "load_treasury", "load_ecb",
-           "load_yahoo", "load_universe"]

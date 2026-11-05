@@ -10,7 +10,7 @@ import pytest
 from optlab import config
 from optlab.marketdata.ingest import load_cboe, load_ecb, load_fred, load_stoxx, load_treasury, load_universe, update_all
 from optlab.marketdata.lake import Lake
-from optlab.marketdata.quality import check_prices, check_vol_indices, run_report
+from optlab.marketdata.quality import check_prices, check_splits, check_vol_indices, run_report
 from optlab.marketdata.sources import simple, yahoo
 
 
@@ -191,7 +191,7 @@ def fake_fetch(url, headers=None):
     if "stoxx" in url:
         return STOXX.encode()
     if "fred" in url:
-        series = url.rsplit("=", 1)[1]
+        series = url.split("id=")[1].split("&")[0]
         return FRED.replace("DGS10", series).encode()
     if "treasury" in url:
         return TREASURY.encode()
@@ -200,7 +200,7 @@ def fake_fetch(url, headers=None):
 
 def test_loads_are_idempotent_end_to_end(lake):
     def run():
-        out = load_cboe(lake, fake_fetch) + load_stoxx(lake, fake_fetch) + load_fred(lake, fake_fetch)
+        out = load_cboe(lake, fake_fetch) + load_stoxx(lake, fake_fetch) + load_fred(lake, fake_fetch, lambda: None)
         out += load_treasury(lake, fake_fetch, 2026, 2026) + load_ecb(lake, fake_fetch) + [load_universe(lake)]
         return out
     assert sum(r["n_new"] for r in run()) > 0
@@ -238,3 +238,34 @@ def test_the_quality_report_is_stored(lake):
     issues = run_report(lake, dt.date(2026, 1, 1))
     assert issues["check_name"].tolist() == ["stale"]
     assert lake.read("quality_issues")["item"].tolist() == ["VIX"]
+
+
+def test_split_check_passes_restated_closes_and_flags_raw_ones():
+    actions = pd.DataFrame({"instrument": ["X"], "kind": ["split"], "value": [20.0], "obs_date": ["2022-07-18"]})
+    days = ["2022-07-15", "2022-07-18", "2022-07-19"]
+    restated = pd.DataFrame({"instrument": "X", "obs_date": days, "close": [111.0, 113.0, 115.0]})
+    raw = pd.DataFrame({"instrument": "X", "obs_date": days, "close": [2220.0, 113.0, 115.0]})
+    assert check_splits(restated, actions) == []
+    assert [i["check_name"] for i in check_splits(raw, actions)] == ["split_not_adjusted"]
+
+
+def test_term_sheet_underlyings_come_from_the_registry_and_need_their_own_market():
+    from optlab.marketdata.universe import enabled_names, instrument
+    from optlab.structured import PricingContext, TermSheet, quote
+    from optlab.structured.schema import SECTIONS
+    field = next(f for f in SECTIONS["general"].fields if f.name == "underlying")
+    assert field.choices == enabled_names() and "NDX" in field.choices and "NVDA" not in field.choices
+    assert instrument("NVDA").enabled is False
+    sheet = TermSheet.from_dict({"type": "autocall", "general": {"underlying": "NDX"}})
+    with pytest.raises(ValueError, match="the market in use is SPX"):
+        quote(sheet, PricingContext.from_calibration(), n_paths=2000)
+
+
+def test_rule_calendars_know_the_special_closures_and_eurex():
+    from optlab.structured.calendars import CALENDARS
+    assert not CALENDARS["nyse"].is_business_day(dt.date(2025, 1, 9))
+    assert not CALENDARS["nyse"].is_business_day(dt.date(2018, 12, 5))
+    eurex = CALENDARS["eurex"]
+    assert not eurex.is_business_day(dt.date(2020, 4, 13))  # Easter Monday
+    assert not eurex.is_business_day(dt.date(2020, 5, 1))
+    assert eurex.is_business_day(dt.date(2020, 7, 3))  # a US holiday

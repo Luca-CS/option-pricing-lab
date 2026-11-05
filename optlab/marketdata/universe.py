@@ -51,7 +51,8 @@ UNIVERSE = (
     Instrument("GBPUSD", "Sterling / US dollar", "fx", "USD", "FX", "GBPUSD=X", enabled=False),
 )
 _BY_ID = {i.id: i for i in UNIVERSE}
-REFERENCE_INSTRUMENT = {"NYSE": "SPX", "EUREX": "SX5E"}  # whose trading days define a place's observed calendar
+REFERENCE_INSTRUMENT = {"NYSE": "SPX", "EUREX": "SX5E"}  # whose traded days define a place's observed calendar
+PLACE_CALENDAR = {"NYSE": "nyse", "EUREX": "eurex"}  # the rule-based calendar of a place, for term sheets
 
 
 def instrument(name: str) -> Instrument:

@@ -190,6 +190,9 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
     basket = len(product.program.underlyings) > 1
     if basket != isinstance(ctx, BasketContext):
         raise ValueError("a worst-of term sheet needs a BasketContext, a single-name one a PricingContext")
+    if not basket and getattr(ctx, "underlying", None) not in (None, *sheet.underlyings):
+        raise ValueError(f"the market in use is {ctx.underlying}, the term sheet is on {sheet.underlyings[0]}: "
+                         "choose a market of that name")
     decision = decide(prof, ctx.t_max, model, control, n_paths, batch, seed,
                       has_surfaces=getattr(ctx, "has_surfaces", True))
     fmt = wrapper(sheet, product)
