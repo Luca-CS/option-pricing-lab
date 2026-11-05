@@ -8,3 +8,4 @@ data/
 *.csv
 logs/
 build/
+build-*/
