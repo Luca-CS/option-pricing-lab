@@ -14,6 +14,8 @@ function draw(out, r) {
   const value = { name: "Value", points: r.daily.map((x) => [day(x.date), x.value]) };
   let cash = 0;
   const wealth = { name: "Value + cash received", points: r.daily.map((x) => { cash += x.cash; return [day(x.date), x.value + cash]; }) };
+  const reserve = { name: "Reserve left", points: r.daily.map((x) => [day(x.date), x.reserve ?? 0]) };
+  const series = r.daily.some((x) => x.reserve) ? [value, wealth, reserve] : [value, wealth];
   const perf = names.map((n) => ({ name: `${n}, % of initial`, points: r.daily.map((x) => [day(x.date), 100 * x.perf[n]]) }));
   const x = r.explain || {};
   const rec = r.reconciliation || {};
@@ -26,8 +28,8 @@ function draw(out, r) {
         r.filled_fixings ? `, ${r.filled_fixings} missing closes filled with the day before` : "", "."),
       prov ? h("p", {}, "Fixings ", originBadge("observed"), " · curve ", originBadge(prov.discount.origin), " · carry ", originBadge(prov.carry.origin),
         ` (${pretty(prov.carry.method)}) · surface `, originBadge(prov.surface.origin), `: beyond ${num(prov.surface.extrapolated_from, 2)} y the term structure is an assumption.`) : null,
-      lineChart([value, wealth], { xFormat: dateAxis, yFormat: (v) => v.toFixed(0), xLabel: "date", label: "Value and cash of the trade over its life" }),
-      legend([value, wealth]),
+      lineChart(series, { xFormat: dateAxis, yFormat: (v) => v.toFixed(0), xLabel: "date", label: "Value and cash of the trade over its life" }),
+      legend(series),
       lineChart(perf, { xFormat: dateAxis, yFormat: (v) => `${v.toFixed(0)} %`, xLabel: "date", label: "Performance of the underlying since the strike" }),
       legend(perf)),
     h("div", { class: "card" }, h("div", { class: "card-head" }, h("h2", {}, "Events"), originBadge("observed")),
@@ -40,9 +42,11 @@ function draw(out, r) {
     x.steps ? h("div", { class: "card" }, h("div", { class: "card-head" }, h("h2", {}, "P&L explained")),
       h("p", {}, `Over ${int(x.steps)} steps, with Greeks from the step before. The mean daily P&L is ${num(x.mean_abs_pnl, 3)} in absolute value, the mean residual ${num(x.mean_abs_residual, 3)}, against a standard error of ${num(x.mean_value_se, 3)} on each value.`),
       h("div", { class: "table-wrap" }, h("table", { class: "data" },
-        h("tr", {}, ["Delta", "Gamma", "Vega", "Time", "Residual", "Total P&L"].map((t) => h("th", { class: "num" }, t))),
-        h("tr", {}, ["delta", "gamma", "vega", "time"].map((k) => h("td", { class: "num" }, signed(x.sum[k], 3))),
-          h("td", { class: "num" }, signed(x.sum_residual, 3)), h("td", { class: "num" }, signed(x.sum_pnl, 3)))))) : null);
+        h("tr", {}, ["Delta", "Gamma", "Vega", "Time", "Reserve released", "Residual", "Total P&L"].map((t) => h("th", { class: "num" }, t))),
+        h("tr", {}, ["delta", "gamma", "vega", "time", "reserve"].map((k) => h("td", { class: "num" }, signed(x.sum[k] ?? 0, 3))),
+          h("td", { class: "num" }, signed(x.sum_residual, 3)), h("td", { class: "num" }, signed(x.sum_pnl, 3))))),
+      rec.reserve_start ? h("p", {}, `Reserve at issue ${num(rec.reserve_start, 3)}, left at the end ${num(rec.reserve_end, 3)}: ${num(rec.reserve_released, 3)} released over the life, `
+        + `the rest at a call. The P&L is the value net of the reserve plus the cash, to ${num(Math.abs(rec.pnl_gap ?? 0), 6)}.`) : null) : null);
 }
 
 export async function render(page) {

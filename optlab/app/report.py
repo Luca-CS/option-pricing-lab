@@ -148,13 +148,26 @@ def _hedging(d: dict | None) -> str:
             "<table><tr><th style='text-align:left'>Line</th><th>Used</th><th>Cost</th><th>SE</th><th>Coupon, bp</th></tr>" + "".join(rows) + "</table>")
 
 
+def _reserve_cell(p: dict) -> str:
+    r = p.get("reserve")
+    return "none booked" if not r else f"{r['amount']:.2f}"
+
+
+def _reserve_summary(last: dict) -> str:
+    if "reserve" not in last:
+        return ""
+    none = f" {len(last['no_reserve'])} trade(s) booked without one." if last.get("no_reserve") else ""
+    return (f"<p>Reserves left {last['reserve']:.2f} of {last['reserve_initial']:.2f} at issue, frozen with each trade, so a value net of reserves of "
+            f"{last['value_net']:.2f}.{none}</p>")
+
+
 def book_report(desk) -> str:
     last = getattr(desk, "last_book", None)
     if last is None:
         return _page("Book", "<h1>Book</h1><p>Price the book in the desk first: the report shows the last run.</p>")
     rows = "".join(f"<tr><td>{_e(p['name'])}</td><td>{_e(p.get('group', ''))}</td><td>{_word(p['class'])}</td>"
                    f"<td>{p['quantity']:g}</td><td>{p['unit_price']:.3f} ± {p['unit_stderr']:.3f}</td>"
-                   f"<td>{p['value']:.2f}</td><td>{p['stderr']:.2f}</td></tr>" for p in last["positions"])
+                   f"<td>{p['value']:.2f}</td><td>{p['stderr']:.2f}</td><td>{_reserve_cell(p)}</td></tr>" for p in last["positions"])
     g = last.get("greeks") or {}
     risk = ""
     if g.get("by_name"):
@@ -175,8 +188,8 @@ def book_report(desk) -> str:
             f"{last['stderr']:.2f}</span></div><p class='muted'>Book value in currency. Within a group the positions "
             f"share one simulation, so the error accounts for their correlation (independent legs would give "
             f"{last['independent_stderr']:.2f}); groups are independent.</p><ul>{groups}</ul>"
-            f"{risk}<table><tr><th>Position</th><th>Group</th><th>Class</th><th>Quantity</th><th>Unit price %</th>"
-            f"<th>Value</th><th>SE</th></tr>{rows}</table>")
+            f"{_reserve_summary(last)}{risk}<table><tr><th>Position</th><th>Group</th><th>Class</th><th>Quantity</th><th>Unit price %</th>"
+            f"<th>Value</th><th>SE</th><th>Reserve left</th></tr>{rows}</table>")
     return _page("Book", body)
 
 

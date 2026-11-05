@@ -32,6 +32,7 @@ class Trade:
     status: str = "live"
     version: int = 1
     tags: tuple = field(default_factory=tuple)
+    reserves: dict | None = None  # what the client price held above the base, frozen at issue (reserves.py)
 
     def __post_init__(self):
         object.__setattr__(self, "trade_date", _date(self.trade_date))

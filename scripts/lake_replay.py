@@ -20,6 +20,7 @@ from optlab.config import paths
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.replay import ReplayConfig, cost_table, replay, result_json, strike_trade
 from optlab.structured import preset
+from optlab.structured.defaults import resolve
 
 # A daily BRC struck before the fall of March 2020, and a Phoenix struck at the top of January 2022.
 PRODUCTS = {
@@ -39,6 +40,7 @@ def main():
     ap.add_argument("--only", default=None)
     ap.add_argument("--leverage-every", type=int, default=1)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--costs", action="store_true", help="deal at the desk's client price: the lines of the quote become the trade's reserves")
     args = ap.parse_args()
     lake = Lake()
     cfg = ReplayConfig(model=args.model, n_paths=args.paths, batch=10_000, reval_every=args.every,
@@ -54,7 +56,8 @@ def main():
     for name, (sheet, strike) in PRODUCTS.items():
         if args.only and name != args.only:
             continue
-        trade, info = strike_trade(lake, name, sheet, strike, 1.0, cfg)
+        costs = resolve(None, sheet).inputs() if args.costs else None
+        trade, info = strike_trade(lake, name, sheet, strike, -1.0 if args.costs else 1.0, cfg, costs=costs)
         print(name, "coupon", info["coupon"], "+/-", info.get("coupon_se"), flush=True)
         r = replay(lake, trade, cfg=cfg, inception=info)
         s = result_json(r)

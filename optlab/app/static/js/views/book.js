@@ -115,6 +115,10 @@ export async function render(page) {
     const groups = res.groups || [];
     const several = groups.length > 1;
     clear(out,
+      res.reserve != null ? h("div", { class: "grid cols-3" },
+        kpi("Reserves left", num(res.reserve, 2), `of ${num(res.reserve_initial, 2)} at issue · frozen with each trade`),
+        kpi("Value net of reserves", num(res.value_net, 2), "the book's value less what is left"),
+        kpi("Booked without a reserve", String(res.no_reserve.length), res.no_reserve.length ? res.no_reserve.slice(0, 4).join(", ") : "every trade carries one")) : null,
       h("div", { class: "grid cols-3" },
         kpi("Book value", pm(res.value, res.stderr, 2), `currency · ${n} position${n > 1 ? "s" : ""}`),
         kpi("Error if legs were independent", num(res.independent_stderr, 2),
@@ -143,13 +147,14 @@ export async function render(page) {
         h("div", { class: "card-head" }, h("h2", {}, "Positions"),
           h("span", { class: "muted" }, several ? "" : `${pretty(res.method)} (${pretty(res.model)})`)),
         h("div", { class: "table-wrap" }, h("table", { class: "data" },
-          h("tr", {}, ["Trade", several ? "Group" : null, "Class", "Quantity", "Unit price %", "Value", "SE", "Delta"]
+          h("tr", {}, ["Trade", several ? "Group" : null, "Class", "Quantity", "Unit price %", "Value", "SE", "Delta", "Reserve left"]
             .filter((c) => c !== null).map((c, k, all) => h("th", { class: k >= all.indexOf("Quantity") ? "num" : "" }, c))),
           res.positions.map((p, k) => h("tr", {}, h("td", {}, h("a", { href: `#/trade/${p.name}` }, h("b", {}, p.name))),
             several ? h("td", {}, pretty(p.group)) : null, h("td", {}, pretty(p.class)),
             h("td", { class: "num" }, num(p.quantity, 2)), h("td", { class: "num" }, pm(p.unit_price, p.unit_stderr)),
             h("td", { class: "num" }, num(p.value, 2)), h("td", { class: "num" }, num(p.stderr, 2)),
-            h("td", { class: "num" }, g && g.positions[k] != null ? signed(g.positions[k], 3) : "–"))))),
+            h("td", { class: "num" }, g && g.positions[k] != null ? signed(g.positions[k], 3) : "–"),
+            h("td", { class: "num" }, p.reserve ? num(p.reserve.amount, 2) : h("span", { class: "faint" }, "none booked")))))),
         res.warnings.map((w) => h("div", { class: "notice", style: { marginTop: "8px" } }, w))));
   }
 

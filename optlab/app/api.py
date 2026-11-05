@@ -7,6 +7,7 @@ switching snapshots never changes a run in progress.
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import json
 import re
@@ -30,6 +31,7 @@ from ..structured.lifecycle import events
 from ..structured.multiasset import BasketContext
 from ..structured.portfolio import Book
 from ..structured.pricer import price
+from ..structured.reserves import frozen, remaining
 from ..structured.schema import SECTIONS, json_schema
 from ..structured.script.lexer import ScriptError
 from ..structured.script.parser import parse
@@ -345,8 +347,10 @@ class Desk:
             raise ApiError("the replay runs under lv or slv", 422, "model")
         trade_id = f"{name}-{underlying}-{strike}".replace("_", "-")
 
+        costs = resolve(self.repo.defaults(), sheet).inputs() if body.get("costs", True) and cfg.model == "lv" and not resolve(self.repo.defaults(), sheet).missing else None
+
         def run():
-            trade, info = strike_trade(self.lake, trade_id, sheet, strike, float(body.get("quantity", 1.0)), cfg)
+            trade, info = strike_trade(self.lake, trade_id, sheet, strike, float(body.get("quantity", 1.0)), cfg, costs=costs)
             out = result_json(replay(self.lake, trade, end, cfg, info))
             (self._replay_dir() / f"replay-{trade_id}-{cfg.model}.json").write_text(json.dumps(clean(out)), encoding="utf-8")
             return clean(out)
@@ -634,6 +638,7 @@ class Desk:
         sheet = t.term_sheet()
         quote_id = next((tag[6:] for tag in t.tags if tag.startswith("quote:")), None)
         return clean({"trade": trade_json(t), "versions": self.repo.versions(trade_id), "quote_id": quote_id,
+                      "reserve": remaining(t, self.ctx.valuation),
                       "form": describe(sheet.mask.name, sheet) if sheet is not None else None,
                       "script": None if sheet is not None else t.product.get("script")})
 
@@ -656,7 +661,7 @@ class Desk:
             r = q.result
             return clean({"trade_id": trade_id, "quantity": t.quantity, "notional": N, "unit_price": r.price,
                           "unit_stderr": r.stderr, "value": t.quantity * N * r.price / 100,
-                          "stderr": abs(t.quantity) * N * r.stderr / 100, "valuation": ctx.valuation,
+                          "stderr": abs(t.quantity) * N * r.stderr / 100, "valuation": ctx.valuation, "reserve": remaining(t, ctx.valuation),
                           "snapshot_id": ctx.snapshot_id, "result": result_json(r), "quote": quote_json(q),
                           "basket": basket})
 
@@ -674,7 +679,20 @@ class Desk:
                                       sheet, float(body.get("quantity", 1.0)), trade_date, body.get("strike_date"),
                                       book=body.get("book", "default"), counterparty=body.get("counterparty", ""),
                                       tags=tuple(body.get("tags", ())))
-        return trade_json(self.repo.save_trade(trade))
+        return trade_json(self.repo.save_trade(dataclasses.replace(trade, reserves=self._reserves_of_quote(trade))))
+
+    def _reserves_of_quote(self, trade: Trade) -> dict | None:
+        """The lines of the quote a trade came from, frozen: its tag names the quote, and a quote without costs leaves no reserve."""
+        quote_id = next((tag[6:] for tag in trade.tags if tag.startswith("quote:")), None)
+        if quote_id is None:
+            return None
+        try:
+            desk = self.repo.quote(quote_id)["result"].get("desk")
+        except KeyError:
+            return None
+        if not desk:
+            return None
+        return frozen(desk, trade.strike_date, compile_sheet(trade.term_sheet(), trade.strike_date).maturity, quote_id)
 
     def update_trade(self, trade_id: str, body: dict) -> dict:
         old = self.repo.trade(trade_id)
@@ -717,6 +735,7 @@ class Desk:
         singles, baskets, names = self._positions_by_market(ctx)
         if not singles and not baskets:
             raise ApiError("no live trade in the book", 422)
+        reserves = {t.trade_id: remaining(t, ctx.valuation) for t in self.repo.trades() if t.status == "live"}
 
         def run():
             t0 = time.perf_counter()
@@ -739,6 +758,12 @@ class Desk:
                                     workers=self.workers)
                 parts.append((label, res, g, shown, name))
             out = _combine_books(parts)
+            for p in out["positions"]:
+                p["reserve"] = clean(reserves.get(p["name"]))
+            out["reserve"] = float(sum(r["amount"] for r in reserves.values() if r))
+            out["reserve_initial"] = float(sum(r["initial"] for r in reserves.values() if r))
+            out["value_net"] = out["value"] - out["reserve"]
+            out["no_reserve"] = sorted(k for k, r in reserves.items() if r is None)
             out["seconds"] = time.perf_counter() - t0  # prices and Greeks; each group's own time is its price
             self.last_book = out
             return out

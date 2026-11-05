@@ -26,6 +26,7 @@ from optlab.marketdata.lake import Lake
 from optlab.marketdata.pit import market_at, real_close
 from optlab.marketdata.replay import ReplayConfig, filled_fixings, strike_trade
 from optlab.structured import preset
+from optlab.structured.defaults import resolve
 
 LOOK_BACK = ("2020-03-23", "2022-07-01")  # markets kept beside the current one: a crash, and a day with a real chain
 
@@ -117,14 +118,16 @@ def seed(desk: Desk, lake: Lake, day, deals=DEALS, n_paths: int = 20_000, log=pr
             log(f"{deal.trade_id}: already in the store")
             continue
         t0 = time.perf_counter()
-        trade, info = strike_trade(lake, deal.trade_id, sheet_of(lake, deal), deal.strike, deal.quantity, cfg, deal.coupon)
+        sheet = sheet_of(lake, deal)
+        trade, info = strike_trade(lake, deal.trade_id, sheet, deal.strike, deal.quantity, cfg, deal.coupon, costs=resolve(desk.repo.defaults(), sheet).inputs())
         tags = ("showcase", f"preset:{deal.preset}")
         desk.repo.save_trade(dataclasses.replace(trade, counterparty=deal.counterparty, tags=tags, book="showcase"))
         if any(e["kind"] == "called" for e in desk.trade_events(deal.trade_id)["past"]):
             desk.update_trade(deal.trade_id, {"status": "called"})
         added.append(deal.trade_id)
         coupon = "no coupon" if info["coupon"] is None else f"coupon {100 * info['coupon']:.2f} %"
-        log(f"{deal.trade_id}: {deal.preset} on {'/'.join(deal.names)}, struck {deal.strike}, {coupon}, {time.perf_counter() - t0:.1f} s")
+        held = trade.reserves["total"] if trade.reserves else 0.0
+        log(f"{deal.trade_id}: {deal.preset} on {'/'.join(deal.names)}, struck {deal.strike}, {coupon}, reserve {held:.3f} %, {time.perf_counter() - t0:.1f} s")
     return added
 
 

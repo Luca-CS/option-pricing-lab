@@ -51,6 +51,20 @@ export async function render(page, id) {
     } catch (e) { toast(e.message); }
   };
 
+  const reserveCard = () => {
+    const r = detail.reserve;
+    if (!r) return h("div", { class: "card" }, h("h2", {}, "Reserve"), h("p", { class: "muted" }, "None: this trade was booked without the lines of a quote."));
+    return h("div", { class: "card" }, h("div", { class: "card-head" }, h("h2", {}, "Reserve"),
+      h("span", { class: "muted" }, `${num(100 * r.fraction, 1)} % left · ${r.method}`)),
+      h("div", { class: "table-wrap" }, h("table", { class: "data nosort" },
+        h("tr", {}, h("th", {}, "Line"), h("th", { class: "num" }, "Frozen at issue, % of notional"), h("th", { class: "num" }, "SE"),
+          h("th", { class: "num" }, "At issue"), h("th", { class: "num" }, "Left")),
+        r.lines.map((x) => h("tr", {}, h("td", {}, x.label), h("td", { class: "num" }, signed(x.cost, 3)), h("td", { class: "num" }, num(x.se, 3)),
+          h("td", { class: "num" }, num(x.initial, 2)), h("td", { class: "num" }, num(x.amount, 2)))),
+        h("tr", {}, h("td", {}, h("b", {}, "Total")), h("td", {}), h("td", {}), h("td", { class: "num" }, h("b", {}, num(r.initial, 2))),
+          h("td", { class: "num" }, h("b", {}, num(r.amount, 2)))))));
+  };
+
   const drawValue = () => clear(valueCard,
     h("div", { class: "card-head" }, h("h2", {}, "Value at today's market"),
       h("span", { class: "muted" }, pathsLabel())),
@@ -125,7 +139,7 @@ export async function render(page, id) {
         s.coupon ? pretty(s.coupon) : "")),
     h("div", { class: "grid cols-2", style: { marginTop: "16px" } },
       h("div", { class: "stack" },
-        valueCard,
+        reserveCard(), valueCard,
         h("div", { class: "card" },
           h("div", { class: "card-head" }, h("h2", {}, "Events"), h("a", { href: `#/lifecycle/${t.trade_id}` }, "Fixings")),
           ev.missing ? h("div", { class: "notice", style: { marginBottom: "10px" } },

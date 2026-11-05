@@ -24,6 +24,7 @@ from ..structured.lifecycle import events as lifecycle_events
 from ..structured.multiasset import BasketContext
 from ..structured.portfolio import Book
 from ..structured.quote import quote
+from ..structured.reserves import frozen, remaining
 from ..structured.schema import TermSheet
 from ..structured.trade import Trade
 from .lake import Lake, sql_str
@@ -78,8 +79,9 @@ def market_for(lake: Lake, names, day, cfg: ReplayConfig, previous=None, T_max: 
 
 
 def strike_trade(lake: Lake, trade_id: str, sheet: TermSheet, strike, quantity: float = 1.0, cfg: ReplayConfig = ReplayConfig(),
-                 coupon: float | None = None) -> tuple[Trade, dict]:
-    """A trade dealt on a past date: the coupon solved on that date's market unless given, then fixed."""
+                 coupon: float | None = None, costs=None) -> tuple[Trade, dict]:
+    """A trade dealt on a past date: the coupon solved on that date's market unless given, then fixed. With `costs` (costs.CostInputs), the desk's
+    policy gives the base and the lines, the coupon is solved on the client price, and the lines stay with the trade as its reserves."""
     strike = pd.Timestamp(strike).date()
     sheet = struck_sheet(sheet, strike)
     t0 = time.perf_counter()
@@ -87,12 +89,24 @@ def strike_trade(lake: Lake, trade_id: str, sheet: TermSheet, strike, quantity: 
     ctx, scales, prov = market_for(lake, names, strike, cfg, T_max=max(sheet.get("general.maturity_months") / 12, 0.5))
     info = {"strike": strike.isoformat(), "provenance": prov}
     has_coupon = sheet.get("coupon.type") != "none"  # an airbag or a capital-protected note has nothing to solve
-    if coupon is None and has_coupon:
+    desk = None
+    if costs is not None:
+        priced = sheet if coupon is None else sheet.replace(**{"wrapper.solve": "upfront", "coupon.rate": coupon})
+        q = quote(priced, ctx, control=None, n_paths=max(cfg.n_paths, 20_000), batch=cfg.batch, seed=cfg.seed, costs=costs)
+        desk = q.desk.to_dict() if q.desk is not None else None
+        info["policy"] = q.decision.label
+        if coupon is None and has_coupon:
+            coupon, info["coupon_se"] = q.coupon_rate, q.coupon_rate_se
+    elif coupon is None and has_coupon:
         q = quote(sheet, ctx, model=cfg.model, control=None, n_paths=max(cfg.n_paths, 20_000), batch=cfg.batch, seed=cfg.seed)
         coupon, info["coupon_se"], info["policy"] = q.coupon_rate, q.coupon_rate_se, q.decision.label
     info.update(coupon=coupon, seconds=time.perf_counter() - t0)
     fixed = sheet.replace(**{"wrapper.solve": "upfront", **({"coupon.rate": coupon} if has_coupon else {})})
-    return Trade.from_term_sheet(trade_id, fixed, quantity, strike, strike), info
+    trade = Trade.from_term_sheet(trade_id, fixed, quantity, strike, strike)
+    if desk is None:
+        return trade, info
+    info["desk"] = desk
+    return dataclasses.replace(trade, reserves=frozen(desk, strike, sheet_maturity(trade.term_sheet()))), info
 
 
 def filled_fixings(lake: Lake, names, start, end, calendar, as_of=None) -> tuple[dict, list]:
@@ -211,7 +225,9 @@ def result_json(r: ReplayResult) -> dict:
     out["daily"] = [{"date": x["date"].isoformat(), "value": float(x["value"]), "se": float(x["value_se"]), "cash": float(x["cash"]),
                      "perf": {n: x["spot"][n] / first[n] for n in names}, "pnl": number(x.get("pnl")),
                      "explain": x.get("explain") if isinstance(x.get("explain"), dict) else None,
-                     "residual": number(x.get("residual")), "greeks": x["greeks"], "layer": x["layer"]} for _, x in d.iterrows()]
+                     "residual": number(x.get("residual")), "greeks": x["greeks"], "layer": x["layer"], "reserve": float(x["reserve"]),
+                     "release": number(x.get("release"))} for _, x in d.iterrows()]
+    out["reserves"] = r.trade.reserves
     return out
 
 
@@ -233,6 +249,12 @@ def replay(lake: Lake, trade: Trade, end=None, cfg: ReplayConfig = ReplayConfig(
             paid_by_date[e.payment] = paid_by_date.get(e.payment, 0.0) + trade.quantity * e.amount
     terminal = [e for e in events if e.kind in ("called", "matured")]
     last_day = min(end, max((e.payment or e.date) for e in terminal)) if terminal else end
+    ended = min(e.date for e in terminal) if terminal else None
+
+    def reserve_at(when) -> float:
+        left = remaining(trade, when, ended)
+        return left["amount"] if left else 0.0
+
     all_days = CALENDARS[calendar].business_days(strike, last_day)
     must = {e.date for e in events} | set(paid_by_date) | {strike, last_day}
     schedule = [d for i, d in enumerate(all_days) if i % cfg.reval_every == 0 or d in must]
@@ -259,15 +281,18 @@ def replay(lake: Lake, trade: Trade, end=None, cfg: ReplayConfig = ReplayConfig(
         seconds["greeks"] += time.perf_counter() - t1
         cash = sum(v for d, v in paid_by_date.items() if (prev_day or strike) < d <= day)
         cum_cash += cash
-        row = {"date": day, "value": base.value, "value_se": base.stderr, "cash": cash, "cum_cash": cum_cash,
+        reserve = reserve_at(day)
+        row = {"date": day, "value": base.value, "value_se": base.stderr, "cash": cash, "cum_cash": cum_cash, "reserve": reserve,
                "spot": {n: fix[n][max(fix[n])] for n in names}, "greeks": greeks, "layer": {n: prov[n]["surface"]["layer"] for n in names}}
         if prev_day is not None:
-            pnl = base.value + cash - prev_value
+            release = rows[-1]["reserve"] - reserve
+            pnl = base.value + cash - prev_value + release
             row["pnl"] = pnl
+            row["release"] = release
             t2 = time.perf_counter()
-            explain = {"delta": 0.0, "gamma": 0.0, "vega": 0.0, "time": 0.0}
+            explain = {"delta": 0.0, "gamma": 0.0, "vega": 0.0, "time": 0.0, "reserve": release}
             if cfg.greeks and prev_greeks:
-                remaining = max((sheet_maturity(sheet) - prev_day).days / 365.0, 1 / 52)
+                years_left = max((sheet_maturity(sheet) - prev_day).days / 365.0, 1 / 52)
                 for n in names:
                     g = prev_greeks[n]
                     move = rows[-1]["spot"][n]
@@ -275,8 +300,8 @@ def replay(lake: Lake, trade: Trade, end=None, cfg: ReplayConfig = ReplayConfig(
                     explain["delta"] += g["delta"] * ret / 0.01
                     explain["gamma"] += 0.5 * g["gamma"] * (ret / 0.01) ** 2
                     if "vega" in g:
-                        new_v = surface_of(ctx, n).iv(0.0, remaining)
-                        old_v = surface_of(prev_ctx, n).iv(0.0, remaining)
+                        new_v = surface_of(ctx, n).iv(0.0, years_left)
+                        old_v = surface_of(prev_ctx, n).iv(0.0, years_left)
                         explain["vega"] += g["vega"] * float(new_v - old_v) * 100
                 old_fix = {n: {d: v for d, v in known[n].items() if d <= prev_day.isoformat()} for n in names}
                 explain["time"] = _time_value(trade, prev_ctx, cfg, prev_scales, old_fix, names, day) + cash - prev_value
@@ -307,9 +332,10 @@ def _reconcile(daily, trade, events, paid_by_date, last_day) -> dict:
     booked = float(daily["cash"].sum())
     pnl = float(daily["pnl"].fillna(0.0).sum()) if "pnl" in daily else 0.0
     final, initial = float(daily["value"].iloc[-1]), float(daily["value"].iloc[0])
+    r0, r1 = float(daily["reserve"].iloc[0]), float(daily["reserve"].iloc[-1])
     return {"cash_booked": booked, "cash_from_events": from_events, "cash_gap": booked - from_events,
-            "total_pnl": pnl, "value_start": initial, "value_end": final,
-            "pnl_gap": pnl - (final + booked - initial - float(daily["cash"].iloc[0]))}
+            "total_pnl": pnl, "value_start": initial, "value_end": final, "reserve_start": r0, "reserve_end": r1, "reserve_released": r0 - r1,
+            "pnl_gap": pnl - (final - r1 + booked - (initial - r0) - float(daily["cash"].iloc[0]))}
 
 
 def _explained(daily: pd.DataFrame) -> dict:

@@ -74,12 +74,7 @@ def greeks_json(g) -> dict | None:
 
 
 def desk_json(desk) -> dict | None:
-    if desk is None:
-        return None
-    return clean({"side": desk.side, "base_price": desk.base_price, "base_se": desk.base_se, "final_price": desk.final_price,
-                  "final_se": desk.final_se, "coupon_base": desk.coupon_base, "coupon_final": desk.coupon_final, "seconds": desk.seconds, "passes": desk.passes,
-                  "lines": [{"key": x.key, "label": x.label, "kind": x.kind, "cost": x.cost, "se": x.se, "coupon_bp": x.coupon_bp, "used": x.used,
-                             "default": x.default, "overridden": x.overridden, "note": x.note, "in_price": x.in_price, "gap": x.gap, "detail": x.detail} for x in desk.lines], "digital_passes": desk.digital_passes})
+    return None if desk is None else clean(desk.to_dict())
 
 
 def quote_json(q) -> dict:
@@ -131,7 +126,7 @@ def trade_json(trade) -> dict:
     return clean({"trade_id": trade.trade_id, "version": trade.version, "book": trade.book, "status": trade.status,
                   "quantity": trade.quantity, "trade_date": trade.trade_date, "strike_date": trade.strike_date,
                   "counterparty": trade.counterparty, "tags": trade.tags, "product": trade.product,
-                  "summary": summary})
+                  "summary": summary, "reserves": trade.reserves})
 
 
 def events_json(events) -> list[dict]:

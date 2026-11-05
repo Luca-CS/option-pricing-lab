@@ -126,6 +126,14 @@ class DeskPrice:
     def line(self, key: str) -> CostLine:
         return next(x for x in self.lines if x.key == key)
 
+    def to_dict(self) -> dict:
+        return {"side": self.side, "base_price": self.base_price, "base_se": self.base_se, "final_price": self.final_price, "final_se": self.final_se,
+                "coupon_base": self.coupon_base, "coupon_final": self.coupon_final, "seconds": self.seconds, "passes": self.passes,
+                "digital_passes": self.digital_passes,
+                "lines": [{"key": x.key, "label": x.label, "kind": x.kind, "cost": x.cost, "se": x.se, "coupon_bp": x.coupon_bp, "used": x.used,
+                           "default": x.default, "overridden": x.overridden, "note": x.note, "in_price": x.in_price, "gap": x.gap, "detail": x.detail}
+                          for x in self.lines]}
+
     def table(self) -> str:
         rows = [f"{'base':<38} {self.base_price:10.4f} +/- {self.base_se:.4f} %"]
         for x in self.lines:
