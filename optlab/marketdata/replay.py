@@ -41,7 +41,7 @@ class ReplayConfig:
     batch: int = 10_000
     seed: int = DEFAULT_SEED
     reval_every: int = 1  # business days between valuations; event and payment days are always valued
-    leverage_every: int = 5  # slv: business days between leverage recalibrations
+    leverage_every: int = 1  # slv: valuations between leverage recalibrations; weekly was off by 0.23 on average (reports/replay.md)
     n_particles: int = 100_000
     greeks: bool = True
     h_spot: float = 0.01

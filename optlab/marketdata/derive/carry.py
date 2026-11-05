@@ -114,6 +114,23 @@ def build_carry(lake: Lake, instruments) -> list[dict]:
     return out
 
 
+def build_parity_carry(lake: Lake, name: str, source: str, days=None, currency: str = "USD") -> dict:
+    """Net carry per expiry from put-call parity, on the days with a chain: an index's carry is not split into dividend and
+    repo. Stored next to the estimates from the past, which `dividend_yield_at` keeps using for a homogeneous history."""
+    from ..quotes import chain_rows, discount_function, quote_days
+    rows = []
+    for day in days if days is not None else quote_days(lake, name, source):
+        chain = chain_rows(lake, name, day, source)
+        closes = pd.to_numeric(chain["underlying_close"], errors="coerce").dropna()
+        if chain.empty or closes.empty:
+            continue
+        carry = parity_carry_rows(chain[chain["root"] != "SPX"], discount_function(lake, currency, day), float(closes.iloc[0]))
+        rows.append(carry.assign(underlying=name, method="parity"))
+    if not rows:
+        return {"n_new": 0, "n_changed": 0, "n_input": 0}
+    return lake.ingest("carry_implied", pd.concat(rows, ignore_index=True), f"parity_on_{source}", "derived", new_run_id("derive_parity"))
+
+
 def dividend_yield_at(lake: Lake, name: str, day: dt.date, as_of=None) -> tuple[float, str, str]:
     """(yield, origin, method): the latest estimate at or before `day` in carry_implied, tenor 1 year."""
     rows = lake.read("carry_implied", where=f"underlying = {sql_str(name)} AND tenor = 1.0 AND obs_date <= DATE '{day}' "

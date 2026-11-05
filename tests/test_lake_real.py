@@ -51,7 +51,7 @@ def test_all_enabled_names_have_prices_and_a_surface_on_a_stress_date():
 def test_erasing_the_future_changes_no_past_price_on_real_data(tmp_path, day):
     cut = truncated_copy(LAKE, tmp_path / "cut", day, tables=TABLES,
                          where_extra={"prices_eod": "instrument IN ('SPX', 'NDX', 'SPX.TR')",
-                                      "vol_surfaces": "underlying IN ('SPX', 'NDX') AND layer = 'reconstructed'",
+                                      "vol_surfaces": "underlying IN ('SPX', 'NDX')",
                                       "carry_implied": "underlying IN ('SPX', 'NDX')",
                                       "corporate_actions": "instrument = 'SPX'"})
     assert pd.to_datetime(cut.read("prices_eod")["obs_date"]).max().date() == day
@@ -66,7 +66,8 @@ def test_erasing_the_future_changes_no_past_price_on_real_data(tmp_path, day):
 
 
 def test_the_market_at_a_date_uses_that_dates_close():
-    assert real_close(LAKE, "SPX", dt.date(2020, 3, 23)) == (pytest.approx(2237.4, abs=0.01), dt.date(2020, 3, 23))
+    px = closes("SPX")
+    assert real_close(LAKE, "SPX", dt.date(2020, 3, 23)) == (px.loc["2020-03-23"], dt.date(2020, 3, 23))
     assert real_close(LAKE, "SPX", dt.date(2020, 3, 22))[1] == dt.date(2020, 3, 20)  # a Sunday: never the Monday after
 
 

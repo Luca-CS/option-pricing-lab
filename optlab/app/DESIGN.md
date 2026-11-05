@@ -200,4 +200,5 @@ Limits that remain, from the library rather than the page:
 - Names other than SPX have no smile (flat Black-Scholes) and the correlation is an input; SLV is not extended to
   baskets, so worst-ofs are priced with local vol per name.
 - A market snapshot is a calibration: a new market needs `scripts/run_calibration.py`, the desk does not
-  recalibrate.
+  recalibrate. The Data screen can build a market at a past date from the lake, and the Vol lab fits real days, but neither feeds the
+  worst-ofs of the Pricer yet: `pit.basket_at` gives each name its own surface and a measured correlation, and only the replay uses it.

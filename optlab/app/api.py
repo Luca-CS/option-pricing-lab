@@ -322,7 +322,7 @@ class Desk:
         except (TermSheetError, ValueError) as exc:
             raise ApiError(str(exc), 422)
         cfg = ReplayConfig(model=str(body.get("model", "lv")), n_paths=int(body.get("n_paths", 20_000)), batch=10_000,
-                           reval_every=max(int(body.get("every", 5)), 1), leverage_every=max(int(body.get("leverage_every", 5)), 1),
+                           reval_every=max(int(body.get("every", 5)), 1), leverage_every=max(int(body.get("leverage_every", 1)), 1),
                            greeks=bool(body.get("greeks", True)))
         if cfg.model not in ("lv", "slv"):
             raise ApiError("the replay runs under lv or slv", 422, "model")

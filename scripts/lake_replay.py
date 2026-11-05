@@ -33,7 +33,7 @@ def main():
     ap.add_argument("--paths", type=int, default=20_000)
     ap.add_argument("--model", default="lv")
     ap.add_argument("--only", default=None)
-    ap.add_argument("--leverage-every", type=int, default=5)
+    ap.add_argument("--leverage-every", type=int, default=1)
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
     lake = Lake()

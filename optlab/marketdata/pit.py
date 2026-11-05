@@ -11,15 +11,11 @@ mode: they do not move when later data arrives, which the anti-look-ahead test c
 from __future__ import annotations
 
 import datetime as dt
-import json
-import shutil
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from ..market import Market
-from ..models import Leverage
 from .derive.carry import dividend_yield_at
 from .derive.correl import correlation_at
 from .derive.surfaces import surface_at
@@ -152,11 +148,3 @@ def truncated_copy(lake: Lake, target, day, tables=None, where_extra: dict | Non
     return target
 
 
-def erase_lake(lake: Lake) -> None:
-    if Path(lake.root).exists():
-        shutil.rmtree(lake.root)
-
-
-def snapshot_summary(snap: MarketSnapshot) -> dict:
-    return {"snapshot_id": snap.snapshot_id, "valuation": snap.valuation.isoformat(), "spot_scale": snap.spot_scale,
-            "provenance": json.loads(json.dumps(snap.provenance))}

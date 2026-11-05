@@ -11,7 +11,7 @@ import time
 import pandas as pd
 
 from optlab.marketdata.derive.bank import build_bank
-from optlab.marketdata.derive.carry import build_carry
+from optlab.marketdata.derive.carry import build_carry, build_parity_carry
 from optlab.marketdata.derive.correl import build_pair_quotes, build_premium, build_realized
 from optlab.marketdata.derive.curves import build_discount_curves
 from optlab.marketdata.derive.surfaces import build_observed, build_reconstructed
@@ -40,7 +40,8 @@ def observed(lake):
 STEPS = {"curves": build_discount_curves, "carry": lambda lake: build_carry(lake, enabled()), "bank": build_bank,
          "reconstructed": lambda lake: build_reconstructed(lake, enabled_names()),
          "realized": lambda lake: build_realized(lake, enabled_names()), "premium": build_premium,
-         "pairs": lambda lake: build_pair_quotes(lake, PAIRS, pair_days(lake)), "observed": observed}
+         "pairs": lambda lake: build_pair_quotes(lake, PAIRS, pair_days(lake)), "observed": observed,
+         "parity": lambda lake: build_parity_carry(lake, "SPX", "historicaldata")}
 
 
 def main():

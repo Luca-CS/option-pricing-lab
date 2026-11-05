@@ -215,3 +215,15 @@ def test_names_reaching_a_query_are_data_not_sql(lake):
     assert len(chain_rows(lake, "SPX", DAY)) == 4
     assert chain_rows(lake, "SPX' OR '1'='1", DAY).empty
     assert chain_rows(lake, "SPX", DAY, "x' OR '1'='1").empty
+
+
+def test_parity_carry_goes_in_the_lake_without_touching_the_yield_estimates(lake):
+    from optlab.marketdata.derive.carry import build_parity_carry, dividend_yield_at
+    lake.ingest("option_quotes", synthetic_rows(), "archive", "observed")
+    out = build_parity_carry(lake, "SPX", "archive")
+    assert out["n_new"] == 5
+    rows = lake.read("carry_implied", where="method = 'parity'", order="tenor")
+    # the carry r - q of the synthetic chain, whose forward grows at CARRY whatever the discount
+    assert rows["carry"].to_numpy() == pytest.approx(CARRY, abs=2e-4)
+    assert rows["origin"].iloc[0] == "derived" and rows["source"].iloc[0] == "parity_on_archive"
+    assert dividend_yield_at(lake, "SPX", DAY)[1:] == ("synthetic", "assumed_yield")
