@@ -55,6 +55,8 @@ def quote_table(q) -> str:
             lines.append(f"upfront paid by the investor: {q.upfront:.4f} % (leg value plus the margin "
                          f"{q.margin:.2f} %)")
     lines.append(f"value: {_price(q.result)}")
+    if getattr(q, "desk", None) is not None:
+        lines += ["hedging cost, % of notional, from the desk's side:", q.desk.table()]
     if q.control is not None:
         lines.append(f"control {q.decision.control.upper()}: {_price(q.control)}, gap {q.control_gap_se:+.1f} SE")
     if q.greeks is not None:

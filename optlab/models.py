@@ -78,11 +78,14 @@ class Leverage:
 
 @dataclass
 class SLVModel(Model):
-    """dS/S = ... + L(t, S) sqrt(v) dW, with the Heston variance whose vol-of-vol is scaled by `mix`."""
+    """dS/S = ... + L(t, S) sqrt(v) dW, with the Heston variance whose vol-of-vol is scaled by `mix`. With `spot_driven`, the spot is driven
+    by the same normals as a model without variance on that seed, and the rest of the variance's driver comes from a stream of its own:
+    same law, and a local vol price on the same seed is on common random numbers with this one."""
 
     params: HestonParams
     leverage: Leverage
     mix: float = 1.0
+    spot_driven: bool = False
     has_variance = True
 
     @property
@@ -142,6 +145,8 @@ def simulate(model: Model, market: Market, times, n_paths: int, rng=None, dt_max
     if antithetic:
         segments += [(half + a, half + b, o, -1.0) for a, b, o, _ in segments]
     rho_c = np.sqrt(1 - hp.rho**2) if hp is not None else 0.0
+    spot_driven = hp is not None and getattr(model, "spot_driven", False)
+    residual = rng.spawn(1)[0] if spot_driven else rng  # spawning leaves the stream of the spot's normals untouched
     j = 0
     for i in range(1, len(grid)):
         t0, dt = grid[i - 1], grid[i] - grid[i - 1]
@@ -153,11 +158,14 @@ def simulate(model: Model, market: Market, times, n_paths: int, rng=None, dt_max
             av = model.inst_var(t0, x[s], v[s])
             if hp is not None:
                 if z2 is None:
-                    z2 = rng.standard_normal(half)  # drawn after the variance of the first tile, as before
+                    z2 = residual.standard_normal(half)  # drawn after the variance of the first tile, as before
                 zz2 = z2[o:o + (b - a)] if sign > 0 else -z2[o:o + (b - a)]
-                zx = hp.rho * zz2 + rho_c * zz1
+                if spot_driven:
+                    zx, zv = zz1, hp.rho * zz1 + rho_c * zz2
+                else:
+                    zx, zv = hp.rho * zz2 + rho_c * zz1, zz2
                 vp = np.maximum(v[s], 0.0)
-                v[s] = v[s] + hp.kappa * (hp.theta - vp) * dt + hp.xi * np.sqrt(vp * dt) * zz2
+                v[s] = v[s] + hp.kappa * (hp.theta - vp) * dt + hp.xi * np.sqrt(vp * dt) * zv
             else:
                 zx = zz1
             x[s] = x[s] - 0.5 * av * dt + np.sqrt(av * dt) * zx

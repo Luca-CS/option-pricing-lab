@@ -1,7 +1,8 @@
 """Batch engine: simulate each batch once, evaluate a list of evaluations on it, in sequence or on a process pool.
 
 An evaluation is a script with its parameters, smoothing, wrapper and notional, optionally on paths scaled by a
-spot factor (a sticky-moneyness spot bump multiplies the paths exactly, so delta needs no new simulation). Batches
+spot factor (a sticky-moneyness spot bump multiplies the paths exactly, so delta needs no new simulation) or by one
+factor per simulated date (a bump of the forward, likewise). Batches
 carry their own seeds (`default_rng(seed)` for one batch, `SeedSequence(seed).spawn(n)` for several), so a pool
 of processes returns the same batches as the sequential loop, and the summaries are added in the same order: the
 results are identical bit for bit whatever the number of workers.
@@ -37,7 +38,7 @@ class Evaluation:
     notional: float
     smoothing: float = 0.0
     check_redemption: bool = True
-    spot_factor: float | dict = 1.0  # float for one name, {name: factor} for a basket
+    spot_factor: float | np.ndarray | dict = 1.0  # one factor or one per simulated date; {name: factor} for a basket
     controls: tuple = ()  # (name, time, forward): S(t) / F(t) - 1 has mean zero, a control variate
 
 
@@ -74,15 +75,19 @@ def _scenario(model, market, name, times, size, seed, spot0, history, sim_kwargs
     return Scenario(name, times, paths, spot0, history)
 
 
+def _no_change(factor) -> bool:
+    return np.ndim(factor) == 0 and factor == 1.0
+
+
 def _scaled(scenario, factor):
     if isinstance(scenario, BasketScenario):
         if not isinstance(factor, dict):
-            factor = {n: float(factor) for n in scenario.paths}
-        if all(f == 1.0 for f in factor.values()):
+            factor = {n: factor for n in scenario.paths}
+        if all(_no_change(f) for f in factor.values()):
             return scenario
-        paths = {n: p * factor.get(n, 1.0) if factor.get(n, 1.0) != 1.0 else p for n, p in scenario.paths.items()}
+        paths = {n: p if _no_change(factor.get(n, 1.0)) else p * factor[n] for n, p in scenario.paths.items()}
         return BasketScenario(scenario.times, paths, scenario.spot0, scenario.history)
-    if factor == 1.0:
+    if _no_change(factor):
         return scenario
     return Scenario(scenario.name, scenario.times, scenario.paths * factor, scenario.spot0, scenario.history)
 

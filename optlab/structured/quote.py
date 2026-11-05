@@ -12,6 +12,7 @@ from ..log import get_logger
 from .cashflows import FundedSwap, Note, Swap, funding_periods
 from .compiler import CompiledProduct, compile_sheet
 from .context import PricingContext
+from .costs import desk_price
 from .policy import PricingDecision, decide
 from .multiasset import BasketContext
 from .pricer import StructuredResult, check_fixing_scale, history_times, price_many
@@ -42,6 +43,7 @@ class Quote:
     greeks: object | None = None  # greeks.Greeks at the solved coupon, with the policy model
     snapshot_id: str | None = None  # the market the quote was priced on
     mix_band: dict | None = None  # {mix: {"value", "se", "atm_error_bp"}}: coupon p.a. or upfront per SLV mix
+    desk: object | None = None  # costs.DeskPrice: base, lines and client price, when costs were asked
 
     @property
     def control_gap_se(self) -> float | None:
@@ -169,7 +171,7 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
           n_paths: int = 200_000, batch: int = 25_000, seed: int = DEFAULT_SEED, control_paths: int | None = None,
           fixings: dict | None = None, with_greeks: bool = False, slv_vega: bool = False,
           workers: int | None = None, control_forwards: bool = False, fast: bool = False,
-          sticky: str = "moneyness", mix_band: tuple | None = None) -> Quote:
+          sticky: str = "moneyness", mix_band: tuple | None = None, costs=None) -> Quote:
     """Price a term sheet with the policy model. In 'coupon' mode the coupon is solved so that the note price is
     100 - margin, or the swap upfront is -margin (zero upfront paid, the margin kept by the bank); in 'upfront' mode
     the coupon is given and the result is the note price, or the swap upfront paid by the investor (leg value +
@@ -180,7 +182,8 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
     Carlo estimator; `fast` uses the grid-interpolated local vol and SLV models (fastmodels); `sticky` sets the
     smile dynamics of the delta (moneyness, strike or model). `mix_band`, e.g. (0, 0.25, 0.5, 0.75), reprices
     the product under SLV with the leverage recalibrated for each mixing fraction (same mode, seed and paths): the
-    mix is not calibrated, and for autocalls it moves the coupon more than the SLV - LV gap."""
+    mix is not calibrated, and for autocalls it moves the coupon more than the SLV - LV gap. `costs` (costs.CostInputs) adds the desk's
+    lines to the base price: the coupon is solved on the client price, or the upfront is that price, and `result` stays the base."""
     t0 = time.perf_counter()
     ctx = ctx or PricingContext.from_calibration()
     product = compile_sheet(sheet, ctx.valuation)
@@ -200,8 +203,20 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
     run = _pricer(product, ctx, fmt, decision, prof, decision.model, decision.method, fixings=fixings,
                   workers=workers, control_forwards=control_forwards, fast=fast)
     cpn = product.coupon_param
-    target = rate = rate_se = upfront = None
-    if sheet.get("wrapper.solve") == "coupon":
+    target = rate = rate_se = upfront = desk = None
+    if costs is not None:
+        aim = (100 - margin if fmt.name == "note" else -margin) if sheet.get("wrapper.solve") == "coupon" else None
+        desk, base, x, x_se = desk_price(product, ctx, fmt, decision, prof, costs, aim, cpn, product.coupon_scale, fixings, workers, fast)
+        if aim is not None:
+            target = aim
+            result = base.at(x)
+            rate, rate_se = product.coupon_rate(x), x_se / product.coupon_scale
+            params = {cpn: x}
+        else:
+            result = base.at(None)
+            upfront = desk.final_price if fmt.name == "note" else desk.final_price + margin
+            params = {}
+    elif sheet.get("wrapper.solve") == "coupon":
         target = 100 - margin if fmt.name == "note" else -margin
         r0, r1 = run([{cpn: 0.0}, {cpn: 1.0}])
         x, x_se = solve_affine(r0, r1, target)
@@ -220,7 +235,7 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
         ctrl_run = _pricer(product, ctx, fmt, decision, prof, decision.control, "monte_carlo",
                            control_paths or decision.n_paths, fixings, workers, fast=fast)
         (ctrl,) = ctrl_run([params])
-    warnings = list(decision.warnings)
+    warnings = list(decision.warnings) + (desk.warnings if desk else [])
     if rate is not None and rate < 0:
         warnings.append("the solved coupon is negative: the product cannot reach the target price with a coupon")
     g = None
@@ -238,4 +253,4 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
         warnings += [f"mix {m:.2f}: the recalibrated SLV misses the ATM vol at the horizon by {b['atm_error_bp']:+.1f} "
                      "bp (over 5 bp)" for m, b in band.items() if abs(b["atm_error_bp"]) > 5]
     return Quote(product, prof, decision, fmt.name, result, target, rate, rate_se, upfront, margin, ctrl,
-                 seconds, warnings, g, getattr(ctx, "snapshot_id", None), band)
+                 seconds, warnings, g, getattr(ctx, "snapshot_id", None), band, desk)

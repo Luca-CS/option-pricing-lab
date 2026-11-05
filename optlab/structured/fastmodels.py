@@ -41,7 +41,7 @@ class UniformLeverage:
 
 def fast_slv(model: SLVModel, n_x: int = 321) -> SLVModel:
     """The same SLV model with its leverage on uniform grids."""
-    return SLVModel(model.params, UniformLeverage(model.leverage, n_x), model.mix)
+    return SLVModel(model.params, UniformLeverage(model.leverage, n_x), model.mix, model.spot_driven)
 
 
 @dataclass
