@@ -140,7 +140,7 @@ def basket_at(lake: Lake, names, day, as_of=None, window: int = 120, implied: bo
     corr, meta = correlation_at(lake, names, day, window, implied, as_of)
     ctxs = {n: PricingContext.from_snapshot(s) for n, s in snaps.items()}
     ctx = BasketContext(tuple(names), {n: c.market for n, c in ctxs.items()}, {n: c.surface for n, c in ctxs.items()}, corr,
-                        pd.Timestamp(day).date())
+                        pd.Timestamp(day).date(), ctxs)
     return ctx, snaps, meta
 
 

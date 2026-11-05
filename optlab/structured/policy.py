@@ -34,10 +34,10 @@ RULES = {
                      "the base is local vol, which fits the smile; autocalls depend on the forward skew between observation dates, "
                      "which local vol flattens, so the gap to SLV is a provision when it goes against the desk",
                      ("slv",)),
-    "basket": Rule("monte_carlo", "lv", "bs",
-                   "worst-of: each name on its own smile (Dupire local vol), correlated spots; the correlation is "
-                   "an input with no skew of its own, and SLV is not extended to baskets yet; Black-Scholes as a "
-                   "smile-risk control"),
+    "basket": Rule("monte_carlo", "lv", "slv",
+                   "worst-of: each name on its own smile (Dupire local vol), correlated spots, with a measured correlation; the smile dynamics "
+                   "of each name are not in it, so the gap to SLV, with a leverage per name, is a provision when it goes against the desk",
+                   ("slv",)),
 }
 MODELS = ("bs", "heston", "lv", "slv")
 
@@ -88,8 +88,6 @@ def decide(prof: ProductProfile, t_max: float, model: str | None = None, control
             raise ValueError(f"replication needs a European-class product, this one is {prof.product_class}")
         method = "replication"
     elif model in MODELS:
-        if basket and model not in ("bs", "lv"):
-            raise ValueError(f"baskets are priced under bs or lv, not {model}")
         method = "monte_carlo"
     else:
         raise ValueError(f"unknown model {model!r}, expected surface or one of {', '.join(MODELS)}")

@@ -172,3 +172,30 @@ def test_the_desk_prices_a_share_and_a_worst_of_on_their_real_surfaces(tmp_path)
         assert all(v == "lake" for v in shown["corr_source"].values()) and 0.3 < shown["corr"]["NDX|SPX"] < 1
     finally:
         desk.jobs.shutdown()
+
+
+def test_slv_on_a_real_basket_reprices_each_name_once_the_noise_of_the_forward_is_out():
+    from optlab.blackscholes import black_price
+    from optlab.structured.multiasset import simulate_basket
+    from optlab.structured.pricer import _controlled
+
+    names = ["SPX", "NDX", "RUT"]
+    ctx, _, _ = basket_at(LAKE, names, "2026-11-04", layer="reconstructed")
+    n = 200_000
+    paths = simulate_basket(ctx.model("slv", 2.0, mix=0.5, spot_driven=True), [1.0, 2.0], n, 11)
+    half = n // 2
+    for name in names:
+        market, surface = ctx.markets[name], ctx.vols[name]
+        for j, T in enumerate((1.0, 2.0)):
+            F = float(market.F(T))
+            s = paths[name][:, j]
+            forward = 0.5 * (s[:half] + s[half:]) / F - 1.0
+            for pct in (0.9, 1.0, 1.1):
+                pay = np.maximum(s - pct * F, 0.0)
+                pay = 0.5 * (pay[:half] + pay[half:])
+                corrected, _ = _controlled(pay, forward[:, None])
+                se = corrected.std(ddof=1) / np.sqrt(half)
+                vol = float(surface.iv(np.log(pct), T))
+                want = float(black_price(F, pct * F, T, vol, 1.0, "call"))
+                vega = F * np.sqrt(T) * 0.3  # a lower bound of the vega near the money, for the bias of the leverage: 10 bp of vol
+                assert abs(corrected.mean() - want) <= 4 * se + 0.001 * vega, (name, T, pct, corrected.mean(), want, se)

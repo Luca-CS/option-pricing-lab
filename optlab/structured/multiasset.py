@@ -2,8 +2,10 @@
 
 Each name keeps its own model (Black-Scholes, Dupire local vol, Heston or SLV) and its own forward curve, and is
 simulated in its log-forward coordinate exactly like `models.simulate`. The spot drivers are correlated by a
-matrix square root of the correlation; a name with a variance process draws it with its own spot-vol
-correlation, independently across names. Discounting uses the curve of the first name (one currency).
+matrix square root of the correlation. A name with a variance process has its own spot-vol correlation rho_i: its variance's
+driver is rho_i z_i + sqrt(1 - rho_i^2) w_i. With `vol_corr="same"`, the residuals w_i take the spots' correlation, so two variances have the correlation
+c_ij (rho_i rho_j + sqrt((1 - rho_i^2)(1 - rho_j^2))), close to c_ij for similar rho, and identical names at a correlation of 1 have the same paths. With
+"independent", it is rho_i rho_j c_ij, about half of c_ij on indices. Discounting uses the curve of the first name (one currency).
 With one name and Black-Scholes, the draws are those of `simulate`, so prices match it bit for bit.
 """
 
@@ -11,12 +13,13 @@ from __future__ import annotations
 
 import datetime as dt
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 
 from ..market import Market
-from ..models import BlackScholesModel, LocalVolModel, Model, time_grid
+from ..heston import HestonParams
+from ..models import BlackScholesModel, Leverage, LocalVolModel, Model, SLVModel, time_grid
 from .scenario import batch_sizes
 
 
@@ -50,8 +53,11 @@ class Basket:
     models: dict  # name → Model
     markets: dict  # name → Market (spot and forward curve)
     corr: np.ndarray
+    vol_corr: str = "same"  # how the residuals of the variances correlate: "same" as the spots, or "independent"
 
     def __post_init__(self):
+        if self.vol_corr not in ("same", "independent"):
+            raise ValueError(f"unknown vol_corr {self.vol_corr!r}, expected same or independent")
         self.names = tuple(self.names)
         missing = [n for n in self.names if n not in self.models or n not in self.markets]
         if missing:
@@ -84,18 +90,24 @@ def simulate_basket(basket: Basket, times, n_paths: int, rng=None, dt_max=1 / 25
     v = [np.full(n, hp.v0) if hp is not None else None for hp in hps]
     out = np.empty((k, n, len(times)))
 
-    def normals(shape):
-        z = rng.standard_normal(shape)
+    # A spot-driven model takes its residuals from a stream of its own, so the spots' normals are those of a model without variance on this seed.
+    spot_driven = any(getattr(m, "spot_driven", False) for m in models)
+    residual = rng.spawn(1)[0] if spot_driven else rng
+    same = basket.vol_corr == "same" and any(hp is not None for hp in hps)
+
+    def normals(shape, source=rng):
+        z = source.standard_normal(shape)
         return np.concatenate([z, -z], axis=-1) if antithetic else z
 
     j = 0
     for i in range(1, len(grid)):
         t0, dt = grid[i - 1], grid[i] - grid[i - 1]
         z = basket.root @ normals((k, half))
+        w = basket.root @ normals((k, half), residual) if same else None
         for a, (m, hp) in enumerate(zip(models, hps)):
             var = m.inst_var(t0, x[a], v[a] if v[a] is not None else np.zeros(n))
             if hp is not None:
-                z2 = hp.rho * z[a] + np.sqrt(1 - hp.rho**2) * normals(half)
+                z2 = hp.rho * z[a] + np.sqrt(1 - hp.rho**2) * (w[a] if same else normals(half, residual))
                 vp = np.maximum(v[a], 0.0)
                 v[a] = v[a] + hp.kappa * (hp.theta - vp) * dt + hp.xi * np.sqrt(vp * dt) * z2
             x[a] = x[a] - 0.5 * var * dt + np.sqrt(var * dt) * z[a]
@@ -193,6 +205,7 @@ class BasketContext:
     vols: dict  # name → SVISurface or float (flat Black-Scholes vol)
     corr: np.ndarray
     valuation: dt.date
+    contexts: dict = field(default_factory=dict, repr=False)  # name → PricingContext, which keeps that name's SLV leverages
 
     def __post_init__(self):
         self.names = tuple(self.names)
@@ -206,7 +219,7 @@ class BasketContext:
         names = ("SPX", *others)
         markets = {"SPX": spx.market, **{n: Market.flat(s, r, q) for n, (s, r, q, _) in others.items()}}
         vols = {"SPX": spx.surface, **{n: v for n, (_, _, _, v) in others.items()}}
-        return cls(names, markets, vols, np.asarray(corr, dtype=float), spx.valuation)
+        return cls(names, markets, vols, np.asarray(corr, dtype=float), spx.valuation, {"SPX": spx})
 
     @property
     def market(self) -> Market:
@@ -221,13 +234,13 @@ class BasketContext:
         if vol_shift:
             v = vols[name]
             vols[name] = v + vol_shift if np.isscalar(v) else ShiftedSurface(v, vol_shift)
-        return BasketContext(self.names, markets, vols, self.corr, self.valuation)
+        return BasketContext(self.names, markets, vols, self.corr, self.valuation, self.contexts)
 
     def with_bumps(self, vol: float = 0.0, skew: float = 0.0, corr: float = 0.0) -> "BasketContext":
         """The same context with every name's implied vols moved, and every pair's correlation, the matrix repaired if needed."""
         from .surfaces import BumpedSurface
         vols = {n: (v + vol if np.isscalar(v) else BumpedSurface(v, vol, skew)) if vol or skew else v for n, v in self.vols.items()}
-        return BasketContext(self.names, self.markets, vols, moved_correlation(self.corr, corr) if corr else self.corr, self.valuation)
+        return BasketContext(self.names, self.markets, vols, moved_correlation(self.corr, corr) if corr else self.corr, self.valuation, self.contexts)
 
     @property
     def t_max(self) -> float:
@@ -242,17 +255,32 @@ class BasketContext:
         v = self.vols[name]
         return float(v) if np.isscalar(v) else float(v.iv(0.0, T))
 
-    def model(self, name: str, T: float = 1.0, names=None) -> Basket:
-        """'bs' (ATM vol at T for every name) or 'lv' (Dupire on each surface; flat names stay Black-Scholes)."""
+    def name_context(self, name: str):
+        """The context that keeps a name's SLV leverages, one with the day's levels and the prior's dynamics when none was given."""
+        got = self.contexts.get(name)
+        if got is None:
+            from ..marketdata.pit import MIX, quick_heston
+            from .context import PricingContext
+            heston = HestonParams(**quick_heston(self.vols[name]))
+            flat = SLVModel(heston, Leverage([0.0], [[-1.0, 1.0]], [[1.0, 1.0]]), MIX)
+            got = PricingContext(self.markets[name], self.vols[name], heston, flat, self.valuation, name, leverage_flat=True)
+            self.contexts[name] = got
+        return got
+
+    def model(self, name: str, T: float = 1.0, names=None, mix: float | None = None, spot_driven: bool = False, vol_corr: str = "same") -> Basket:
+        """'bs' (ATM vol at T for every name), 'lv' (Dupire on each surface) or 'slv' (each name's leverage, calibrated on its own marginal and kept per name
+        and date). A flat name stays Black-Scholes. `spot_driven` runs SLV on the spot draws of local vol: common random numbers with 'lv' on one seed."""
         names = tuple(names or self.names)
         models: dict[str, Model] = {}
         for n in names:
             vol = self.vols[n]
             if name == "lv" and not np.isscalar(vol):
                 models[n] = LocalVolModel(vol)
-            elif name in ("bs", "lv"):
+            elif name == "slv" and not np.isscalar(vol):
+                models[n] = replace(self.name_context(n).slv_model(T, mix), spot_driven=spot_driven)
+            elif name in ("bs", "lv", "slv"):
                 models[n] = BlackScholesModel(self.atm_vol(n, T))
             else:
-                raise ValueError(f"basket model {name!r} is not available, expected bs or lv")
+                raise ValueError(f"basket model {name!r} is not available, expected bs, lv or slv")
         idx = [self.names.index(n) for n in names]
-        return Basket(names, models, {n: self.markets[n] for n in names}, np.asarray(self.corr)[np.ix_(idx, idx)])
+        return Basket(names, models, {n: self.markets[n] for n in names}, np.asarray(self.corr)[np.ix_(idx, idx)], vol_corr)

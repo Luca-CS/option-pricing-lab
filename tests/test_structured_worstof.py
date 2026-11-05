@@ -145,8 +145,8 @@ def test_worst_of_fields_and_script():
 def test_worst_of_quote_uses_the_basket_policy():
     spx = BasketContext.with_spx({"SX5E": (100.0, 0.03, 0.03, 0.22)}, [[1, 0.7], [0.7, 1]])
     q = quote(worst("phoenix", **{"wrapper.solve": "coupon"}), spx, n_paths=20_000, batch=10_000)
-    assert (q.decision.model, q.decision.control) == ("lv", "bs")
-    assert "correlation is an input" in q.decision.reason
+    assert (q.decision.model, q.decision.control, q.decision.provisions) == ("lv", "slv", ("slv",))
+    assert "measured correlation" in q.decision.reason
     assert any("flat volatility" in w for w in q.warnings)
     assert q.result.price == pytest.approx(98.0, abs=1e-10)
     single = quote(preset("phoenix"), flat_context(), model="bs", control=None, n_paths=20_000, batch=10_000)

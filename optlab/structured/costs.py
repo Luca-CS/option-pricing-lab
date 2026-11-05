@@ -222,15 +222,25 @@ class _Lines:
 
     def model_run(self, name: str, mix: float | None) -> _Run:
         """A model of provision on the spot draws of the base, for the same sets of parameters."""
-        if name != "slv" or self.basket:
+        if name != "slv":
             raise ValueError(f"no provision model {name!r} on this context")
-        model = replace(self.ctx.slv_model(self.horizon, mix), spot_driven=True)
-        if self.fast:
-            from .fastmodels import fast_slv
-            model = fast_slv(model)
+        if self.basket:
+            model = self.ctx.model("slv", self.horizon, self.names, mix, spot_driven=True)
+        else:
+            model = replace(self.ctx.slv_model(self.horizon, mix), spot_driven=True)
+            if self.fast:
+                from .fastmodels import fast_slv
+                model = fast_slv(model)
         d = self.decision
         return _Run(price_many(self.program, model, self.ctx.market, self.sets, self.fmt, d.n_paths, d.seed, d.batch, valuation=self.product.valuation,
                                fixings=self.fixings, calendar=self.product.calendar, workers=self.workers, initial_fixing=self.initial))
+
+    def mix_used(self, mix: float | None) -> float:
+        if mix is not None:
+            return mix
+        if not self.basket:
+            return self.ctx.slv.mix
+        return next(self.ctx.name_context(n).slv.mix for n in self.names if not np.isscalar(self.ctx.vols[n]))
 
     def ramp_run(self, requests: list, params: list | None = None) -> list[_Run]:
         """One line per set of ramps, on one simulation of the base: for each set of parameters, or at the `params` given."""
@@ -365,7 +375,8 @@ def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target:
     single = runs
     everything = lines.run({"all": values})["all"] if len(values) > 1 else None
     moved = everything if everything is not None else next(iter(single.values()), None)
-    models = {name: lines.model_run(name, inputs.mix) for name in decision.provisions}
+    no_smile = lines.basket and all(np.isscalar(ctx.vols[n]) for n in lines.names)  # flat names: every model is the same Black-Scholes
+    models = {} if no_smile else {name: lines.model_run(name, inputs.mix) for name in decision.provisions}
 
     def effect(x):
         return 0.0 if moved is None else moved.price(x) - base.price(x)
@@ -416,7 +427,7 @@ def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target:
         on = inputs.sign * gap > 0
         if on:
             final_extra = final_extra + pairs
-        mix = lines.ctx.slv_model(lines.horizon, inputs.mix).mix if name == "slv" else None
+        mix = lines.mix_used(inputs.mix) if name == "slv" else None
         note = "" if on else "the gap is in the desk's favour: no provision"
         c = line(name, f"Model: {name.upper()}" + (f" (mix {mix:g})" if mix is not None else ""), "model", pairs, gap if on else 0.0, note=note, gap=inputs.sign * gap,
                  used=mix, default=inputs.defaults.get("slv_mix"), overridden=inputs.overridden_mix)

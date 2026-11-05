@@ -374,7 +374,9 @@ export function costCard(q) {
     d.coupon_final != null ? h("p", { class: "muted", style: { marginTop: "8px" } },
       `Coupon ${num(100 * d.coupon_base, 3)} % p.a. on the base alone, ${num(100 * d.coupon_final, 3)} % p.a. with the costs. `
       + "Each line runs on the random numbers of the base.") : null,
-    d.lines.some((x) => x.kind === "model") ? h("p", { class: "muted" }, "The SLV mix is not calibrated: turn on SLV mix band to see what it moves.") : null,
+    d.lines.some((x) => x.kind === "model") ? h("p", { class: "muted" }, q.basket && q.basket.kind === "basket"
+      ? "The SLV mix is not calibrated, and neither is the correlation of the variances, taken as the spots' correlation: independent variances gave a gap about half this size on a phoenix of three indices (reports/pricing.md)."
+      : "The SLV mix is not calibrated: turn on SLV mix band to see what it moves.") : null,
     d.lines.some((x) => x.kind === "digital") ? h("details", { class: "more" }, h("summary", {}, "Digitals, date by date"),
       h("div", { class: "table-wrap" }, h("table", { class: "data" },
         h("tr", {}, ["Digital", "Date", "Level", "Jump", "Width", "Side", "Cost alone"].map((c, i) => h("th", { class: i > 1 && i !== 5 ? "num" : "" }, c))),

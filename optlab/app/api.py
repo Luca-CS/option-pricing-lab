@@ -439,16 +439,16 @@ class Desk:
         r_default = float(ctx.market.zero_rate(1.0))
         names = tuple(dict.fromkeys(names))
         order = (ctx.underlying, *(n for n in names if n != ctx.underlying)) if ctx.underlying in names else names
-        markets, vols, shown, measured = {}, {}, {}, []
+        markets, vols, shown, measured, contexts = {}, {}, {}, [], {}
         for n in order:
             got = None if n == ctx.underlying or n in typed else self._lake_context(n, day)
             if n == ctx.underlying:
-                markets[n], vols[n] = ctx.market, ctx.surface
+                markets[n], vols[n], contexts[n] = ctx.market, ctx.surface, ctx
                 shown[n] = self._name_row(ctx.market, ctx.atm_vol(1.0), "active", self._origin(ctx.snapshot_id))
                 measured.append(n)
             elif got is not None:
                 c, snap = got
-                markets[n], vols[n] = c.market, c.surface
+                markets[n], vols[n], contexts[n] = c.market, c.surface, c
                 shown[n] = self._name_row(c.market, c.atm_vol(1.0), "lake", self._snapshot_origin(snap))
                 measured.append(n)
             else:
@@ -469,7 +469,7 @@ class Desk:
                 else:
                     value, rho_source[key] = BASKET_DEFAULTS["corr"], "default"
                 corr[i, j] = corr[j, i] = rho[key] = value
-        return BasketContext(order, markets, vols, corr, day), {"kind": "basket", "names": shown, "corr": rho, "corr_source": rho_source,
+        return BasketContext(order, markets, vols, corr, day, contexts), {"kind": "basket", "names": shown, "corr": rho, "corr_source": rho_source,
                                                                 "correlation": meta, "calibrated": ctx.underlying}
 
     def _context_for(self, sheet: TermSheet, ctx: PricingContext):
