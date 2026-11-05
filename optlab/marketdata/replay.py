@@ -73,7 +73,7 @@ def market_for(lake: Lake, names, day, cfg: ReplayConfig, previous=None, T_max: 
     else:
         ctx, snap = context_at(lake, name, day, cfg.as_of, layer=cfg.surface_layer)
         if cfg.model == "slv" and previous is not None:
-            ctx = dataclasses.replace(ctx, slv=previous.slv, heston=previous.heston)
+            ctx = dataclasses.replace(ctx, slv=previous.slv, heston=previous.heston, leverage_flat=previous.leverage_flat)
     return ctx, {name: snap.spot_scale}, {name: snap.provenance}
 
 

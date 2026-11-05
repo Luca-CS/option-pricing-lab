@@ -150,3 +150,25 @@ def test_dividends_give_the_forward_its_steps():
     T = np.linspace(0.01, 1.0, 400)
     jumps = np.log(market.F(T[1:]) / market.F(T[:-1]))
     assert (jumps < -0.005).sum() >= 3  # IBM pays four times a year, each over one percent of spot
+
+
+def test_the_desk_prices_a_share_and_a_worst_of_on_their_real_surfaces(tmp_path):
+    from optlab.app.api import Desk
+
+    desk = Desk(store=tmp_path / "desk.sqlite")
+    try:
+        day = dt.date(2026, 11, 4)
+        snap = market_at(LAKE, "SPX", day, layer="reconstructed")
+        desk.use_snapshot({"snapshot_id": desk.market_store.put(snap)})
+        ctx, shown = desk._single_ctx("AAPL", desk.ctx)
+        assert ctx.underlying == "AAPL" and shown["names"]["AAPL"]["origin"] == "reconstructed"
+        assert ctx.atm_vol(1.0) > desk.ctx.atm_vol(1.0)  # a share is more volatile than the index
+        phoenix = preset("phoenix", **{"general.underlying": "AAPL"})
+        q = quote(phoenix, ctx, model="lv", control=None, n_paths=20_000, batch=10_000)
+        spx = quote(preset("phoenix"), desk.ctx, model="lv", control=None, n_paths=20_000, batch=10_000)
+        assert q.coupon_rate > spx.coupon_rate + 4 * np.hypot(q.coupon_rate_se, spx.coupon_rate_se)
+        bctx, shown = desk._basket_ctx(("SPX", "NDX", "AAPL"))
+        assert bctx.has_surfaces and {r["origin"] for r in shown["names"].values()} == {"reconstructed"}
+        assert all(v == "lake" for v in shown["corr_source"].values()) and 0.3 < shown["corr"]["NDX|SPX"] < 1
+    finally:
+        desk.jobs.shutdown()

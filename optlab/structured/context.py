@@ -14,6 +14,7 @@ from ..svi import SVISurface
 from .surfaces import FastSVISurface
 
 DEFAULT_CALIBRATION = paths().results / "spx_calibration.json"
+LEVERAGE_HORIZONS = (1.0, 2.0, 3.0, 5.0, 7.0, 10.0)  # a leverage calibrated up to one of these serves every shorter product
 
 
 @dataclass
@@ -26,6 +27,7 @@ class PricingContext:
     underlying: str = "SPX"
     snapshot_id: str | None = None  # the market every price of this context refers to
     slv_cache: dict = field(default_factory=dict, repr=False)  # leverages recalibrated per (mix, horizon)
+    leverage_flat: bool = False  # read from the lake without a leverage: calibrated on the first SLV use
 
     @classmethod
     def from_calibration(cls, path: str | Path | None = None, underlying: str = "SPX",
@@ -52,8 +54,9 @@ class PricingContext:
         heston = HestonParams(**snap.heston)
         slv = SLVModel(heston, Leverage.from_dict(snap.slv["leverage"]), snap.slv["mix"])
         surface = FastSVISurface.from_dict(snap.surface)  # bit-identical to SVISurface, faster per step
+        flat = (snap.provenance or {}).get("leverage", {}).get("mode") == "flat"
         return cls(Market.from_dict(snap.market), surface, heston, slv, snap.valuation, snap.underlying,
-                   snap.snapshot_id)
+                   snap.snapshot_id, leverage_flat=flat)
 
     def slv_at_mix(self, mix: float, horizon: float, n_particles: int = 200_000, seed: int = 2026):
         """The SLV model with its leverage recalibrated for another mixing fraction (cached): the vanillas stay on
@@ -65,6 +68,14 @@ class PricingContext:
             self.slv_cache[key] = calibrate_leverage(self.heston, self.surface, self.market, T_max, mix=float(mix),
                                                      n_particles=n_particles, rng=seed)
         return self.slv_cache[key]
+
+    def slv_model(self, horizon: float = 1.0):
+        """The SLV model up to a horizon: the stored one, or, on a market without a leverage, one calibrated once per horizon
+        band at the market's mix."""
+        if not self.leverage_flat:
+            return self.slv
+        band = next((h for h in LEVERAGE_HORIZONS if h >= horizon - 1e-9), max(horizon, LEVERAGE_HORIZONS[-1]))
+        return self.slv_at_mix(self.slv.mix, band)
 
     @property
     def t_max(self) -> float:
@@ -88,9 +99,9 @@ class PricingContext:
             return TabulatedLocalVol(self.surface)
         if name == "slv" and fast:
             from .fastmodels import fast_slv
-            return fast_slv(self.slv)
+            return fast_slv(self.slv_model(T))
         if name == "lv":
             return LocalVolModel(self.surface)
         if name == "slv":
-            return self.slv
+            return self.slv_model(T)
         raise KeyError(f"unknown model {name!r}, expected bs, heston, lv or slv")

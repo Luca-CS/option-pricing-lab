@@ -186,7 +186,7 @@ def test_showcase_seed_fills_a_store_with_trades_struck_on_their_own_markets(tmp
         import pandas as pd
         from optlab.marketdata.derive.bank import spread_at
         day = pd.Timestamp("2021-06-30").date()
-        added = mod.seed(desk, lake, day, deals, n_paths=2000, log=lambda s: None, look_back=(), basket_names=())
+        added = mod.seed(desk, lake, day, deals, n_paths=2000, log=lambda s: None, look_back=())
         assert added == ["SHOW-A", "SHOW-B"]
         assert desk.ctx.valuation == day and desk.ctx.market.spot == 100.0
         trades = {t.trade_id: t for t in desk.repo.trades()}
@@ -212,7 +212,7 @@ def test_showcase_seed_fills_a_store_with_trades_struck_on_their_own_markets(tmp
         live = {t.trade_id for t in desk.repo.trades() if t.status == "live"}
         assert live and {p["name"] for p in state["result"]["positions"]} == live
         # a second run keeps what is there
-        assert mod.seed(desk, lake, day, deals, n_paths=2000, log=lambda s: None, look_back=(), basket_names=()) == []
+        assert mod.seed(desk, lake, day, deals, n_paths=2000, log=lambda s: None, look_back=()) == []
     finally:
         desk.jobs.shutdown()
 

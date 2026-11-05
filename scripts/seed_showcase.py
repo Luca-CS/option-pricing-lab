@@ -22,15 +22,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from optlab.app.api import Desk
 from optlab.config import paths
 from optlab.marketdata.derive.bank import wrapper_spreads
-from optlab.marketdata.derive.carry import dividend_stream
-from optlab.marketdata.derive.correl import correlation_at
-from optlab.marketdata.derive.surfaces import surface_at
 from optlab.marketdata.lake import Lake
-from optlab.marketdata.pit import market_at, market_curves, real_close
+from optlab.marketdata.pit import market_at, real_close
 from optlab.marketdata.replay import ReplayConfig, filled_fixings, strike_trade
 from optlab.structured import preset
 
-BASKET_NAMES = ("NDX", "RUT", "SX5E")  # the calibrated name is SPX
 LOOK_BACK = ("2020-03-23", "2022-07-01")  # markets kept beside the current one: a crash, and a day with a real chain
 
 
@@ -60,7 +56,7 @@ DEALS = (
     Deal("SHOW-05", "airbag", ("SPX",), "2025-06-16", 36, 4e6, "Insurer D"),
     Deal("SHOW-06", "capital_protected", ("SPX",), "2023-06-15", 60, 12e6, "Insurer D", {"upside.participation": 0.6}),
     Deal("SHOW-07", "athena", ("SPX",), "2026-02-17", 36, 6e6, "Private bank A", {"autocall.first_call": 4}),
-    # Worst-ofs: priced on the basket settings of the Market screen.
+    # Worst-ofs: each name on its own market from the lake.
     Deal("SHOW-08", "phoenix", ("SPX", "NDX", "RUT"), "2025-09-15", 36, 7e6, "Family office E",
          {"autocall.first_call": 6, "coupon.barrier": 0.65, "downside.barrier": 0.55}),
     Deal("SHOW-09", "phoenix", ("SPX", "SX5E"), "2026-03-16", 24, 5e6, "Private bank B", {"autocall.first_call": 4}),
@@ -104,24 +100,7 @@ def store_fixings(desk: Desk, lake: Lake, start, day, names) -> tuple[int, int]:
     return stored, len(filled)
 
 
-def store_basket(desk: Desk, lake: Lake, day, names=BASKET_NAMES, calibrated: str = "SPX") -> dict:
-    """What the Pricer's worst-ofs take for the other names: their level, carry and correlation on that date, as flat inputs."""
-    every = [calibrated, *names]
-    corr, meta = correlation_at(lake, every, day)
-    settings = {"names": {}, "corr": {}}
-    for n in names:
-        market, spot, _ = market_curves(lake, n, day)
-        surface = surface_at(lake, n, day, layer="reconstructed").surface
-        settings["names"][n] = {"vol": float(surface.theta(1.0)) ** 0.5, "q": dividend_stream(lake, n, day, spot).annual_yield,
-                                "r": float(market.zero_rate(1.0))}
-    for i, a in enumerate(every):
-        for j in range(i + 1, len(every)):
-            settings["corr"]["|".join(sorted((a, every[j])))] = float(corr[i, j])
-    desk.put_basket(settings)
-    return meta
-
-
-def seed(desk: Desk, lake: Lake, day, deals=DEALS, n_paths: int = 20_000, log=print, look_back=LOOK_BACK, basket_names=BASKET_NAMES) -> list:
+def seed(desk: Desk, lake: Lake, day, deals=DEALS, n_paths: int = 20_000, log=print, look_back=LOOK_BACK) -> list:
     """Markets, fixings, basket settings and trades. Returns the ids of the trades added."""
     day = pd.Timestamp(day).date()
     sid = store_markets(desk, lake, day, look_back)
@@ -130,8 +109,6 @@ def seed(desk: Desk, lake: Lake, day, deals=DEALS, n_paths: int = 20_000, log=pr
     start = min(pd.Timestamp(d.strike).date() for d in deals)
     stored, filled = store_fixings(desk, lake, start, day, names)
     log(f"fixings: {stored} real closes of {', '.join(names)}, {filled} days without a close took the day before")
-    if basket_names:
-        log(f"basket settings: {store_basket(desk, lake, day, basket_names)}")
     known = {t.trade_id for t in desk.repo.trades()}
     cfg = ReplayConfig(model="lv", n_paths=n_paths, greeks=False)
     added = []

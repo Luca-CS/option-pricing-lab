@@ -101,8 +101,9 @@ python -m venv .venv
   `data/store` with the basket settings (market snapshots go to `data/store/market`), `report.py` writes standalone
   HTML reports, `tunnel.py` opens the `--tunnel` SSH link, `fixings.py` parses pasted or CSV fixings (the page sends
   the raw text), `netcheck.py` reads what blocks LAN access on Windows (firewall, Public profile; read-only).
-  Worst-ofs use a `BasketContext` built from the stored settings, and the book is valued in two independent groups
-  (single names, worst-ofs). Each job captures the market context when submitted, so a snapshot switch never changes
+  Every name is on its own market: the one in use for its name, else the lake's at the same date (`marketdata/names.py`), else flat
+  inputs (what is typed in the Market screen wins). The book is valued in independent groups (one per single name, the worst-ofs).
+  Each job captures the market context when submitted, so a snapshot switch never changes
   a run in progress. The page is plain ES modules
   without a build: `js/main.js` routes `#/screen/arg` to `js/views/*.js`, each exporting `render(page, arg)`, and
   makes every `table.data` sortable.

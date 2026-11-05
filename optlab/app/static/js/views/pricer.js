@@ -4,7 +4,7 @@ import { api, runJob, withToken } from "../api.js";
 import { barChart } from "../charts.js";
 import { describeSheet, display, parse, suffix, vegaNote } from "../format.js";
 import { desk, save, state } from "../state.js";
-import { clear, dateLabel, dialog, errorNotice, field, h, int, num, pm, pretty, progress, segmented, signed,
+import { clear, dateLabel, dialog, errorNotice, field, h, int, num, originBadge, pm, pretty, progress, segmented, signed,
   switchControl, toast } from "../ui.js";
 
 const PRECISION = [["quick", "Quick · 20k"], ["standard", "Standard · 100k"], ["precise", "Precise · 200k"]];
@@ -82,9 +82,9 @@ export async function render(page, arg) {
     const top = resp.error && !resp.error.field ? errorNotice(resp.error.message) : null;
     const general = (resp.sheet && resp.sheet.general) || draft.values.general || {};
     const worstOf = general.basket === "worst_of" ? h("div", { class: "notice info" },
-      `Only ${desk.context ? desk.context.underlying : "SPX"} is calibrated: the other names are flat Black-Scholes `
-      + "markets with the volatility, dividend and correlations set in ", h("a", { href: "#/market" }, "Market › Other underlyings"),
-      ". The policy prices worst-ofs with local vol per name.") : null;
+      "Each name takes its own market from the lake at the valuation date, with a measured correlation. A name or a pair typed in ",
+      h("a", { href: "#/market" }, "Market › Other underlyings"),
+      " stays what was typed. The policy prices worst-ofs with local vol per name.") : null;
     clear(formCard,
       h("div", { class: "card-head" }, h("h2", {}, "Term sheet"),
         h("span", { class: "muted" }, describeSheet(resp.sheet || { ...draft.values }))),
@@ -327,20 +327,26 @@ export async function render(page, arg) {
   return () => document.removeEventListener("keydown", onKey);
 }
 
-// What a worst-of was priced with: the names that are not calibrated, and the correlations.
+// What a price used for each name: its market, where it comes from, and the correlations.
+const SOURCE = { active: "market in use", lake: "lake", input: "typed", default: "default, flat" };
+
 export function basketCard(b) {
   const names = Object.entries(b.names || {});
+  const flat = names.filter(([, p]) => p.layer === "flat").map(([n]) => n);
+  const pairs = Object.entries(b.corr || {});
   return h("div", { class: "card" },
-    h("div", { class: "card-head" }, h("h2", {}, "Other underlyings"), h("a", { href: "#/market" }, "Change")),
-    h("p", { class: "muted" }, `${b.calibrated} on its calibrated surface; the others on flat markets rescaled to 100.`),
+    h("div", { class: "card-head" }, h("h2", {}, "Markets used"), h("a", { href: "#/market" }, "Change")),
+    flat.length ? h("div", { class: "notice", style: { marginBottom: "8px" } },
+      `${flat.join(", ")}: no smile, a flat Black-Scholes volatility.`) : null,
     h("div", { class: "table-wrap" }, h("table", { class: "data" },
-      h("tr", {}, h("th", {}, "Name"), h("th", { class: "num" }, "Volatility"), h("th", { class: "num" }, "Dividend"),
-        h("th", { class: "num" }, "Rate"), h("th", {}, "")),
-      names.map(([n, p]) => h("tr", {}, h("td", {}, n), h("td", { class: "num" }, `${num(100 * p.vol, 1)} %`),
-        h("td", { class: "num" }, `${num(100 * p.q, 2)} %`), h("td", { class: "num" }, `${num(100 * p.r, 2)} %`),
-        h("td", { class: "faint" }, p.set ? "" : "default"))))),
-    h("p", { class: "muted", style: { marginTop: "8px" } }, "Correlations: ",
-      Object.entries(b.corr || {}).map(([k, v]) => `${k.replace("|", "–")} ${num(v, 2)}`).join(" · ")));
+      h("tr", {}, h("th", {}, "Name"), h("th", {}, "Market"), h("th", {}, "Surface"), h("th", { class: "num" }, "ATM vol 1 y"), h("th", { class: "num" }, "Dividend"),
+        h("th", { class: "num" }, "Rate")),
+      names.map(([n, p]) => h("tr", {}, h("td", {}, n), h("td", {}, SOURCE[p.source] || p.source || ""),
+        h("td", {}, originBadge(p.origin)), h("td", { class: "num" }, `${num(100 * p.vol, 1)} %`),
+        h("td", { class: "num" }, `${num(100 * p.q, 2)} %`), h("td", { class: "num" }, `${num(100 * p.r, 2)} %`))))),
+    pairs.length ? h("p", { class: "muted", style: { marginTop: "8px" } }, "Correlations: ",
+      pairs.map(([k, v]) => `${k.replace("|", "–")} ${num(v, 2)}${b.corr_source && b.corr_source[k] !== "lake" ? ` (${b.corr_source[k]})` : ""}`).join(" · "),
+      b.correlation ? ` · measured over ${b.correlation.window} days, premium λ ${num(b.correlation.lambda, 2)}` : "") : null);
 }
 
 function kpi(label, value, sub) {

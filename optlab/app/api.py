@@ -17,8 +17,11 @@ import numpy as np
 
 from ..config import DEFAULT_SEED, paths
 from ..log import get_logger
+from ..market import Market
 from ..marketdata import MarketSnapshot, MarketStore
+from ..marketdata.derive.correl import correlation_at
 from ..marketdata.lake import Lake
+from ..marketdata.names import NameMarkets
 from ..structured import PRESETS, MASKS, PricingContext, TermSheet, TermSheetError, describe, preset, quote
 from ..structured.compiler import compile_sheet
 from ..structured.context import DEFAULT_CALIBRATION
@@ -38,8 +41,8 @@ from .serialize import book_json, clean, events_json, quote_json, result_json, t
 
 PRECISION = {"quick": (20_000, 10_000), "standard": (100_000, 25_000), "precise": (200_000, 25_000)}
 FIELD = re.compile(r"^([a-z_]+\.[a-z_]+)\b")
-# Names other than the calibrated one: flat Black-Scholes markets rescaled to 100, with these defaults until the
-# user sets them (Market screen). The rate defaults to the calibrated 1-year zero rate.
+# Names the lake cannot give: flat Black-Scholes markets rescaled to 100, with these defaults until the user sets them
+# (Market screen). The rate defaults to the 1-year zero rate of the market in use.
 BASKET_DEFAULTS = {"vol": 0.20, "q": 0.02, "corr": 0.70}
 LOG = get_logger(__name__)
 
@@ -69,6 +72,7 @@ class Desk:
     def __init__(self, store=None, calibration=None, workers: int | None = None, max_jobs: int = 2, lake=None):
         self.repo = Repository(store)
         self.lake = Lake(lake)
+        self.names = NameMarkets(self.lake)
         self.shared = False  # listening beyond this machine: raw quotes and levels stay private
         self.market_store = MarketStore(self.repo.path.parent / "market")
         self.calibration = Path(calibration) if calibration else DEFAULT_CALIBRATION
@@ -384,34 +388,101 @@ class Desk:
         self.repo.put_setting("basket", settings)
         return self.basket_settings()
 
+    def _lake_context(self, name: str, day) -> tuple | None:
+        """(context, snapshot) of a name from the lake at a date, or None when the lake cannot build it."""
+        if not self.lake.has("prices_eod"):
+            return None
+        try:
+            return self.names.context(name, day)
+        except KeyError as exc:
+            LOG.info("no market of %s on %s from the lake: %s", name, day, exc)
+            return None
+
+    @staticmethod
+    def _name_row(market, atm_vol: float, source: str, origin: dict | None = None) -> dict:
+        """What a price used for one name, as the page shows it: rates and vol at one year, never a real level."""
+        r = float(market.zero_rate(1.0))
+        return {"vol": atm_vol, "q": r - float(market.carry_rate(1.0)), "r": r, "source": source, "set": source == "input",
+                "origin": (origin or {}).get("surface"), "layer": (origin or {}).get("layer"),
+                "carry_origin": (origin or {}).get("carry"), "extrapolated_from": (origin or {}).get("extrapolated_from")}
+
+    @staticmethod
+    def _snapshot_origin(snap) -> dict:
+        p = snap.provenance
+        return {"surface": p["surface"]["origin"], "layer": p["surface"]["layer"], "carry": p["carry"]["origin"],
+                "extrapolated_from": p["surface"]["extrapolated_from"]}
+
+    def _basket_correlation(self, known, day) -> tuple[dict, dict | None]:
+        """{pair: correlation} measured on the lake for the names it holds, with how it was measured."""
+        known = list(known)
+        if len(known) < 2:
+            return {}, None
+        try:
+            matrix, meta = correlation_at(self.lake, known, day)
+        except KeyError as exc:
+            LOG.info("no correlation of %s on %s from the lake: %s", ", ".join(known), day, exc)
+            return {}, None
+        return {_pair(a, known[j]): float(matrix[i, j]) for i, a in enumerate(known) for j in range(i + 1, len(known))}, meta
+
     def _basket_ctx(self, names, settings: dict | None = None, ctx: PricingContext | None = None):
-        """The calibrated name (local vol on its surface) and the others as flat Black-Scholes markets at 100, with
-        the stored or default assumptions. Returns (context, assumptions shown with the result)."""
+        """Each name on its own market: the one in use for its name, the lake's at the same date for the others, and flat
+        Black-Scholes for what the lake cannot give. A name typed in the Market screen stays what was typed. Correlations come
+        the same way: typed, else measured on the lake, else the default. Returns (context, what the page shows)."""
         ctx = ctx or self.ctx
         s = settings if settings is not None else self.repo.setting("basket", {})
+        typed, day = s.get("names", {}), ctx.valuation
         r_default = float(ctx.market.zero_rate(1.0))
-        others, shown = {}, {}
-        for n in names:
-            if n == ctx.underlying or n in others:
-                continue
-            p = {**BASKET_DEFAULTS, "r": None, **s.get("names", {}).get(n, {})}
-            r = r_default if p["r"] is None else p["r"]
-            others[n] = (100.0, r, p["q"], p["vol"])
-            shown[n] = {"vol": p["vol"], "q": p["q"], "r": r, "set": n in s.get("names", {})}
-        order = (ctx.underlying, *others)
-        corr = np.eye(len(order))
-        rho = {}
+        names = tuple(dict.fromkeys(names))
+        order = (ctx.underlying, *(n for n in names if n != ctx.underlying)) if ctx.underlying in names else names
+        markets, vols, shown, measured = {}, {}, {}, []
+        for n in order:
+            got = None if n == ctx.underlying or n in typed else self._lake_context(n, day)
+            if n == ctx.underlying:
+                markets[n], vols[n] = ctx.market, ctx.surface
+                shown[n] = self._name_row(ctx.market, ctx.atm_vol(1.0), "active", self._origin(ctx.snapshot_id))
+                measured.append(n)
+            elif got is not None:
+                c, snap = got
+                markets[n], vols[n] = c.market, c.surface
+                shown[n] = self._name_row(c.market, c.atm_vol(1.0), "lake", self._snapshot_origin(snap))
+                measured.append(n)
+            else:
+                p = {**BASKET_DEFAULTS, "r": None, **typed.get(n, {})}
+                r = r_default if p["r"] is None else p["r"]
+                markets[n], vols[n] = Market.flat(100.0, r, p["q"]), p["vol"]
+                shown[n] = {"vol": p["vol"], "q": p["q"], "r": r, "set": n in typed, "source": "input" if n in typed else "default",
+                            "origin": "synthetic", "layer": "flat"}
+        lake_rho, meta = self._basket_correlation(measured, day) if self.lake.has("prices_eod") else ({}, None)
+        corr, rho, rho_source = np.eye(len(order)), {}, {}
         for i, a in enumerate(order):
             for j in range(i + 1, len(order)):
-                b = order[j]
-                corr[i, j] = corr[j, i] = rho[_pair(a, b)] = s.get("corr", {}).get(_pair(a, b), BASKET_DEFAULTS["corr"])
-        bctx = BasketContext.with_spx(others, corr, spx=ctx)
-        return bctx, {"names": shown, "corr": rho, "calibrated": ctx.underlying}
+                key = _pair(a, order[j])
+                if key in s.get("corr", {}):
+                    value, rho_source[key] = s["corr"][key], "input"
+                elif key in lake_rho:
+                    value, rho_source[key] = lake_rho[key], "lake"
+                else:
+                    value, rho_source[key] = BASKET_DEFAULTS["corr"], "default"
+                corr[i, j] = corr[j, i] = rho[key] = value
+        return BasketContext(order, markets, vols, corr, day), {"kind": "basket", "names": shown, "corr": rho, "corr_source": rho_source,
+                                                                "correlation": meta, "calibrated": ctx.underlying}
 
     def _context_for(self, sheet: TermSheet, ctx: PricingContext):
         if len(sheet.underlyings) > 1:
             return self._basket_ctx(sheet.underlyings, ctx=ctx)
-        return ctx, None
+        return self._single_ctx(sheet.underlyings[0], ctx)
+
+    def _single_ctx(self, name: str, ctx: PricingContext):
+        """A name on the market in use when it is that name's, else on the lake's at the same date. Without one the market in
+        use comes back, and the quote says the sheet is on another name."""
+        if name == ctx.underlying:
+            return ctx, None
+        got = self._lake_context(name, ctx.valuation)
+        if got is None:
+            return ctx, None
+        c, snap = got
+        return c, {"kind": "single", "names": {name: self._name_row(c.market, c.atm_vol(1.0), "lake", self._snapshot_origin(snap))},
+                   "corr": {}, "calibrated": ctx.underlying}
 
     # --- term sheets ---
     def presets(self) -> dict:
@@ -473,7 +544,7 @@ class Desk:
         q = quote(sheet, qctx, model=o["model"], control=o["control"], n_paths=o["n_paths"], batch=o["batch"],
                   control_paths=o["control_paths"], fixings=fixings, with_greeks=o["with_greeks"],
                   slv_vega=o["slv_vega"], workers=self.workers, control_forwards=o["control_forwards"],
-                  fast=o["fast"], sticky=o["sticky"], mix_band=None if basket else o["mix_band"])
+                  fast=o["fast"], sticky=o["sticky"], mix_band=None if isinstance(qctx, BasketContext) else o["mix_band"])
         return q, basket
 
     def quote(self, body: dict) -> dict:
@@ -593,47 +664,54 @@ class Desk:
         self.repo.restore_trade(trade_id)
         return {"ok": True}
 
-    def price_book(self, body: dict) -> dict:
-        """Live trades in two groups, each on its own shared simulation: single names under the policy (SLV for
-        path-dependent products), worst-ofs under the basket context (local vol for the calibrated name, flat
-        Black-Scholes for the others). The groups use different seeds, so their errors add in quadrature."""
-        o = self._options(body.get("options") or {})
-        greeks = bool((body.get("options") or {}).get("greeks", True))
-        ctx = self.ctx
-        singles, baskets, names = [], [], []
+    def _positions_by_market(self, ctx: PricingContext) -> tuple[dict, list, list]:
+        """Live trades as ({single name: positions}, worst-of positions, names of the worst-ofs)."""
+        singles, baskets, names = {}, [], []
         for t in self.repo.trades():
             if t.status != "live":
                 continue
             sheet = t.term_sheet()
-            fix = None
-            if t.strike_date < ctx.valuation and sheet is not None:
-                fix = self._known_fixings(sheet.underlyings, ctx.valuation)
-            if sheet is not None and len(sheet.underlyings) > 1:
+            observed = sheet.underlyings if sheet is not None else tuple(validate(parse(t.product["script"])).underlying_names)
+            fix = self._known_fixings(observed, ctx.valuation) if t.strike_date < ctx.valuation and sheet is not None else None
+            if len(observed) > 1:
                 baskets.append(t.to_position(fix))
-                names += [n for n in sheet.underlyings if n not in names]
+                names += [n for n in observed if n not in names]
             else:
-                singles.append(t.to_position(fix))
+                singles.setdefault(observed[0], []).append(t.to_position(fix))
+        return singles, baskets, names
+
+    def price_book(self, body: dict) -> dict:
+        """Live trades in groups, each on its own shared simulation: one group per single name, on that name's market and
+        under the policy (SLV for path-dependent products), and the worst-ofs under the basket context. The groups use
+        different seeds, so their errors add in quadrature."""
+        o = self._options(body.get("options") or {})
+        greeks = bool((body.get("options") or {}).get("greeks", True))
+        ctx = self.ctx
+        singles, baskets, names = self._positions_by_market(ctx)
         if not singles and not baskets:
             raise ApiError("no live trade in the book", 422)
 
         def run():
             t0 = time.perf_counter()
             groups = []
-            if singles:
-                groups.append(("single names", Book(singles), ctx, None, DEFAULT_SEED))
+            for k, (name, positions) in enumerate(sorted(singles.items(), key=lambda x: x[0] != ctx.underlying)):
+                gctx, shown = self._single_ctx(name, ctx)
+                if gctx.underlying != name:
+                    raise ValueError(f"{', '.join(p.name for p in positions)}: no market of {name} on {ctx.valuation}, from the lake or in use")
+                groups.append((name, Book(positions), gctx, shown, DEFAULT_SEED + k, name))
             if baskets:
                 bctx, shown = self._basket_ctx(names, ctx=ctx)
-                groups.append(("worst-of", Book(baskets), bctx, shown, DEFAULT_SEED + 1))
+                groups.append(("worst-of", Book(baskets), bctx, shown, DEFAULT_SEED + len(groups), None))
             parts = []
-            for label, book, gctx, shown, seed in groups:
-                res = book.price(gctx, model=None if shown else o["model"], n_paths=o["n_paths"], seed=seed,
-                                 batch=o["batch"], workers=self.workers)
+            for label, book, gctx, shown, seed, name in groups:
+                forced = None if name is None else o["model"]
+                res = book.price(gctx, model=forced, n_paths=o["n_paths"], seed=seed, batch=o["batch"], workers=self.workers)
                 g = None
                 if greeks:
-                    g = book.greeks(gctx, model=None if shown else o["model"], n_paths=o["n_paths"], seed=seed,
-                                    batch=o["batch"], slv_vega=o["slv_vega"], workers=self.workers)
-                parts.append((label, res, g, shown))
-            out = _combine_books(parts, ctx.underlying)
+                    g = book.greeks(gctx, model=forced, n_paths=o["n_paths"], seed=seed, batch=o["batch"], slv_vega=o["slv_vega"],
+                                    workers=self.workers)
+                parts.append((label, res, g, shown, name))
+            out = _combine_books(parts)
             out["seconds"] = time.perf_counter() - t0  # prices and Greeks; each group's own time is its price
             self.last_book = out
             return out
@@ -733,13 +811,14 @@ class Desk:
         return {"job": self.jobs.submit("script", run)}
 
 
-def _combine_books(parts, calibrated: str) -> dict:
+def _combine_books(parts) -> dict:
     """One book result from groups priced on independent simulations: values add, errors add in quadrature;
-    deltas and vegas are reported per underlying (a worst-of moves with every name)."""
+    deltas and vegas are reported per underlying (a worst-of moves with every name). A part is (label, result, greeks,
+    what the markets were, its one name or None for a basket)."""
     positions, groups, warnings = [], [], []
     by_name: dict = {}
     pos_delta = []
-    for label, res, g, shown in parts:
+    for label, res, g, shown, name in parts:
         b = book_json(res)
         for p in b["positions"]:
             p["group"] = label
@@ -751,7 +830,7 @@ def _combine_books(parts, calibrated: str) -> dict:
         if g is None:
             pos_delta += [None] * len(b["positions"])
             continue
-        per_name = {calibrated: {"delta": g["delta"], "vega": g.get("vega")}} if shown is None else \
+        per_name = {name: {"delta": g["delta"], "vega": g.get("vega")}} if name is not None else \
             {n: {"delta": g["delta"][n], "vega": (g.get("vega") or {}).get(n)} for n in g["delta"]}
         pos_delta += list(np.sum([d["delta"]["positions"] for d in per_name.values()], axis=0))
         for n, d in per_name.items():

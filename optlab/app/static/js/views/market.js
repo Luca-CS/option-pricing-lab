@@ -68,9 +68,9 @@ export async function render(page) {
         h("div", { class: "btn-row" },
           h("button", { class: "btn sm", type: "button", onclick: () => { rows.push({ name: "", vol: d.vol, q: d.q, r: null }); drawBasket(); } }, "Add a name"),
           h("button", { class: "btn sm primary", type: "button", onclick: saveBasket }, "Save"))),
-      h("p", { class: "muted" }, `Only ${basket.calibrated} is calibrated. Other names are flat Black-Scholes markets rescaled to 100; `
-        + `a name not listed here uses ${num(100 * d.vol, 0)} % volatility, ${num(100 * d.q, 1)} % dividend, the `
-        + `${basket.calibrated} 1-year rate (${num(100 * d.r, 2)} %) and a correlation of ${num(d.corr, 2)}.`),
+      h("p", { class: "muted" }, "Prices read each name's market and the correlations from the lake at the valuation date. List a name here only to "
+        + "replace them by a flat Black-Scholes market of your own: what is typed wins. A name the lake does not have and that is not listed uses "
+        + `${num(100 * d.vol, 0)} % volatility, ${num(100 * d.q, 1)} % dividend, the ${basket.calibrated} 1-year rate (${num(100 * d.r, 2)} %) and a correlation of ${num(d.corr, 2)}.`),
       error ? h("div", { class: "notice err", role: "alert", style: { marginBottom: "10px" } }, error) : null,
       rows.length ? h("div", { class: "table-wrap" }, h("table", { class: "data nosort" },
         h("tr", {}, ["Name", "Volatility %", "Dividend %", "Rate %", ""].map((c) => h("th", {}, c))),
@@ -82,7 +82,7 @@ export async function render(page) {
           h("td", {}, pctIn(r.r, (v) => { r.r = v; }, `Rate of ${r.name}`, `${num(100 * d.r, 2)}`)),
           h("td", {}, h("button", { class: "btn sm ghost danger", type: "button",
             onclick: () => { rows.splice(i, 1); drawBasket(); } }, "Remove"))))))
-        : h("div", { class: "empty" }, "No other name yet: worst-ofs use the defaults above."),
+        : h("div", { class: "empty" }, "Nothing typed: worst-ofs read the lake."),
       names.length > 1 ? h("div", { style: { marginTop: "14px" } }, h("h3", {}, "Correlations"),
         h("div", { class: "table-wrap" }, h("table", { class: "data nosort" },
           h("tr", {}, h("th", {}, ""), names.map((n) => h("th", { class: "num" }, n))),
