@@ -165,10 +165,18 @@ atexit.register(shutdown_pool)
 NATIVE_BATCH_BYTES = 256 * 2**20  # paths of one engine batch: memory, not numbers, sets the size
 
 
-def native_pair_batches(n_pairs: int, n_columns: int) -> list[int]:
-    """Pairs per engine batch: as many as fit in NATIVE_BATCH_BYTES of double spots, at least 4096."""
-    per = max(4096, NATIVE_BATCH_BYTES // max(1, 2 * 8 * n_columns))
+def native_pair_batches(n_pairs: int, n_columns: int, parts: int = 1) -> list[int]:
+    """Pairs per engine batch: at most what fits in NATIVE_BATCH_BYTES of double spots, and at most n_pairs / parts
+    so that `parts` evaluations can run at once; at least 4096."""
+    per = max(4096, min(NATIVE_BATCH_BYTES // max(1, 2 * 8 * n_columns), -(-n_pairs // max(1, parts))))
     return [per] * (n_pairs // per) + ([n_pairs % per] if n_pairs % per else [])
+
+
+def evaluation_threads(backend: str) -> int:
+    """Threads evaluating batches at once. On the GPU the NumPy evaluation is the bottleneck, and NumPy releases the
+    GIL inside its array operations: one thread per physical core (half the hardware threads), at most 8. On the CPU
+    backend the engine already uses every core: one."""
+    return max(1, min(8, native.cpu_threads() // 2)) if backend == "gpu" else 1
 
 
 def _run_native(backend, model, market, name, times, n_paths, seed, spot0, history, evaluations, sim_kwargs):
@@ -176,9 +184,11 @@ def _run_native(backend, model, market, name, times, n_paths, seed, spot0, histo
     t_start = time.perf_counter()
     plan = native.plan(model, market, times, sim_kwargs.get("dt_max", 1 / 252), sim_kwargs.get("dt_min", 1 / 2000))
     key = native.seed64(seed)
-    sizes = native_pair_batches(n_paths // 2, len(plan.names) * plan.n_obs)
+    threads = int(sim_kwargs.get("eval_threads") or evaluation_threads(backend))
+    sizes = native_pair_batches(n_paths // 2, len(plan.names) * plan.n_obs, 2 * threads if threads > 1 else 1)
     starts = np.concatenate([[0], np.cumsum(sizes)[:-1]]).astype(int)
     basket = isinstance(model, Basket)
+    n = len(sizes)
 
     def produce(k):
         t = time.perf_counter()
@@ -189,20 +199,38 @@ def _run_native(backend, model, market, name, times, n_paths, seed, spot0, histo
             scenario = Scenario(name, times, spots[0], spot0, history)
         return scenario, time.perf_counter() - t, timing["kernel_ms"]
 
+    def evaluate(scenario):
+        t = time.perf_counter()
+        return [_summary(ev, scenario, market) for ev in evaluations], time.perf_counter() - t
+
+    # The engine produces batches in order on one thread (ctypes releases the GIL) while up to `threads` batches are
+    # evaluated; at most threads + 1 batches wait in memory. Summaries are added in batch order, so the numbers do not
+    # depend on the number of threads.
     totals = [Totals() for _ in evaluations]
     t_sim = t_eval = kernel = 0.0
-    with ThreadPoolExecutor(max_workers=1) as producer:  # ctypes releases the GIL: batch k + 1 runs while k is evaluated
-        nxt = producer.submit(produce, 0)
-        for k in range(len(sizes)):
-            scenario, ts, km = nxt.result()
-            if k + 1 < len(sizes):
-                nxt = producer.submit(produce, k + 1)
-            t1 = time.perf_counter()
-            for tot, ev in zip(totals, evaluations):
-                tot.add(_summary(ev, scenario, market))
-            t_sim, t_eval, kernel = t_sim + ts, t_eval + time.perf_counter() - t1, kernel + km
-    return totals, {"simulation": t_sim, "evaluation": t_eval, "wall": time.perf_counter() - t_start, "workers": 1,
-                    "engine": backend, "kernel_ms": kernel, "batches": len(sizes)}
+    with ThreadPoolExecutor(max_workers=1) as producer, ThreadPoolExecutor(max_workers=threads) as pool:
+        sims = {k: producer.submit(produce, k) for k in range(min(n, threads + 1))}
+        evals = {}
+
+        def collect(j):
+            nonlocal t_eval
+            summaries, te = evals.pop(j).result()
+            t_eval += te
+            for tot, summary in zip(totals, summaries):
+                tot.add(summary)
+
+        for k in range(n):
+            scenario, ts, km = sims.pop(k).result()
+            t_sim, kernel = t_sim + ts, kernel + km
+            evals[k] = pool.submit(evaluate, scenario)
+            if k >= threads:
+                collect(k - threads)
+            if k + threads + 1 < n:
+                sims[k + threads + 1] = producer.submit(produce, k + threads + 1)
+        for j in sorted(evals):
+            collect(j)
+    return totals, {"simulation": t_sim, "evaluation": t_eval, "wall": time.perf_counter() - t_start, "workers": threads,
+                    "engine": backend, "kernel_ms": kernel, "batches": n}
 
 
 def run(model, market, name, times, n_paths: int, seed, batch, spot0, history, evaluations: list,
@@ -215,6 +243,7 @@ def run(model, market, name, times, n_paths: int, seed, batch, spot0, history, e
     if backend != "numpy":
         return _run_native(backend, model, market, name, times, n_paths, seed, spot0, history, evaluations, sim_kwargs)
     sim_kwargs.pop("threads", None)
+    sim_kwargs.pop("eval_threads", None)
     sizes = batch_sizes(n_paths, batch)
     seeds = [seed] if len(sizes) == 1 else list(np.random.SeedSequence(seed).spawn(len(sizes)))
     jobs = [(model, market, name, times, size, s, spot0, history, evaluations, sim_kwargs)

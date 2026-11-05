@@ -62,6 +62,36 @@ def run_case(ctx, key, n_paths, workers, batch, engine="numpy"):
             "simulation_share": t["simulation"] / (t["simulation"] + t["evaluation"])}
 
 
+def desk_quote(engine, precision):
+    """A Phoenix quoted as the Pricer does it: policy model (local vol base, SLV provision), Greeks with the SLV vega,
+    the SLV mix band and the desk's costs, in its own temporary store."""
+    import tempfile
+
+    from optlab import native
+    from optlab.app.api import Desk
+
+    with tempfile.TemporaryDirectory() as tmp:
+        desk = Desk(store=Path(tmp) / "desk.sqlite", engine=engine)
+        try:
+            s = preset("phoenix").to_dict(json_safe=True)
+            kind = s.pop("type")
+            body = {"sheet": {"type": kind, "values": s},
+                    "options": {"precision": precision, "greeks": True, "slv_vega": True, "mix_band": True, "costs": True}}
+            t0 = time.perf_counter()
+            job = desk.quote(body)["job"]
+            while (j := desk.job(job))["state"] in ("queued", "running"):
+                time.sleep(0.02)
+            wall = time.perf_counter() - t0
+            if j["state"] != "done":
+                raise RuntimeError(j.get("error"))
+            res = j["result"]
+            return {"case": "desk_quote", "engine": engine, "precision": precision, "paths": res["options"]["n_paths"],
+                    "wall": wall, "coupon": res.get("coupon_rate"), "coupon_se": res.get("coupon_rate_se")}
+        finally:
+            desk.jobs.shutdown()
+            native.set_default(None)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--paths", type=int, default=1_000_000)
@@ -70,6 +100,7 @@ def main():
     ap.add_argument("--cases", default=",".join(CASES))
     ap.add_argument("--engines", default="numpy,cpu,gpu")
     ap.add_argument("--no-leverage", action="store_true")
+    ap.add_argument("--desk", help="precisions of a full desk quote to time, e.g. standard,precise")
     ap.add_argument("--out")
     args = ap.parse_args()
     ctx = PricingContext.from_calibration()
@@ -84,13 +115,20 @@ def main():
             print(f"{key:28s} {e:5s} workers {w:2d}  wall {r['wall']:7.2f} s  simulation {r['simulation_cpu']:7.2f} s  "
                   f"evaluation {r['evaluation_cpu']:7.2f} s  share {100 * r['simulation_share']:5.1f} %  "
                   f"price {r['price']:.4f} ± {r['stderr']:.4f}")
-    for n in (() if args.no_leverage else (100_000, 200_000)):
-        t0 = time.perf_counter()
-        calibrate_leverage(HestonParams(**vars(ctx.heston)) if not isinstance(ctx.heston, HestonParams) else ctx.heston,
-                           ctx.surface, ctx.market, 1.0, mix=0.5, n_particles=n, rng=1)
-        dt_ = time.perf_counter() - t0
-        rows.append({"case": "slv_leverage_1y", "particles": n, "wall": dt_})
-        print(f"slv leverage 1y, {n:,} particles: {dt_:.2f} s")
+    for e in (() if args.no_leverage else args.engines.split(",")):
+        for n in (100_000, 200_000):
+            t0 = time.perf_counter()
+            calibrate_leverage(ctx.heston, ctx.surface, ctx.market, 1.0, mix=0.5, n_particles=n, rng=1, engine=e)
+            dt_ = time.perf_counter() - t0
+            rows.append({"case": "slv_leverage_1y", "engine": e, "particles": n, "wall": dt_})
+            print(f"slv leverage 1y {e:5s} {n:,} particles: {dt_:.2f} s")
+    if args.desk:
+        for e in args.engines.split(","):
+            for precision in args.desk.split(","):
+                r = desk_quote(e, precision)
+                rows.append(r)
+                print(f"desk quote {e:5s} {precision:9s} ({r['paths']:,} paths, greeks, SLV vega, mix band, costs): "
+                      f"{r['wall']:6.1f} s, coupon {100 * r['coupon']:.3f} % ± {100 * r['coupon_se']:.3f}")
     if args.out:
         Path(args.out).write_text(json.dumps(rows, indent=1))
 
