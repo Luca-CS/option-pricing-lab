@@ -234,7 +234,9 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
     if mix_band and decision.method == "monte_carlo" and not basket:
         band = _mix_band(mix_band, product, ctx, fmt, decision, prof, fixings, workers, margin, sheet)
     ctrl = None
-    if decision.control:
+    if desk is not None and decision.control in desk.model_results:  # on the base's paths already
+        ctrl = desk.model_results[decision.control]
+    elif decision.control:
         ctrl_run = _pricer(product, ctx, fmt, decision, prof, decision.control, "monte_carlo",
                            control_paths or decision.n_paths, fixings, workers, fast=fast)
         (ctrl,) = ctrl_run([params])

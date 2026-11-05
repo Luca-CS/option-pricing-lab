@@ -92,7 +92,7 @@ def test_quote_job_end_to_end(desk):
 def test_quote_with_slv_vega(desk):
     """SLV has a vega only when the leverage is recalibrated on the bumped surface: the option reaches the library."""
     job = desk.quote({"sheet": sheet_of(desk, "phoenix"),
-                      "options": {"precision": "quick", "greeks": True, "slv_vega": True}})["job"]
+                      "options": {"precision": "quick", "greeks": True, "slv_vega": True, "model": "slv"}})["job"]
     g = wait(desk, job)["greeks"]
     assert g["model"] == "slv" and g["vega"] < 0 and 0 < g["vega_se"] < abs(g["vega"]) / 4
     assert 0 < g["delta"] and g["delta_se"] < g["delta"] / 4

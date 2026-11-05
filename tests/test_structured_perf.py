@@ -122,7 +122,7 @@ def test_forward_controls_reduce_the_variance_without_moving_the_price(model):
 def test_the_coupon_solver_stays_exact_with_forward_controls():
     from optlab.structured.pricer import price_many
     from optlab.structured.quote import quote
-    q = quote(preset("phoenix", **{"general.maturity_months": 12}), SPX, control=None, n_paths=40_000,
+    q = quote(preset("phoenix", **{"general.maturity_months": 12}), SPX, model="slv", control=None, n_paths=40_000,
               batch=10_000, control_forwards=True)
     cpn = q.coupon_rate * q.product.coupon_scale
     again = price_many(q.product.program, SPX.model("slv"), SPX.market, [{"cpn": cpn}], n_paths=40_000,

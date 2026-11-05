@@ -143,9 +143,9 @@ def test_barrier_reverse_convertible_matches_bgk_shifted_closed_form():
     assert ref < euro
 
 
-def test_brc_policy_is_slv_with_a_local_vol_control():
+def test_brc_policy_is_local_vol_with_an_slv_control():
     q = quote(preset("barrier_reverse_convertible"), SPX, n_paths=40_000, batch=20_000)
-    assert (q.decision.method, q.decision.model, q.decision.control) == ("monte_carlo", "slv", "lv")
+    assert (q.decision.method, q.decision.model, q.decision.control) == ("monte_carlo", "lv", "slv")
     assert q.result.price == pytest.approx(98.0, abs=1e-10)
     assert q.coupon_rate > 0 and q.control is not None
 
@@ -289,9 +289,9 @@ def test_autocall_with_daily_knock_in_matches_backward_quadrature():
     assert ref < euro
 
 
-def test_autocall_policy_is_slv_and_reports_call_probabilities():
+def test_autocall_policy_is_local_vol_and_reports_call_probabilities():
     q = quote(preset("phoenix"), SPX, n_paths=40_000, batch=20_000)
-    assert (q.decision.method, q.decision.model, q.decision.control) == ("monte_carlo", "slv", "lv")
+    assert (q.decision.method, q.decision.model, q.decision.control) == ("monte_carlo", "lv", "slv")
     assert q.result.price == pytest.approx(98.0, abs=1e-10)
     assert q.result.termination.sum() > 0.3
     assert 0.25 < q.result.expected_life < 2.0
@@ -357,6 +357,9 @@ def test_quote_with_greeks_uses_the_policy_model():
     assert "greeks (SURFACE)" in q.table()
     q = quote(preset("phoenix", **{"general.maturity_months": 12}), SPX, control=None, with_greeks=True,
               n_paths=20_000, batch=10_000)
+    assert q.greeks.model == "lv" and q.greeks.vega is not None
+    q = quote(preset("phoenix", **{"general.maturity_months": 12}), SPX, model="slv", control=None, with_greeks=True,
+              n_paths=20_000, batch=10_000)
     assert q.greeks.model == "slv" and q.greeks.vega is None and "recalibration" in q.table()
 
 
@@ -378,6 +381,6 @@ def test_slv_vega_by_recalibration_matches_the_smile_vega_of_a_european_product(
     slv = greeks(p.program, SPX, "slv", n_paths=N_MC, slv_vega=True, n_particles=50_000)
     assert abs(slv.vega - rep.vega) <= 4 * slv.vega_se + 0.01
     assert abs(slv.delta - rep.delta) <= 4 * slv.delta_se + 0.005
-    q = quote(preset("phoenix", **{"general.maturity_months": 12}), SPX, control=None, n_paths=20_000,
+    q = quote(preset("phoenix", **{"general.maturity_months": 12}), SPX, model="slv", control=None, n_paths=20_000,
               batch=10_000, with_greeks=True)
     assert q.greeks.vega is None and "slv_vega=True" in q.greeks.note

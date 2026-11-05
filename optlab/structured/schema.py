@@ -122,6 +122,7 @@ SECTIONS = {s.name: s for s in [
         Field("dividend", "number", None, "Dividends", "of dividends", minimum=-1.0, maximum=1.0),
         Field("repo", "number", None, "Repo", "bp", minimum=-0.05, maximum=0.05),
         Field("spot", "number", None, "Spot, delta bid-ask", "bp", minimum=-0.02, maximum=0.02),
+        Field("slv_mix", "number", None, "SLV mix (not calibrated)", "", minimum=0.0, maximum=1.0),
     )),
 ]}
 

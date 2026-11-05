@@ -138,24 +138,24 @@ def test_conditional_coupons_make_a_bullet_path_dependent():
     assert p.product_class == "path_dependent" and len(p.observation_times) == 4
 
 
-def test_policy_picks_replication_for_european_and_slv_otherwise():
+def test_policy_picks_replication_for_european_and_local_vol_with_a_provision_otherwise():
     d = decide(prof(preset("reverse_convertible")), t_max=2.14)
     assert (d.method, d.model, d.control) == ("replication", "surface", "lv")
     d = decide(prof(preset("phoenix")), t_max=2.14)
-    assert (d.method, d.model, d.control) == ("monte_carlo", "slv", "lv")
+    assert (d.method, d.model, d.control, d.provisions) == ("monte_carlo", "lv", "slv", ("slv",))
     assert "forward skew" in d.reason
     d = decide(prof(preset("barrier_reverse_convertible")), t_max=2.14)
-    assert d.model == "slv"
+    assert d.model == "lv" and d.provisions == ("slv",)
 
 
 def test_policy_overrides_and_warnings():
     d = decide(prof(preset("phoenix")), t_max=2.14, model="bs")
-    assert d.forced and d.model == "bs" and "policy default: slv" in d.reason
+    assert d.forced and d.model == "bs" and "policy default: lv" in d.reason and d.provisions == ()
     with pytest.raises(ValueError, match="needs a European"):
         decide(prof(preset("phoenix")), t_max=2.14, model="surface")
     long = decide(prof(preset("phoenix", **{"general.maturity_months": 36})), t_max=2.14)
     assert any("beyond the last calibrated maturity" in w for w in long.warnings)
-    assert decide(prof(preset("phoenix")), t_max=2.14, model="lv").control is None
+    assert decide(prof(preset("phoenix")), t_max=2.14, model="slv").control is None
 
 
 def test_describe_is_json_serialisable_for_a_front_end():

@@ -1,7 +1,8 @@
-"""Pricing policy: the model and method suited to a product, chosen from its profile, with the reason.
+"""Pricing policy: the base model and method suited to a product, chosen from its profile, with the reason, and the models it is compared to.
 
-The rules are data and can be replaced. Black-Scholes and Heston are never chosen by default (BS ignores the
-smile, Heston does not reprice it exactly) but stay available when forced.
+The rules are data and can be replaced. The base is local vol (or replication on the surface, the same law without the noise). A family's
+own risks are in other models, and the gap to each is kept as a provision when it goes against the desk (costs.py). Black-Scholes and
+Heston are never chosen by default (BS ignores the smile, Heston does not reprice it exactly) but stay available when forced.
 """
 
 from __future__ import annotations
@@ -15,21 +16,24 @@ from .profile import ProductProfile
 @dataclass(frozen=True)
 class Rule:
     method: str  # replication or monte_carlo
-    model: str  # surface (replication), slv, lv, heston, bs
-    control: str | None  # second model priced for comparison
+    model: str  # the base: surface (replication), or lv
+    control: str | None  # second model priced for comparison, when no cost is asked
     reason: str
+    provisions: tuple = ()  # models whose gap to the base is kept as a fixed provision when it goes against the desk
 
 
 RULES = {
     "european": Rule("replication", "surface", "lv",
                      "only the final fixing matters: any smile-consistent model gives the same price, so it is "
                      "replicated on the implied surface (no Monte Carlo noise); local vol Monte Carlo as a check"),
-    "path_dependent": Rule("monte_carlo", "slv", "lv",
-                           "the payoff depends on the path, so the smile dynamics matter: SLV, which fits the smile "
-                           "and keeps stochastic forward skew; the local vol price shows the model risk"),
-    "callable": Rule("monte_carlo", "slv", "lv",
-                     "autocalls depend on the forward skew between observation dates, which local vol flattens: "
-                     "SLV; the local vol price shows the model risk"),
+    "path_dependent": Rule("monte_carlo", "lv", "slv",
+                           "the payoff depends on the path: the base is local vol, which fits the smile; the smile dynamics "
+                           "are not in it, so the gap to SLV is a provision when it goes against the desk",
+                           ("slv",)),
+    "callable": Rule("monte_carlo", "lv", "slv",
+                     "the base is local vol, which fits the smile; autocalls depend on the forward skew between observation dates, "
+                     "which local vol flattens, so the gap to SLV is a provision when it goes against the desk",
+                     ("slv",)),
     "basket": Rule("monte_carlo", "lv", "bs",
                    "worst-of: each name on its own smile (Dupire local vol), correlated spots; the correlation is "
                    "an input with no skew of its own, and SLV is not extended to baskets yet; Black-Scholes as a "
@@ -50,13 +54,15 @@ class PricingDecision:
     seed: int
     forced: bool = False
     warnings: list = field(default_factory=list)
+    provisions: tuple = ()
 
     @property
     def label(self) -> str:
         what = "replication on the SVI surface" if self.method == "replication" else \
             f"{self.model.upper()} Monte Carlo ({self.n_paths:,} paths)"
         ctrl = f", control {self.control.upper()}" if self.control else ""
-        return f"{self.product_class} -> {what}{ctrl}" + (" [forced]" if self.forced else "")
+        kept = f", provision {' and '.join(x.upper() for x in self.provisions)}" if self.provisions else ""
+        return f"{self.product_class} -> {what}{ctrl}{kept}" + (" [forced]" if self.forced else "")
 
 
 def decide(prof: ProductProfile, t_max: float, model: str | None = None, control: str | None = "default",
@@ -90,4 +96,5 @@ def decide(prof: ProductProfile, t_max: float, model: str | None = None, control
     if control == "default":
         control = rule.control if rule.control != model else None
     reason = rule.reason if not forced else f"forced by the user (policy default: {rule.model}, {rule.method})"
-    return PricingDecision(prof.product_class, method, model, control, reason, n_paths, batch, seed, forced, warnings)
+    return PricingDecision(prof.product_class, method, model, control, reason, n_paths, batch, seed, forced, warnings,
+                           () if forced else rule.provisions)

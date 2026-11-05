@@ -1,6 +1,7 @@
 """A desk price: a base price, and what is added to it line by line, each with its cost and standard error.
 
-    Base            the policy's model
+    Base            the policy's model: local vol, or replication for a European product
+    + Provisions    max(0, gap against the desk) per model of the product's family
     + Bumps         one cost per market parameter, signed by the trader and applied as given
     = Client price  the coupon is solved on this price and the margin
 
@@ -8,7 +9,9 @@ Every line runs on the random numbers of the base (same seed, same batches), so 
 error comes from the differences of the antithetic pairs. A bump of the forward (dividends, repo, spot) keeps the path in
 x = ln(S / F): the surface stays in moneyness, so these lines are new evaluations of the same simulation. A bump of the surface or of
 the correlation needs a simulation of its own. The price uses all the bumps together; the interaction line is that price less the sum
-of the single bumps.
+of the single bumps. A model of provision runs on the spot draws of the base (`SLVModel.spot_driven`). Each price is affine in the coupon
+on these paths, but a provision is floored at zero, so the solve iterates on which provisions are on: a provision at a gap of zero has a small
+positive bias, about 0.4 of the gap's standard error, which is not removed by a threshold.
 
 Prices are the investor's value in % of notional. The cost of a line is seen from the desk: what it adds to the price of what the
 desk sells, or takes from the price of what it buys.
@@ -17,7 +20,7 @@ desk sells, or takes from the price of what it buys.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 
@@ -56,6 +59,7 @@ class CostInputs:
     side: str = "sell"
     defaults: dict = field(default_factory=dict)
     candidates: dict = field(default_factory=dict)
+    mix: float | None = None  # mixing fraction of the SLV provision; None keeps the market's
 
     def __post_init__(self):
         if self.side not in SIDES:
@@ -69,6 +73,11 @@ class CostInputs:
         return {k: float(v) for k, v in self.bumps.items() if v}
 
     @property
+    def overridden_mix(self) -> bool:
+        default = self.defaults.get("slv_mix")
+        return default is not None and self.mix is not None and default != self.mix
+
+    @property
     def sign(self) -> float:
         return SIDES[self.side]
 
@@ -77,7 +86,7 @@ class CostInputs:
 class CostLine:
     key: str
     label: str
-    kind: str  # bump or interaction
+    kind: str  # model, bump or interaction
     cost: float  # % of notional, seen from the desk: positive is against it
     se: float
     coupon_bp: float | None = None  # effect on the solved coupon, in bp per annum
@@ -85,6 +94,7 @@ class CostLine:
     default: float | None = None
     overridden: bool = False
     note: str = ""
+    gap: float | None = None  # a model: the gap before the floor, seen from the desk
 
     @property
     def in_price(self) -> bool:
@@ -103,6 +113,8 @@ class DeskPrice:
     coupon_final: float | None = None
     seconds: float = 0.0
     warnings: list = field(default_factory=list)
+    passes: int = 0  # solves until the provisions in force stopped changing
+    model_results: dict = field(default_factory=dict, repr=False)  # model -> its StructuredResult at the coupon
 
     def line(self, key: str) -> CostLine:
         return next(x for x in self.lines if x.key == key)
@@ -193,6 +205,18 @@ class _Lines:
         n = len(self.sets)
         return [_Run(out[i * n:(i + 1) * n]) for i in range(len(forwards))]
 
+    def model_run(self, name: str, mix: float | None) -> _Run:
+        """A model of provision on the spot draws of the base, for the same sets of parameters."""
+        if name != "slv" or self.basket:
+            raise ValueError(f"no provision model {name!r} on this context")
+        model = replace(self.ctx.slv_model(self.horizon, mix), spot_driven=True)
+        if self.fast:
+            from .fastmodels import fast_slv
+            model = fast_slv(model)
+        d = self.decision
+        return _Run(price_many(self.program, model, self.ctx.market, self.sets, self.fmt, d.n_paths, d.seed, d.batch, valuation=self.product.valuation,
+                               fixings=self.fixings, calendar=self.product.calendar, workers=self.workers, initial_fixing=self.initial))
+
     def run(self, requests: dict) -> dict:
         """{key: run} for {key: bumps}, one simulation per distinct set of simulation bumps."""
         groups: dict = {}
@@ -208,14 +232,25 @@ class _Lines:
         return out
 
 
-def _solved(base: _Run, effect, target: float) -> float:
-    """The coupon parameter x with base(x) + effect(x) = target, both affine in x on common paths."""
+def _solved(base: _Run, effect, provisions: dict, sign: float, target: float) -> tuple[float, int]:
+    """The coupon parameter x with base(x) + effect(x) + the provisions in force at x = target, and the passes it took. Each price is affine
+    in x on common paths; which provisions are in force is what the passes settle."""
     b0, b1 = base.price(0.0), base.price(1.0)
     e0, e1 = effect(0.0), effect(1.0)
-    slope = (b1 + e1) - (b0 + e0)
-    if abs(slope) < 1e-14:
-        raise ValueError("the price does not depend on the coupon")
-    return (target - b0 - e0) / slope
+    gaps = {k: (r.price(0.0) - b0, r.price(1.0) - b1) for k, r in provisions.items()}
+    on = dict.fromkeys(gaps, True)
+    x, passes = 0.0, 0
+    for passes in range(1, 9):
+        at0 = b0 + e0 + sum(g[0] for k, g in gaps.items() if on[k])
+        at1 = b1 + e1 + sum(g[1] for k, g in gaps.items() if on[k])
+        if abs(at1 - at0) < 1e-14:
+            raise ValueError("the price does not depend on the coupon")
+        x = (target - at0) / (at1 - at0)
+        now = {k: sign * (g[0] + x * (g[1] - g[0])) > 0 for k, g in gaps.items()}
+        if now == on:
+            break
+        on = now
+    return x, passes
 
 
 def _settled(inputs: CostInputs, lines: _Lines, base_requests: dict, target, sets_solving: bool) -> tuple[dict, dict]:
@@ -251,11 +286,18 @@ def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target:
     single = runs
     everything = lines.run({"all": values})["all"] if len(values) > 1 else None
     moved = everything if everything is not None else next(iter(single.values()), None)
+    models = {name: lines.model_run(name, inputs.mix) for name in decision.provisions}
 
     def effect(x):
         return 0.0 if moved is None else moved.price(x) - base.price(x)
 
-    x = _solved(base, effect, target) if solving else None
+    def in_force(x):
+        return {k: r for k, r in models.items() if inputs.sign * (r.price(x) - base.price(x)) > 0}
+
+    def provided(x):
+        return sum((r.price(x) - base.price(x) for r in in_force(x).values()), 0.0)
+
+    x, passes = _solved(base, effect, models, inputs.sign, target) if solving else (None, 0)
     at_base = base.at(x)
     base_pairs = _pct_pairs(at_base)
     s = inputs.sign
@@ -266,6 +308,19 @@ def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target:
         return CostLine(key, label, kind, s * price_effect, _se(pairs), bp, **kw)
 
     out, total_single = [], 0.0
+    final_extra = 0.0 if base_pairs is None else np.zeros_like(base_pairs)
+    for name, run in models.items():
+        r = run.at(x)
+        pairs = _pct_pairs(r) - base_pairs
+        gap = float(pairs.mean())
+        on = inputs.sign * gap > 0
+        if on:
+            final_extra = final_extra + pairs
+        mix = lines.ctx.slv_model(lines.horizon, inputs.mix).mix if name == "slv" else None
+        note = "" if on else "the gap is in the desk's favour: no provision"
+        c = line(name, f"Model: {name.upper()}" + (f" (mix {mix:g})" if mix is not None else ""), "model", pairs, gap if on else 0.0, note=note, gap=inputs.sign * gap,
+                 used=mix, default=inputs.defaults.get("slv_mix"), overridden=inputs.overridden_mix)
+        out.append(c)
     for key, label in BUMPS.items():
         if key not in single:
             continue
@@ -290,16 +345,19 @@ def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target:
             d = (float(pairs.mean()) if pairs is not None else r.price - at_base.price) - total_single
             singles = None if pairs is None else sum(_pct_pairs(single[k].at(x)) - base_pairs for k in single)
             out.append(line("interaction", "Interaction of the bumps", "interaction", None if pairs is None else pairs - singles, d))
-    final_price = at_base.price + effect(x)
+    final_price = at_base.price + effect(x) + provided(x)
+    final_pairs = None if final_pairs is None else final_pairs + final_extra
     final_se = _se(final_pairs)
     warnings = _arbitrage_warnings(ctx, values, lines.horizon, lines.names) if "vol" in values or "skew" in values else []
     rate_se = None
     if solving:
-        slope_x = (base.price(1.0) + effect(1.0)) - (base.price(0.0) + effect(0.0))
+        on = in_force(x)
+        slope_x = (base.price(1.0) + effect(1.0) + sum(r.price(1.0) - base.price(1.0) for r in on.values())) - (
+            base.price(0.0) + effect(0.0) + sum(r.price(0.0) - base.price(0.0) for r in on.values()))
         rate_se = final_se / abs(slope_x)
     desk = DeskPrice(inputs.side, at_base.price, at_base.stderr, final_price, final_se, out,
                      (target - base.price(0.0)) / (base.price(1.0) - base.price(0.0)) / coupon_scale if solving else None,
-                     x / coupon_scale if solving else None, time.perf_counter() - t0, warnings)
+                     x / coupon_scale if solving else None, time.perf_counter() - t0, warnings, passes, {k: r.at(x) for k, r in models.items()})
     return desk, base, x, rate_se
 
 

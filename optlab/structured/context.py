@@ -69,13 +69,14 @@ class PricingContext:
                                                      n_particles=n_particles, rng=seed)
         return self.slv_cache[key]
 
-    def slv_model(self, horizon: float = 1.0):
-        """The SLV model up to a horizon: the stored one, or, on a market without a leverage, one calibrated once per horizon
-        band at the market's mix."""
-        if not self.leverage_flat:
+    def slv_model(self, horizon: float = 1.0, mix: float | None = None):
+        """The SLV model up to a horizon at a mixing fraction, the market's by default: the stored one, or a leverage calibrated once per
+        horizon band when the market has none or the mix is another."""
+        same = mix is None or abs(mix - self.slv.mix) < 1e-12
+        if same and not self.leverage_flat:
             return self.slv
         band = next((h for h in LEVERAGE_HORIZONS if h >= horizon - 1e-9), max(horizon, LEVERAGE_HORIZONS[-1]))
-        return self.slv_at_mix(self.slv.mix, band)
+        return self.slv_at_mix(self.slv.mix if same else mix, band)
 
     @property
     def t_max(self) -> float:

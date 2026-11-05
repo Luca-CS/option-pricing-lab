@@ -50,7 +50,7 @@ def test_above_the_last_tier_it_alerts_and_asks_for_the_values():
     big = preset("phoenix", **{"general.notional": 1e9})
     got = resolve(None, big)
     assert got.tiers["index_us"] is None and "above the last tier" in got.alerts[0]
-    assert set(got.missing) == {"vol", "skew", "dividend", "repo", "spot"}
+    assert set(got.missing) == {"vol", "skew", "dividend", "repo", "spot", "slv_mix"}
     with pytest.raises(ValueError, match="no default"):
         got.inputs()
     filled = big.replace(**{f"costs.{k}": 0.001 for k in got.missing})

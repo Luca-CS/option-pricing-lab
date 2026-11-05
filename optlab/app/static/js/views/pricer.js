@@ -352,6 +352,7 @@ export function costCard(q) {
   const unitOf = { vol: "pt", skew: "pt", corr: "pt", dividend: "%", repo: "bp", spot: "bp" };
   const used = (x) => {
     if (x.used == null) return "";
+    if (x.kind === "model") return `mix ${num(x.used, 2)}`;
     const factor = x.key === "repo" || x.key === "spot" ? 1e4 : 100;
     return `${signed(factor * x.used, 2)} ${unitOf[x.key] || ""}`;
   };
@@ -363,14 +364,16 @@ export function costCard(q) {
       h("tr", {}, h("th", {}, "Line"), h("th", {}, "Used"), h("th", {}, "Default"), h("th", { class: "num" }, "Cost"), h("th", { class: "num" }, "SE"),
         h("th", { class: "num" }, "Coupon, bp")),
       row(h("b", {}, "Base"), "", "", num(d.base_price, 3), num(d.base_se, 3), ""),
-      d.lines.map((x) => row(x.note ? h("span", { title: x.note }, x.label) : x.label,
+      d.lines.map((x) => row(x.kind === "model" ? h("span", {}, x.label, h("span", { class: "faint" }, ` · gap ${signed(x.gap, 3)}${x.cost === 0 ? ", in the desk's favour" : ""}`))
+        : x.note ? h("span", { title: x.note }, x.label) : x.label,
         h("span", {}, used(x), " ", x.overridden ? h("span", { class: "badge warn" }, "overridden") : null),
         x.default == null || x.kind === "interaction" ? "" : used({ ...x, used: x.default }),
         signed(x.cost, 3), num(x.se, 3), x.coupon_bp == null ? "" : signed(x.coupon_bp, 1))),
       row(h("b", {}, "Client price"), "", "", h("b", {}, num(d.final_price, 3)), num(d.final_se, 3), ""))),
     d.coupon_final != null ? h("p", { class: "muted", style: { marginTop: "8px" } },
       `Coupon ${num(100 * d.coupon_base, 3)} % p.a. on the base alone, ${num(100 * d.coupon_final, 3)} % p.a. with the costs. `
-      + "Each line runs on the random numbers of the base.") : null);
+      + "Each line runs on the random numbers of the base.") : null,
+    d.lines.some((x) => x.kind === "model") ? h("p", { class: "muted" }, "The SLV mix is not calibrated: turn on SLV mix band to see what it moves.") : null);
 }
 
 // What a price used for each name: its market, where it comes from, and the correlations.

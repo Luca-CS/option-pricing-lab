@@ -76,7 +76,7 @@ def test_book_policy_follows_the_most_demanding_position():
     assert r.method == "replication" and r.stderr == 0.0
     mixed = Book([Position("rc", rc(), 1.0), Position("phoenix", preset("phoenix"), 1.0)])
     r = mixed.price(SPX, n_paths=20_000, batch=10_000)
-    assert (r.method, r.model) == ("monte_carlo", "slv")
+    assert (r.method, r.model) == ("monte_carlo", "lv")
     assert "book: 2 positions" in r.table()
 
 
@@ -109,14 +109,14 @@ def test_book_greeks_are_the_sum_of_position_greeks_and_match_replication():
 
 def test_book_greeks_under_slv_have_no_vega():
     g = Book([Position("phoenix", preset("phoenix", **{"general.maturity_months": 12}), 1.0)]).greeks(
-        SPX, n_paths=20_000, batch=10_000)
+        SPX, model="slv", n_paths=20_000, batch=10_000)
     assert g["model"] == "slv" and g["vega"] is None and g["delta"]["total_se"] > 0
 
 
 def test_book_slv_vega_by_recalibration_is_the_sum_of_positions():
     sheet = preset("phoenix", **{"general.maturity_months": 12})
     book = Book([Position("a", sheet, 1.0), Position("b", rc(), 2.0)])
-    g = book.greeks(SPX, n_paths=20_000, batch=10_000, slv_vega=True, n_particles=50_000)
+    g = book.greeks(SPX, model="slv", n_paths=20_000, batch=10_000, slv_vega=True, n_particles=50_000)
     assert g["model"] == "slv" and g["vega"] is not None
     assert g["vega"]["total"] == pytest.approx(sum(g["vega"]["positions"]), rel=1e-9)
     assert g["vega"]["positions"][1] < 0  # the reverse convertible is short vol

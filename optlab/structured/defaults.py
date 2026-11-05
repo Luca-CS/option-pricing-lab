@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from ..marketdata.universe import instrument
-from .costs import CostInputs
+from .costs import BUMPS, CostInputs
 from .schema import SECTIONS, TermSheet
 
 TIERS = (10e6, 50e6, 250e6)
@@ -26,15 +26,15 @@ def _tiers(**columns) -> list:
 STARTING = {
     "index_us": {"label": "US index", "currency": "USD", "tiers": _tiers(
         vol=(-0.0025, -0.005, -0.01), skew=(-0.0025, -0.005, -0.01), corr=(0.01, 0.02, 0.04), dividend=(-0.05, -0.10, -0.15),
-        repo=(-0.0005, -0.001, -0.002), spot=(0.0002, 0.0005, 0.001))},
+        repo=(-0.0005, -0.001, -0.002), spot=(0.0002, 0.0005, 0.001), slv_mix=(0.5, 0.5, 0.5))},
     "index_eu": {"label": "European index", "currency": "EUR", "tiers": _tiers(
         vol=(-0.0025, -0.005, -0.01), skew=(-0.0025, -0.005, -0.01), corr=(0.01, 0.02, 0.04), dividend=(-0.10, -0.15, -0.20),
-        repo=(-0.0005, -0.001, -0.002), spot=(0.0003, 0.0007, 0.0015))},
+        repo=(-0.0005, -0.001, -0.002), spot=(0.0003, 0.0007, 0.0015), slv_mix=(0.5, 0.5, 0.5))},
     "equity_us": {"label": "US large-cap share", "currency": "USD", "tiers": _tiers(
         vol=(-0.005, -0.01, -0.02), skew=(-0.005, -0.01, -0.02), corr=(0.02, 0.03, 0.05), dividend=(-0.05, -0.10, -0.20),
-        repo=(-0.001, -0.002, -0.004), spot=(0.0005, 0.001, 0.002))},
+        repo=(-0.001, -0.002, -0.004), spot=(0.0005, 0.001, 0.002), slv_mix=(0.5, 0.5, 0.5))},
 }
-RULES = {}  # parameter -> how groups combine when it is not a signed bump: "max" or "min"
+RULES = {"slv_mix": "max"}  # parameter -> how groups combine when it is not a signed bump: "max" or "min"
 SKIP = ("side",)
 
 
@@ -125,10 +125,11 @@ class Resolved:
     def inputs(self) -> CostInputs:
         if self.missing:
             raise ValueError(f"no default for {', '.join(self.missing)}: " + " ".join(self.alerts))
-        bumps = {k: p["value"] for k, p in self.params.items()}
+        bumps = {k: p["value"] for k, p in self.params.items() if k in BUMPS}
         defaults = {k: p["default"] for k, p in self.params.items()}
         candidates = {k: p["conflict"] for k, p in self.params.items() if p["conflict"] and not p["overridden"]}
-        return CostInputs(bumps, self.side, defaults, candidates)
+        mix = self.params["slv_mix"]["value"] if "slv_mix" in self.params else None
+        return CostInputs(bumps, self.side, defaults, candidates, mix)
 
     def as_json(self) -> dict:
         return {"groups": self.groups, "tiers": self.tiers, "params": self.params, "side": self.side, "alerts": self.alerts, "missing": self.missing}

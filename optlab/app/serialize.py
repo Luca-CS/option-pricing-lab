@@ -77,9 +77,9 @@ def desk_json(desk) -> dict | None:
     if desk is None:
         return None
     return clean({"side": desk.side, "base_price": desk.base_price, "base_se": desk.base_se, "final_price": desk.final_price,
-                  "final_se": desk.final_se, "coupon_base": desk.coupon_base, "coupon_final": desk.coupon_final, "seconds": desk.seconds,
+                  "final_se": desk.final_se, "coupon_base": desk.coupon_base, "coupon_final": desk.coupon_final, "seconds": desk.seconds, "passes": desk.passes,
                   "lines": [{"key": x.key, "label": x.label, "kind": x.kind, "cost": x.cost, "se": x.se, "coupon_bp": x.coupon_bp, "used": x.used,
-                             "default": x.default, "overridden": x.overridden, "note": x.note, "in_price": x.in_price} for x in desk.lines]})
+                             "default": x.default, "overridden": x.overridden, "note": x.note, "in_price": x.in_price, "gap": x.gap} for x in desk.lines]})
 
 
 def quote_json(q) -> dict:
@@ -97,7 +97,7 @@ def quote_json(q) -> dict:
                     "maturity_months": p.sheet.get("general.maturity_months"), "strike_date": p.strike_date,
                     "maturity": p.maturity, "format": q.fmt, "script": q.script},
         "policy": {"class": d.product_class, "method": d.method, "model": d.model, "control": d.control,
-                   "reason": d.reason, "label": d.label, "forced": d.forced, "n_paths": d.n_paths,
+                   "reason": d.reason, "label": d.label, "forced": d.forced, "n_paths": d.n_paths, "provisions": d.provisions,
                    "description": q.profile.description},
         "target": q.target, "coupon_rate": q.coupon_rate, "coupon_rate_se": q.coupon_rate_se, "upfront": q.upfront,
         "margin": q.margin, "result": result_json(q.result), "control": result_json(q.control),

@@ -224,3 +224,67 @@ def test_an_extreme_bump_warns_and_the_table_prints():
     assert any("arbitrage" in w for w in q.warnings)
     q = lv_quote(sheet(), CostInputs({"vol": 0.005}), n_paths=4000)
     assert "Volatility, parallel" in q.table() and "client price (sell)" in q.table()
+
+
+# --- provisions of model ---
+def policy_quote(s, costs=None, n_paths=PATHS, **kw):
+    return quote(s, SPX, control="default", n_paths=n_paths, batch=10_000, costs=costs if costs is not None else CostInputs(), **kw)
+
+
+def test_an_autocall_is_local_vol_plus_the_slv_gap_when_it_goes_against_the_desk():
+    from dataclasses import replace
+
+    q = policy_quote(sheet())
+    d = q.desk
+    line = d.line("slv")
+    assert q.decision.model == "lv" and q.decision.provisions == ("slv",) and line.kind == "model"
+    assert line.cost > 4 * line.se and line.gap == pytest.approx(line.cost) and line.used == SPX.slv.mix
+    assert d.final_price == pytest.approx(98.0, abs=1e-9) and d.final_price == pytest.approx(d.base_price + line.cost, abs=1e-9)
+    assert d.coupon_final < d.coupon_base and line.coupon_bp < 0
+    assert q.result.price == pytest.approx(d.base_price)  # the result stays the base
+    p = compile_sheet(sheet(), SPX.valuation)
+    kw = dict(fmt=wrapper(sheet(), p), n_paths=PATHS, seed=q.decision.seed, batch=10_000, valuation=p.valuation, calendar=p.calendar, initial_fixing=SPX.market.spot)
+    cpn = {"cpn": q.coupon_rate * p.coupon_scale}
+    alone = price_many(p.program, replace(SPX.slv, spot_driven=True), SPX.market, [cpn], **kw)[0]
+    lv = price_many(p.program, SPX.model("lv"), SPX.market, [cpn], **kw)[0]
+    assert lv.price == pytest.approx(d.base_price, abs=1e-9) and alone.price - lv.price == pytest.approx(line.cost, abs=1e-9)
+    assert line.se < 0.75 * np.hypot(alone.stderr, lv.stderr)  # the two models share their spot draws
+    assert q.control.price == pytest.approx(alone.price) and q.decision.control == "slv"  # no second simulation for the control
+
+
+def test_a_gap_in_the_desks_favour_gives_no_provision_and_the_buyer_takes_the_other_side():
+    s = sheet()
+    sold, bought = policy_quote(s, CostInputs(side="sell")), policy_quote(s, CostInputs(side="buy"))
+    a, b = sold.desk.line("slv"), bought.desk.line("slv")
+    assert a.cost > 0 and b.cost == 0.0 and b.gap < 0 and "favour" in b.note
+    assert bought.desk.final_price == pytest.approx(bought.desk.base_price, abs=1e-12)  # nothing in the price
+    assert bought.coupon_rate == pytest.approx(bought.desk.coupon_base, abs=1e-12)
+    assert b.se > 0
+
+
+def test_the_solve_settles_which_provisions_are_on_and_says_how_many_passes():
+    for margin in (0.0, 0.02, 0.1):
+        q = policy_quote(sheet(**{"wrapper.margin": margin}), n_paths=20_000)
+        assert q.desk.final_price == pytest.approx(100 * (1 - margin), abs=1e-9)
+        assert q.desk.passes <= 3
+
+
+def test_a_european_product_has_no_provision_and_a_forced_model_neither():
+    q = quote(preset("reverse_convertible", **{"downside.barrier": 0.8}), SPX, control=None, costs=CostInputs())
+    assert q.desk.lines == [] and q.decision.provisions == ()
+    q = lv_quote(sheet(), CostInputs())
+    assert q.decision.forced and q.decision.provisions == () and q.desk.lines == []
+
+
+def test_a_mix_of_zero_is_local_vol_within_the_error_of_the_leverage():
+    q = policy_quote(sheet(), CostInputs(mix=0.0), n_paths=20_000)
+    assert abs(q.desk.line("slv").gap) < 0.25 and q.desk.line("slv").used == 0.0
+    other = policy_quote(sheet(), CostInputs(mix=SPX.slv.mix / 2), n_paths=20_000)
+    assert other.desk.line("slv").used == SPX.slv.mix / 2
+
+
+def test_a_mix_and_bumps_add_up_in_the_summary():
+    d = policy_quote(sheet(), CostInputs({"vol": -0.005, "repo": -0.001}), n_paths=20_000).desk
+    assert [x.key for x in d.lines] == ["slv", "vol", "repo", "interaction"]
+    assert sum(x.cost for x in d.lines) == pytest.approx(d.final_price - d.base_price, abs=1e-10)
+    assert "Model: SLV" in d.table()
