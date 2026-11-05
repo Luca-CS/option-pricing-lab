@@ -7,6 +7,11 @@ carry their own seeds (`default_rng(seed)` for one batch, `SeedSequence(seed).sp
 of processes returns the same batches as the sequential loop, and the summaries are added in the same order: the
 results are identical bit for bit whatever the number of workers.
 
+With `engine="cpu"`, `"gpu"` or `"auto"` (or $OPTLAB_ENGINE, or `native.set_default`), the paths come from the compiled
+engine (`optlab.native`) instead of NumPy: one process, every CPU thread or the GPU, and the next batch is simulated
+while the current one is evaluated. Its draws depend on (seed, pair) only, so the batches are sized by memory and the
+prices depend on (seed, n_paths) alone. A model the engine does not cover goes to NumPy, and the timings say so.
+
 The pool uses the "spawn" start method (the only one on Windows): the calling program must be importable, so run
 it from a file with the usual `if __name__ == "__main__":` guard (not from code piped to the interpreter).
 """
@@ -17,11 +22,12 @@ import atexit
 import multiprocessing as mp
 import os
 import time
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 import numpy as np
 
+from .. import native
 from ..models import simulate
 from .cashflows import pair_averages
 from .multiasset import Basket, BasketScenario, simulate_basket
@@ -156,9 +162,59 @@ def shutdown_pool():
 atexit.register(shutdown_pool)
 
 
+NATIVE_BATCH_BYTES = 256 * 2**20  # paths of one engine batch: memory, not numbers, sets the size
+
+
+def native_pair_batches(n_pairs: int, n_columns: int) -> list[int]:
+    """Pairs per engine batch: as many as fit in NATIVE_BATCH_BYTES of double spots, at least 4096."""
+    per = max(4096, NATIVE_BATCH_BYTES // max(1, 2 * 8 * n_columns))
+    return [per] * (n_pairs // per) + ([n_pairs % per] if n_pairs % per else [])
+
+
+def _run_native(backend, model, market, name, times, n_paths, seed, spot0, history, evaluations, sim_kwargs):
+    from .multiasset import Basket
+    t_start = time.perf_counter()
+    plan = native.plan(model, market, times, sim_kwargs.get("dt_max", 1 / 252), sim_kwargs.get("dt_min", 1 / 2000))
+    key = native.seed64(seed)
+    sizes = native_pair_batches(n_paths // 2, len(plan.names) * plan.n_obs)
+    starts = np.concatenate([[0], np.cumsum(sizes)[:-1]]).astype(int)
+    basket = isinstance(model, Basket)
+
+    def produce(k):
+        t = time.perf_counter()
+        spots, timing = native.run(plan, sizes[k], key, int(starts[k]), backend, int(sim_kwargs.get("threads", 0)))
+        if basket:
+            scenario = BasketScenario(times, dict(zip(plan.names, spots)), spot0, history)
+        else:
+            scenario = Scenario(name, times, spots[0], spot0, history)
+        return scenario, time.perf_counter() - t, timing["kernel_ms"]
+
+    totals = [Totals() for _ in evaluations]
+    t_sim = t_eval = kernel = 0.0
+    with ThreadPoolExecutor(max_workers=1) as producer:  # ctypes releases the GIL: batch k + 1 runs while k is evaluated
+        nxt = producer.submit(produce, 0)
+        for k in range(len(sizes)):
+            scenario, ts, km = nxt.result()
+            if k + 1 < len(sizes):
+                nxt = producer.submit(produce, k + 1)
+            t1 = time.perf_counter()
+            for tot, ev in zip(totals, evaluations):
+                tot.add(_summary(ev, scenario, market))
+            t_sim, t_eval, kernel = t_sim + ts, t_eval + time.perf_counter() - t1, kernel + km
+    return totals, {"simulation": t_sim, "evaluation": t_eval, "wall": time.perf_counter() - t_start, "workers": 1,
+                    "engine": backend, "kernel_ms": kernel, "batches": len(sizes)}
+
+
 def run(model, market, name, times, n_paths: int, seed, batch, spot0, history, evaluations: list,
         workers: int | None = None, **sim_kwargs):
-    """Totals per evaluation and timings {"simulation", "evaluation", "wall", "workers"}."""
+    """Totals per evaluation and timings {"simulation", "evaluation", "wall", "workers", "engine"}. `engine` in
+    sim_kwargs picks the source of the paths (numpy, cpu, gpu, auto)."""
+    backend, why = native.choose(sim_kwargs.pop("engine", None), model)
+    if backend != "numpy" and (not len(times) or not sim_kwargs.get("antithetic", True) or n_paths % 2):
+        backend, why = "numpy", "no simulated date, or no antithetic pairs"
+    if backend != "numpy":
+        return _run_native(backend, model, market, name, times, n_paths, seed, spot0, history, evaluations, sim_kwargs)
+    sim_kwargs.pop("threads", None)
     sizes = batch_sizes(n_paths, batch)
     seeds = [seed] if len(sizes) == 1 else list(np.random.SeedSequence(seed).spawn(len(sizes)))
     jobs = [(model, market, name, times, size, s, spot0, history, evaluations, sim_kwargs)
@@ -175,4 +231,5 @@ def run(model, market, name, times, n_paths: int, seed, batch, spot0, history, e
         t_sim, t_eval = t_sim + ts, t_eval + te
         for tot, summary in zip(totals, summaries):
             tot.add(summary)
-    return totals, {"simulation": t_sim, "evaluation": t_eval, "wall": time.perf_counter() - t0, "workers": workers}
+    return totals, {"simulation": t_sim, "evaluation": t_eval, "wall": time.perf_counter() - t0, "workers": workers,
+                    "engine": "numpy", **({"engine_note": why} if why else {})}

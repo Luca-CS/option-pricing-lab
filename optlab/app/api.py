@@ -17,6 +17,7 @@ from pathlib import Path
 import numpy as np
 
 from ..config import DEFAULT_SEED, paths
+from .. import native
 from ..log import get_logger
 from ..market import Market
 from ..marketdata import MarketSnapshot, MarketStore
@@ -73,7 +74,12 @@ def _pair(a: str, b: str) -> str:
 
 
 class Desk:
-    def __init__(self, store=None, calibration=None, workers: int | None = None, max_jobs: int = 2, lake=None):
+    def __init__(self, store=None, calibration=None, workers: int | None = None, max_jobs: int = 2, lake=None,
+                 engine: str | None = None):
+        """`engine`: where Monte Carlo paths come from (numpy, cpu, gpu, auto; see optlab.native), for every job of this
+        process. None keeps the library's default."""
+        if engine is not None:
+            native.set_default(engine)
         self.repo = Repository(store)
         self.lake = Lake(lake)
         self.names = NameMarkets(self.lake)
@@ -112,7 +118,7 @@ class Desk:
                 "origin": self._origin(self.ctx.snapshot_id),
                 "workers": self.workers, "jobs": self.jobs.running(), "store": str(self.repo.path),
                 "started": self.started.isoformat(timespec="seconds"), "public_url": self.public_url,
-                "lan_blockers": self.lan_blockers}
+                "lan_blockers": self.lan_blockers, "engine": native.summary()}
 
     def context(self) -> dict:
         c = self.ctx

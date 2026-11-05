@@ -60,6 +60,14 @@ async function render() {
   main.focus({ preventScroll: true });
 }
 
+// Where the Monte Carlo paths come from: the GPU, every CPU thread, or NumPy.
+function engineLabel(engine) {
+  if (!engine) return "";
+  if (engine.resolved === "gpu") return ` · GPU ${engine.devices.length ? engine.devices[0].name.replace("NVIDIA GeForce ", "") : ""}`;
+  if (engine.resolved === "cpu") return ` · CPU engine, ${engine.cpu_threads} threads`;
+  return " · NumPy";
+}
+
 async function refreshStatus() {
   const dot = document.getElementById("status-dot");
   const text = document.getElementById("status-text");
@@ -71,7 +79,7 @@ async function refreshStatus() {
     const jobs = health.jobs.length ? ` · ${health.jobs.length} job${health.jobs.length > 1 ? "s" : ""} running` : "";
     const origin = health.origin && health.origin.surface ? ` · surface ${health.origin.surface}` : "";
     text.textContent = `Market ${health.snapshot_id} · valuation ${health.valuation}${origin}` +
-      `${health.workers ? ` · ${health.workers} workers` : ""}${jobs}`;
+      `${engineLabel(health.engine)}${health.workers ? ` · ${health.workers} workers` : ""}${jobs}`;
   } catch (e) {
     dot.className = "dot bad";
     text.textContent = e.message;
