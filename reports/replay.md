@@ -63,8 +63,12 @@ each calibration draws its own particles.
 ## SLV against local vol
 
 Solved at the strike of the BRC, SLV gives 2.89 % ± 0.07 against 2.57 % ± 0.07 for local vol: 32 bp on the coupon, significant. On 02/03/2020 the running BRC
-was worth 95.67 ± 0.09 under SLV and 95.86 ± 0.09 under local vol. The default runs use local vol for speed, and the policy's own choice for these products is SLV:
-the Replay screen offers both.
+was worth 95.67 ± 0.09 under SLV and 95.86 ± 0.09 under local vol. These runs use local vol, which has since become the desk's base, with SLV as a provision
+([pricing.md](pricing.md)). The Replay screen offers both.
+
+## A reserve through a life
+
+`results/replay_phx_desk.json` deals the same Phoenix at the desk's client price, with starting values for the bumps: sold at 3.24 % ± 0.18 p.a., against 5.06 % on the base alone, it holds a reserve of 1.076 per 100 of notional. The reserve falls linearly with the calendar and the 0.361 left is released on the call of 16/01/2024. The explained P&L has a line of +1.076 for it; P&L, value net of reserve and cash add up to 4e-15.
 
 ## What this does not show
 

@@ -41,6 +41,7 @@ RULES = {
                    ("slv", "local_corr")),
 }
 MODELS = ("bs", "heston", "lv", "slv")
+PROVISIONS = {"slv": "SLV", "local_corr": "local correlation"}
 
 
 @dataclass
@@ -62,7 +63,7 @@ class PricingDecision:
         what = "replication on the SVI surface" if self.method == "replication" else \
             f"{self.model.upper()} Monte Carlo ({self.n_paths:,} paths)"
         ctrl = f", control {self.control.upper()}" if self.control else ""
-        kept = f", provision {' and '.join(x.upper() for x in self.provisions)}" if self.provisions else ""
+        kept = f", provisions {' and '.join(PROVISIONS.get(x, x) for x in self.provisions)}" if self.provisions else ""
         return f"{self.product_class} -> {what}{ctrl}{kept}" + (" [forced]" if self.forced else "")
 
 

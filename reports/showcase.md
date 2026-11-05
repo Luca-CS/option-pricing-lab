@@ -1,9 +1,9 @@
 # Showcase: the desk on real history, in fifteen minutes
 
-A book of twelve trades is ready in its own store (`optlab-data/showcase`), so your own trades stay out of it. Each trade was sold on a past date,
-with its coupon solved on that date's market, and real closes are loaded as fixings. The market in use is the close of 4 November 2026.
+A book of twelve trades is ready in its own store (`optlab-data/showcase`), so your own trades stay out of it. Each trade was dealt on a past date,
+with its coupon solved on that date's market at the desk's client price, with the lines of that quote kept as its reserve, and real closes are loaded as fixings. The market in use is the close of 4 November 2026.
 
-Open it from this worktree (branch `data`). `--workers 6` brings a book valuation from about 100 s to about 40 s.
+Open it from this worktree. `--workers 6` is what the times below use.
 
 ```
 ..\..\..\.venv\Scripts\python.exe -m optlab.app --store "C:\Users\Luca\Code\projets\optlab-data\showcase\desk.sqlite" --market SPX-20261104T1600-8b7fa10118 --workers 6 --open
@@ -26,15 +26,16 @@ origins: observed, derived, reconstructed, synthetic. The next 60 days list the 
 
 The line 01 Jul 2022 is the one market with an SVI fit on a real chain, `observed`.
 
-## 3. Book: eleven live trades, one simulation
+## 3. Book: eleven live trades, each name on its own market
 
-Press **Price the book** with Delta and vega on. Quick takes about 12 s, Standard about 40 s.
+Press **Price the book** with Delta and vega on. Quick takes about 26 s, Standard about 57 s.
 
-- **Value about -57.2 m**, ± 29 k on Quick and ± 13 k on Standard. The trades were sold by the desk, so the value is negative. Standard errors are measured on one shared simulation.
-- **Two groups:** 8 single-name trades under SLV, 3 worst-ofs under local vol.
-- **Delta by name:** SPX about -190 k per 1 %.
-- **Other underlyings** of the worst-ofs come from the lake at that date: level, dividend, correlations (NDX-SPX 0.91, SPX-SX5E 0.61).
-- **Book report** writes a standalone HTML page.
+- **Value about -56.4 m**, ± 22 k on Quick and ± 10 k on Standard. The trades were sold by the desk, so the value is negative. It is the value at the **base**, local vol or replication.
+- **Reserves left: 572 k of 893 k at issue,** so a value net of reserves of about -56.96 m. Each position shows its own. They amortise by the calendar and SHOW-01, called, has released its own. **Open SHOW-09** for the lines of a worst-of, frozen as they were on its strike date.
+- **Two simulations:** 8 trades on SPX, 3 worst-ofs. A trade on another single name would get a group of its own, on its own market.
+- **Delta by name:** SPX about -194 k per 1 %.
+- **Worst-ofs read the lake:** each name its own surface, and a measured correlation (NDX-SPX 0.91, SPX-SX5E 0.61). The Market screen no longer holds inputs for them, unless you type some: what is typed wins.
+- **Book report** writes a standalone HTML page, with the reserves.
 
 ## 4. Lifecycle: four stories on real closes
 
@@ -46,7 +47,7 @@ Open each trade from the Book, section Events.
 | SHOW-02 | Phoenix on the same date, monthly coupon at an 85 % barrier: **one coupon missed**, then paid back by the memory |
 | SHOW-01 | Phoenix struck 15/11/2024: **called** after one coupon, status Called, out of the valuation |
 | SHOW-11 | Swap with a floating funding leg, spread from the fictitious bank on its strike date |
-| SHOW-12 | The one long position, half a unit bought back |
+| SHOW-12 | The one long position, half a unit bought back: its quote is on the buyer's side, so its SLV gap gives no provision |
 
 The others are ordinary: reverse convertible, airbag, capital protected, Athena, three worst-ofs.
 
@@ -69,21 +70,43 @@ SPX · historicaldata, day 2022-09-15, then **Fit**. About 10 s, more with SLV.
 
 ## 7. Replay: a product through its life
 
+- **Open `replay_phx_desk/PHX-2022`.** The Phoenix of January 2022 sold at the client price: 3.24 % p.a. instead of 5.06 % on the base. The reserve falls with the calendar in the first chart, and the 0.361 left is released on the call of 16/01/2024, a line of its own in the P&L, which still adds up to 4e-15.
 - **Open `replay_brc_lv/BRC-2020`.** Struck 15/01/2020: knocked in on 23/03/2020 at 68.0 %, while the close before was 70.07 %, then redeemed at 100 because the index came back. The P&L
   table splits delta, gamma, vega, time and a published residual. Cash booked equals the events.
 - **New run:** Barrier reverse convertible, SPX, 2020-01-15, every 20 days, local vol, about 35 s. Each value uses only what was known on its date; a test erases the future of the lake
   and finds the same market. Sparse steps make a large residual: daily is the honest setting.
 - Replays of a share work too, on its own index and dividends.
 
-## 8. Pricer: from a past market to a new trade
+## 8. Pricer: a base and what is added to it
 
-Phoenix, Quick, **Quote**. The policy picks SLV and says why, with local vol as a control (3.5 SE apart on this one). Expected life, probability of ending at each date, expected flows, generated
-script, then **Book this trade**.
+**Cost defaults** first: bumps, SLV mix and limits of the digitals, by group of underlyings and size. Everything in italics is a starting value, none given by a trader: this is the table to correct.
+
+**Phoenix, Standard, Quote.** About 20 s. The policy picks local vol, then adds what it does not see. Section **Hedging cost**, on the market of 4 November 2026:
+
+| Line | Cost, % of notional | Coupon, bp |
+|---|---|---|
+| Base | 96.99 ± 0.04 | |
+| Model: SLV, mix 0.5 | +0.58 ± 0.03 | -120 |
+| Bumps, with their interaction | +0.14 | -28 |
+| Digitals, with their interaction | +0.29 | -60 |
+| Client price | 98.00 ± 0.04 | |
+
+The coupon goes from 5.87 % on the base to 3.80 % ± 0.07. Open **Digitals, date by date**: width, side and cost of each.
+
+1. **Override a parameter.** In the term sheet's Hedging costs section, each field shows its default as a placeholder. Enter -1 in Volatility and quote again: the line is marked overridden, and the coupon falls by about 45 bp.
+2. **Change the size.** A notional of 20 m takes the next tier and the defaults double. At 1 billion the Pricer alerts and asks for the values, and Quote stays disabled until they are entered.
+3. **Barrier reverse convertible.** SLV is below local vol here, gap -0.18: no provision, and the coupon only moves by the bumps and the barrier moved by the minimum spread.
+4. **Underlying AAPL.** Its own surface, in Markets used, well above SPX in implied vol, and larger default bumps.
+5. **Basket: Worst of, SPX, NDX, RUT.** The first quote of a basket takes a minute and a half: three leverages, then the correlation skew fitted on CvC and PvP. They stay for later quotes of that basket and date. Two provisions now, the second marked `synthetic`, with its fit shown next to it: this one rests on an assumption, as no broker levels exist.
+6. **Book this trade.** Quantity -1 for a sale: the trade's page shows the frozen lines.
+
+Numbers and limits, including what the mix and the correlation of the variances move: [pricing.md](pricing.md).
 
 ## What this does not show
 
 - **No FX and no quanto.** The tables and the parity formula exist, with no FX source loaded. A worst-of on SPX and SX5E mixes performances in their own currencies, with no adjustment.
-- **Worst-ofs of the Pricer and the Book take flat inputs for the other names**, filled from the lake by the seed script. Only the replay gives each name its own surface.
+- **Defaults are starting values,** and on worst-ofs they hold more in reserves than the 2 % margin.
+- **The correlation skew is an assumption:** no broker level exists, and on three indices its provision also rests on extrapolating below 90 % ([pricing.md](pricing.md)).
 - **Reconstructed surfaces are not quotes.** Above a VIX of 60 the at-the-money level is still about 3.5 points low. From 70 to 95 % of the forward they ran about 2 points high in 2022, so coupons
   solved on them are a little high. [surface_reconstruction.md](surface_reconstruction.md).
 - **Forwards sit about 0.25 % below put-call parity at one year** on SPX in 2022: the Treasury curve is not the funding of the index.

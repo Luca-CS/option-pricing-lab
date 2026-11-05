@@ -26,7 +26,7 @@ import numpy as np
 W0 = 0.3  # the weight at the money: there is room on both sides of the measured correlation
 MONTH = 1 / 12
 ORIGIN = "synthetic"
-NOTE = "calibrated on pseudo-quotes of CvC and PvP, where the correlation skew is an assumption: no broker level was available"
+NOTE = "Calibrated on pseudo-quotes of CvC and PvP, where the correlation skew is an assumption: no broker level was available"
 
 
 def low_matrix(corr, w0: float) -> np.ndarray:

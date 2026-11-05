@@ -222,7 +222,8 @@ export async function render(page, arg) {
           slv_vega: state.slvVega } } });
       const q = await runJob(job, (j) => {
         status.querySelector("p").textContent = `${pretty(j.state)} · ${num((performance.now() - started) / 1000, 1)} s`
-          + (state.mixBand ? " · the mix band recalibrates four leverages" : "");
+          + (state.mixBand ? " · the mix band recalibrates four leverages" : "")
+          + ((draft.values.general || {}).basket === "worst_of" && state.costs ? " · a basket's first quote calibrates its leverages and correlation skew: about a minute" : "");
       }, ctrl.signal);
       save({ lastQuote: { id: q.quote_id, headline: q.headline, product: describeSheet(q.sheet) } });
       drawResult(q);
@@ -380,7 +381,7 @@ export function costCard(q) {
       ? "The SLV mix is not calibrated, and neither is the correlation of the variances, taken as the spots' correlation: independent variances gave a gap about half this size on a phoenix of three indices (reports/pricing.md)."
       : "The SLV mix is not calibrated: turn on SLV mix band to see what it moves.") : null,
     d.lines.filter((x) => x.fit && x.fit.length).map((x) => h("div", { class: "notice", style: { marginTop: "8px" } },
-      h("p", {}, "The correlation skew is an assumption here: ", x.note, "."),
+      h("p", {}, x.note, "."),
       h("div", { class: "table-wrap" }, h("table", { class: "data nosort" },
         h("tr", {}, ["Line", "Strike", "Pseudo-quote %", "Model %", "SE", "Assumed correlation"].map((c, i) => h("th", { class: i > 1 ? "num" : "" }, c))),
         x.fit.map((f) => h("tr", {}, h("td", {}, f.kind.toUpperCase()), h("td", {}, `${num(100 * f.strike, 0)} %`), h("td", { class: "num" }, num(f.pseudo_quote, 3)),

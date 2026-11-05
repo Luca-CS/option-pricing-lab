@@ -78,6 +78,7 @@ def sheet_of(lake: Lake, deal: Deal):
         values["wrapper.funding_spread"] = spreads["wrapper.funding_spread"]
     else:
         values["wrapper.issuer_spread"] = spreads["wrapper.issuer_spread"]
+    values["costs.side"] = "sell" if deal.quantity < 0 else "buy"
     return preset(deal.preset, **values)
 
 

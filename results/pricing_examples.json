@@ -1,0 +1,1426 @@
+{
+ "day": "2026-11-04",
+ "n_paths": 100000,
+ "workers": 6,
+ "defaults": "starting values, first tier",
+ "products": {
+  "Phoenix 2y on SPX": {
+   "base": 96.99339926682057,
+   "base_se": 0.039373669980062725,
+   "client": 97.99999999999997,
+   "client_se": 0.03516218543034927,
+   "coupon_base": 0.05874036670839487,
+   "coupon_final": 0.03795589020453582,
+   "coupon_se": 0.0007110947728435053,
+   "passes": 1,
+   "digital_passes": 2,
+   "seconds": 23.855378100000962,
+   "lines": [
+    {
+     "key": "slv",
+     "label": "Model: SLV (mix 0.5)",
+     "kind": "model",
+     "cost": 0.580821778183176,
+     "se": 0.02982862231260285,
+     "coupon_bp": -119.92914572441417,
+     "used": 0.5,
+     "gap": 0.580821778183176,
+     "note": ""
+    },
+    {
+     "key": "vol",
+     "label": "Volatility, parallel",
+     "kind": "bump",
+     "cost": 0.07098772845093078,
+     "se": 0.004076959371162464,
+     "coupon_bp": -14.657676330021983,
+     "used": -0.0025,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "skew",
+     "label": "Volatility skew (90-110 % at 1 year)",
+     "kind": "bump",
+     "cost": 0.04802100430997342,
+     "se": 0.00585981754723154,
+     "coupon_bp": -9.915465018784552,
+     "used": -0.0025,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "dividend",
+     "label": "Dividends",
+     "kind": "bump",
+     "cost": 0.010115255487487084,
+     "se": 0.0017685274271185384,
+     "coupon_bp": -2.088616499872245,
+     "used": -0.05,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "repo",
+     "label": "Repo",
+     "kind": "bump",
+     "cost": 0.008623968177760616,
+     "se": 0.0015230138151414447,
+     "coupon_bp": -1.7806927618116675,
+     "used": -0.0005,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "spot",
+     "label": "Spot, delta bid-ask",
+     "kind": "bump",
+     "cost": 0.005960732045322863,
+     "se": 0.00158764100950165,
+     "coupon_bp": -1.2307828820121496,
+     "used": 0.0002,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "coupon",
+     "label": "Digital: coupon barrier",
+     "kind": "digital",
+     "cost": 0.004044134358972192,
+     "se": 0.00025829308387295403,
+     "coupon_bp": -0.8350402775588192,
+     "used": null,
+     "gap": null,
+     "note": "8 dates, width 0.95 pt"
+    },
+    {
+     "key": "autocall",
+     "label": "Digital: autocall trigger",
+     "kind": "digital",
+     "cost": 0.09908828179131535,
+     "se": 0.0059127714988844865,
+     "coupon_bp": -20.459930107484197,
+     "used": null,
+     "gap": null,
+     "note": "7 dates, width 0.95 pt"
+    },
+    {
+     "key": "barrier",
+     "label": "Digital: final barrier",
+     "kind": "digital",
+     "cost": 0.19502376494440182,
+     "se": 0.007012703482884771,
+     "coupon_bp": -40.268864571336316,
+     "used": null,
+     "gap": null,
+     "note": "1 date, width 8.00 pt"
+    },
+    {
+     "key": "digital_interaction",
+     "label": "Interaction of the digitals",
+     "kind": "interaction",
+     "cost": -0.0096891423295411,
+     "se": 0.0012512592479552655,
+     "coupon_bp": 2.0006318737202315,
+     "used": null,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "interaction",
+     "label": "Interaction of the bumps",
+     "kind": "interaction",
+     "cost": -0.006396772240380516,
+     "se": 0.00807428555977899,
+     "coupon_bp": 1.3208172609886886,
+     "used": null,
+     "gap": null,
+     "note": ""
+    }
+   ]
+  },
+  "Athena 2y on SPX": {
+   "base": 96.90361861629066,
+   "base_se": 0.041182935642085645,
+   "client": 98.0,
+   "client_se": 0.03665776077979114,
+   "coupon_base": 0.07905591009270213,
+   "coupon_final": 0.048588103505579947,
+   "coupon_se": 0.001028035178054437,
+   "passes": 1,
+   "digital_passes": 3,
+   "seconds": 11.976901699999871,
+   "lines": [
+    {
+     "key": "slv",
+     "label": "Model: SLV (mix 0.5)",
+     "kind": "model",
+     "cost": 0.49052807991679626,
+     "se": 0.03041432224925671,
+     "coupon_bp": -136.3149255042415,
+     "used": 0.5,
+     "gap": 0.49052807991679626,
+     "note": ""
+    },
+    {
+     "key": "vol",
+     "label": "Volatility, parallel",
+     "kind": "bump",
+     "cost": 0.073753876246736,
+     "se": 0.004198336196490966,
+     "coupon_bp": -20.495777016329402,
+     "used": -0.0025,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "skew",
+     "label": "Volatility skew (90-110 % at 1 year)",
+     "kind": "bump",
+     "cost": 0.033007792986628516,
+     "se": 0.006188691289823164,
+     "coupon_bp": -9.172675380367403,
+     "used": -0.0025,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "dividend",
+     "label": "Dividends",
+     "kind": "bump",
+     "cost": 0.013292229757123904,
+     "se": 0.001922175313583799,
+     "coupon_bp": -3.693834019522283,
+     "used": -0.05,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "repo",
+     "label": "Repo",
+     "kind": "bump",
+     "cost": 0.011577464684176671,
+     "se": 0.0016602060879442083,
+     "coupon_bp": -3.217310691406743,
+     "used": -0.0005,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "spot",
+     "label": "Spot, delta bid-ask",
+     "kind": "bump",
+     "cost": 0.007369511461683471,
+     "se": 0.0017235126581679778,
+     "coupon_bp": -2.047944749814186,
+     "used": 0.0002,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "autocall",
+     "label": "Digital: autocall trigger",
+     "kind": "digital",
+     "cost": 0.30033266699834843,
+     "se": 0.00901363856177641,
+     "coupon_bp": -83.46071673473674,
+     "used": null,
+     "gap": null,
+     "note": "8 dates, width 1.21 to 9.72 pt"
+    },
+    {
+     "key": "barrier",
+     "label": "Digital: final barrier",
+     "kind": "digital",
+     "cost": 0.19502376494440185,
+     "se": 0.007012703482884771,
+     "coupon_bp": -54.195979961967005,
+     "used": null,
+     "gap": null,
+     "note": "1 date, width 8.00 pt"
+    },
+    {
+     "key": "digital_interaction",
+     "label": "Interaction of the digitals",
+     "kind": "interaction",
+     "cost": -0.017037093419586147,
+     "se": 0.0018226541162610955,
+     "coupon_bp": 4.734510042103232,
+     "used": null,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "interaction",
+     "label": "Interaction of the bumps",
+     "kind": "interaction",
+     "cost": -0.0114669098669693,
+     "se": 0.008589436985398175,
+     "coupon_bp": 3.186588145055647,
+     "used": null,
+     "gap": null,
+     "note": ""
+    }
+   ]
+  },
+  "BRC 1y on SPX, daily 70 %": {
+   "base": 97.73439316529283,
+   "base_se": 0.03589554078617878,
+   "client": 98.0,
+   "client_se": 0.03515583008370552,
+   "coupon_base": 0.06518916378361818,
+   "coupon_final": 0.06245912798289452,
+   "coupon_se": 0.0003613486634802805,
+   "passes": 2,
+   "digital_passes": 1,
+   "seconds": 12.53668729999481,
+   "lines": [
+    {
+     "key": "slv",
+     "label": "Model: SLV (mix 0.5)",
+     "kind": "model",
+     "cost": 0.0,
+     "se": 0.02670720153582182,
+     "coupon_bp": -0.0,
+     "used": 0.5,
+     "gap": -0.17579582244902114,
+     "note": "the gap is in the desk's favour: no provision"
+    },
+    {
+     "key": "vol",
+     "label": "Volatility, parallel",
+     "kind": "bump",
+     "cost": 0.10055720709324854,
+     "se": 0.0032361660652875466,
+     "coupon_bp": -10.335757198717577,
+     "used": -0.0025,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "skew",
+     "label": "Volatility skew (90-110 % at 1 year)",
+     "kind": "bump",
+     "cost": 0.08712101405029854,
+     "se": 0.0024859469162342,
+     "coupon_bp": -8.954720145468377,
+     "used": -0.0025,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "dividend",
+     "label": "Dividends",
+     "kind": "bump",
+     "cost": 0.009017121244421234,
+     "se": 0.0010702349744949177,
+     "coupon_bp": -0.9268234322310785,
+     "used": -0.05,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "repo",
+     "label": "Repo",
+     "kind": "bump",
+     "cost": 0.008527450147320734,
+     "se": 0.0010544708744471508,
+     "coupon_bp": -0.876492663177726,
+     "used": -0.0005,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "spot",
+     "label": "Spot, delta bid-ask",
+     "kind": "bump",
+     "cost": 0.0043099869656011945,
+     "se": 0.0008004476511780277,
+     "coupon_bp": -0.44300135309826416,
+     "used": 0.0002,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "daily",
+     "label": "Barrier observed daily",
+     "kind": "digital",
+     "cost": 0.054745430228190686,
+     "se": 0.0034832610005768594,
+     "coupon_bp": -5.627000698748555,
+     "used": null,
+     "gap": null,
+     "note": "1 date, moved by 0.50 pt"
+    },
+    {
+     "key": "interaction",
+     "label": "Interaction of the bumps",
+     "kind": "interaction",
+     "cost": 0.001328624978106957,
+     "se": 0.005100033734086754,
+     "coupon_bp": -0.1365625157939272,
+     "used": null,
+     "gap": null,
+     "note": ""
+    }
+   ]
+  },
+  "Reverse convertible 1y on SPX, 80 %": {
+   "base": 97.58378978492493,
+   "base_se": 0.0,
+   "client": 98.0,
+   "client_se": 0.0,
+   "coupon_base": 0.06628114346851206,
+   "coupon_final": 0.06200313311898759,
+   "coupon_se": 0.0,
+   "passes": 1,
+   "digital_passes": 1,
+   "seconds": 11.800419899998815,
+   "lines": [
+    {
+     "key": "vol",
+     "label": "Volatility, parallel",
+     "kind": "bump",
+     "cost": 0.09571816092092433,
+     "se": 0.0,
+     "coupon_bp": -9.838376575724073,
+     "used": -0.0025,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "skew",
+     "label": "Volatility skew (90-110 % at 1 year)",
+     "kind": "bump",
+     "cost": 0.06781345004775119,
+     "se": 0.0,
+     "coupon_bp": -6.970195123368518,
+     "used": -0.0025,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "dividend",
+     "label": "Dividends",
+     "kind": "bump",
+     "cost": 0.008794154014722722,
+     "se": 0.0,
+     "coupon_bp": -0.9039057795232275,
+     "used": -0.05,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "repo",
+     "label": "Repo",
+     "kind": "bump",
+     "cost": 0.008182095453662441,
+     "se": 0.0,
+     "coupon_bp": -0.8409954336476781,
+     "used": -0.0005,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "spot",
+     "label": "Spot, delta bid-ask",
+     "kind": "bump",
+     "cost": 0.0032748342631236937,
+     "se": 0.0,
+     "coupon_bp": -0.3366033404080119,
+     "used": 0.0002,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "barrier",
+     "label": "Digital: final barrier",
+     "kind": "digital",
+     "cost": 0.23236677537886408,
+     "se": 0.0,
+     "coupon_bp": -23.883783577419333,
+     "used": null,
+     "gap": null,
+     "note": "1 date, width 4.00 pt"
+    },
+    {
+     "key": "interaction",
+     "label": "Interaction of the bumps",
+     "kind": "interaction",
+     "cost": 6.074499601993466e-05,
+     "se": 0.0,
+     "coupon_bp": -0.006243665153875023,
+     "used": null,
+     "gap": null,
+     "note": ""
+    }
+   ]
+  },
+  "Phoenix 2y on AAPL": {
+   "base": 96.5983226741368,
+   "base_se": 0.05339389209238201,
+   "client": 97.99999999999997,
+   "client_se": 0.05053999522322075,
+   "coupon_base": 0.09988833793385546,
+   "coupon_final": 0.0726652879353734,
+   "coupon_se": 0.0009690335686811925,
+   "passes": 1,
+   "digital_passes": 2,
+   "seconds": 22.867096500005573,
+   "lines": [
+    {
+     "key": "slv",
+     "label": "Model: SLV (mix 0.5)",
+     "kind": "model",
+     "cost": 0.6508748604592388,
+     "se": 0.03204206477330523,
+     "coupon_bp": -126.41139684645219,
+     "used": 0.5,
+     "gap": 0.6508748604592388,
+     "note": ""
+    },
+    {
+     "key": "vol",
+     "label": "Volatility, parallel",
+     "kind": "bump",
+     "cost": 0.1534135524342601,
+     "se": 0.0056439894203244535,
+     "coupon_bp": -29.79562222561177,
+     "used": -0.005,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "skew",
+     "label": "Volatility skew (90-110 % at 1 year)",
+     "kind": "bump",
+     "cost": 0.15064388126300163,
+     "se": 0.00942032640440366,
+     "coupon_bp": -29.257703152631905,
+     "used": -0.005,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "dividend",
+     "label": "Dividends",
+     "kind": "bump",
+     "cost": 0.0022957477716094555,
+     "se": 0.0007927249826076083,
+     "coupon_bp": -0.44587477600766173,
+     "used": -0.05,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "repo",
+     "label": "Repo",
+     "kind": "bump",
+     "cost": 0.020937273046773536,
+     "se": 0.0027663745982964547,
+     "coupon_bp": -4.06638832252758,
+     "used": -0.001,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "spot",
+     "label": "Spot, delta bid-ask",
+     "kind": "bump",
+     "cost": 0.013995684947723876,
+     "se": 0.0028378451911208026,
+     "coupon_bp": -2.718209277304601,
+     "used": 0.0005,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "coupon",
+     "label": "Digital: coupon barrier",
+     "kind": "digital",
+     "cost": 0.0220023609915809,
+     "se": 0.0008525067932368619,
+     "coupon_bp": -4.273247218218248,
+     "used": null,
+     "gap": null,
+     "note": "8 dates, width 1.82 pt"
+    },
+    {
+     "key": "autocall",
+     "label": "Digital: autocall trigger",
+     "kind": "digital",
+     "cost": 0.13388026038889017,
+     "se": 0.008749187697353654,
+     "coupon_bp": -26.001911817557776,
+     "used": null,
+     "gap": null,
+     "note": "7 dates, width 1.82 pt"
+    },
+    {
+     "key": "barrier",
+     "label": "Digital: final barrier",
+     "kind": "digital",
+     "cost": 0.2723348034685691,
+     "se": 0.008186740009187447,
+     "coupon_bp": -52.892230147091084,
+     "used": null,
+     "gap": null,
+     "note": "1 date, width 8.00 pt"
+    },
+    {
+     "key": "digital_interaction",
+     "label": "Interaction of the digitals",
+     "kind": "interaction",
+     "cost": -0.01801203258100037,
+     "se": 0.001689255656260812,
+     "coupon_bp": 3.4982549441247888,
+     "used": null,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "interaction",
+     "label": "Interaction of the bumps",
+     "kind": "interaction",
+     "cost": -0.000689066327447807,
+     "se": 0.011042126322519106,
+     "coupon_bp": 0.13382885446070647,
+     "used": null,
+     "gap": null,
+     "note": ""
+    }
+   ]
+  }
+ },
+ "baskets": {
+  "Phoenix 2y, worst of SPX, NDX, RUT": {
+   "base": 95.08140309659468,
+   "base_se": 0.06522228323949383,
+   "client": 97.99999999999999,
+   "client_se": 0.07778237421504118,
+   "coupon_base": 0.137892641185036,
+   "coupon_final": 0.08808388135034276,
+   "coupon_se": 0.0012757466301759196,
+   "passes": 1,
+   "digital_passes": 2,
+   "seconds": 132.02218749999884,
+   "lines": [
+    {
+     "key": "slv",
+     "label": "Model: SLV (mix 0.5)",
+     "kind": "model",
+     "cost": 0.8361739037546935,
+     "se": 0.04351915071706473,
+     "coupon_bp": -142.70139567256135,
+     "used": 0.5,
+     "gap": 0.8361739037546935,
+     "note": ""
+    },
+    {
+     "key": "local_corr",
+     "label": "Model: correlation skew (local correlation)",
+     "kind": "model",
+     "cost": 1.0802500096190302,
+     "se": 0.06311134275104426,
+     "coupon_bp": -184.35541142307284,
+     "used": null,
+     "gap": 1.0802500096190302,
+     "note": "calibrated on pseudo-quotes of CvC and PvP, where the correlation skew is an assumption: no broker level was available"
+    },
+    {
+     "key": "corr_skew",
+     "label": "Correlation skew",
+     "kind": "bump",
+     "cost": 0.004789202079566902,
+     "se": 0.005726257016687032,
+     "coupon_bp": -0.8173249820920329,
+     "used": 0.01,
+     "gap": null,
+     "note": "the slope of the local correlation, on its own paths"
+    },
+    {
+     "key": "vol",
+     "label": "Volatility, parallel",
+     "kind": "bump",
+     "cost": 0.1217274828582022,
+     "se": 0.004914965112198797,
+     "coupon_bp": -20.774006002307914,
+     "used": -0.0025,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "skew",
+     "label": "Volatility skew (90-110 % at 1 year)",
+     "kind": "bump",
+     "cost": 0.11220494265563309,
+     "se": 0.00818035901842178,
+     "coupon_bp": -19.14888977809561,
+     "used": -0.0025,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "corr",
+     "label": "Correlation",
+     "kind": "bump",
+     "cost": 0.07912502020779613,
+     "se": 0.006280339266706832,
+     "coupon_bp": -13.503471904074893,
+     "used": 0.01,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "dividend",
+     "label": "Dividends",
+     "kind": "bump",
+     "cost": 0.006596854295451863,
+     "se": 0.0014134461744738968,
+     "coupon_bp": -1.1258188168542542,
+     "used": -0.05,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "repo",
+     "label": "Repo",
+     "kind": "bump",
+     "cost": 0.008497849057866711,
+     "se": 0.001802976012384701,
+     "coupon_bp": -1.45024248583593,
+     "used": -0.0005,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "spot",
+     "label": "Spot, delta bid-ask",
+     "kind": "bump",
+     "cost": 0.001589223248575565,
+     "se": 0.001361480289229703,
+     "coupon_bp": -0.2712167583665063,
+     "used": 0.0002,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "coupon",
+     "label": "Digital: coupon barrier",
+     "kind": "digital",
+     "cost": 0.04558136473295012,
+     "se": 0.0013567041169117626,
+     "coupon_bp": -7.778913375369183,
+     "used": null,
+     "gap": null,
+     "note": "8 dates, width 2.20 pt"
+    },
+    {
+     "key": "autocall",
+     "label": "Digital: autocall trigger",
+     "kind": "digital",
+     "cost": 0.23164665957761604,
+     "se": 0.012512781018775525,
+     "coupon_bp": -39.53280708256851,
+     "used": null,
+     "gap": null,
+     "note": "7 dates, width 2.20 pt"
+    },
+    {
+     "key": "barrier",
+     "label": "Digital: final barrier",
+     "kind": "digital",
+     "cost": 0.3819728857589098,
+     "se": 0.009651488053551855,
+     "coupon_bp": -65.18747315852991,
+     "used": null,
+     "gap": null,
+     "note": "1 date, width 8.00 pt"
+    },
+    {
+     "key": "digital_interaction",
+     "label": "Interaction of the digitals",
+     "kind": "interaction",
+     "cost": -0.03672650494118912,
+     "se": 0.002520842799881197,
+     "coupon_bp": 6.267743455935963,
+     "used": null,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "interaction",
+     "label": "Interaction of the bumps",
+     "kind": "interaction",
+     "cost": 0.04516801050022956,
+     "se": 0.012646693205065389,
+     "coupon_bp": -7.708370363142279,
+     "used": null,
+     "gap": null,
+     "note": ""
+    }
+   ],
+   "correlation": {
+    "matrix": [
+     [
+      1.0,
+      0.907,
+      0.789
+     ],
+     [
+      0.907,
+      1.0,
+      0.721
+     ],
+     [
+      0.789,
+      0.721,
+      1.0
+     ]
+    ],
+    "window": 120,
+    "lambda": 0.0,
+    "origin": "derived"
+   },
+   "leverages_seconds": 21.31148490000487,
+   "fit": {
+    "constant": [
+     {
+      "kind": "pvp",
+      "strike": 0.9,
+      "pseudo_quote": -0.4817704210566327,
+      "model": -0.6509952724421804,
+      "se": 0.004732202185290879
+     },
+     {
+      "kind": "cvc",
+      "strike": 1.0,
+      "pseudo_quote": -0.5946001658577743,
+      "model": -0.6063805349751887,
+      "se": 0.0047101860086996945
+     },
+     {
+      "kind": "cvc",
+      "strike": 1.1,
+      "pseudo_quote": -0.549877687476173,
+      "model": -0.491995343352105,
+      "se": 0.004212048715052722
+     }
+    ],
+    "local": {
+     "seconds": 65.86439399999654,
+     "rmse": 0.015080048241929465,
+     "lines": [
+      {
+       "kind": "pvp",
+       "strike": 0.9,
+       "tenor": 1.0,
+       "pseudo_quote": -0.4817704210566327,
+       "model": -0.4953056428777121,
+       "se": 0.006339549455535987,
+       "assumed_rho": 0.8527350144115399
+      },
+      {
+       "kind": "cvc",
+       "strike": 1.0,
+       "tenor": 1.0,
+       "pseudo_quote": -0.5946001658577743,
+       "model": -0.5852908322481712,
+       "se": 0.00706812728755688,
+       "assumed_rho": 0.8020959180476702
+      },
+      {
+       "kind": "cvc",
+       "strike": 1.1,
+       "tenor": 1.0,
+       "pseudo_quote": -0.549877687476173,
+       "model": -0.5699835533964722,
+       "se": 0.007329610179382643,
+       "assumed_rho": 0.7763607911828309
+      }
+     ],
+     "shorter": {
+      "0.25": [
+       {
+        "strike": 0.9,
+        "pseudo_quote": -0.1918277402615666,
+        "model": -0.1748368214656293,
+        "se": 0.001771771407553844
+       },
+       {
+        "strike": 1.0,
+        "pseudo_quote": -0.24456084605598358,
+        "model": -0.25991910716677596,
+        "se": 0.0019650708524288044
+       },
+       {
+        "strike": 1.1,
+        "pseudo_quote": -0.15839394097511084,
+        "model": -0.17995990548291513,
+        "se": 0.0013481905570652587
+       }
+      ],
+      "0.5": [
+       {
+        "strike": 0.9,
+        "pseudo_quote": -0.31453163363451503,
+        "model": -0.30928766946543823,
+        "se": 0.0027373903803764982
+       },
+       {
+        "strike": 1.0,
+        "pseudo_quote": -0.38565847118790386,
+        "model": -0.39781995949122523,
+        "se": 0.003000387170325234
+       },
+       {
+        "strike": 1.1,
+        "pseudo_quote": -0.32002424428113024,
+        "model": -0.3556297331685137,
+        "se": 0.002450596409581408
+       }
+      ]
+     },
+     "params": {
+      "sigma": 0.20482996462316183,
+      "level": -0.24515040414431127,
+      "down": 0.8317690449365825,
+      "up": 0.0,
+      "w0": 0.3
+     }
+    },
+    "stochastic": {
+     "seconds": 67.40404000000126,
+     "rmse": 0.08712467641478726,
+     "lines": [
+      {
+       "kind": "pvp",
+       "strike": 0.9,
+       "tenor": 1.0,
+       "pseudo_quote": -0.4817704210566327,
+       "model": -0.622840527993036,
+       "se": 0.007328610674727312,
+       "assumed_rho": 0.8527350144115399
+      },
+      {
+       "kind": "cvc",
+       "strike": 1.0,
+       "tenor": 1.0,
+       "pseudo_quote": -0.5946001658577743,
+       "model": -0.5887036891633018,
+       "se": 0.007340478466797149,
+       "assumed_rho": 0.8020959180476702
+      },
+      {
+       "kind": "cvc",
+       "strike": 1.1,
+       "tenor": 1.0,
+       "pseudo_quote": -0.549877687476173,
+       "model": -0.49375788798291215,
+       "se": 0.006657566959375781,
+       "assumed_rho": 0.7763607911828309
+      }
+     ],
+     "shorter": {
+      "0.25": [
+       {
+        "strike": 0.9,
+        "pseudo_quote": -0.1918277402615666,
+        "model": -0.24370750459521762,
+        "se": 0.0022264893873849005
+       },
+       {
+        "strike": 1.0,
+        "pseudo_quote": -0.24456084605598358,
+        "model": -0.24584612653962196,
+        "se": 0.001968039348665495
+       },
+       {
+        "strike": 1.1,
+        "pseudo_quote": -0.15839394097511084,
+        "model": -0.14996741402026625,
+        "se": 0.0011738055807636826
+       }
+      ],
+      "0.5": [
+       {
+        "strike": 0.9,
+        "pseudo_quote": -0.31453163363451503,
+        "model": -0.40789245997768536,
+        "se": 0.003230578798332228
+       },
+       {
+        "strike": 1.0,
+        "pseudo_quote": -0.38565847118790386,
+        "model": -0.38699811550221985,
+        "se": 0.003124481143282486
+       },
+       {
+        "strike": 1.1,
+        "pseudo_quote": -0.32002424428113024,
+        "model": -0.29485492586667233,
+        "se": 0.002051747620850082
+       }
+      ]
+     },
+     "params": {
+      "theta": 0.3,
+      "nu": 0.5,
+      "rho": -0.5,
+      "kappa": 2.0,
+      "w0": 0.3
+     }
+    }
+   },
+   "slv_gap": [
+    {
+     "vol_corr": "same",
+     "mix": 0.25,
+     "gap": 0.5097927118836971,
+     "se": 0.029254475505624166
+    },
+    {
+     "vol_corr": "same",
+     "mix": 0.5,
+     "gap": 0.9444821507182863,
+     "se": 0.045059077955713525
+    },
+    {
+     "vol_corr": "same",
+     "mix": 0.75,
+     "gap": 1.1576548493765255,
+     "se": 0.05640523955893832
+    },
+    {
+     "vol_corr": "independent",
+     "mix": 0.25,
+     "gap": 0.33152758024432144,
+     "se": 0.028650510017078107
+    },
+    {
+     "vol_corr": "independent",
+     "mix": 0.5,
+     "gap": 0.39337764331704367,
+     "se": 0.0436581673753457
+    },
+    {
+     "vol_corr": "independent",
+     "mix": 0.75,
+     "gap": 0.26171939349353807,
+     "se": 0.05507976611743348
+    }
+   ]
+  },
+  "Phoenix 2y, worst of SPX, SX5E": {
+   "base": 95.46955462508825,
+   "base_se": 0.056781119551451285,
+   "client": 97.99999999999999,
+   "client_se": 0.05861993636202499,
+   "coupon_base": 0.10898406266306285,
+   "coupon_final": 0.06795910511164686,
+   "coupon_se": 0.0009224222490566286,
+   "passes": 1,
+   "digital_passes": 2,
+   "seconds": 85.73480910000217,
+   "lines": [
+    {
+     "key": "slv",
+     "label": "Model: SLV (mix 0.5)",
+     "kind": "model",
+     "cost": 0.9387003280644256,
+     "se": 0.04240104262186186,
+     "coupon_bp": -152.18720583401804,
+     "used": 0.5,
+     "gap": 0.9387003280644256,
+     "note": ""
+    },
+    {
+     "key": "local_corr",
+     "label": "Model: correlation skew (local correlation)",
+     "kind": "model",
+     "cost": 0.618204774851528,
+     "se": 0.03692631055810224,
+     "coupon_bp": -100.22672252804956,
+     "used": null,
+     "gap": 0.618204774851528,
+     "note": "calibrated on pseudo-quotes of CvC and PvP, where the correlation skew is an assumption: no broker level was available"
+    },
+    {
+     "key": "corr_skew",
+     "label": "Correlation skew",
+     "kind": "bump",
+     "cost": 0.01829364896585563,
+     "se": 0.006448865542933121,
+     "coupon_bp": -2.965865929079407,
+     "used": 0.01,
+     "gap": null,
+     "note": "the slope of the local correlation, on its own paths"
+    },
+    {
+     "key": "vol",
+     "label": "Volatility, parallel",
+     "kind": "bump",
+     "cost": 0.12041567321299568,
+     "se": 0.004974851812044801,
+     "coupon_bp": -19.522444274303353,
+     "used": -0.0025,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "skew",
+     "label": "Volatility skew (90-110 % at 1 year)",
+     "kind": "bump",
+     "cost": 0.11127468436166972,
+     "se": 0.007359035829490852,
+     "coupon_bp": -18.04045741411795,
+     "used": -0.0025,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "corr",
+     "label": "Correlation",
+     "kind": "bump",
+     "cost": 0.025052266047880266,
+     "se": 0.0038261023527017433,
+     "coupon_bp": -4.061609712546797,
+     "used": 0.01,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "dividend",
+     "label": "Dividends",
+     "kind": "bump",
+     "cost": 0.054224582085682614,
+     "se": 0.004108184598986262,
+     "coupon_bp": -8.791184351829704,
+     "used": -0.1,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "repo",
+     "label": "Repo",
+     "kind": "bump",
+     "cost": 0.013797199914311295,
+     "se": 0.0022942525542368687,
+     "coupon_bp": -2.236877138012758,
+     "used": -0.0005,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "spot",
+     "label": "Spot, delta bid-ask",
+     "kind": "bump",
+     "cost": 0.009721469491670342,
+     "se": 0.0024679659811450375,
+     "coupon_bp": -1.5760975407227302,
+     "used": 0.0003,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "coupon",
+     "label": "Digital: coupon barrier",
+     "kind": "digital",
+     "cost": 0.02983102684639183,
+     "se": 0.000993072219293924,
+     "coupon_bp": -4.836368420444789,
+     "used": null,
+     "gap": null,
+     "note": "8 dates, width 1.70 pt"
+    },
+    {
+     "key": "autocall",
+     "label": "Digital: autocall trigger",
+     "kind": "digital",
+     "cost": 0.20214872663959244,
+     "se": 0.010564033765099335,
+     "coupon_bp": -32.773451708086384,
+     "used": null,
+     "gap": null,
+     "note": "7 dates, width 1.70 pt"
+    },
+    {
+     "key": "barrier",
+     "label": "Digital: final barrier",
+     "kind": "digital",
+     "cost": 0.403910722478055,
+     "se": 0.009914224104425242,
+     "coupon_bp": -65.48420451400528,
+     "used": null,
+     "gap": null,
+     "note": "1 date, width 8.00 pt"
+    },
+    {
+     "key": "digital_interaction",
+     "label": "Interaction of the digitals",
+     "kind": "interaction",
+     "cost": -0.031081442813025384,
+     "se": 0.0022734606292518196,
+     "coupon_bp": 5.0390926620401775,
+     "used": null,
+     "gap": null,
+     "note": ""
+    },
+    {
+     "key": "interaction",
+     "label": "Interaction of the bumps",
+     "kind": "interaction",
+     "cost": 0.015951714764694813,
+     "se": 0.01469614709734076,
+     "coupon_bp": -2.58617881097996,
+     "used": null,
+     "gap": null,
+     "note": ""
+    }
+   ],
+   "correlation": {
+    "matrix": [
+     [
+      1.0,
+      0.608
+     ],
+     [
+      0.608,
+      1.0
+     ]
+    ],
+    "window": 120,
+    "lambda": 0.0,
+    "origin": "derived"
+   },
+   "leverages_seconds": 14.264380900000106,
+   "fit": {
+    "constant": [
+     {
+      "kind": "pvp",
+      "strike": 0.9,
+      "pseudo_quote": -0.6866921273647764,
+      "model": -0.8013455379766854,
+      "se": 0.006167934001351213
+     },
+     {
+      "kind": "cvc",
+      "strike": 1.0,
+      "pseudo_quote": -0.7578949414452739,
+      "model": -0.7746968001762049,
+      "se": 0.006374048302695629
+     },
+     {
+      "kind": "cvc",
+      "strike": 1.1,
+      "pseudo_quote": -0.60355662975057,
+      "model": -0.5750454916273849,
+      "se": 0.004556782656932987
+     }
+    ],
+    "local": {
+     "seconds": 42.35824319999665,
+     "rmse": 0.010963638827823252,
+     "lines": [
+      {
+       "kind": "pvp",
+       "strike": 0.9,
+       "tenor": 1.0,
+       "pseudo_quote": -0.6866921273647764,
+       "model": -0.7031649276051039,
+       "se": 0.009100242437020345,
+       "assumed_rho": 0.658190594985337
+      },
+      {
+       "kind": "cvc",
+       "strike": 1.0,
+       "tenor": 1.0,
+       "pseudo_quote": -0.7578949414452739,
+       "model": -0.7711442338266356,
+       "se": 0.010021970057280455,
+       "assumed_rho": 0.608190594985337
+      },
+      {
+       "kind": "cvc",
+       "strike": 1.1,
+       "tenor": 1.0,
+       "pseudo_quote": -0.60355662975057,
+       "model": -0.6241328786190751,
+       "se": 0.007736472029784695,
+       "assumed_rho": 0.583190594985337
+      }
+     ],
+     "shorter": {
+      "0.25": [
+       {
+        "strike": 0.9,
+        "pseudo_quote": -0.24395908133481303,
+        "model": -0.2310112768206873,
+        "se": 0.0024872784118962384
+       },
+       {
+        "strike": 1.0,
+        "pseudo_quote": -0.3096683756714102,
+        "model": -0.3247697955100089,
+        "se": 0.002698850928952149
+       },
+       {
+        "strike": 1.1,
+        "pseudo_quote": -0.10700319793794046,
+        "model": -0.11393242051914974,
+        "se": 0.0012797759458856334
+       }
+      ],
+      "0.5": [
+       {
+        "strike": 0.9,
+        "pseudo_quote": -0.43176642697900736,
+        "model": -0.429425047740433,
+        "se": 0.003823967488672747
+       },
+       {
+        "strike": 1.0,
+        "pseudo_quote": -0.48719819926756813,
+        "model": -0.5000146457195829,
+        "se": 0.00415787751704485
+       },
+       {
+        "strike": 1.1,
+        "pseudo_quote": -0.29764307006111346,
+        "model": -0.3098574138302319,
+        "se": 0.002420413427105675
+       }
+      ]
+     },
+     "params": {
+      "sigma": 0.1701158276281795,
+      "level": -0.08612122785087993,
+      "down": 0.2534102289145004,
+      "up": 0.0,
+      "w0": 0.3
+     }
+    },
+    "stochastic": {
+     "seconds": 44.65963450000709,
+     "rmse": 0.019273665719408833,
+     "lines": [
+      {
+       "kind": "pvp",
+       "strike": 0.9,
+       "tenor": 1.0,
+       "pseudo_quote": -0.6866921273647764,
+       "model": -0.7098752984220171,
+       "se": 0.009494046002673834,
+       "assumed_rho": 0.658190594985337
+      },
+      {
+       "kind": "cvc",
+       "strike": 1.0,
+       "tenor": 1.0,
+       "pseudo_quote": -0.7578949414452739,
+       "model": -0.7503502200762312,
+       "se": 0.010024143576039974,
+       "assumed_rho": 0.608190594985337
+      },
+      {
+       "kind": "cvc",
+       "strike": 1.1,
+       "tenor": 1.0,
+       "pseudo_quote": -0.60355662975057,
+       "model": -0.6253440593871402,
+       "se": 0.0077792909027687585,
+       "assumed_rho": 0.583190594985337
+      }
+     ],
+     "shorter": {
+      "0.25": [
+       {
+        "strike": 0.9,
+        "pseudo_quote": -0.24395908133481303,
+        "model": -0.24169318650945018,
+        "se": 0.002588717190786307
+       },
+       {
+        "strike": 1.0,
+        "pseudo_quote": -0.3096683756714102,
+        "model": -0.3048769540107241,
+        "se": 0.0026208035501823672
+       },
+       {
+        "strike": 1.1,
+        "pseudo_quote": -0.10700319793794046,
+        "model": -0.11880353818989615,
+        "se": 0.0013202428698553383
+       }
+      ],
+      "0.5": [
+       {
+        "strike": 0.9,
+        "pseudo_quote": -0.43176642697900736,
+        "model": -0.4348108027267056,
+        "se": 0.0039053310201592334
+       },
+       {
+        "strike": 1.0,
+        "pseudo_quote": -0.48719819926756813,
+        "model": -0.47623316658294496,
+        "se": 0.004116364716408067
+       },
+       {
+        "strike": 1.1,
+        "pseudo_quote": -0.29764307006111346,
+        "model": -0.31663301487625706,
+        "se": 0.002469238948457205
+       }
+      ]
+     },
+     "params": {
+      "theta": 0.29093120710037973,
+      "nu": 0.9274981343082276,
+      "rho": -0.8536764817878404,
+      "kappa": 2.0,
+      "w0": 0.3
+     }
+    }
+   },
+   "slv_gap": [
+    {
+     "vol_corr": "same",
+     "mix": 0.25,
+     "gap": 0.6042353688502549,
+     "se": 0.029601736455114103
+    },
+    {
+     "vol_corr": "same",
+     "mix": 0.5,
+     "gap": 1.1297744130681044,
+     "se": 0.044857949391508195
+    },
+    {
+     "vol_corr": "same",
+     "mix": 0.75,
+     "gap": 1.4408192403020517,
+     "se": 0.05426638323284343
+    },
+    {
+     "vol_corr": "independent",
+     "mix": 0.25,
+     "gap": 0.5627613356388129,
+     "se": 0.02938612986307777
+    },
+    {
+     "vol_corr": "independent",
+     "mix": 0.5,
+     "gap": 1.02424195977243,
+     "se": 0.0442868530758914
+    },
+    {
+     "vol_corr": "independent",
+     "mix": 0.75,
+     "gap": 1.3153857801964117,
+     "se": 0.053971747115342805
+    }
+   ]
+  }
+ }
+}
