@@ -375,6 +375,21 @@ def run_group(group: RiskGroup, shocks: dict, measures: list | None = None, sett
     return run
 
 
+def run_group_safe(group: RiskGroup, shocks: dict, measures: list | None = None, settings: RiskSettings | None = None,
+                   env: RiskEnv | None = None) -> GroupRun:
+    """`run_group`, except that a replicated group whose shocked surface is in butterfly arbitrage (replication refuses it) is
+    valued by local vol Monte Carlo instead, with a warning."""
+    settings = settings or RiskSettings()
+    try:
+        return run_group(group, shocks, measures, settings, env)
+    except ValueError as exc:
+        if "arbitrage" not in str(exc) or settings.model is not None:
+            raise
+        run = run_group(group, shocks, measures, dataclasses.replace(settings, model="lv"), env)
+        run.warnings.append(f"replication refused a shocked surface ({exc}): the group is valued by local vol Monte Carlo")
+        return run
+
+
 @dataclass
 class RiskRun:
     """Every group of a book under the same shocks and measures, and the book totals (groups independent)."""

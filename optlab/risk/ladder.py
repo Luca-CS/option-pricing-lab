@@ -24,7 +24,7 @@ import pandas as pd
 
 from . import grid
 from .curves import CurveMove
-from .engine import Measure, RiskSettings, run_group
+from .engine import Measure, RiskSettings, run_group_safe
 from .shocks import RULES, RiskEnv, Shock, VolMove, context_currency
 
 POINTS = (-0.30, -0.20, -0.10, -0.05, 0.0, 0.05, 0.10)
@@ -191,13 +191,7 @@ def ladder(groups: list, options: LadderOptions | None = None, settings: RiskSet
         shocks, measures = plan(g.ctx, o, env)
         aliases = [m for m in measures if "__alias__" in m.weights]
         real = [m for m in measures if "__alias__" not in m.weights]
-        try:
-            run = run_group(g, shocks, real, settings, env)
-        except ValueError as exc:  # a shocked surface in butterfly arbitrage cannot be replicated: local vol Monte Carlo
-            if "arbitrage" not in str(exc) or settings.model is not None:
-                raise
-            run = run_group(g, shocks, real, dataclasses.replace(settings, model="lv"), env)
-            run.warnings.append(f"replication refused a shocked surface ({exc}): the group is valued by local vol Monte Carlo")
+        run = run_group_safe(g, shocks, real, settings, env)
         for m in aliases:  # the point 0's Greeks, shared by the rules
             src = next(k for k in m.weights if k != "__alias__")
             run.measures[m.name] = run.measures[src]
