@@ -112,12 +112,13 @@ def smoothing_width(k, T):
     return c * root, ck * root, ckk * root, np.where(held, 0.0, 0.5 * c / root)
 
 
-def strike_tents(k, T=1.0):
+def strike_tents(k, T=1.0, rows=None):
     """Strike tents at log forward moneyness k and maturity T: (phi, dphi/dk, d2phi/dk2, dphi/dT), each (n_strikes, *shape).
 
     The hats are smoothed by a Gaussian whose width l(k, T) depends on the point where it is read: the result is still a
     partition of unity (the smoothing maps one to one). A ramp (x - a)_+ becomes R = u Phi(z) + l n(z), u = x - a, z = u / l,
-    with dR/dl = n(z), so R_k = Phi(z) + n(z) l_k, R_kk = n(z) [(1 - z l_k)^2 / l + l_kk], R_T = n(z) l_T."""
+    with dR/dl = n(z), so R_k = Phi(z) + n(z) l_k, R_kk = n(z) [(1 - z l_k)^2 / l + l_kk], R_T = n(z) l_T. `rows` computes only
+    those tents (the others stay zero)."""
     from scipy.special import ndtr
     k = np.asarray(k, dtype=float)
     T = np.asarray(T, dtype=float)
@@ -127,6 +128,8 @@ def strike_tents(k, T=1.0):
     out = np.zeros((4, len(_RAMPS), *shape))
     cache = {}
     for i, (const, ramps) in enumerate(_RAMPS):
+        if rows is not None and i not in rows:
+            continue
         out[0, i] = const
         for a, c in ramps:
             if a not in cache:
@@ -151,6 +154,27 @@ def strike_weights(k, T) -> np.ndarray:
 def tenor_tents(T, order: int = 1):
     """Tents over the tenors, read in years."""
     return tents(TENORS, T, order)
+
+
+def scalar_tenor_tents(T: float):
+    """(psi, dpsi) of the tenor tents at one maturity, shape (n_tenors, 1): the same numbers as `tenor_tents`, faster."""
+    nodes = TENORS
+    n = len(nodes)
+    psi, dpsi = np.zeros((n, 1)), np.zeros((n, 1))
+    if T <= nodes[0]:
+        psi[0, 0] = 1.0
+    elif T >= nodes[-1]:
+        psi[-1, 0] = 1.0
+    else:
+        i = int(np.searchsorted(nodes, T, side="right")) - 1
+        a, b = nodes[i], nodes[i + 1]
+        if T == a:
+            psi[i, 0] = 1.0
+        else:
+            s, ds, _ = _smoother(np.array((T - a) / (b - a)))
+            psi[i, 0], psi[i + 1, 0] = 1.0 - float(s), float(s)
+            dpsi[i, 0], dpsi[i + 1, 0] = -float(ds) / (b - a), float(ds) / (b - a)
+    return psi, dpsi
 
 
 def tenor_weights(T) -> np.ndarray:

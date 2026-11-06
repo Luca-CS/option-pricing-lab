@@ -30,17 +30,28 @@ def _sigma_parts(surface, k, T):
     return T, s, sk, skk, sT
 
 
-def _field(matrix, k, T, phi_cache=None):
+def _tenor(T):
+    """(psi, dpsi) of the tenor tents, (n_tenors, *T.shape); a single maturity (the path engine asks one per step) once."""
+    T = np.asarray(T, dtype=float)
+    flat = T.reshape(-1)
+    if flat.size and flat[0] == flat[-1] and np.all(flat == flat[0]):
+        psi, dpsi = grid.scalar_tenor_tents(float(flat[0]))
+        return (np.broadcast_to(psi[:, :1].reshape((-1,) + (1,) * T.ndim), (psi.shape[0], *T.shape)),
+                np.broadcast_to(dpsi[:, :1].reshape((-1,) + (1,) * T.ndim), (psi.shape[0], *T.shape)))
+    return grid.tenor_tents(T, order=1)
+
+
+def _field(matrix, k, T, phi_cache=None, tenor=None):
     """sum_ij M_ij phi_i(k, T) psi_j(T) and its derivatives in k, k twice and T; zero rows are skipped."""
     k = np.asarray(k, dtype=float)
     Tb = np.broadcast_to(np.asarray(T, dtype=float), np.broadcast(k, np.asarray(T)).shape)
     kb = np.broadcast_to(k, Tb.shape)
-    psi, dpsi = grid.tenor_tents(Tb, order=1)
-    rows = np.flatnonzero(np.any(matrix != 0.0, axis=1))
+    rows = _rows(matrix)
     out = np.zeros(Tb.shape), np.zeros(Tb.shape), np.zeros(Tb.shape), np.zeros(Tb.shape)
     if not len(rows):
         return out
-    phi, dphi, d2phi, phiT = phi_cache if phi_cache is not None else grid.strike_tents(kb, Tb)
+    psi, dpsi = tenor if tenor is not None else _tenor(Tb)
+    phi, dphi, d2phi, phiT = phi_cache if phi_cache is not None else grid.strike_tents(kb, Tb, set(rows.tolist()))
     f, fk, fkk, fT = out
     for i in rows:
         a = np.tensordot(matrix[i], psi, axes=(0, 0))  # sum_j M_ij psi_j(T)
@@ -52,8 +63,12 @@ def _field(matrix, k, T, phi_cache=None):
     return f, fk, fkk, fT
 
 
-def _term(vector, T, shape):
-    psi, dpsi = grid.tenor_tents(np.broadcast_to(np.asarray(T, dtype=float), shape), order=1)
+def _rows(matrix):
+    return np.flatnonzero(np.any(matrix != 0.0, axis=1))
+
+
+def _term(vector, tenor):
+    psi, dpsi = tenor
     v = np.asarray(vector, dtype=float)
     return np.tensordot(v, psi, axes=(0, 0)), np.tensordot(v, dpsi, axes=(0, 0))
 
@@ -69,15 +84,20 @@ class TentBumpedSurface:
         self.term = np.zeros(shape[1]) if term is None else np.asarray(term, dtype=float).reshape(shape[1])
         self.parallel, self.relative = float(parallel), float(relative)
         self.maturities = surface.maturities
+        self._rows = set(_rows(self.H).tolist()) | set(_rows(self.R).tolist())
+        self._has = (bool(np.any(self.H)), bool(np.any(self.R)), bool(np.any(self.term)))
 
     def derivatives(self, k, T):
         T_, s, sk, skk, sT = _sigma_parts(self.base, k, T)
         kb = np.broadcast_to(np.asarray(k, dtype=float), s.shape)
-        cache = grid.strike_tents(kb, T_) if (np.any(self.H) or np.any(self.R)) else None
-        a, ak, akk, aT = _field(self.H, kb, T_, cache)
-        r, rk, rkk, rT = _field(self.R, kb, T_, cache)
-        if np.any(self.term):
-            t, tT = _term(self.term, T_, s.shape)
+        has_h, has_r, has_t = self._has
+        cache = grid.strike_tents(kb, T_, self._rows) if self._rows else None
+        tenor = _tenor(T_) if (self._rows or has_t) else None
+        zero = np.zeros(s.shape)
+        a, ak, akk, aT = _field(self.H, kb, T_, cache, tenor) if has_h else (zero, zero, zero, zero)
+        r, rk, rkk, rT = _field(self.R, kb, T_, cache, tenor) if has_r else (zero, zero, zero, zero)
+        if has_t:
+            t, tT = _term(self.term, tenor)
             a, aT = a + t, aT + tT
         a = a + self.parallel
         r = r + self.relative

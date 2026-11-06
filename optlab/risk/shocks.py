@@ -32,10 +32,16 @@ from .surfaces import bumped_surface
 RULES = ("sticky_moneyness", "sticky_strike", "realistic")
 
 
-def _get(d: dict, key, default=None):
-    if key in d:
-        return d[key]
-    return d.get("*", default)
+def _get(d: dict, key, default=None, combine=None):
+    """The move of `key`: its own entry combined with the "*" entry (both apply), the default when neither is there."""
+    star, own = d.get("*"), d.get(key)
+    if star is None:
+        return default if own is None else own
+    if own is None or key == "*":
+        return star
+    if combine == "mult":
+        return (1 + star) * (1 + own) - 1
+    return star + own
 
 
 def _merge(a: dict, b: dict, add):
@@ -122,6 +128,7 @@ class Shock:
     quanto_corr: dict = field(default_factory=dict)  # {name: move of the correlation with its FX}
     fx_vol: dict = field(default_factory=dict)  # {name: absolute move of the FX vol of its quanto link}
     roll_days: int = 0  # business days
+    rule_spot: dict | None = None  # the part of the spot move the vol rule applies to (None: all of it)
 
     def __post_init__(self):
         if self.rule not in RULES:
@@ -136,19 +143,27 @@ class Shock:
             raise ValueError(f"cannot add shocks under {self.rule} and {o.rule}")
         rule = o.rule if self.rule == "sticky_moneyness" else self.rule
         add = lambda a, b: a + b  # noqa: E731
+        mult = lambda a, b: (1 + a) * (1 + b) - 1  # noqa: E731
+        rule_spot = None  # what the rule applies to: the spot moves of the shocks that carry it
+        if rule != "sticky_moneyness":
+            rule_spot = {}
+            for x in (self, o):
+                if x.rule != "sticky_moneyness":
+                    rule_spot = _merge(rule_spot, x.spot if x.rule_spot is None else x.rule_spot, mult)
         return Shock(_merge(self.spot, o.spot, lambda a, b: (1 + a) * (1 + b) - 1), _merge(self.vol, o.vol, add), rule,
                      _merge(self.rates, o.rates, add), _merge(self.discount, o.discount, add),
                      _merge(self.forward_rate, o.forward_rate, add), _merge(self.dividend, o.dividend, add),
                      _merge(self.dividend_relative, o.dividend_relative, lambda a, b: (1 + a) * (1 + b) - 1),
                      _merge(self.repo, o.repo, add), self.corr + o.corr, _merge(self.corr_pairs, o.corr_pairs, add),
                      _merge(self.fx, o.fx, lambda a, b: (1 + a) * (1 + b) - 1), _merge(self.quanto_corr, o.quanto_corr, add),
-                     _merge(self.fx_vol, o.fx_vol, add), self.roll_days + o.roll_days)
+                     _merge(self.fx_vol, o.fx_vol, add), self.roll_days + o.roll_days, rule_spot)
 
     def to_dict(self) -> dict:
         d = {"spot": dict(self.spot), "vol": {n: v.to_dict() for n, v in self.vol.items()}, "rule": self.rule,
              **{k: {c: m.to_dict() for c, m in getattr(self, k).items()} for k in ("rates", "discount", "forward_rate", "dividend", "repo")},
              "dividend_relative": dict(self.dividend_relative), "corr": self.corr, "corr_pairs": dict(self.corr_pairs),
-             "fx": dict(self.fx), "quanto_corr": dict(self.quanto_corr), "fx_vol": dict(self.fx_vol), "roll_days": self.roll_days}
+             "fx": dict(self.fx), "quanto_corr": dict(self.quanto_corr), "fx_vol": dict(self.fx_vol), "roll_days": self.roll_days,
+             "rule_spot": None if self.rule_spot is None else dict(self.rule_spot)}
         return {k: v for k, v in d.items() if v or k == "rule"}
 
     @classmethod
@@ -190,16 +205,17 @@ class NameMove:
 
 def name_moves(shock: Shock, name: str, currency: str, env: RiskEnv | None = None) -> NameMove:
     env = env or RiskEnv()
-    h = float(_get(shock.spot, name, 0.0))
+    h = float(_get(shock.spot, name, 0.0, "mult"))
+    hr = h if shock.rule_spot is None else float(_get(shock.rule_spot, name, 0.0, "mult"))
     vol = _get(shock.vol, name, VolMove()) or VolMove()
     strike_shift = 0.0
-    if h and shock.rule == "sticky_strike":
-        strike_shift = h
-    elif h and shock.rule == "realistic":
+    if hr and shock.rule == "sticky_strike":
+        strike_shift = hr
+    elif hr and shock.rule == "realistic":
         betas = env.betas.get(name)
         if betas is None:
             raise KeyError(f"no spot-vol beta of {name}: the realistic rule needs RiskEnv.betas")
-        vol = vol + VolMove(term={j: float(b) * float(np.log1p(h)) for j, b in enumerate(betas)})
+        vol = vol + VolMove(term={j: float(b) * float(np.log1p(hr)) for j, b in enumerate(betas)})
     carry = CurveMove()
     for d, sign in ((shock.rates, 1.0), (shock.forward_rate, 1.0)):
         m = _get(d, currency)
@@ -214,7 +230,7 @@ def name_moves(shock: Shock, name: str, currency: str, env: RiskEnv | None = Non
     if (dc or dv) and name in env.quanto:
         rho, vfx = env.quanto[name]
         drift = (rho + dc) * (vfx + dv) - rho * vfx
-    return NameMove(h, vol, strike_shift, carry, float(_get(shock.dividend_relative, name, 0.0)), drift)
+    return NameMove(h, vol, strike_shift, carry, float(_get(shock.dividend_relative, name, 0.0, "mult")), drift)
 
 
 def discount_move(shock: Shock, currency: str) -> CurveMove:
@@ -351,4 +367,4 @@ def fx_factor(shock: Shock, currency: str, report: str) -> float:
     """Value in the reporting currency of one unit of `currency` after the shock, relative to before."""
     if currency == report:
         return 1.0
-    return 1.0 + float(_get(shock.fx, currency, 0.0))
+    return 1.0 + float(_get(shock.fx, currency, 0.0, "mult"))
