@@ -148,6 +148,7 @@ class GroupRun:
     currency: str
     names: list
     quantities: list
+    notionals: list
     n_paths: int
     seed: int
     values: dict = field(default_factory=dict)  # shock -> [value per position]
@@ -160,18 +161,31 @@ class GroupRun:
     timings: list = field(default_factory=list)
     warnings: list = field(default_factory=list)
     smoothing_bias: tuple | None = None  # (per position, se, total, total se): smoothed - exact base value
+    cash: dict = field(default_factory=dict)  # base and rolled shocks: per position {payment time: expected cash}
 
     def to_dict(self) -> dict:
         def block(t):
             return {"positions": t[0], "positions_se": t[1], "total": t[2], "total_se": t[3]}
         return {"label": self.label, "method": self.method, "model": self.model, "currency": self.currency, "names": self.names,
-                "quantities": self.quantities, "n_paths": self.n_paths, "seed": self.seed,
+                "quantities": self.quantities, "notionals": self.notionals, "n_paths": self.n_paths, "seed": self.seed,
                 "base": {"positions": self.values["base"], "positions_se": self.base_se, "total": float(sum(self.values["base"])),
                          "total_se": self.base_total_se},
                 "values": self.values, "pnl": {k: block(v) for k, v in self.pnl.items()},
                 "measures": {k: block(v) for k, v in self.measures.items()}, "simulations": self.simulations,
                 "seconds": self.seconds, "warnings": self.warnings,
+                "cash": {k: [{str(t): a for t, a in c.items()} for c in v] for k, v in self.cash.items()},
                 "smoothing_bias": block(self.smoothing_bias) if self.smoothing_bias else None}
+
+
+def _expected_cash(fmt, flows: dict, redemption: dict, notional: float, n: float, scale: float) -> dict:
+    """{payment time: expected undiscounted cash} of one position, from summed (or expected, n = 1) flows."""
+    out: dict = {}
+    for (t, _tag), f in flows.items():
+        out[round(float(t), 10)] = out.get(round(float(t), 10), 0.0) + scale * f / n
+    if isinstance(fmt, (Swap, FundedSwap)):
+        for t, w in redemption.items():
+            out[round(float(t), 10)] = out.get(round(float(t), 10), 0.0) - scale * notional * w / n
+    return out
 
 
 def _sim_model(d_model: str, ctx, sim_ctx, horizon: float, settings: RiskSettings, seed: int, cache: dict, names):
@@ -226,7 +240,7 @@ def run_group(group: RiskGroup, shocks: dict, measures: list | None = None, sett
     spot0 = {n: float(ctx.markets[n].spot) for n in names} if basket else float(ctx.market.spot)
     notionals = [float({**it["program"].param_values, **it["pos"].params}.get("N", 1.0)) for it in base_items]
     quantities = [float(it["pos"].quantity) for it in base_items]
-    run = GroupRun(group.label, d.method, d.model, cur, [it["pos"].name for it in base_items], quantities,
+    run = GroupRun(group.label, d.method, d.model, cur, [it["pos"].name for it in base_items], quantities, notionals,
                    settings.n_paths if d.method != "replication" else 0, group.seed, warnings=list(d.warnings))
     buckets: OrderedDict = OrderedDict()
     for k, s in shocks.items():
@@ -294,6 +308,10 @@ def run_group(group: RiskGroup, shocks: dict, measures: list | None = None, sett
                     r = replication_result(it["program"], tl, full.surface, full.market, T_obs, fmt, it["pos"].params,
                                            initial_fixing=spot0, history=it["history"].get(name, {}))
                     vals.append(q * r.value.price * fx[m])
+                    if m == "base" or shocks[m].roll_days:
+                        N = float(r.notional)
+                        run.cash.setdefault(m, []).append(
+                            _expected_cash(it["fmt"], r.expected_flows, r.redemption_probabilities, N, 1.0, q * fx[m]))
                 finish(m, vals)
             continue
         horizon = max(it["profile"].horizon for it in items)
@@ -341,6 +359,9 @@ def run_group(group: RiskGroup, shocks: dict, measures: list | None = None, sett
             if m == "base@exact":
                 exact = per
                 continue
+            if m == "base" or shocks[m].roll_days:
+                run.cash[m] = [_expected_cash(it["fmt"], t.flows, t.redemption, N, settings.n_paths, q * mult)
+                               for it, t, N, q in zip(items, chunk, notionals, quantities)]
             finish(m, per)
         if smooth and "base" in members:
             bias = [run.values["base"][i] - float(np.mean(exact[i])) for i in range(n_pos)]
