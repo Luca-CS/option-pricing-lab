@@ -39,7 +39,6 @@ from ..structured.multiasset import BasketContext
 from ..structured.portfolio import Book
 from ..structured.reserves import remaining
 from . import grid
-from .curves import bumped_market
 from .engine import RiskGroup, RiskSettings, run_group
 from .greeks import Bumps, GreekOptions, compute
 from .shocks import RiskEnv, context_currency

@@ -132,7 +132,7 @@ def plan(
     M: list = []
     h, H, v, rv = b.spot, b.spot_large, b.vol, b.vol_relative
     unit_s, unit_v = 0.01 / h, 0.01 / v
-    per_name: dict = {
+    per_name: dict = {  # noqa: F841 (dead since v0, removed in A8)
         k: []
         for k in (
             "delta",

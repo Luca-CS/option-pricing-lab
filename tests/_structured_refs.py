@@ -142,7 +142,7 @@ def autocall_reference(sheet, market=FLAT, vol=VOL, valuation="2026-10-27", dx=0
 
     W = None
     for k in range(len(dates) - 1, -1, -1):
-        d, role = dates[k], roles[dates[k]]
+        d, role = dates[k], roles[dates[k]]  # noqa: F841 (dead since v0, removed in A8)
         D = float(market.D(year_fraction(val, role["pay"])))
         new = np.zeros((n_m, 2, len(x)))
         for m in range(n_m):

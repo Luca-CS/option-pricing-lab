@@ -18,7 +18,6 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from optlab.heston import HestonParams  # noqa: E402
 from optlab.slv import calibrate_leverage  # noqa: E402
 from optlab.structured import PricingContext, compile_sheet, preset, price_many  # noqa: E402
 from optlab.structured.multiasset import Basket  # noqa: E402

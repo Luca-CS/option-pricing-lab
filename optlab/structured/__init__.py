@@ -19,10 +19,10 @@ from .qmc import price_rqmc
 from .quote import Quote, quote
 from .schema import MASKS, TermSheet, TermSheetError, describe, json_schema
 from .script.lexer import ScriptError
-from .trade import Trade
 from .script.parser import parse
 from .script.printer import to_text
 from .script.validate import validate
+from .trade import Trade
 
 __all__ = [
     "Note",

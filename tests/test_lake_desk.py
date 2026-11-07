@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-from _lake_fixture import fill_observed, derive_all
+from _lake_fixture import derive_all, fill_observed
 from test_lake_quotes import DAY, curve_rows, synthetic_rows
 
 from optlab.app.api import ApiError, Desk
@@ -190,8 +190,9 @@ def test_showcase_seed_fills_a_store_with_trades_struck_on_their_own_markets(tmp
     import importlib.util
     from pathlib import Path
 
-    from optlab.app.api import Desk
     from _lake_fixture import synthetic_lake
+
+    from optlab.app.api import Desk
 
     path = Path(__file__).resolve().parents[1] / "scripts" / "seed_showcase.py"
     spec = importlib.util.spec_from_file_location("seed_showcase", path)
@@ -210,6 +211,7 @@ def test_showcase_seed_fills_a_store_with_trades_struck_on_their_own_markets(tmp
         import time
 
         import pandas as pd
+
         from optlab.marketdata.derive.bank import spread_at
 
         day = pd.Timestamp("2021-06-30").date()
@@ -246,6 +248,7 @@ def test_showcase_seed_fills_a_store_with_trades_struck_on_their_own_markets(tmp
 
 def test_data_screen_shows_the_latest_basket_spreads_as_synthetic(tmp_path):
     import pandas as pd
+
     from optlab.app.api import Desk
     from optlab.marketdata.lake import Lake
 

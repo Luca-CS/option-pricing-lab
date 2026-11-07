@@ -171,13 +171,14 @@ def test_a_vanilla_put_costs_what_black_scholes_says():
         return float(surface.iv(np.log(K / F_), T))
 
     base = black_put(F, vol(SPX.surface, F))
+    from types import SimpleNamespace
+
+    from optlab.structured.cashflows import Swap
     from optlab.structured.costs import _Lines
     from optlab.structured.policy import PricingDecision
     from optlab.structured.profile import profile
     from optlab.structured.script.parser import parse
     from optlab.structured.script.validate import validate
-    from optlab.structured.cashflows import Swap
-    from types import SimpleNamespace
 
     program = validate(parse(script))
     clock = Clock(SPX.valuation)

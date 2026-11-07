@@ -3,11 +3,11 @@
 import datetime as dt
 
 import numpy as np
+from _structured_refs import FLAT, S0, VOL, Q, R, flat_surface
 
 from optlab import native
 from optlab.structured.context import PricingContext
 from optlab.structured.portfolio import Book, Position
-from _structured_refs import FLAT, Q, R, S0, VOL, flat_surface
 
 VALUATION = dt.date(2026, 10, 27)
 
@@ -79,6 +79,7 @@ def worst_put_shifted(K, T, vols, rho, r, qs, a=(1.0, 1.0)):
     """E[(K - min(a1 X1, a2 X2))+], X = S_T / S_0 lognormal: the worst-of put after spot moves a (initial fixings kept)."""
     from scipy.integrate import quad
     from scipy.stats import norm
+
     from optlab.blackscholes import black_price
 
     (v1, v2), (q1, q2) = vols, qs

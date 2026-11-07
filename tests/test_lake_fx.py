@@ -220,7 +220,7 @@ def test_a_day_of_forwards_matches_covered_parity_on_the_lakes_curves(world):
 
 def test_a_flat_curve_gives_the_exact_forward_and_a_gap_in_the_curves_is_skipped():
     day = pd.Timestamp("2020-01-02")
-    flat = lambda r: {day: (np.array([1.0, 5.0]), np.array([r, r]))}
+    flat = lambda r: {day: (np.array([1.0, 5.0]), np.array([r, r]))}  # noqa: E731
     rows = forward_rows(pd.Series({day: 1.1, day + pd.Timedelta(days=30): 1.2}), flat(0.01), flat(0.03), tenors=(2.0,))
     assert len(rows) == 1  # 30 days later, the last curve is too old
     assert rows["forward"].iloc[0] == pytest.approx(1.1 * np.exp(0.02 * 2.0), rel=1e-12)

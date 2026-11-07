@@ -4,12 +4,11 @@ import json
 
 import numpy as np
 import pytest
+from _risk_refs import S0, VOL, Q, R, book, engine_name, flat_ctx, forward_contract, vanilla, within
 from scipy.stats import norm
 
-from _risk_refs import Q, R, S0, VOL, book, engine_name, flat_ctx, forward_contract, vanilla, within
 from optlab.blackscholes import bs_greeks, bs_price
-from optlab.risk import CurveMove, Measure, RiskGroup, RiskSettings, Shock, VolMove, apply, revalue
-from optlab.risk import grid
+from optlab.risk import CurveMove, Measure, RiskGroup, RiskSettings, Shock, VolMove, apply, grid, revalue
 from optlab.risk.curves import bumped_market, forward_ratio
 from optlab.risk.shocks import RiskEnv, sim_key
 from optlab.risk.surfaces import TentBumpedSurface, arbitrage

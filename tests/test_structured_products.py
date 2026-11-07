@@ -137,7 +137,8 @@ def test_quote_table_reads_like_a_term_sheet():
 
 
 def test_barrier_reverse_convertible_matches_bgk_shifted_closed_form():
-    from _structured_refs import FLAT, R, Q
+    from _structured_refs import FLAT, Q, R
+
     from optlab import barrier_price, barrier_shift_discrete
 
     sheet = preset(
@@ -277,6 +278,7 @@ def test_quadrature_reference_reproduces_the_rc_closed_form():
 
 def test_single_date_autocall_is_a_digital_plus_a_put():
     from _structured_refs import FLAT, prob_below, put_fwd
+
     from optlab.structured.dates import schedule
 
     sheet = preset(

@@ -2,8 +2,9 @@
 
 import numpy as np
 import pytest
+from _risk_refs import S0, VOL, Q, R, book, flat_ctx, vanilla
+from _structured_refs import flat_surface
 
-from _risk_refs import Q, R, S0, VOL, book, flat_ctx, vanilla
 from optlab.blackscholes import bs_price
 from optlab.risk import RiskGroup
 from optlab.risk import scenarios as sc
@@ -11,7 +12,6 @@ from optlab.risk.shocks import RiskEnv
 from optlab.risk.store import RiskStore
 from optlab.structured.context import PricingContext
 from optlab.structured.surfaces import BumpedSurface
-from _structured_refs import flat_surface
 
 BETA_1Y = -0.46
 BETAS = [-1.5, -0.96, -0.69, BETA_1Y, -0.37, -0.31, -0.24, -0.16]

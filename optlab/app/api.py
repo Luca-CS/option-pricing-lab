@@ -16,8 +16,8 @@ from pathlib import Path
 
 import numpy as np
 
-from ..config import DEFAULT_SEED, paths
 from .. import native
+from ..config import DEFAULT_SEED, paths
 from ..log import get_logger
 from ..market import Market
 from ..marketdata import MarketSnapshot, MarketStore
@@ -25,7 +25,7 @@ from ..marketdata.derive.correl import correlation_at
 from ..marketdata.lake import Lake
 from ..marketdata.names import NameMarkets
 from ..marketdata.universe import _BY_ID
-from ..structured import PRESETS, MASKS, PricingContext, TermSheet, TermSheetError, describe, preset, quote
+from ..structured import MASKS, PRESETS, PricingContext, TermSheet, TermSheetError, describe, preset, quote
 from ..structured.compiler import compile_sheet
 from ..structured.context import DEFAULT_CALIBRATION
 from ..structured.defaults import STARTING, merged, parameters, resolve, validate_table

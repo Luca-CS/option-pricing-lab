@@ -10,8 +10,7 @@ from optlab.blackscholes import black_price
 from optlab.heston import heston_price
 from optlab.market import Market
 from optlab.models import BlackScholesModel, simulate
-from optlab.structured import PricingContext, compile_sheet, preset, price_many
-from optlab.structured import engine
+from optlab.structured import PricingContext, compile_sheet, engine, preset, price_many
 from optlab.structured.localcorr import LocalCorrelation, StochasticMix
 from optlab.structured.multiasset import Basket, simulate_basket
 

@@ -8,8 +8,8 @@ import pandas as pd
 import pytest
 
 from optlab.marketdata.derive.surfaces import (
-    ShapePrior,
     TERM_INDICES,
+    ShapePrior,
     build_reconstructed,
     extrapolate_thetas,
     fit_shape,
@@ -111,8 +111,8 @@ def test_fit_shape_recovers_a_power_law_surface():
     rec = reconstruct(LEVELS, PRIOR)
     assert rec is not None
     k = np.linspace(-0.3, 0.2, 5)
-    from optlab.svi import ssvi_slice_to_svi
     from optlab.marketdata.derive.surfaces import _phi
+    from optlab.svi import ssvi_slice_to_svi
 
     surf = SVISurface(Ts, np.array([ssvi_slice_to_svi(t, t * _phi(t, 0.9, 0.35), -0.6) for t in th]))
     fit = fit_shape(surf)

@@ -22,7 +22,6 @@ from optlab.marketdata.derive.curves import (
 )
 from optlab.marketdata.derive.fx import build_fx_correl, build_fx_forwards, build_fx_vols, quanto_link_at, spot_series
 from optlab.marketdata.ingest import load_boe, load_boj, load_mof
-from optlab.marketdata.lake import Lake
 from optlab.marketdata.pit import basket_at, market_at
 from optlab.marketdata.quality import RESOLVED, open_issues
 from optlab.marketdata.quotes import discount_function

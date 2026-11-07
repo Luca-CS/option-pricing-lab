@@ -2,9 +2,9 @@
 
 import numpy as np
 import pytest
-
 from _risk_refs import book, flat_ctx, forward_contract, vanilla
-from optlab.risk import RiskGroup, RiskSettings
+
+from optlab.risk import RiskGroup
 from optlab.risk import var as V
 from optlab.risk.greeks import GreekOptions, compute
 

@@ -582,6 +582,7 @@ class _ShowcaseCopy:
 
     def __exit__(self, *exc):
         import gc
+
         from optlab import native
 
         self.desk.jobs.shutdown()

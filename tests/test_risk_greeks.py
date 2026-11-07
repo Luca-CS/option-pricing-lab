@@ -5,16 +5,15 @@ import json
 
 import numpy as np
 import pytest
-
 from _risk_refs import (
     FLAT,
-    Q,
-    R,
     S0,
     VALUATION,
     VOL,
-    bs_cross,
+    Q,
+    R,
     book,
+    bs_cross,
     day,
     digital,
     engine_name,
@@ -23,6 +22,7 @@ from _risk_refs import (
     within,
     worst_put_shifted,
 )
+
 from optlab import Market
 from optlab.blackscholes import bs_greeks, bs_price
 from optlab.risk import RiskGroup, RiskSettings

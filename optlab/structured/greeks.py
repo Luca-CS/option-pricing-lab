@@ -18,10 +18,10 @@ from ..config import DEFAULT_SEED
 from ..models import BlackScholesModel, LocalVolModel, SLVModel
 from ..svi import g_function
 from .cashflows import Note
-from .units import GREEK_UNITS
 from .pricer import price_many
 from .replication import replication_result
 from .script.timeline import Clock, build_timeline
+from .units import GREEK_UNITS
 
 
 class ShiftedSurface:

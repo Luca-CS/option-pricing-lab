@@ -19,8 +19,8 @@ from dataclasses import dataclass, field, replace
 
 import numpy as np
 
-from ..market import Market
 from ..heston import HestonParams
+from ..market import Market
 from ..models import BlackScholesModel, Leverage, LocalVolModel, Model, SLVModel, time_grid
 from .scenario import batch_sizes
 

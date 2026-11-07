@@ -11,8 +11,8 @@ from ..log import get_logger
 from ..market import Market
 from ..models import Model
 from ..products import MCResult
-from .cashflows import Note
 from . import engine
+from .cashflows import Note
 from .engine import Evaluation
 from .multiasset import Basket
 from .script.evaluator import Evaluator
@@ -20,7 +20,6 @@ from .script.nodes import DateLit, Program
 from .script.parser import parse
 from .script.timeline import Clock, Timeline, build_timeline
 from .script.validate import validate
-
 
 LOG = get_logger(__name__)
 

@@ -66,7 +66,7 @@ def test_covered_parity_is_exact():
 
 def test_equity_forward_with_repo_and_a_dividend():
     r, repo = 0.04, 0.005
-    disc = lambda t: np.exp(-r * np.asarray(t))
+    disc = lambda t: np.exp(-r * np.asarray(t))  # noqa: E731
     F = equity_forward(100.0, [0.25, 1.0], disc, repo, dividends=[(0.5, 2.0)])
     assert F[0] == pytest.approx(100 * np.exp((r - repo) * 0.25), abs=1e-10)
     assert F[1] == pytest.approx(100 * np.exp((r - repo)) - 2.0 * np.exp((r - repo) * 0.5), abs=1e-10)
@@ -274,9 +274,9 @@ def test_an_assumed_yield_keeps_its_total_and_takes_its_season(tmp_path):
 
 
 def test_a_forward_has_its_steps_and_no_dividend_before_the_ex_date(tmp_path):
+    from optlab.market import Market
     from optlab.marketdata.derive.carry import DividendStream
     from optlab.marketdata.pit import ONE_DAY, curve_pillars
-    from optlab.market import Market
 
     stream = DividendStream(np.array([0.4, 1.4]), np.array([0.02, 0.02]), "derived", "dividend_dates")
     pillars = curve_pillars(stream)
@@ -289,9 +289,9 @@ def test_a_forward_has_its_steps_and_no_dividend_before_the_ex_date(tmp_path):
 
 
 def test_every_dividend_of_a_stream_is_a_step_on_its_own_date():
+    from optlab.market import Market
     from optlab.marketdata.derive.carry import DividendStream
     from optlab.marketdata.pit import ONE_DAY, curve_pillars
-    from optlab.market import Market
 
     times = np.array([0.1075342465, 0.3595890410958904, 0.6143835616438356, 0.8554794520547945, 1.3603])
     stream = DividendStream(times, np.full(5, 0.01), "derived", "dividend_dates")

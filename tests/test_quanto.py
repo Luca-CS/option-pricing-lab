@@ -215,7 +215,7 @@ def test_a_worst_of_spx_sx5e_in_dollars_matches_the_closed_form_at_4_se(rho_fx):
     q_eff = R_USD - (R_EUR - Q_EUR - rho_fx * VOL_S * VOL_FX)
     vols, qs = (VOL_US, VOL_S), (Q_USD, q_eff)
     loss = worst_put(B, T, vols, rho, R_USD, qs) + (K - B) * (1 - worst_digital(B, T, vols, rho, R_USD, qs))
-    D = lambda t: np.exp(-R_USD * t)
+    D = lambda t: np.exp(-R_USD * t)  # noqa: E731
     ref = 100 * 0.02 * sum(D(t) for t in pays) + 100 * D(pays[-1]) * (1 - loss)
     within(res, ref)
 

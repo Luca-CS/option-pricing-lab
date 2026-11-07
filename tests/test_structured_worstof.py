@@ -4,7 +4,7 @@ import datetime as dt
 
 import numpy as np
 import pytest
-from _structured_refs import FLAT, R, VOL, autocall_reference, flat_context, worst_digital, worst_put
+from _structured_refs import FLAT, VOL, R, autocall_reference, flat_context, worst_digital, worst_put
 
 from optlab import BlackScholesModel, Market, european_mc
 from optlab.structured.compiler import compile_sheet

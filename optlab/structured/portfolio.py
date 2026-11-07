@@ -19,15 +19,14 @@ import numpy as np
 from ..config import DEFAULT_SEED
 from ..models import BlackScholesModel, LocalVolModel
 from ..products import MCResult
+from . import engine
 from .cashflows import Note, Swap
 from .compiler import compile_sheet
 from .context import PricingContext
-from .greeks import ShiftedSurface, _recalibrated_slv
-from .units import BOOK_UNITS
-from .policy import RULES, decide
-from . import engine
 from .engine import Evaluation
+from .greeks import ShiftedSurface, _recalibrated_slv
 from .multiasset import BasketContext
+from .policy import RULES, decide
 from .pricer import basket_history, check_fixing_scale
 from .profile import ProductProfile, profile
 from .replication import replication_result
@@ -35,6 +34,7 @@ from .schema import TermSheet
 from .script.parser import parse
 from .script.timeline import Clock, build_timeline
 from .script.validate import validate
+from .units import BOOK_UNITS
 
 CLASS_ORDER = ("european", "path_dependent", "callable")
 

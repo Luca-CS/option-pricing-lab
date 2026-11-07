@@ -23,7 +23,6 @@ from optlab.marketdata.names import NameMarkets
 from optlab.marketdata.pit import basket_at
 from optlab.structured import preset, quote
 from optlab.structured.compiler import compile_sheet
-from optlab.structured.costs import CostInputs
 from optlab.structured.defaults import resolve
 from optlab.structured.localcorr import LocalCorrelation, basket_sigma, calibrate, model_quotes, targets
 from optlab.structured.pricer import price_many

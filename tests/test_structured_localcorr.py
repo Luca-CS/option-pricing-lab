@@ -7,19 +7,19 @@ from scipy.stats import multivariate_normal, norm
 from optlab.blackscholes import black_price
 from optlab.market import Market
 from optlab.marketdata.derive.correl import CorrelationSkew, spread_payoff
+from optlab.models import BlackScholesModel
 from optlab.structured import PricingContext, preset, quote
 from optlab.structured.costs import CostInputs
 from optlab.structured.localcorr import (
+    W0,
     LocalCorrelation,
     StochasticMix,
-    W0,
     basket_sigma,
     calibrate,
     low_matrix,
     targets,
 )
 from optlab.structured.multiasset import Basket, BasketContext, simulate_basket
-from optlab.models import BlackScholesModel
 
 SPX = PricingContext.from_calibration()
 RHO = 0.7
@@ -80,6 +80,7 @@ def test_every_name_keeps_its_law_whatever_the_weight():
 def _with_grid(basket):
     """The same law on a time grid: a local vol model on a flat surface steps where Black-Scholes would jump."""
     from _structured_refs import flat_surface
+
     from optlab.models import LocalVolModel
 
     models = {n: LocalVolModel(flat_surface(m.vol)) for n, m in basket.models.items()}

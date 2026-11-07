@@ -13,12 +13,12 @@ from .cashflows import FundedSwap, Note, Swap, funding_periods
 from .compiler import CompiledProduct, compile_sheet
 from .context import PricingContext
 from .costs import desk_price
-from .policy import PricingDecision, decide
 from .multiasset import BasketContext
+from .policy import PricingDecision, decide
 from .pricer import StructuredResult, check_fixing_scale, history_times, price_many
 from .profile import ProductProfile, profile
-from .replication import replication_result
 from .quanto import payment_warnings
+from .replication import replication_result
 from .schema import TermSheet
 from .script.nodes import Param, Program
 from .script.printer import to_text

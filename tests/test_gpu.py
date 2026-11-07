@@ -18,9 +18,9 @@ from optlab import (
     bs_price,
     european_mc,
     geometric_asian_price,
+    gpu,
     heston_price,
 )
-from optlab import gpu
 
 S, r, q, vol = 100.0, 0.04, 0.01, 0.2
 MARKET = Market.flat(S, r, q)
