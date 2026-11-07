@@ -9,3 +9,6 @@ data/
 logs/
 build/
 build-*/
+
+# Handoffs between sessions stay local (journals of work in progress)
+HANDOFF_*.md
