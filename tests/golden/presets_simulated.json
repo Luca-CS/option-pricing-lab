@@ -1,0 +1,167 @@
+{
+ "meta": {
+  "recorded": "2026-11-07T16:40:52+00:00",
+  "commit": "4612e786becc54aa16c02a63a2490368d4292e59",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "machine": "AMD64",
+  "python": "3.14.7",
+  "numpy": "2.5.4",
+  "scipy": "1.18.1",
+  "seconds": 10.46,
+  "times": {}
+ },
+ "values": {
+  "reverse_convertible": {
+   "coupon_rate": 0.06959476260023963,
+   "coupon_rate_se": 0.0,
+   "upfront": null,
+   "target": 98.0,
+   "margin": 2.0,
+   "result": {
+    "value": 98.0,
+    "se": 0.0
+   },
+   "model": "surface",
+   "method": "replication",
+   "termination": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "expected_life": 1.0,
+   "control": {
+    "value": 98.1221624707798,
+    "se": 0.06774327121411702
+   }
+  },
+  "barrier_reverse_convertible": {
+   "coupon_rate": 0.04953048399416786,
+   "coupon_rate_se": 0.0006983391312593153,
+   "upfront": null,
+   "target": 98.0,
+   "margin": 2.0,
+   "result": {
+    "value": 97.99999999999996,
+    "se": 0.0680645159643216
+   },
+   "model": "lv",
+   "method": "monte_carlo",
+   "termination": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "expected_life": 1.0,
+   "control": {
+    "value": 97.6537501940824,
+    "se": 0.07122205236692657
+   }
+  },
+  "phoenix": {
+   "coupon_rate": 0.0415913713360747,
+   "coupon_rate_se": 0.0015651289698436065,
+   "upfront": null,
+   "target": 98.0,
+   "margin": 2.0,
+   "result": {
+    "value": 97.99999999999996,
+    "se": 0.07465836425317993
+   },
+   "model": "lv",
+   "method": "monte_carlo",
+   "termination": [
+    0.0,
+    0.6613,
+    0.12175,
+    0.0551,
+    0.02905,
+    0.0179,
+    0.0141,
+    0.00815,
+    0.0
+   ],
+   "expected_life": 0.5411923287671233,
+   "control": {
+    "value": 98.14195884369742,
+    "se": 0.07089776376777668
+   }
+  },
+  "athena": {
+   "coupon_rate": 0.05529660431606467,
+   "coupon_rate_se": 0.002203518761669315,
+   "upfront": null,
+   "target": 98.0,
+   "margin": 2.0,
+   "result": {
+    "value": 97.99999999999999,
+    "se": 0.0790587366693903
+   },
+   "model": "lv",
+   "method": "monte_carlo",
+   "termination": [
+    0.0,
+    0.6613,
+    0.12175,
+    0.0551,
+    0.02905,
+    0.0179,
+    0.0141,
+    0.00815,
+    0.0
+   ],
+   "expected_life": 0.5411923287671233,
+   "control": {
+    "value": 98.0283015652651,
+    "se": 0.075204658564836
+   }
+  },
+  "airbag": {
+   "coupon_rate": null,
+   "coupon_rate_se": null,
+   "upfront": 100.90196661296999,
+   "target": null,
+   "margin": 2.0,
+   "result": {
+    "value": 100.90196661296999,
+    "se": 0.0
+   },
+   "model": "surface",
+   "method": "replication",
+   "termination": [
+    0.0,
+    0.0
+   ],
+   "expected_life": 2.0082191780821916,
+   "control": {
+    "value": 100.96511860206039,
+    "se": 0.043689989118610224
+   }
+  },
+  "capital_protected": {
+   "coupon_rate": null,
+   "coupon_rate_se": null,
+   "upfront": 98.11678668583309,
+   "target": null,
+   "margin": 2.0,
+   "result": {
+    "value": 98.11678668583309,
+    "se": 0.0
+   },
+   "model": "surface",
+   "method": "replication",
+   "termination": [
+    0.0,
+    0.0
+   ],
+   "expected_life": 2.0082191780821916,
+   "control": {
+    "value": 98.1067778958126,
+    "se": 0.020789983686776304
+   }
+  }
+ }
+}

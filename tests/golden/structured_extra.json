@@ -1,0 +1,711 @@
+{
+ "meta": {
+  "recorded": "2026-11-07T16:43:15+00:00",
+  "commit": "4612e786becc54aa16c02a63a2490368d4292e59",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "machine": "AMD64",
+  "python": "3.14.7",
+  "numpy": "2.5.4",
+  "scipy": "1.18.1",
+  "seconds": 38.22,
+  "times": {}
+ },
+ "values": {
+  "forced": {
+   "bs": {
+    "coupon_rate": 0.017059963914943188,
+    "coupon_rate_se": 0.0003495534831866632,
+    "upfront": null,
+    "target": 98.0,
+    "margin": 2.0,
+    "result": {
+     "value": 98.0,
+     "se": 0.024455628468937646
+    },
+    "model": "bs",
+    "method": "monte_carlo",
+    "termination": [
+     0.0,
+     0.5195,
+     0.1284,
+     0.06575,
+     0.04155,
+     0.0283,
+     0.01945,
+     0.01505,
+     0.0
+    ],
+    "expected_life": 0.7417673972602743,
+    "control": {
+     "value": 96.93330289847349,
+     "se": 0.07103812336303689
+    }
+   },
+   "heston": {
+    "coupon_rate": 0.03359566988258495,
+    "coupon_rate_se": 0.0013093401587250318,
+    "upfront": null,
+    "target": 98.0,
+    "margin": 2.0,
+    "result": {
+     "value": 97.99999999999999,
+     "se": 0.06622816564832157
+    },
+    "model": "heston",
+    "method": "monte_carlo",
+    "termination": [
+     0.0,
+     0.6642,
+     0.10795,
+     0.0479,
+     0.0256,
+     0.018,
+     0.0131,
+     0.00865,
+     0.0
+    ],
+    "expected_life": 0.5698271232876714,
+    "control": {
+     "value": 97.74801275116009,
+     "se": 0.07086828147645051
+    }
+   },
+   "slv": {
+    "coupon_rate": 0.03871011282281809,
+    "coupon_rate_se": 0.0014385859813860929,
+    "upfront": null,
+    "target": 98.0,
+    "margin": 2.0,
+    "result": {
+     "value": 97.99999999999999,
+     "se": 0.07087875021880546
+    },
+    "model": "slv",
+    "method": "monte_carlo",
+    "termination": [
+     0.0,
+     0.6589,
+     0.1177,
+     0.05095,
+     0.02775,
+     0.0179,
+     0.01155,
+     0.00845,
+     0.0
+    ],
+    "expected_life": 0.5592950684931507
+   }
+  },
+  "costs": {
+   "barrier_reverse_convertible": {
+    "coupon_rate": 0.04724940983142573,
+    "coupon_rate_se": 0.0006772719930201032,
+    "upfront": null,
+    "target": 98.0,
+    "margin": 2.0,
+    "result": {
+     "value": 97.7776721913237,
+     "se": 0.0680645159643216
+    },
+    "model": "lv",
+    "method": "monte_carlo",
+    "termination": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "expected_life": 1.0,
+    "control": {
+     "value": 97.72500930606448,
+     "se": 0.06808737587477626
+    },
+    "desk": {
+     "base_price": 97.7776721913237,
+     "base_se": 0.0680645159643216,
+     "final_price": 97.99999999999999,
+     "final_se": 0.0660111804102626,
+     "lines": [
+      {
+       "key": "slv",
+       "label": "Model: SLV (mix 0.5)",
+       "kind": "model",
+       "cost": 0.0,
+       "se": 0.035447827079768984,
+       "coupon_bp": -0.0,
+       "used": 0.5,
+       "default": 0.5,
+       "overridden": false,
+       "note": "the gap is in the desk's favour: no provision",
+       "gap": -0.05266288525924317,
+       "detail": [],
+       "origin": null,
+       "fit": []
+      },
+      {
+       "key": "vol",
+       "label": "Volatility, parallel",
+       "kind": "bump",
+       "cost": 0.08242838459141813,
+       "se": 0.006430313472779599,
+       "coupon_bp": -8.457118319456399,
+       "used": -0.0025,
+       "default": -0.0025,
+       "overridden": false,
+       "note": "",
+       "gap": null,
+       "detail": [],
+       "origin": null,
+       "fit": []
+      },
+      {
+       "key": "skew",
+       "label": "Volatility skew (90-110 % at 1 year)",
+       "kind": "bump",
+       "cost": 0.07642374404169097,
+       "se": 0.0050941325682070625,
+       "coupon_bp": -7.841044671445889,
+       "used": -0.0025,
+       "default": -0.0025,
+       "overridden": false,
+       "note": "",
+       "gap": null,
+       "detail": [],
+       "origin": null,
+       "fit": []
+      },
+      {
+       "key": "dividend",
+       "label": "Dividends",
+       "kind": "bump",
+       "cost": 0.008665417758449158,
+       "se": 0.0023964239058673438,
+       "coupon_bp": -0.8890682940589018,
+       "used": -0.05,
+       "default": -0.05,
+       "overridden": false,
+       "note": "",
+       "gap": null,
+       "detail": [],
+       "origin": null,
+       "fit": []
+      },
+      {
+       "key": "repo",
+       "label": "Repo",
+       "kind": "bump",
+       "cost": 0.005692542866259211,
+       "se": 0.001712212407726942,
+       "coupon_bp": -0.5840525541919194,
+       "used": -0.0005,
+       "default": -0.0005,
+       "overridden": false,
+       "note": "",
+       "gap": null,
+       "detail": [],
+       "origin": null,
+       "fit": []
+      },
+      {
+       "key": "spot",
+       "label": "Spot, delta bid-ask",
+       "kind": "bump",
+       "cost": 0.003035674361189961,
+       "se": 0.0011568623084122975,
+       "coupon_bp": -0.31145893952890374,
+       "used": 0.0002,
+       "default": 0.0002,
+       "overridden": false,
+       "note": "",
+       "gap": null,
+       "detail": [],
+       "origin": null,
+       "fit": []
+      },
+      {
+       "key": "daily",
+       "label": "Barrier observed daily",
+       "kind": "digital",
+       "cost": 0.03511692871153401,
+       "se": 0.006017840821893578,
+       "coupon_bp": -3.602982426520573,
+       "used": null,
+       "default": null,
+       "overridden": false,
+       "note": "1 date, moved by 0.50 pt",
+       "gap": null,
+       "detail": [
+        {
+         "date": "2027-11-04",
+         "level": 0.7,
+         "jump": 0.0,
+         "width": 0.005,
+         "side": "down",
+         "alone": 0.03511692871154537,
+         "shift": true
+        }
+       ],
+       "origin": null,
+       "fit": []
+      },
+      {
+       "key": "interaction",
+       "label": "Interaction of the bumps",
+       "kind": "interaction",
+       "cost": 0.01096511634570893,
+       "se": 0.010497895814181346,
+       "coupon_bp": -1.1250164222182337,
+       "used": null,
+       "default": null,
+       "overridden": false,
+       "note": "",
+       "gap": null,
+       "detail": [],
+       "origin": null,
+       "fit": []
+      }
+     ],
+     "coupon_base": 0.04953048399416786,
+     "coupon_final": 0.04724940983142573,
+     "warnings": [],
+     "passes": 2,
+     "model_results": {
+      "slv": {
+       "value": 97.72500930606448,
+       "se": 0.06808737587477626
+      }
+     },
+     "digital_passes": 1
+    }
+   },
+   "phoenix": {
+    "coupon_rate": 0.026689177243662664,
+    "coupon_rate_se": 0.00140162158192405,
+    "upfront": null,
+    "target": 98.0,
+    "margin": 2.0,
+    "result": {
+     "value": 97.28914903745338,
+     "se": 0.07471395712801816
+    },
+    "model": "lv",
+    "method": "monte_carlo",
+    "termination": [
+     0.0,
+     0.6613,
+     0.12175,
+     0.0551,
+     0.02905,
+     0.0179,
+     0.0141,
+     0.00815,
+     0.0
+    ],
+    "expected_life": 0.5411923287671233,
+    "control": {
+     "value": 97.6153752263814,
+     "se": 0.0673598789741815
+    },
+    "desk": {
+     "base_price": 97.28914903745338,
+     "base_se": 0.07471395712801816,
+     "final_price": 98.00000000000006,
+     "final_se": 0.06834560416704119,
+     "lines": [
+      {
+       "key": "slv",
+       "label": "Model: SLV (mix 0.5)",
+       "kind": "model",
+       "cost": 0.3262261889279939,
+       "se": 0.041981832817349546,
+       "coupon_bp": -68.38966592964557,
+       "used": 0.5,
+       "default": 0.5,
+       "overridden": false,
+       "note": "",
+       "gap": 0.3262261889279939,
+       "detail": [],
+       "origin": null,
+       "fit": []
+      },
+      {
+       "key": "vol",
+       "label": "Volatility, parallel",
+       "kind": "bump",
+       "cost": 0.06373929558139002,
+       "se": 0.008388249332065417,
+       "coupon_bp": -13.362229273273828,
+       "used": -0.0025,
+       "default": -0.0025,
+       "overridden": false,
+       "note": "",
+       "gap": null,
+       "detail": [],
+       "origin": null,
+       "fit": []
+      },
+      {
+       "key": "skew",
+       "label": "Volatility skew (90-110 % at 1 year)",
+       "kind": "bump",
+       "cost": 0.054713513756289446,
+       "se": 0.012199096879625853,
+       "coupon_bp": -11.470075225798682,
+       "used": -0.0025,
+       "default": -0.0025,
+       "overridden": false,
+       "note": "",
+       "gap": null,
+       "detail": [],
+       "origin": null,
+       "fit": []
+      },
+      {
+       "key": "dividend",
+       "label": "Dividends",
+       "kind": "bump",
+       "cost": 0.015164261119547877,
+       "se": 0.00454237763517747,
+       "coupon_bp": -3.179017464672958,
+       "used": -0.05,
+       "default": -0.05,
+       "overridden": false,
+       "note": "",
+       "gap": null,
+       "detail": [],
+       "origin": null,
+       "fit": []
+      },
+      {
+       "key": "repo",
+       "label": "Repo",
+       "kind": "bump",
+       "cost": 0.012640546499927541,
+       "se": 0.004146288377866191,
+       "coupon_bp": -2.6499489668164187,
+       "used": -0.0005,
+       "default": -0.0005,
+       "overridden": false,
+       "note": "",
+       "gap": null,
+       "detail": [],
+       "origin": null,
+       "fit": []
+      },
+      {
+       "key": "spot",
+       "label": "Spot, delta bid-ask",
+       "kind": "bump",
+       "cost": 0.0019178608279176543,
+       "se": 0.0003437213831788194,
+       "coupon_bp": -0.4020580375593098,
+       "used": 0.0002,
+       "default": 0.0002,
+       "overridden": false,
+       "note": "",
+       "gap": null,
+       "detail": [],
+       "origin": null,
+       "fit": []
+      },
+      {
+       "key": "coupon",
+       "label": "Digital: coupon barrier",
+       "kind": "digital",
+       "cost": 0.0026233547628947505,
+       "se": 0.00044293752158295946,
+       "coupon_bp": -0.5499569376660831,
+       "used": null,
+       "default": null,
+       "overridden": false,
+       "note": "8 dates, width 0.67 pt",
+       "gap": null,
+       "detail": [
+        {
+         "date": "2027-02-04",
+         "level": 0.7,
+         "jump": 0.006672294310915666,
+         "width": 0.006672294310915666,
+         "side": "down",
+         "alone": 5.5014676732412227e-05,
+         "shift": false
+        },
+        {
+         "date": "2027-05-04",
+         "level": 0.7,
+         "jump": 0.006672294310915666,
+         "width": 0.006672294310915666,
+         "side": "down",
+         "alone": 0.00016140757846017095,
+         "shift": false
+        },
+        {
+         "date": "2027-08-04",
+         "level": 0.7,
+         "jump": 0.006672294310915666,
+         "width": 0.006672294310915666,
+         "side": "down",
+         "alone": 0.0002362782924478779,
+         "shift": false
+        },
+        {
+         "date": "2027-11-04",
+         "level": 0.7,
+         "jump": 0.006672294310915666,
+         "width": 0.006672294310915666,
+         "side": "down",
+         "alone": 0.000387958534702193,
+         "shift": false
+        },
+        {
+         "date": "2028-02-04",
+         "level": 0.7,
+         "jump": 0.006672294310915666,
+         "width": 0.006672294310915666,
+         "side": "down",
+         "alone": 0.00031934173688341616,
+         "shift": false
+        },
+        {
+         "date": "2028-05-04",
+         "level": 0.7,
+         "jump": 0.006672294310915666,
+         "width": 0.006672294310915666,
+         "side": "down",
+         "alone": 0.00026222231788608497,
+         "shift": false
+        },
+        {
+         "date": "2028-08-04",
+         "level": 0.7,
+         "jump": 0.006672294310915666,
+         "width": 0.006672294310915666,
+         "side": "down",
+         "alone": 0.0003739384025465142,
+         "shift": false
+        },
+        {
+         "date": "2028-11-06",
+         "level": 0.7,
+         "jump": 0.006672294310915666,
+         "width": 0.006672294310915666,
+         "side": "down",
+         "alone": 0.0017395442483376655,
+         "shift": false
+        }
+       ],
+       "origin": null,
+       "fit": []
+      },
+      {
+       "key": "autocall",
+       "label": "Digital: autocall trigger",
+       "kind": "digital",
+       "cost": 0.04131824952998294,
+       "se": 0.006062623766331526,
+       "coupon_bp": -8.661908142442172,
+       "used": null,
+       "default": null,
+       "overridden": false,
+       "note": "7 dates, width 0.67 pt",
+       "gap": null,
+       "detail": [
+        {
+         "date": "2027-02-04",
+         "level": 1.0,
+         "jump": 0.006672294310915666,
+         "width": 0.006672294310915666,
+         "side": "down",
+         "alone": 0.03338411850047862,
+         "shift": false
+        },
+        {
+         "date": "2027-05-04",
+         "level": 1.0,
+         "jump": 0.006672294310915666,
+         "width": 0.006672294310915666,
+         "side": "down",
+         "alone": 0.008839582041716199,
+         "shift": false
+        },
+        {
+         "date": "2027-08-04",
+         "level": 1.0,
+         "jump": 0.006672294310915666,
+         "width": 0.006672294310915666,
+         "side": "down",
+         "alone": 0.0013131358580835695,
+         "shift": false
+        },
+        {
+         "date": "2027-11-04",
+         "level": 1.0,
+         "jump": 0.006672294310915666,
+         "width": 0.006672294310915666,
+         "side": "down",
+         "alone": 0.0011261956595092215,
+         "shift": false
+        },
+        {
+         "date": "2028-02-04",
+         "level": 1.0,
+         "jump": 0.006672294310915666,
+         "width": 0.006672294310915666,
+         "side": "down",
+         "alone": 0.001885730455470025,
+         "shift": false
+        },
+        {
+         "date": "2028-05-04",
+         "level": 1.0,
+         "jump": 0.006672294310915666,
+         "width": 0.006672294310915666,
+         "side": "down",
+         "alone": 0.00020378890546624007,
+         "shift": false
+        },
+        {
+         "date": "2028-08-04",
+         "level": 1.0,
+         "jump": 0.006672294310915666,
+         "width": 0.006672294310915666,
+         "side": "down",
+         "alone": 8.9681890869997e-05,
+         "shift": false
+        }
+       ],
+       "origin": null,
+       "fit": []
+      },
+      {
+       "key": "barrier",
+       "label": "Digital: final barrier",
+       "kind": "digital",
+       "cost": 0.2010361697745258,
+       "se": 0.016235567856967333,
+       "coupon_bp": -42.14498086691019,
+       "used": null,
+       "default": null,
+       "overridden": false,
+       "note": "1 date, width 8.00 pt",
+       "gap": null,
+       "detail": [
+        {
+         "date": "2028-11-06",
+         "level": 0.6,
+         "jump": 0.4,
+         "width": 0.08,
+         "side": "down",
+         "alone": 0.2010361697745111,
+         "shift": false
+        }
+       ],
+       "origin": null,
+       "fit": []
+      },
+      {
+       "key": "digital_interaction",
+       "label": "Interaction of the digitals",
+       "kind": "interaction",
+       "cost": -0.0035373127748057065,
+       "se": 0.0016266463734033803,
+       "coupon_bp": 0.7415579961639027,
+       "used": null,
+       "default": null,
+       "overridden": false,
+       "note": "",
+       "gap": null,
+       "detail": [],
+       "origin": null,
+       "fit": []
+      },
+      {
+       "key": "interaction",
+       "label": "Interaction of the bumps",
+       "kind": "interaction",
+       "cost": -0.004991165459028835,
+       "se": 0.017256589651974144,
+       "coupon_bp": 1.046341924491878,
+       "used": null,
+       "default": null,
+       "overridden": false,
+       "note": "",
+       "gap": null,
+       "detail": [],
+       "origin": null,
+       "fit": []
+      }
+     ],
+     "coupon_base": 0.0415913713360747,
+     "coupon_final": 0.026689177243662664,
+     "warnings": [],
+     "passes": 1,
+     "model_results": {
+      "slv": {
+       "value": 97.6153752263814,
+       "se": 0.0673598789741815
+      }
+     },
+     "digital_passes": 2
+    }
+   }
+  },
+  "greeks": {
+   "phoenix": {
+    "coupon_rate": 0.0415913713360747,
+    "coupon_rate_se": 0.0015651289698436065,
+    "upfront": null,
+    "target": 98.0,
+    "margin": 2.0,
+    "result": {
+     "value": 97.99999999999996,
+     "se": 0.07465836425317993
+    },
+    "model": "lv",
+    "method": "monte_carlo",
+    "termination": [
+     0.0,
+     0.6613,
+     0.12175,
+     0.0551,
+     0.02905,
+     0.0179,
+     0.0141,
+     0.00815,
+     0.0
+    ],
+    "expected_life": 0.5411923287671233,
+    "control": {
+     "value": 98.14195884369742,
+     "se": 0.07089776376777668
+    },
+    "greeks": {
+     "delta": 0.160147491008361,
+     "delta_se": 0.01305024559433442,
+     "vega": -0.2545246751126069,
+     "vega_se": 0.012844255041049562,
+     "smoothing_bias": -0.0038567700294606104,
+     "smoothing_bias_se": 0.0037955070117041785,
+     "model": "lv"
+    }
+   }
+  },
+  "book": {
+   "value": 98.68891899128336,
+   "se": 0.12362478892213677,
+   "model": "lv",
+   "method": "monte_carlo",
+   "positions": [
+    {
+     "name": "brc",
+     "unit_price": 100.96975032011206
+    },
+    {
+     "name": "phx",
+     "unit_price": 99.8293346556977
+    }
+   ]
+  }
+ }
+}
