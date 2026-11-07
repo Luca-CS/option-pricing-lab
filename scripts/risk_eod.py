@@ -23,12 +23,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 def main():
     from optlab import native
-    from optlab.app.api import PRECISION
-    from optlab.config import paths
+    from optlab.core.config import paths
     from optlab.marketdata.lake import Lake
     from optlab.risk import RiskSettings
     from optlab.risk import pnl as P
     from optlab.risk.store import RiskStore
+    from optlab.server.api import PRECISION
 
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=("eod", "backfill", "pnl", "var", "ladder"))
@@ -53,7 +53,7 @@ def main():
     t0 = time.perf_counter()
 
     if args.command in ("eod", "backfill", "pnl"):
-        from optlab.app.repository import Repository
+        from optlab.server.repository import Repository
 
         trades = Repository(store_path).trades()
         if args.command == "eod":
@@ -72,8 +72,8 @@ def main():
                     f"  {s:10s} cascade {c['steps'][s]:>14,.0f}   greeks {c['predicted'][s]:>14,.0f}   unexplained {c['unexplained'][s]:>12,.0f}"
                 )
     else:
-        from optlab.app.api import Desk
-        from optlab.app.risk_api import RiskApi
+        from optlab.server.api import Desk
+        from optlab.server.risk_api import RiskApi
 
         desk = Desk(store_path, engine=args.engine)
         try:

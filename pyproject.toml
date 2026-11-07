@@ -1,16 +1,24 @@
+# The uv workspace (ADR-0003): one repository, six distributions sharing the PEP 420 namespace `optlab`, each in
+# packages/<name>/src/optlab/<name> with its tests in packages/<name>/tests. The root is not a package: it installs
+# them all, editable, with the tools.
 [project]
 name = "optlab"
 version = "0.1.0"
 description = "Option pricing under Black-Scholes, Heston, Dupire local volatility and Heston SLV"
 requires-python = ">=3.14"
-dependencies = ["numpy>=2.5", "scipy>=1.18"]
 license = "MIT"
+dependencies = [
+    "optlab-core",
+    "optlab-native",
+    "optlab-structured",
+    "optlab-marketdata",
+    "optlab-risk",
+    "optlab-server",
+]
 
 [project.optional-dependencies]
-# The lake, the desk's market data and the structured products' reference data (split by package in step A2)
-data = ["pandas>=3.1", "duckdb>=2.0", "pyarrow>=26.0", "requests>=2.34"]
-yahoo = ["yfinance>=1.7"]
-reports = ["matplotlib>=3.11"]
+yahoo = ["optlab-marketdata[yahoo]"]
+reports = ["matplotlib>=3.11"]  # scripts/make_report.py
 
 [dependency-groups]
 dev = [
@@ -24,13 +32,23 @@ dev = [
 ]
 
 [tool.uv]
-# Not installed: tests and scripts import the repository through `pythonpath` (installable packages come with A2)
 package = false
 default-groups = ["dev"]
 
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+optlab-core = { workspace = true }
+optlab-native = { workspace = true }
+optlab-structured = { workspace = true }
+optlab-marketdata = { workspace = true }
+optlab-risk = { workspace = true }
+optlab-server = { workspace = true }
+
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["."]
+testpaths = ["packages", "tests"]
+pythonpath = ["tests/helpers"]  # the independent references shared by several packages
 markers = [
     "slow: longer than about 10 s; left out of the CI run",
     "lake: needs the real data lake (optlab-data); skipped without it",
@@ -53,22 +71,22 @@ select = ["E4", "E7", "E9", "F", "I", "TID252"]
 ban-relative-imports = "all"  # absolute `optlab.<package>` imports only (ADR-0003): a move never changes their meaning
 
 [tool.pyright]
-include = ["optlab", "scripts", "tests", "cuda/bench"]
+include = ["packages", "scripts", "tests", "cuda/bench"]
+extraPaths = ["tests/helpers"]
 pythonVersion = "3.14"
 pythonPlatform = "All"  # the same counts on the Windows and Linux runners
 typeCheckingMode = "standard"
 venvPath = "."
 venv = ".venv"
 
-# Boundaries that already hold in v0; the layers of ADR-0004 replace them when the packages split (A2)
 [tool.importlinter]
-root_package = "optlab"
+root_packages = ["optlab.core", "optlab.native", "optlab.structured", "optlab.marketdata", "optlab.risk", "optlab.server"]
 
 [[tool.importlinter.contracts]]
 name = "Only the desk imports the desk"
 type = "forbidden"
 source_modules = ["optlab.structured", "optlab.marketdata", "optlab.risk"]
-forbidden_modules = ["optlab.app"]
+forbidden_modules = ["optlab.server"]
 
 [[tool.importlinter.contracts]]
 name = "Products and market data do not import the risk engine"

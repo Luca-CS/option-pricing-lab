@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from optlab.config import paths
+from optlab.core.config import paths
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.replay import ReplayConfig, cost_table, replay, result_json, strike_trade
 from optlab.structured import preset

@@ -20,7 +20,7 @@ from scipy.optimize import least_squares
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from optlab.config import paths
+from optlab.core.config import paths
 from optlab.marketdata.derive.surfaces import LEVEL_REF, index_panel, reconstruct_on, static_prior
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.pit import real_close

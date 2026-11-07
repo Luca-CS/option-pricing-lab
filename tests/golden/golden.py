@@ -42,7 +42,7 @@ SPX_MARKET = "SPX-20261104T1600-8b7fa10118"  # the showcase's market in use (clo
 
 
 def local_dir() -> Path:
-    from optlab.config import paths
+    from optlab.core.config import paths
 
     base = os.environ.get("OPTLAB_DATA")
     return (Path(base) if base else paths().lake.parent) / "golden"
@@ -119,7 +119,7 @@ def numbers_only(x):
 
 
 def closed_forms() -> dict:
-    from optlab import (
+    from optlab.core import (
         HestonParams,
         Market,
         barrier_price,
@@ -134,7 +134,7 @@ def closed_forms() -> dict:
         heston_price,
         implied_vol,
     )
-    from optlab.blackscholes import black_vega
+    from optlab.core.blackscholes import black_vega
 
     S, r, q = 100.0, 0.03, 0.01
     Ks, Ts, vols = [70.0, 90.0, 100.0, 110.0, 140.0], [0.05, 0.5, 1.0, 3.0], [0.1, 0.25, 0.6]
@@ -186,14 +186,14 @@ def closed_forms() -> dict:
 
 
 def _synthetic_ssvi():
-    from optlab import SSVI
+    from optlab.core import SSVI
 
     mats = np.array([0.1, 0.25, 0.5, 1.0, 2.0])
     return SSVI.power_law(-0.7, 1.1, 0.4, mats, 0.04 * mats * (1 + 0.2 * mats))
 
 
 def mc_products() -> dict:
-    from optlab import (
+    from optlab.core import (
         BlackScholesModel,
         HestonModel,
         HestonParams,
@@ -241,7 +241,7 @@ def mc_products() -> dict:
 
 def _simulated_market(noise_bp=15, seed=1):
     """Frozen copy of scripts/run_calibration.py:simulated_market (A0): Heston quotes plus noise on a flat market."""
-    from optlab import HestonParams, Market, heston_iv
+    from optlab.core import HestonParams, Market, heston_iv
 
     true = HestonParams(v0=0.025, kappa=1.8, theta=0.04, xi=0.75, rho=-0.75)
     rng = np.random.default_rng(seed)
@@ -275,7 +275,7 @@ _FIT: dict = {}
 
 def _simulated_fit():
     if not _FIT:
-        from optlab.pipeline import calibrate_all
+        from optlab.core.pipeline import calibrate_all
 
         market, slices = _simulated_market()
         _FIT.update(
@@ -287,7 +287,7 @@ def _simulated_fit():
 
 
 def calibration_simulated() -> dict:
-    from optlab.pipeline import exotics_table, fit_errors
+    from optlab.core.pipeline import exotics_table, fit_errors
 
     f = _simulated_fit()
     fit, market, slices = f["fit"], f["market"], f["slices"]
@@ -573,7 +573,7 @@ class _ShowcaseCopy:
         self.dir = local_dir() / f"work-{name}-{os.getpid()}"
 
     def __enter__(self):
-        from optlab.app.api import Desk
+        from optlab.server.api import Desk
 
         shutil.copytree(local_dir().parent / "showcase", self.dir / "showcase")
         self.desk = Desk(self.dir / "showcase" / "desk.sqlite", engine="gpu", workers=6)
@@ -609,7 +609,7 @@ _TIMES: dict = {}
 
 
 def showcase_book() -> dict:
-    from optlab.app.risk_api import RiskApi
+    from optlab.server.risk_api import RiskApi
 
     with _ShowcaseCopy("book") as desk:
         t0 = time.perf_counter()
@@ -622,7 +622,7 @@ def showcase_book() -> dict:
 
 
 def showcase_var() -> dict:
-    from optlab.app.risk_api import RiskApi
+    from optlab.server.risk_api import RiskApi
 
     with _ShowcaseCopy("var") as desk:
         t0 = time.perf_counter()

@@ -19,12 +19,12 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from optlab.app.api import Desk
-from optlab.config import paths
+from optlab.core.config import paths
 from optlab.marketdata.derive.bank import wrapper_spreads
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.pit import market_at, real_close
 from optlab.marketdata.replay import ReplayConfig, filled_fixings, strike_trade
+from optlab.server.api import Desk
 from optlab.structured import preset
 from optlab.structured.defaults import resolve
 
@@ -237,7 +237,7 @@ def main():
     finally:
         desk.jobs.shutdown()
     print("\nOpen the desk on this book:")
-    print(f'python -m optlab.app --store "{desk.repo.path}" --market {sid} --open')
+    print(f'python -m optlab.server --store "{desk.repo.path}" --market {sid} --open')
 
 
 if __name__ == "__main__":

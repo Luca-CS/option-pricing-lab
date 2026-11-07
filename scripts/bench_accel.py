@@ -18,7 +18,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from optlab.slv import calibrate_leverage  # noqa: E402
+from optlab.core.slv import calibrate_leverage  # noqa: E402
 from optlab.structured import PricingContext, compile_sheet, preset, price_many  # noqa: E402
 from optlab.structured.multiasset import Basket  # noqa: E402
 
@@ -87,7 +87,7 @@ def desk_quote(engine, precision):
     import tempfile
 
     from optlab import native
-    from optlab.app.api import Desk
+    from optlab.server.api import Desk
 
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         desk = Desk(store=Path(tmp) / "desk.sqlite", engine=engine)

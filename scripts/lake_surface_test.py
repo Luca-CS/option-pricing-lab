@@ -19,11 +19,11 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from optlab.config import paths
+from optlab.core.config import paths
+from optlab.core.svi import SVISurface, svi_arbitrage_report
 from optlab.marketdata.derive.surfaces import fit_observed, fit_shape, index_panel, reconstruct_on, static_prior
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.quotes import clean_day, quote_days
-from optlab.svi import SVISurface, svi_arbitrage_report
 
 MONEYNESS = [0, 0.7, 0.8, 0.9, 0.95, 1.0, 1.05, 1.1, 1.2, 10]
 MATURITY = [0, 1 / 12, 0.25, 0.5, 1.0, 2.0, 3.0, 6.0]

@@ -14,7 +14,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from optlab.instruments import enabled_names, enabled_underlyings
+from optlab.core.instruments import enabled_names, enabled_underlyings
 from optlab.marketdata.derive.bank import build_bank
 from optlab.marketdata.derive.carry import build_carry, build_parity_carry
 from optlab.marketdata.derive.correl import build_basket_quotes, build_premium, build_realized
