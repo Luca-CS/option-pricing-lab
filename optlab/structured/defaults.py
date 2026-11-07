@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from optlab.marketdata.universe import instrument
+from optlab.instruments import instrument
 from optlab.structured.costs import BUMPS, CostInputs
 from optlab.structured.digitals import DELTA_FIELD
 from optlab.structured.schema import SECTIONS, TermSheet

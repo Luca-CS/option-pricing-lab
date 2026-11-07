@@ -16,11 +16,11 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from optlab.config import DEFAULT_SEED
+from optlab.instruments import PLACE_CALENDAR, instrument
 from optlab.log import get_logger
 from optlab.marketdata.lake import Lake, sql_str
 from optlab.marketdata.pit import basket_at, context_at, real_fixings
-from optlab.marketdata.snapshot import to_model_scale
-from optlab.marketdata.universe import PLACE_CALENDAR, instrument
+from optlab.snapshot import to_model_scale
 from optlab.structured.calendars import CALENDARS
 from optlab.structured.fastmodels import TabulatedLocalVol
 from optlab.structured.greeks import ShiftedSurface

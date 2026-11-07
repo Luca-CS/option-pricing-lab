@@ -24,10 +24,11 @@ import numpy as np
 import pandas as pd
 
 from optlab.blackscholes import implied_vol
+from optlab.config import REPO_ROOT
 from optlab.market import Market
 
 NY = ZoneInfo("America/New_York")
-RAW_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
+RAW_DIR = REPO_ROOT / "data" / "raw"  # personal-use snapshots, git-ignored
 
 
 def download_chain(ticker="^SPX", min_days=7, max_days=800, out_dir=RAW_DIR) -> Path:

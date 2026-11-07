@@ -17,6 +17,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from optlab.instruments import pair_currencies
 from optlab.market import Market
 from optlab.marketdata.derive.correl import closes_wide
 from optlab.marketdata.derive.curves import CURVE_OF_CURRENCY
@@ -35,7 +36,6 @@ from optlab.marketdata.quality import open_issues
 from optlab.marketdata.quotes import discount_function
 from optlab.marketdata.sources import curl_get
 from optlab.marketdata.sources.simple import fred_url, parse_fred
-from optlab.marketdata.universe import pair_currencies
 from optlab.models import LocalVolModel, time_grid
 from optlab.structured.context import PricingContext
 from optlab.structured.multiasset import BasketContext

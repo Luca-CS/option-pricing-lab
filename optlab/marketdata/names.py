@@ -15,7 +15,7 @@ import pandas as pd
 
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.pit import market_at
-from optlab.marketdata.snapshot import MarketSnapshot
+from optlab.snapshot import MarketSnapshot
 
 LAYER = "reconstructed"
 KEPT = 64  # contexts in memory, each with its leverages

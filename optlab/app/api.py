@@ -22,13 +22,14 @@ from optlab.app.jobs import Jobs
 from optlab.app.repository import Repository
 from optlab.app.serialize import book_json, clean, events_json, quote_json, result_json, trade_json
 from optlab.config import DEFAULT_SEED, paths
+from optlab.instruments import _BY_ID
 from optlab.log import get_logger
 from optlab.market import Market
-from optlab.marketdata import MarketSnapshot, MarketStore
+from optlab.marketdata import MarketStore
 from optlab.marketdata.derive.correl import correlation_at
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.names import NameMarkets
-from optlab.marketdata.universe import _BY_ID
+from optlab.snapshot import MarketSnapshot
 from optlab.structured import MASKS, PRESETS, PricingContext, TermSheet, TermSheetError, describe, preset, quote
 from optlab.structured.compiler import compile_sheet
 from optlab.structured.context import DEFAULT_CALIBRATION
@@ -243,8 +244,8 @@ class Desk:
             raise ApiError(f"{what} stay on the owner's machine: this desk is shared beyond it", 403)
 
     def data_overview(self) -> dict:
+        from optlab.instruments import UNIVERSE
         from optlab.marketdata.quality import open_issues
-        from optlab.marketdata.universe import UNIVERSE
 
         lake = self.lake
         if not lake.has("instruments") and not lake.has("prices_eod"):

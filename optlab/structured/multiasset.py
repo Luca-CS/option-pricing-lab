@@ -42,7 +42,7 @@ def correlation_root(corr) -> np.ndarray:
 
 def moved_correlation(corr, shift: float) -> np.ndarray:
     """Every pair moved by `shift`, kept within (-0.99, 0.99), and repaired into a correlation matrix when the move breaks it."""
-    from optlab.marketdata.derive.correl import nearest_correlation
+    from optlab.correlation import nearest_correlation
 
     c = np.array(corr, dtype=float)
     moved = np.clip(c + shift, -0.99, 0.99)
@@ -328,8 +328,7 @@ class BasketContext:
         """The context that keeps a name's SLV leverages, one with the day's levels and the prior's dynamics when none was given."""
         got = self.contexts.get(name)
         if got is None:
-            from optlab.marketdata.pit import MIX, quick_heston
-            from optlab.structured.context import PricingContext
+            from optlab.structured.context import MIX, PricingContext, quick_heston
 
             heston = HestonParams(**quick_heston(self.vols[name]))
             flat = SLVModel(heston, Leverage([0.0], [[-1.0, 1.0]], [[1.0, 1.0]]), MIX)

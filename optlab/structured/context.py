@@ -23,6 +23,23 @@ LEVERAGE_HORIZONS = (
     10.0,
 )  # a leverage calibrated up to one of these serves every shorter product
 
+MIX = 0.5  # the SLV mix of a context built without a calibrated leverage (a name read from the lake)
+PRIOR_DYNAMICS = {"kappa": 3.09, "xi": 1.31, "rho": -0.69}  # of the versioned SPX calibration (27/10/2026)
+
+
+def quick_heston(surface) -> dict:
+    """Heston with the prior's dynamics, its variance levels set by the day's surface: fast and stable for a daily loop.
+    The SLV leverage is what brings the vanillas back on the surface."""
+    v0 = float(surface.theta(1 / 12)) * 12
+    theta_ = max(float(surface.theta(2.0)) / 2.0, 1e-4)
+    return {
+        "v0": max(v0, 1e-4),
+        "kappa": PRIOR_DYNAMICS["kappa"],
+        "theta": theta_,
+        "xi": PRIOR_DYNAMICS["xi"],
+        "rho": PRIOR_DYNAMICS["rho"],
+    }
+
 
 @dataclass
 class PricingContext:
@@ -48,7 +65,7 @@ class PricingContext:
         """The calibrated market of a results/*.json file; files without a snapshot time need `valuation`.
         `slv_regression="local_linear"` recalibrates the SLV leverage at load (about 7 s) with the local linear
         regression of max(v, 0), which removes most of the ATM vanilla bias left by the stored leverage."""
-        from optlab.marketdata import MarketSnapshot
+        from optlab.snapshot import MarketSnapshot
 
         snap = MarketSnapshot.from_calibration_file(
             path or DEFAULT_CALIBRATION, underlying, valuation, provenance=False

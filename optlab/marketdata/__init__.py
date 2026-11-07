@@ -1,6 +1,6 @@
-"""Market data: identified snapshots of a calibrated market, their local store and the scale of real fixings."""
+"""Market data: the lake, its sources and derivations, the point-in-time markets, and the local store of snapshots
+(the snapshot type itself is `optlab.snapshot`)."""
 
-from optlab.marketdata.snapshot import MarketSnapshot, to_model_scale
 from optlab.marketdata.store import MarketStore
 
-__all__ = ["MarketSnapshot", "MarketStore", "to_model_scale"]
+__all__ = ["MarketStore"]

@@ -11,31 +11,33 @@ from _structured_refs import worst_put
 from scipy.special import ndtr
 
 from optlab.blackscholes import black_price
+from optlab.correlation import nearest_correlation
 from optlab.marketdata.derive.correl import (
-    CorrelationSkew,
     apply_premium,
-    average_correlation,
-    basket_paths,
-    basket_rows,
     build_basket_quotes,
     build_premium,
     build_realized,
     closes_wide,
-    copula_expectation,
     correlation_at,
-    forward_quantile,
-    member_vols,
-    nearest_correlation,
     pair_horizon,
     premium_series,
-    read_correlation,
     realised_matrix,
     rolling_pair,
+)
+from optlab.marketdata.lake import Lake
+from optlab.structured.localcorr import (
+    CorrelationSkew,
+    average_correlation,
+    basket_paths,
+    basket_rows,
+    copula_expectation,
+    forward_quantile,
+    member_vols,
+    read_correlation,
     skewed_matrix,
     spread_payoff,
     spread_quote,
 )
-from optlab.marketdata.lake import Lake
 from optlab.structured.multiasset import correlation_root
 from optlab.svi import SVISurface
 

@@ -8,11 +8,11 @@ import pandas as pd
 import pytest
 
 from optlab.config import paths
+from optlab.instruments import enabled_names
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.pit import basket_at, context_at, market_at, real_close, truncated_copy
 from optlab.marketdata.quality import check_splits, open_issues
 from optlab.marketdata.quotes import clean_day, quote_days
-from optlab.marketdata.universe import enabled_names
 from optlab.structured import CALENDARS, preset, quote
 
 LAKE = Lake()

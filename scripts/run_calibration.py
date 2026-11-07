@@ -67,7 +67,7 @@ def simulated_market(noise_bp=15, seed=1):
 
 
 def spx_market():
-    from optlab.data import build_iv_table, latest_snapshot, select_maturities
+    from optlab.marketdata.chains import build_iv_table, latest_snapshot, select_maturities
 
     market, slices, _, meta = build_iv_table(latest_snapshot())
     slices = select_maturities(slices)

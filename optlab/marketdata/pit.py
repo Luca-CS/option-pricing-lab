@@ -15,6 +15,7 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 
+from optlab.instruments import instrument
 from optlab.market import Market
 from optlab.marketdata.derive.carry import DividendStream, dividend_stream
 from optlab.marketdata.derive.correl import correlation_at
@@ -22,15 +23,13 @@ from optlab.marketdata.derive.fx import quanto_link_at
 from optlab.marketdata.derive.surfaces import surface_at
 from optlab.marketdata.lake import TABLES, Lake, sql_str
 from optlab.marketdata.quotes import discount_function
-from optlab.marketdata.snapshot import MarketSnapshot
-from optlab.marketdata.universe import instrument
+from optlab.snapshot import MarketSnapshot
+from optlab.structured.context import MIX, quick_heston
 
 PILLARS = np.array([1 / 52, 1 / 12, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 7.0])
 STEPS_UP_TO = 3.0  # years over which a forward keeps its dividend steps; beyond it, the pillars smooth them
 ONE_DAY = 1 / 365
 MODEL_SPOT = 100.0
-MIX = 0.5
-PRIOR_DYNAMICS = {"kappa": 3.09, "xi": 1.31, "rho": -0.69}  # of the versioned SPX calibration (27/10/2026)
 
 
 def real_close(lake: Lake, name: str, day, as_of=None, max_age_days: int = 5) -> tuple[float, dt.date]:
@@ -95,20 +94,6 @@ def market_curves(lake: Lake, name: str, day, as_of=None) -> tuple[Market, float
 def flat_leverage(T_max: float) -> dict:
     """A leverage of one everywhere: the SLV model is then a plain Heston. Only for contexts priced under local vol."""
     return {"times": [0.0], "x_grids": [[-1.0, 1.0]], "values": [[1.0, 1.0]]}
-
-
-def quick_heston(surface) -> dict:
-    """Heston with the prior's dynamics, its variance levels set by the day's surface: fast and stable for a daily loop.
-    The SLV leverage is what brings the vanillas back on the surface."""
-    v0 = float(surface.theta(1 / 12)) * 12
-    theta_ = max(float(surface.theta(2.0)) / 2.0, 1e-4)
-    return {
-        "v0": max(v0, 1e-4),
-        "kappa": PRIOR_DYNAMICS["kappa"],
-        "theta": theta_,
-        "xi": PRIOR_DYNAMICS["xi"],
-        "rho": PRIOR_DYNAMICS["rho"],
-    }
 
 
 def fitted_heston(surface, market: Market, x0: dict | None = None) -> dict:

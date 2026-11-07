@@ -313,7 +313,7 @@ def test_split_check_passes_restated_closes_and_flags_raw_ones():
 
 
 def test_term_sheet_underlyings_come_from_the_registry_and_need_their_own_market():
-    from optlab.marketdata.universe import enabled_names, instrument
+    from optlab.instruments import enabled_names, instrument
     from optlab.structured import PricingContext, TermSheet, quote
     from optlab.structured.schema import SECTIONS
 

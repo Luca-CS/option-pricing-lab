@@ -5,13 +5,13 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from optlab.instruments import instrument
 from optlab.marketdata.derive.bank import BankParams, build_bank
 from optlab.marketdata.derive.carry import build_carry
 from optlab.marketdata.derive.correl import build_premium
 from optlab.marketdata.derive.curves import build_discount_curves
 from optlab.marketdata.derive.surfaces import ShapePrior, build_reconstructed
 from optlab.marketdata.lake import Lake
-from optlab.marketdata.universe import instrument
 
 PRIOR = ShapePrior(-0.7, 1.0, 0.3, 0.05, source="test")
 NAMES = ("SPX", "NDX", "AAPL", "AMZN", "GOOGL", "GS", "IBM")

@@ -9,13 +9,21 @@ from __future__ import annotations
 import datetime as dt
 import io
 import time
+from dataclasses import asdict
 
 import pandas as pd
 
+from optlab.instruments import REFERENCE_INSTRUMENT, UNIVERSE, enabled_underlyings
 from optlab.log import get_logger
 from optlab.marketdata.lake import Lake, new_run_id
 from optlab.marketdata.sources import curl_get, fx, http_get, rates, simple, yahoo
-from optlab.marketdata.universe import REFERENCE_INSTRUMENT, as_rows, enabled_underlyings
+
+
+def as_rows(as_of) -> pd.DataFrame:
+    """The registry as rows of the `instruments` table, dated `as_of`."""
+    rows = [{**asdict(i), "instrument": i.id, "obs_date": as_of, "cboe": i.vol_index} for i in UNIVERSE]
+    return pd.DataFrame(rows).drop(columns=["id", "group"])
+
 
 LOG = get_logger(__name__)
 START = "2015-01-01"  # the replay period starts in 2018; earlier history feeds rolling windows

@@ -6,7 +6,8 @@ import json
 import pytest
 from _structured_refs import flat_context
 
-from optlab.marketdata import MarketSnapshot, MarketStore, to_model_scale
+from optlab.marketdata import MarketStore
+from optlab.snapshot import MarketSnapshot, to_model_scale
 from optlab.structured import PRESETS, PricingContext, TermSheet, TermSheetError, compile_sheet, preset, quote
 from optlab.structured.context import DEFAULT_CALIBRATION
 from optlab.structured.portfolio import Book
@@ -131,7 +132,7 @@ def test_the_store_is_immutable_and_finds_the_latest(tmp_path):
 def test_real_fixings_against_a_rescaled_market_are_refused_until_converted():
     sheet = preset("reverse_convertible", **{"general.strike_date": STRIKE, "wrapper.solve": "upfront"})
     spx = PricingContext.from_calibration()
-    with pytest.raises(ValueError, match="convert them with optlab.marketdata.to_model_scale"):
+    with pytest.raises(ValueError, match="convert them with optlab.snapshot.to_model_scale"):
         quote(sheet, spx, control=None, fixings={"SPX": {STRIKE: 5800.0}})
     converted = to_model_scale({"SPX": {STRIKE: 5800.0}}, 58.0)
     assert converted["SPX"][STRIKE] == pytest.approx(100.0)

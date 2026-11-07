@@ -6,17 +6,18 @@ from scipy.stats import multivariate_normal, norm
 
 from optlab.blackscholes import black_price
 from optlab.market import Market
-from optlab.marketdata.derive.correl import CorrelationSkew, spread_payoff
 from optlab.models import BlackScholesModel
 from optlab.structured import PricingContext, preset, quote
 from optlab.structured.costs import CostInputs
 from optlab.structured.localcorr import (
     W0,
+    CorrelationSkew,
     LocalCorrelation,
     StochasticMix,
     basket_sigma,
     calibrate,
     low_matrix,
+    spread_payoff,
     targets,
 )
 from optlab.structured.multiasset import Basket, BasketContext, simulate_basket

@@ -9,7 +9,7 @@ from _lake_fixture import derive_all, fill_observed, synthetic_lake
 
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.pit import basket_at, context_at, market_at, real_close, real_fixings, truncated_copy
-from optlab.marketdata.snapshot import MarketSnapshot, to_model_scale
+from optlab.snapshot import MarketSnapshot, to_model_scale
 from optlab.structured import preset, quote
 
 DAY = dt.date(2020, 6, 15)

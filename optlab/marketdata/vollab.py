@@ -19,8 +19,8 @@ import numpy as np
 import pandas as pd
 
 from optlab.config import REPO_ROOT
-from optlab.data import select_maturities
 from optlab.heston import calibrate_heston, heston_iv
+from optlab.marketdata.chains import select_maturities
 from optlab.marketdata.lake import Lake, new_run_id, sql_str
 from optlab.marketdata.quotes import CleanDay, clean_day
 from optlab.pipeline import _thin, _weights

@@ -30,10 +30,10 @@ import pandas as pd
 from scipy.optimize import brentq, least_squares
 from scipy.special import ndtr
 
+from optlab.instruments import instrument
 from optlab.log import get_logger
 from optlab.marketdata.lake import Lake, new_run_id, sql_str
 from optlab.marketdata.quotes import clean_day
-from optlab.marketdata.universe import instrument
 from optlab.pipeline import _weights
 from optlab.svi import SVISurface, fit_svi_surface, ssvi_slice_to_svi, svi_arbitrage_report
 
@@ -302,7 +302,7 @@ def build_reconstructed(
 
 def fit_observed(lake: Lake, name: str, day, source: str | None = None, targets=OBSERVED_TARGETS) -> dict:
     """SVI on a day's chain: the stored row, with the fit's error against mid and bid-ask, and the arbitrage report."""
-    from optlab.data import select_maturities
+    from optlab.marketdata.chains import select_maturities
 
     cleaned = clean_day(lake, name, day, source)
     slices = select_maturities(cleaned.slices, targets)

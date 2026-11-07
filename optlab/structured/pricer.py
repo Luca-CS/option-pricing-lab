@@ -219,7 +219,7 @@ def check_fixing_scale(history: dict, spot: float, name: str, band=(0.2, 5.0)):
             raise ValueError(
                 f"fixing {level:g} of {name} (t = {t:.4f}) is {level / spot:.1f} times the model spot "
                 f"{spot:g}: real index levels against a market rescaled to 100? convert them with "
-                "optlab.marketdata.to_model_scale"
+                "optlab.snapshot.to_model_scale"
             )
 
 

@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from optlab.blackscholes import black_price
-from optlab.data import build_iv_table
+from optlab.marketdata.chains import build_iv_table
 from optlab.marketdata.derive.curves import EUR_CURVE, USD_CURVE
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.quotes import as_clean_input, clean_day, discount_function, quote_days

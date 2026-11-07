@@ -19,12 +19,12 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from optlab.instruments import enabled, enabled_names, instrument, pair_currencies
 from optlab.marketdata.derive.carry import cip_forward
 from optlab.marketdata.derive.correl import WINDOWS, closes_wide, rolling_pair
 from optlab.marketdata.derive.curves import CURVE_OF_CURRENCY
 from optlab.marketdata.lake import Lake, new_run_id, sql_str
 from optlab.marketdata.quality import RESOLVED, open_issues
-from optlab.marketdata.universe import enabled, enabled_names, instrument, pair_currencies
 
 FX_TENORS = (1 / 12, 0.25, 0.5, 1.0, 2.0, 3.0, 5.0)
 SPOT_SOURCE = "ecb"

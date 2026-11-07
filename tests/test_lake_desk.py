@@ -12,8 +12,8 @@ from test_lake_quotes import DAY, curve_rows, synthetic_rows
 
 from optlab.app.api import ApiError, Desk
 from optlab.app.server import routes
+from optlab.marketdata.ingest import as_rows
 from optlab.marketdata.lake import Lake
-from optlab.marketdata.universe import as_rows
 
 STATIC = Path(__file__).resolve().parents[1] / "optlab" / "app" / "static"
 EXPIRIES = tuple(DAY + dt.timedelta(days=d) for d in (36, 110, 256, 400))

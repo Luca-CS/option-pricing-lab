@@ -9,8 +9,8 @@ from scipy.stats import multivariate_normal, norm
 
 from optlab.app.api import ApiError, Desk
 from optlab.app.report import quote_report
+from optlab.instruments import UNIVERSE, instrument
 from optlab.market import Market
-from optlab.marketdata.universe import UNIVERSE, instrument
 from optlab.structured import PricingContext, TermSheetError, describe, preset, quote
 from optlab.structured.costs import CostInputs
 from optlab.structured.defaults import STARTING, merged, resolve, validate_table

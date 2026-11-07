@@ -11,21 +11,8 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
-import subprocess
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
-
-from optlab.config import REPO_ROOT
-
-
-def _code_version() -> str | None:
-    try:
-        out = subprocess.run(
-            ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=5
-        )
-        return out.stdout.strip() or None
-    except OSError, subprocess.SubprocessError:
-        return None
 
 
 @dataclass(frozen=True)
@@ -79,9 +66,10 @@ class MarketSnapshot:
         valuation: dt.date | str | None = None,
         source: str | None = None,
         provenance: bool = True,
+        code_version: str | None = None,
     ) -> "MarketSnapshot":
         """A snapshot from a calibration JSON (results/*.json). Files without a snapshot time (the simulated
-        market) need `valuation`."""
+        market) need `valuation`. `provenance` adds the creation time and, when given, the code version."""
         path = Path(path)
         raw = path.read_bytes()
         cal = json.loads(raw)
@@ -95,7 +83,7 @@ class MarketSnapshot:
         slv = {"mix": cal["slv"]["mix"], "leverage": cal["slv"]["leverage"]}
         prov = {"file": path.name, "file_sha256": hashlib.sha256(raw).hexdigest(), "note": meta.get("note")}
         if provenance:
-            prov.update(code_version=_code_version(), created_at=dt.datetime.now(dt.timezone.utc).isoformat())
+            prov.update(code_version=code_version, created_at=dt.datetime.now(dt.timezone.utc).isoformat())
         return cls(
             underlying,
             stamp or valuation.isoformat(),

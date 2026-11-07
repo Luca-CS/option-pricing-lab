@@ -300,7 +300,7 @@ def context_currency(ctx) -> str:
     cur = getattr(ctx, "payment_currency", None)
     if cur:
         return cur
-    from optlab.marketdata.universe import _BY_ID
+    from optlab.instruments import _BY_ID
 
     name = ctx.names[0] if isinstance(ctx, BasketContext) else ctx.underlying
     inst = _BY_ID.get(name)
@@ -309,7 +309,7 @@ def context_currency(ctx) -> str:
 
 def moved_corr(corr, shock: Shock, names) -> np.ndarray:
     """The correlation matrix with every pair moved by shock.corr and the listed pairs by their own move, repaired."""
-    from optlab.marketdata.derive.correl import nearest_correlation
+    from optlab.correlation import nearest_correlation
 
     c = np.array(corr, dtype=float)
     if not shock.corr and not shock.corr_pairs:

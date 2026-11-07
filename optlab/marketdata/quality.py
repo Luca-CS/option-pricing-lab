@@ -173,7 +173,7 @@ def check_fx(spots: pd.DataFrame, today: dt.date, max_gap: float = 0.02, max_mov
 def check_calendar(lake: Lake) -> list[dict]:
     """Weekdays where the rule calendar of a place and the traded days disagree. A traded day missing from Yahoo shows
     here too: the fixings of that day have to be filled before a replay crosses it."""
-    from optlab.marketdata.universe import PLACE_CALENDAR
+    from optlab.instruments import PLACE_CALENDAR
     from optlab.structured.calendars import CALENDARS
 
     issues = []

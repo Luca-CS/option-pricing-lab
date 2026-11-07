@@ -18,8 +18,8 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from optlab.instruments import instrument
 from optlab.marketdata.lake import Lake, new_run_id, sql_str
-from optlab.marketdata.universe import instrument
 
 # Assumed dividend yields of indices with neither chains nor a total-return index (origin = synthetic).
 SYNTHETIC_YIELD = {"NDX": 0.008, "SX5E": 0.03}

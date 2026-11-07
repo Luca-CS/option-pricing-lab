@@ -2,14 +2,13 @@
 
 Only `enabled` names are loaded and offered. The others are declared with their tickers and switched on by changing
 one word. The list is chosen today, so history built on it has a survivorship bias: these names all survived to 2026,
-and the bias grows the further back a replay starts.
+and the bias grows the further back a replay starts. Pure data (no pandas): its table for the lake is
+`marketdata.ingest.as_rows`.
 """
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
-
-import pandas as pd
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -83,9 +82,3 @@ def pair_currencies(pair: str) -> tuple[str, str]:
     if len(pair) != 6:
         raise ValueError(f"{pair!r} is not a currency pair")
     return pair[:3], pair[3:]
-
-
-def as_rows(as_of) -> pd.DataFrame:
-    """The registry as rows of the `instruments` table, dated `as_of`."""
-    rows = [{**asdict(i), "instrument": i.id, "obs_date": as_of, "cboe": i.vol_index} for i in UNIVERSE]
-    return pd.DataFrame(rows).drop(columns=["id", "group"])

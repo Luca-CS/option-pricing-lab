@@ -1,4 +1,4 @@
-"""A day's option quotes from the lake, through the one cleaning chain (`optlab.data.clean_chain`), whatever the source."""
+"""A day's option quotes from the lake, through the one cleaning chain (`optlab.marketdata.chains.clean_chain`), whatever the source."""
 
 from __future__ import annotations
 
@@ -8,12 +8,12 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from optlab.data import clean_chain
+from optlab.instruments import _BY_ID
 from optlab.market import Market
+from optlab.marketdata.chains import clean_chain
 from optlab.marketdata.derive.curves import CURVE_OF_CURRENCY
 from optlab.marketdata.lake import Lake, sql_str
 from optlab.marketdata.sources.archives import snapshot_time
-from optlab.marketdata.universe import _BY_ID
 
 
 def discount_function(lake: Lake, currency: str, day: dt.date, as_of=None):

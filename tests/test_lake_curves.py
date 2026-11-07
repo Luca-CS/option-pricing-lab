@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from optlab.blackscholes import black_price
+from optlab.instruments import instrument
 from optlab.marketdata.derive.bank import ENTITY, BankParams, bank_spreads, build_bank, spread_at, wrapper_spreads
 from optlab.marketdata.derive.carry import (
     build_carry,
@@ -28,7 +29,6 @@ from optlab.marketdata.derive.curves import (
     zero_curve_rows,
 )
 from optlab.marketdata.lake import Lake
-from optlab.marketdata.universe import instrument
 
 
 def test_bootstrap_reprices_par_bonds_to_par():
