@@ -2,13 +2,55 @@
 name = "optlab"
 version = "0.1.0"
 description = "Option pricing under Black-Scholes, Heston, Dupire local volatility and Heston SLV"
-requires-python = ">=3.10"
-dependencies = ["numpy>=2.0", "scipy>=1.13"]
+requires-python = ">=3.14"
+dependencies = ["numpy>=2.5", "scipy>=1.18"]
 license = "MIT"
+
+[project.optional-dependencies]
+# The lake, the desk's market data and the structured products' reference data (split by package in step A2)
+data = ["pandas>=3.1", "duckdb>=2.0", "pyarrow>=26.0", "requests>=2.34"]
+yahoo = ["yfinance>=1.7"]
+reports = ["matplotlib>=3.11"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2",
+    "pytest-xdist>=3.8",
+    "pytest-cov>=7.1",
+    "ruff==0.17.2",
+    "pyright==1.1.414",
+    "import-linter==2.15",
+    "pre-commit>=4.7",
+]
+
+[tool.uv]
+# Not installed: tests and scripts import the repository through `pythonpath` (installable packages come with A2)
+package = false
+default-groups = ["dev"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "slow: longer than about 10 s; left out of the CI run",
+    "lake: needs the real data lake (optlab-data); skipped without it",
+    "gpu: needs the CUDA library and a GPU",
+    "native: needs the native engine library (CPU or GPU)",
+    "node: needs node on PATH (the JavaScript pricers of docs/ and the desk's table sorting)",
+]
 
 [tool.ruff]
 line-length = 120
+target-version = "py314"
+
+[tool.ruff.lint]
+# v0's rules (pycodestyle errors, pyflakes) plus import sorting; the wider set of ADR-0014 (C901, S, B, UP) comes with
+# the clean-up of A8, measured against reports/refactor-baseline.md
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.pyright]
+include = ["optlab", "scripts", "tests", "cuda/bench"]
+pythonVersion = "3.14"
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"

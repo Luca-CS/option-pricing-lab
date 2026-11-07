@@ -292,9 +292,8 @@ wing). [reports/replay.md](reports/replay.md) follows a BRC and a Phoenix throug
 ## Running
 
 ```bash
-python -m venv .venv
-.venv/Scripts/pip install -r requirements.txt     # .venv/bin/pip on Linux and macOS
-python -m pytest                                  # about ten minutes, most of it in the SLV tests
+uv sync --locked --all-extras                     # https://docs.astral.sh/uv/ ; the lock pins every version with its hash
+uv run pytest                                     # about half an hour with the real lake; CI runs the offline part
 python scripts/run_calibration.py --source simulated
 python scripts/download_spx.py                    # personal-use snapshot in data/raw/
 python scripts/run_calibration.py --source spx
