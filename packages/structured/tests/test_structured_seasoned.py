@@ -5,6 +5,7 @@ import datetime as dt
 import numpy as np
 import pytest
 from _structured_refs import FLAT, S0, flat_context, prob_below, put_fwd
+
 from optlab.structured.compiler import compile_sheet
 from optlab.structured.dates import business_days
 from optlab.structured.presets import preset

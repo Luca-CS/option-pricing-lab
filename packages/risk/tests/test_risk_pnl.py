@@ -4,6 +4,7 @@ import datetime as dt
 
 import numpy as np
 import pytest
+
 from optlab.marketdata.replay import struck_sheet
 from optlab.risk import RiskSettings
 from optlab.risk import pnl as P

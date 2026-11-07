@@ -6,6 +6,7 @@ from __future__ import annotations
 import time
 
 import numpy as np
+
 from optlab.core.heston import HestonParams, calibrate_heston, heston_iv
 from optlab.core.market import Market
 from optlab.core.models import BlackScholesModel, HestonModel, LocalVolModel

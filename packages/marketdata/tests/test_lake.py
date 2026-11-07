@@ -6,6 +6,7 @@ import time
 import numpy as np
 import pandas as pd
 import pytest
+
 from optlab.core import config
 from optlab.marketdata.ingest import (
     load_cboe,

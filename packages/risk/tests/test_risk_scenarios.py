@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 from _risk_refs import S0, VOL, Q, R, book, flat_ctx, vanilla
 from _structured_refs import flat_surface
+
 from optlab.core.blackscholes import bs_price
 from optlab.risk import RiskGroup
 from optlab.risk import scenarios as sc

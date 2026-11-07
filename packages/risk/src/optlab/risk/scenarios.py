@@ -17,6 +17,7 @@ import time
 from dataclasses import dataclass
 
 import numpy as np
+
 from optlab.risk.curves import CurveMove
 from optlab.risk.engine import RiskSettings, run_group_safe
 from optlab.risk.shocks import RiskEnv, Shock, VolMove, apply

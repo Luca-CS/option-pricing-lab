@@ -14,6 +14,7 @@ import time
 from dataclasses import dataclass, field
 
 import pandas as pd
+
 from optlab.core.config import DEFAULT_SEED
 from optlab.core.instruments import PLACE_CALENDAR, instrument
 from optlab.core.log import get_logger

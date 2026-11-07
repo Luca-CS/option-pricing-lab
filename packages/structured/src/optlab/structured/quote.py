@@ -6,6 +6,7 @@ import time
 from dataclasses import dataclass, field
 
 import numpy as np
+
 from optlab.core.config import DEFAULT_SEED
 from optlab.core.log import get_logger
 from optlab.structured.cashflows import FundedSwap, Note, Swap, funding_periods

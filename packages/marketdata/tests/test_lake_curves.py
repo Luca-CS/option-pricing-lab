@@ -5,6 +5,7 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 import pytest
+
 from optlab.core.blackscholes import black_price
 from optlab.core.instruments import instrument
 from optlab.marketdata.derive.bank import ENTITY, BankParams, bank_spreads, build_bank, spread_at, wrapper_spreads

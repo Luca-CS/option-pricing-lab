@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+
 from optlab.core.heston import HestonParams
 from optlab.core.market import Market
 from optlab.core.ssvi import SSVI

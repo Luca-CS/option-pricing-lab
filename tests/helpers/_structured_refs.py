@@ -1,10 +1,11 @@
 """Independent references for the structured pricer: Black-Scholes closed forms and a flat SVI surface."""
 
 import numpy as np
+from scipy.stats import norm
+
 from optlab.core import BlackScholesModel, Market, SVISurface
 from optlab.core.blackscholes import black_price
 from optlab.structured.context import PricingContext
-from scipy.stats import norm
 
 S0, R, Q, VOL = 100.0, 0.04, 0.01, 0.2
 FLAT = Market.flat(S0, R, Q)

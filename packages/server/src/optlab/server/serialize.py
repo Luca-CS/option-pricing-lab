@@ -6,6 +6,7 @@ import datetime as dt
 import math
 
 import numpy as np
+
 from optlab.structured.script.nodes import DateLit
 from optlab.structured.script.timeline import Clock, build_timeline
 

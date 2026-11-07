@@ -9,6 +9,7 @@ same numbers bit for bit (same operations in the same order), so prices do not m
 from __future__ import annotations
 
 import numpy as np
+
 from optlab.core.svi import SVISurface, g_function, svi_derivs
 
 

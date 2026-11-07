@@ -21,9 +21,10 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from plots import plot_errors, plot_mix_sweep, plot_smiles, plot_surfaces  # noqa: E402
+
 from optlab.core import HestonParams, Leverage, Market, SVISurface, heston_iv  # noqa: E402
 from optlab.core.pipeline import calibrate_all, exotics_table, fit_errors, mix_sweep  # noqa: E402
-from plots import plot_errors, plot_mix_sweep, plot_smiles, plot_surfaces  # noqa: E402
 
 RESULTS = ROOT / "results"
 FIGURES = ROOT / "reports" / "figures"

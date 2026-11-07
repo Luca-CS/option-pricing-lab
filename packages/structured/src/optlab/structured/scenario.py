@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import numpy as np
+
 from optlab.core.market import Market
 from optlab.core.models import Model, simulate
 

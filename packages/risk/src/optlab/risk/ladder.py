@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
+
 from optlab.risk import grid
 from optlab.risk.curves import CurveMove
 from optlab.risk.engine import Measure, RiskSettings, run_group_safe

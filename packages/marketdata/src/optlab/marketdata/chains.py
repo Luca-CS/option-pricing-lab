@@ -22,6 +22,7 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
+
 from optlab.core.blackscholes import implied_vol
 from optlab.core.config import REPO_ROOT
 from optlab.core.market import Market

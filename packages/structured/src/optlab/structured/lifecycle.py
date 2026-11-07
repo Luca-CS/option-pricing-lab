@@ -7,6 +7,7 @@ import datetime as dt
 from dataclasses import dataclass
 
 import numpy as np
+
 from optlab.structured.compiler import compile_sheet
 from optlab.structured.dates import as_date
 from optlab.structured.multiasset import BasketScenario

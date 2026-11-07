@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import numpy as np
+
 from optlab.core.config import DEFAULT_SEED
 from optlab.core.models import BlackScholesModel, LocalVolModel, SLVModel
 from optlab.core.svi import g_function

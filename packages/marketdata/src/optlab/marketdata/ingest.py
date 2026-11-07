@@ -12,6 +12,7 @@ import time
 from dataclasses import asdict
 
 import pandas as pd
+
 from optlab.core.instruments import REFERENCE_INSTRUMENT, UNIVERSE, enabled_underlyings
 from optlab.core.log import get_logger
 from optlab.marketdata.lake import Lake, new_run_id

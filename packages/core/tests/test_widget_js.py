@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+
 from optlab.core import barrier_price, barrier_shift_discrete, binomial_price, bs_price, geometric_asian_price
 
 JS = Path(__file__).resolve().parents[3] / "docs" / "lab.js"

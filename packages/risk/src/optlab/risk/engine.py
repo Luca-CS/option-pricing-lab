@@ -27,6 +27,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 
 import numpy as np
+
 from optlab.core.config import DEFAULT_SEED
 from optlab.risk.curves import bumped_market, forward_ratio
 from optlab.risk.shocks import (

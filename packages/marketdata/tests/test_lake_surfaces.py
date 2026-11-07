@@ -6,6 +6,7 @@ import json
 import numpy as np
 import pandas as pd
 import pytest
+
 from optlab.core.svi import SVISurface, svi_arbitrage_report
 from optlab.marketdata.derive.surfaces import (
     TERM_INDICES,

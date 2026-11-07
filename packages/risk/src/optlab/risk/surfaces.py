@@ -19,6 +19,7 @@ rather than the bumped one; the engine reads any grid, and base and bumped table
 from __future__ import annotations
 
 import numpy as np
+
 from optlab.core.svi import g_function
 from optlab.risk import grid
 from optlab.structured.surfaces import BumpedSurface, surface_arbitrage

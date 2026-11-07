@@ -12,6 +12,7 @@ import threading
 from collections import OrderedDict
 
 import pandas as pd
+
 from optlab.core.snapshot import MarketSnapshot
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.pit import market_at

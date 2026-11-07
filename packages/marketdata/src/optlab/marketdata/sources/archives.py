@@ -13,6 +13,7 @@ import zipfile
 from pathlib import Path
 
 import pandas as pd
+
 from optlab.marketdata.lake import Lake, new_run_id
 
 HD_SOURCE, OPTIONSDX_SOURCE = "historicaldata", "optionsdx"

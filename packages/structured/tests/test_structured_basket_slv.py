@@ -4,6 +4,7 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
+
 from optlab.core.blackscholes import black_price
 from optlab.core.market import Market
 from optlab.core.models import LocalVolModel, simulate

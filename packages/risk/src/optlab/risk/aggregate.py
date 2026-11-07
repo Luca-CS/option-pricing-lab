@@ -7,6 +7,7 @@ groups are exact for the values; their standard errors add in quadrature (groups
 from __future__ import annotations
 
 import numpy as np
+
 from optlab.risk import grid
 
 

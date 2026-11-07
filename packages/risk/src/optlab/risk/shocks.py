@@ -23,6 +23,7 @@ import json
 from dataclasses import dataclass, field
 
 import numpy as np
+
 from optlab.risk import grid
 from optlab.risk.curves import CurveMove, bumped_market
 from optlab.risk.surfaces import bumped_surface

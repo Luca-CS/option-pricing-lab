@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+
 from optlab.core import BlackScholesModel, HestonModel, HestonParams, Market, simulate
 from optlab.structured import PricingContext
 

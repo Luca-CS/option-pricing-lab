@@ -1,6 +1,7 @@
 """The SLV model loaded from results/ is the one that was validated: every time step of the leverage is stored."""
 
 import numpy as np
+
 from optlab.core.validation import mc_smile
 from optlab.structured import PricingContext
 

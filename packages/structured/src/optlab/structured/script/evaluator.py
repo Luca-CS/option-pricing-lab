@@ -16,6 +16,7 @@ import functools
 from dataclasses import dataclass, field
 
 import numpy as np
+
 from optlab.structured.script.lexer import ScriptError
 from optlab.structured.script.nodes import Assign, Binary, Call, If, Name, Num, Pay, Program, Terminate, Unary, Window
 from optlab.structured.script.timeline import Timeline

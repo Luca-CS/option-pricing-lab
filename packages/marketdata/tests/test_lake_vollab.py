@@ -6,10 +6,11 @@ import json
 import numpy as np
 import pandas as pd
 import pytest
+from test_lake_quotes import DAY, curve_rows, synthetic_rows
+
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.quotes import clean_day
 from optlab.marketdata.vollab import DEFAULTS, fit_day, lab_days, list_runs, quote_table, reproduce, run_fit
-from test_lake_quotes import DAY, curve_rows, synthetic_rows
 
 SMALL = {"n_particles": 10_000, "n_paths": 10_000, "n_strikes_heston": 12, "targets": (0.1, 0.3, 0.7, 1.1)}
 EXPIRIES = tuple(DAY + dt.timedelta(days=d) for d in (36, 110, 256, 400))

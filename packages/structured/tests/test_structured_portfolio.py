@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 from _structured_refs import flat_context
+
 from optlab.structured.compiler import compile_sheet
 from optlab.structured.context import PricingContext
 from optlab.structured.portfolio import Book, Position

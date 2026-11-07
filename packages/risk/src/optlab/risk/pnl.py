@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
+
 from optlab.core.config import DEFAULT_SEED
 from optlab.risk import grid
 from optlab.risk.engine import RiskGroup, RiskSettings, run_group

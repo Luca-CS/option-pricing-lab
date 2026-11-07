@@ -12,6 +12,7 @@ from _structured_refs import (
     worst_digital,
     worst_put,
 )
+
 from optlab.core import BlackScholesModel, Market
 from optlab.core.blackscholes import black_price
 from optlab.structured.compiler import compile_sheet

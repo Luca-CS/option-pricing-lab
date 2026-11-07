@@ -7,6 +7,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
+
 from optlab.core import heston_iv  # noqa: E402
 
 PAPER, INK, MUTED, LINE = "#fbfaf7", "#17191e", "#5d6370", "#e3e0d7"

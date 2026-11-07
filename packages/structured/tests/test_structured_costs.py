@@ -2,6 +2,8 @@
 
 import numpy as np
 import pytest
+from scipy.stats import norm
+
 from optlab.core.models import LocalVolModel, simulate
 from optlab.structured import PricingContext, preset, quote
 from optlab.structured.compiler import compile_sheet
@@ -10,7 +12,6 @@ from optlab.structured.pricer import price_many
 from optlab.structured.quote import wrapper
 from optlab.structured.script.timeline import Clock, build_timeline
 from optlab.structured.surfaces import BumpedSurface, surface_arbitrage
-from scipy.stats import norm
 
 SPX = PricingContext.from_calibration()
 PATHS = 40_000

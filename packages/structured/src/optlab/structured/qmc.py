@@ -12,6 +12,9 @@ from __future__ import annotations
 import time
 
 import numpy as np
+from scipy.special import ndtri
+from scipy.stats import qmc
+
 from optlab.core.models import BlackScholesModel, time_grid
 from optlab.core.products import MCResult
 from optlab.structured.cashflows import Note
@@ -19,8 +22,6 @@ from optlab.structured.engine import Evaluation, _summary
 from optlab.structured.pricer import StructuredResult, _program, check_fixing_scale, history_times
 from optlab.structured.scenario import Scenario
 from optlab.structured.script.timeline import Clock, build_timeline
-from scipy.special import ndtri
-from scipy.stats import qmc
 
 
 def bridge_order(times: np.ndarray):

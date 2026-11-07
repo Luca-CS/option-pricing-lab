@@ -6,6 +6,7 @@ import json
 import numpy as np
 import pandas as pd
 import pytest
+
 from optlab.core.config import paths
 from optlab.core.instruments import enabled_names
 from optlab.marketdata.lake import Lake

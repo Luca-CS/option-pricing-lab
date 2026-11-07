@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+
 from optlab.core.instruments import instrument
 from optlab.marketdata.derive.bank import BankParams, build_bank
 from optlab.marketdata.derive.carry import build_carry

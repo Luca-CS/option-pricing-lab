@@ -22,6 +22,7 @@ from _risk_refs import (
     within,
     worst_put_shifted,
 )
+
 from optlab.core import Market
 from optlab.core.blackscholes import bs_greeks, bs_price
 from optlab.risk import RiskGroup, RiskSettings

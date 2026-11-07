@@ -21,8 +21,9 @@ calendar condition carries over to the whole surface.
 from __future__ import annotations
 
 import numpy as np
-from optlab.core.ssvi import fit_ssvi
 from scipy.interpolate import PchipInterpolator
+
+from optlab.core.ssvi import fit_ssvi
 
 
 def svi_w(p, k):

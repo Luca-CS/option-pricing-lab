@@ -7,6 +7,7 @@ import zipfile
 import numpy as np
 import pandas as pd
 import pytest
+
 from optlab.core.blackscholes import black_price
 from optlab.marketdata.chains import build_iv_table
 from optlab.marketdata.derive.curves import EUR_CURVE, USD_CURVE

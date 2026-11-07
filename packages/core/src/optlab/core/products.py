@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+
 from optlab.core.blackscholes import geometric_asian_price_curve
 from optlab.core.market import Market
 from optlab.core.models import BlackScholesModel, Model, simulate

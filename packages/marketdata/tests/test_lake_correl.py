@@ -8,6 +8,8 @@ import pandas as pd
 import pytest
 from _lake_fixture import synthetic_lake
 from _structured_refs import worst_put
+from scipy.special import ndtr
+
 from optlab.core.blackscholes import black_price
 from optlab.core.correlation import nearest_correlation
 from optlab.core.svi import SVISurface
@@ -38,7 +40,6 @@ from optlab.structured.localcorr import (
     spread_quote,
 )
 from optlab.structured.multiasset import correlation_root
-from scipy.special import ndtr
 
 
 def correlated_closes(rho=0.6, n=800, names=("SPX", "NDX", "RUT"), seed=3):

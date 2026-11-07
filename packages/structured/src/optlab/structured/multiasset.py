@@ -18,6 +18,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field, replace
 
 import numpy as np
+
 from optlab.core.heston import HestonParams
 from optlab.core.market import Market
 from optlab.core.models import BlackScholesModel, Leverage, LocalVolModel, Model, SLVModel, time_grid

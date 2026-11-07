@@ -6,6 +6,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 import numpy as np
+
 from optlab.core.products import MCResult
 from optlab.structured.pricer import StructuredResult
 

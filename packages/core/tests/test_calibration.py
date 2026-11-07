@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+
 from optlab.core import (
     SSVI,
     HestonParams,

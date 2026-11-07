@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+
 from optlab.marketdata.lake import Lake, new_run_id
 
 USD_CURVE, EUR_CURVE, JPY_CURVE, GBP_CURVE = "USD.DISC", "EUR.DISC", "JPY.DISC", "GBP.DISC"

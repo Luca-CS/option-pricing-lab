@@ -16,6 +16,7 @@ life. A vol bump keeps the adjustment of the base market, so a vega does not see
 from __future__ import annotations
 
 import numpy as np
+
 from optlab.core.instruments import _BY_ID
 from optlab.core.market import Market
 

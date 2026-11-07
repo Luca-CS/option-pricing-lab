@@ -5,6 +5,8 @@ import json
 import numpy as np
 import pytest
 from _risk_refs import S0, VOL, Q, R, book, engine_name, flat_ctx, forward_contract, vanilla, within
+from scipy.stats import norm
+
 from optlab.core.blackscholes import bs_greeks, bs_price
 from optlab.risk import CurveMove, Measure, RiskGroup, RiskSettings, Shock, VolMove, apply, grid, revalue
 from optlab.risk.curves import bumped_market, forward_ratio
@@ -13,7 +15,6 @@ from optlab.risk.surfaces import TentBumpedSurface, arbitrage
 from optlab.structured.context import PricingContext
 from optlab.structured.greeks import ShiftedSurface
 from optlab.structured.portfolio import Book, Position
-from scipy.stats import norm
 
 SPX = PricingContext.from_calibration()
 

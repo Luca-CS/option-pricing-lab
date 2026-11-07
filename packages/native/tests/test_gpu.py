@@ -4,6 +4,7 @@ Engine tests are skipped when the shared library is not built, GPU tests when th
 
 import numpy as np
 import pytest
+
 from optlab.core import (
     BlackScholesModel,
     HestonModel,

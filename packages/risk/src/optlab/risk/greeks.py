@@ -26,6 +26,7 @@ import time
 from dataclasses import dataclass, field
 
 import numpy as np
+
 from optlab.risk import grid
 from optlab.risk.curves import CurveMove
 from optlab.risk.engine import Measure, RiskSettings, run_group

@@ -5,6 +5,7 @@ import datetime as dt
 import numpy as np
 import pytest
 from _structured_refs import flat_context
+
 from optlab.structured import TermSheetError, preset, quote
 from optlab.structured.dates import business_days
 from optlab.structured.multiasset import BasketContext

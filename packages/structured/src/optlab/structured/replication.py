@@ -15,13 +15,14 @@ from __future__ import annotations
 import time
 
 import numpy as np
+from scipy.stats import norm
+
 from optlab.core.market import Market
 from optlab.core.products import MCResult
 from optlab.structured.cashflows import Note
 from optlab.structured.scenario import Scenario
 from optlab.structured.script.evaluator import Evaluator
 from optlab.structured.script.timeline import Timeline
-from scipy.stats import norm
 
 TAIL = 1e-13
 

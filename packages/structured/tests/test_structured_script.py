@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+
 from optlab.structured.scenario import Scenario
 from optlab.structured.script.evaluator import Evaluator
 from optlab.structured.script.lexer import ScriptError

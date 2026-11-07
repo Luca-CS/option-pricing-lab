@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 from _structured_refs import FLAT, flat_context
+
 from optlab.structured.cashflows import FundedSwap, Swap
 from optlab.structured.compiler import compile_sheet
 from optlab.structured.portfolio import Book, Position

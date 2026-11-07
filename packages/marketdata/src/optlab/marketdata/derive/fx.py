@@ -18,6 +18,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+
 from optlab.core.instruments import enabled, enabled_names, instrument, pair_currencies
 from optlab.marketdata.derive.carry import cip_forward
 from optlab.marketdata.derive.correl import WINDOWS, closes_wide, rolling_pair

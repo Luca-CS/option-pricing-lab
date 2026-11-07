@@ -3,6 +3,8 @@
 import numpy as np
 import pytest
 from _structured_refs import flat_context
+from scipy.stats import norm
+
 from optlab.core.blackscholes import black_price
 from optlab.structured import PricingContext, preset, quote
 from optlab.structured.compiler import compile_sheet
@@ -13,7 +15,6 @@ from optlab.structured.quote import wrapper
 from optlab.structured.scenario import Scenario
 from optlab.structured.script.evaluator import Evaluator, Ramp, _ramped
 from optlab.structured.script.timeline import Clock, build_timeline
-from scipy.stats import norm
 
 SPX = PricingContext.from_calibration()
 BS = flat_context()

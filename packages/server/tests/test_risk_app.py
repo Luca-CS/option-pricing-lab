@@ -5,6 +5,7 @@ import time
 import urllib.request
 
 import pytest
+
 from optlab.server.api import Desk
 from optlab.server.report import risk_report
 from optlab.server.server import serve_in_thread

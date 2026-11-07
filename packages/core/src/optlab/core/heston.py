@@ -9,8 +9,9 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 
 import numpy as np
-from optlab.core.blackscholes import black_price, black_vega, implied_vol
 from scipy.optimize import least_squares
+
+from optlab.core.blackscholes import black_price, black_vega, implied_vol
 
 
 @dataclass

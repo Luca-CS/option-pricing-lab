@@ -4,6 +4,7 @@ import datetime as dt
 
 import pytest
 from _structured_refs import flat_context
+
 from optlab.structured import compile_sheet, preset, quote
 from optlab.structured.calendars import NYSECalendar, easter
 from optlab.structured.dates import WeekendCalendar, business_days, schedule

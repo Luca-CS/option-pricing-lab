@@ -27,14 +27,15 @@ from dataclasses import asdict, dataclass, replace
 
 import numpy as np
 import pandas as pd
+from scipy.optimize import brentq, least_squares
+from scipy.special import ndtr
+
 from optlab.core.instruments import instrument
 from optlab.core.log import get_logger
 from optlab.core.pipeline import _weights
 from optlab.core.svi import SVISurface, fit_svi_surface, ssvi_slice_to_svi, svi_arbitrage_report
 from optlab.marketdata.lake import Lake, new_run_id, sql_str
 from optlab.marketdata.quotes import clean_day
-from scipy.optimize import brentq, least_squares
-from scipy.special import ndtr
 
 LOG = get_logger(__name__)
 TERM_INDICES = {"VIX9D": 9 / 365, "VIX": 30 / 365, "VIX3M": 93 / 365, "VIX6M": 183 / 365, "VIX1Y": 365 / 365}

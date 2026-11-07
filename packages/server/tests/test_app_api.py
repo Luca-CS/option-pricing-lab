@@ -9,6 +9,7 @@ import urllib.request
 from pathlib import Path
 
 import pytest
+
 from optlab.server.api import ApiError, Desk
 from optlab.server.fixings import parse_fixings
 from optlab.server.netcheck import interpret

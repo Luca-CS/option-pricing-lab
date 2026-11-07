@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
+
 from optlab.marketdata.lake import Lake, new_run_id
 
 ENTITY = "BANQUE-FICTIVE"

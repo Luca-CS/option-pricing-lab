@@ -25,6 +25,7 @@ import time
 from dataclasses import dataclass, field, replace
 
 import numpy as np
+
 from optlab.core.market import Market
 from optlab.core.models import LocalVolModel
 from optlab.structured.digitals import KINDS

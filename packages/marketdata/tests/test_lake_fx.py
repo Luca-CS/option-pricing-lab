@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from _lake_fixture import synthetic_lake
+
 from optlab.core.instruments import enabled, enabled_names, instrument, pair_currencies
 from optlab.marketdata.derive.carry import build_carry, cip_forward
 from optlab.marketdata.derive.curves import build_discount_curves

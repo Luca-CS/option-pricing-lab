@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
 from optlab.server.server import STATIC
 
 UI = STATIC / "js" / "ui.js"

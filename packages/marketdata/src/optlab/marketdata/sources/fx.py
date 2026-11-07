@@ -13,6 +13,7 @@ from __future__ import annotations
 import io
 
 import pandas as pd
+
 from optlab.marketdata.sources.simple import _text, parse_fred
 
 ECB_CURRENCIES = ("USD", "JPY", "GBP")

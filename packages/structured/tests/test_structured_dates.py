@@ -3,6 +3,7 @@
 import datetime as dt
 
 import pytest
+
 from optlab.structured.dates import (
     add_business_days,
     add_months,

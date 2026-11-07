@@ -17,6 +17,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+
 from optlab.core.instruments import instrument
 from optlab.marketdata.lake import Lake, new_run_id, sql_str
 

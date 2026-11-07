@@ -3,10 +3,11 @@ maturities, SLV leverage and its regression, delta conventions."""
 
 import numpy as np
 import pytest
+from scipy.integrate import quad
+
 from optlab.core import BlackScholesModel, HestonParams, Market, asian_mc, geometric_asian_price, heston_price
 from optlab.core.blackscholes import geometric_asian_price_curve
 from optlab.core.heston import char_function
-from scipy.integrate import quad
 
 CURVED = Market(
     100.0,
@@ -91,9 +92,10 @@ def test_local_linear_leverage_removes_the_atm_bias_on_spx():
 @pytest.mark.slow
 def test_local_linear_leverage_stays_within_tolerance_on_the_synthetic_surface():
     # on this surface both regressions are within the Monte Carlo error (a few bp per strike): no ranking claimed
+    from test_calibration import MARKET, TRUE_SSVI
+
     from optlab.core import calibrate_leverage
     from optlab.core.validation import mc_smile
-    from test_calibration import MARKET, TRUE_SSVI
 
     slv = calibrate_leverage(
         HestonParams(0.04, 1.5, 0.045, 0.6, -0.7),
@@ -133,6 +135,7 @@ def test_local_linear_falls_back_where_bins_are_thin():
 
 def test_delta_conventions_agree_on_a_flat_smile():
     from _structured_refs import flat_context
+
     from optlab.structured import compile_sheet, preset
     from optlab.structured.greeks import greeks
 

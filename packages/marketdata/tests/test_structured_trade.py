@@ -5,6 +5,7 @@ import json
 
 import pytest
 from _structured_refs import flat_context
+
 from optlab.core.snapshot import MarketSnapshot, to_model_scale
 from optlab.marketdata import MarketStore
 from optlab.structured import PRESETS, PricingContext, TermSheet, TermSheetError, compile_sheet, preset, quote

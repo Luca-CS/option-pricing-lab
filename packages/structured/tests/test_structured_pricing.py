@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+
 from optlab.core import asian_mc, barrier_mc, european_mc
 from optlab.core.products import fixing_dates
 from optlab.structured.context import PricingContext

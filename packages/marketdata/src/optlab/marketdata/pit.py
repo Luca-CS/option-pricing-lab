@@ -14,6 +14,7 @@ import datetime as dt
 
 import numpy as np
 import pandas as pd
+
 from optlab.core.instruments import instrument
 from optlab.core.market import Market
 from optlab.core.snapshot import MarketSnapshot

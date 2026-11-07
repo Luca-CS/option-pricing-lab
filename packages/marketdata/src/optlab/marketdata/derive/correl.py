@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+
 from optlab.core.correlation import nearest_correlation
 from optlab.core.instruments import instrument
 from optlab.core.log import get_logger

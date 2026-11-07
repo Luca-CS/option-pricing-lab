@@ -3,6 +3,7 @@
 import datetime as dt
 
 import pytest
+
 from optlab.structured.compiler import compile_sheet
 from optlab.structured.policy import decide
 from optlab.structured.presets import PRESETS, preset

@@ -8,11 +8,12 @@ from pathlib import Path
 import pandas as pd
 import pytest
 from _lake_fixture import derive_all, fill_observed
+from test_lake_quotes import DAY, curve_rows, synthetic_rows
+
 from optlab.marketdata.ingest import as_rows
 from optlab.marketdata.lake import Lake
 from optlab.server.api import ApiError, Desk
 from optlab.server.server import STATIC, routes
-from test_lake_quotes import DAY, curve_rows, synthetic_rows
 
 EXPIRIES = tuple(DAY + dt.timedelta(days=d) for d in (36, 110, 256, 400))
 
@@ -191,6 +192,7 @@ def test_showcase_seed_fills_a_store_with_trades_struck_on_their_own_markets(tmp
     import importlib.util
 
     from _lake_fixture import synthetic_lake
+
     from optlab.server.api import Desk
 
     path = Path(__file__).resolve().parents[3] / "scripts" / "seed_showcase.py"
@@ -210,6 +212,7 @@ def test_showcase_seed_fills_a_store_with_trades_struck_on_their_own_markets(tmp
         import time
 
         import pandas as pd
+
         from optlab.marketdata.derive.bank import spread_at
 
         day = pd.Timestamp("2021-06-30").date()
@@ -246,6 +249,7 @@ def test_showcase_seed_fills_a_store_with_trades_struck_on_their_own_markets(tmp
 
 def test_data_screen_shows_the_latest_basket_spreads_as_synthetic(tmp_path):
     import pandas as pd
+
     from optlab.marketdata.lake import Lake
     from optlab.server.api import Desk
 

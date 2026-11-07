@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+
 from optlab.core.instruments import _BY_ID
 from optlab.core.market import Market
 from optlab.marketdata.chains import clean_chain

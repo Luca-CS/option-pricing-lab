@@ -15,6 +15,7 @@ import time
 from dataclasses import dataclass, field
 
 import numpy as np
+
 from optlab.core.config import DEFAULT_SEED
 from optlab.core.models import BlackScholesModel, LocalVolModel
 from optlab.core.products import MCResult

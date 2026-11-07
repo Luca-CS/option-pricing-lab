@@ -27,6 +27,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+
 from optlab.core.config import paths
 from optlab.core.log import get_logger
 

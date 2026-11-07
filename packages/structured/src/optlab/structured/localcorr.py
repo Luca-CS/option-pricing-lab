@@ -22,9 +22,10 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 import numpy as np
+from scipy.special import ndtr
+
 from optlab.core.blackscholes import black_price, implied_vol
 from optlab.core.correlation import nearest_correlation
-from scipy.special import ndtr
 
 W0 = 0.3  # the weight at the money: there is room on both sides of the measured correlation
 MONTH = 1 / 12

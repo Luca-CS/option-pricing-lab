@@ -5,6 +5,8 @@ import time
 
 import numpy as np
 import pytest
+from scipy.stats import multivariate_normal, norm
+
 from optlab.core.instruments import UNIVERSE, instrument
 from optlab.core.market import Market
 from optlab.server.api import ApiError, Desk
@@ -13,7 +15,6 @@ from optlab.structured import PricingContext, TermSheetError, describe, preset, 
 from optlab.structured.costs import CostInputs
 from optlab.structured.defaults import STARTING, merged, resolve, validate_table
 from optlab.structured.multiasset import BasketContext, moved_correlation
-from scipy.stats import multivariate_normal, norm
 
 SPX = PricingContext.from_calibration()
 PATHS = 20_000

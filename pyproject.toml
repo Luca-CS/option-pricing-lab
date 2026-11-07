@@ -67,6 +67,9 @@ extend-exclude = ["*.md"]  # code blocks in docs keep their hand-aligned comment
 # the clean-up of A8, measured against reports/refactor-baseline.md
 select = ["E4", "E7", "E9", "F", "I", "TID252"]
 
+[tool.ruff.lint.isort]
+known-first-party = ["optlab"]  # a namespace spread over packages/*/src, which ruff cannot find alone
+
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"  # absolute `optlab.<package>` imports only (ADR-0003): a move never changes their meaning
 

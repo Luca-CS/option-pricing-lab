@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 from _risk_refs import S0, VOL, Q, R, book, engine_name, flat_ctx, vanilla, within
+
 from optlab.core.blackscholes import bs_greeks, bs_price
 from optlab.risk import RiskGroup, RiskSettings, Shock
 from optlab.risk.ladder import POINTS, LadderOptions, ladder

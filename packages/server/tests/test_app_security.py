@@ -5,6 +5,7 @@ import http.client
 import json
 
 import pytest
+
 from optlab.server.api import Desk
 from optlab.server.server import cross_site_refusal, serve_in_thread
 

@@ -19,6 +19,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 import pandas as pd
+
 from optlab.marketdata.sources.simple import _text
 
 # --- Ministry of Finance: two title and header lines, YYYY/M/D, percent, "-" when a maturity did not exist ---

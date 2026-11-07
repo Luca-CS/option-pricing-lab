@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
+
 from optlab.core.config import paths
 from optlab.marketdata.lake import Lake, new_run_id
 

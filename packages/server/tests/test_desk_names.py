@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from _lake_fixture import derive_all, fill_observed
+
 from optlab.marketdata.derive.correl import correlation_at
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.names import NameMarkets

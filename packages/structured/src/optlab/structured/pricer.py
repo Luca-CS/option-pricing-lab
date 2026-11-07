@@ -6,6 +6,7 @@ import time
 from dataclasses import dataclass, field
 
 import numpy as np
+
 from optlab.core.log import get_logger
 from optlab.core.market import Market
 from optlab.core.models import Model

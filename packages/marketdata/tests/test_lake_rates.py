@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from _lake_fixture import synthetic_lake
+
 from optlab.marketdata.derive.carry import cip_forward
 from optlab.marketdata.derive.curves import (
     GBP_CURVE,

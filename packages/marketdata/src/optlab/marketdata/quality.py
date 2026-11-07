@@ -6,6 +6,7 @@ import datetime as dt
 
 import numpy as np
 import pandas as pd
+
 from optlab.marketdata.lake import Lake, new_run_id
 
 MAX_MOVE = {"index": 0.2, "equity": 0.3}  # one-day moves beyond these are flagged, not removed
