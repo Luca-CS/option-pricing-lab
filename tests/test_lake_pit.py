@@ -31,6 +31,7 @@ def price_on(lake, day, seed=5):
     return q.coupon_rate, q.result.price, snap
 
 
+@pytest.mark.slow
 def test_erasing_the_future_changes_no_past_price(world, tmp_path):
     root, lake, days, paths = world
     cut = truncated_copy(lake, tmp_path / "cut", DAY)
@@ -41,13 +42,14 @@ def test_erasing_the_future_changes_no_past_price(world, tmp_path):
     assert price_on(lake, DAY)[:2] == price_on(cut, DAY)[:2]
 
 
+@pytest.mark.slow
 def test_rederiving_after_erasing_the_future_gives_the_same_market(world, tmp_path):
     """Stronger: the derived tables recomputed from the observed rows of the past alone are the same as those computed on
     the whole history, so no derivation uses a later date."""
     root, lake, days, paths = world
     past = days[days <= pd.Timestamp(DAY)]
     fresh = Lake(tmp_path / "fresh")
-    fill_observed(fresh, past, {n: p[:len(past)] for n, p in paths.items()})
+    fill_observed(fresh, past, {n: p[: len(past)] for n, p in paths.items()})
     derive_all(fresh, str(days[0].date()))
     a, b = market_at(lake, "SPX", DAY), market_at(fresh, "SPX", DAY)
     assert a.market == b.market and a.surface == b.surface and a.heston == b.heston
@@ -56,11 +58,12 @@ def test_rederiving_after_erasing_the_future_gives_the_same_market(world, tmp_pa
     assert (ctx_a.corr == ctx_b.corr).all()
 
 
+@pytest.mark.slow
 def test_changing_a_future_price_changes_nothing_but_a_past_one_does(world, tmp_path):
     root, lake, days, paths = world
     twisted = {n: p.copy() for n, p in paths.items()}
     i = np.searchsorted(days, pd.Timestamp(DAY))
-    twisted["SPX"][i + 1:] *= 3.0
+    twisted["SPX"][i + 1 :] *= 3.0
     fresh = Lake(tmp_path / "twist")
     fill_observed(fresh, days, twisted)
     derive_all(fresh, str(days[0].date()))
@@ -77,6 +80,7 @@ def test_as_of_reads_what_the_lake_knew(tmp_path):
     close = real_close(lake, "SPX", days[-1])[0]
     stamp = pd.Timestamp.now(tz="UTC").tz_localize(None).ceil("s") + pd.Timedelta(seconds=1)
     import time
+
     time.sleep(3.2)
     restated = pd.DataFrame({"instrument": "SPX", "obs_date": [days[-1]], "close": [close * 2]})
     assert lake.ingest("prices_eod", restated, "yahoo", "observed")["n_changed"] == 1
@@ -92,13 +96,19 @@ def test_snapshot_is_in_the_model_scale_and_says_where_each_part_comes_from(worl
     assert snap.spot_scale == pytest.approx(paths["SPX"][i] / 100.0)
     p = snap.provenance
     assert p["spot"]["origin"] == "observed" and p["discount"]["origin"] == "derived"
-    assert p["surface"] == {"origin": "reconstructed", "layer": "reconstructed", "date": str(DAY), "extrapolated_from": 1.0}
+    assert p["surface"] == {
+        "origin": "reconstructed",
+        "layer": "reconstructed",
+        "date": str(DAY),
+        "extrapolated_from": 1.0,
+    }
     assert p["carry"]["method"] == "dividend_points"
     assert snap.source == "lake:reconstructed"
     restored = MarketSnapshot.from_json(snap.to_json())
     assert restored.snapshot_id == snap.snapshot_id
 
 
+@pytest.mark.slow
 def test_forward_and_discount_follow_the_curves(world):
     root, lake, days, paths = world
     ctx, snap = context_at(lake, "SPX", DAY)
@@ -123,8 +133,10 @@ def test_a_seasoned_product_prices_on_a_past_market_with_real_fixings(world):
     strike = dt.date(2020, 1, 15)
     ctx, snap = context_at(lake, "SPX", DAY)
     fixings = to_model_scale({"SPX": real_fixings(lake, "SPX", strike, DAY)}, snap.spot_scale)
-    sheet = preset("phoenix", **{"general.strike_date": strike, "wrapper.solve": "upfront", "coupon.rate": 0.08,
-                                 "autocall.trigger": 2.0})  # never called on these paths: its value is still to come
+    sheet = preset(
+        "phoenix",
+        **{"general.strike_date": strike, "wrapper.solve": "upfront", "coupon.rate": 0.08, "autocall.trigger": 2.0},
+    )  # never called on these paths: its value is still to come
     q = quote(sheet, ctx, model="lv", control=None, n_paths=4000, batch=4000, fixings=fixings)
     assert 0 < q.result.price < 200
 
@@ -136,8 +148,16 @@ def test_basket_context_at_a_date(world):
     assert meta["origin"] == "derived" and 0 <= meta["lambda"] <= 1
     assert snaps["NDX"].provenance["carry"]["origin"] == "synthetic"
     assert snaps["SPX"].spot_scale != snaps["NDX"].spot_scale
-    q = quote(preset("phoenix", **{"general.basket": "worst_of", "general.underlyings": ("SPX", "NDX"),
-                                   "general.strike_date": DAY}), ctx, control=None, n_paths=4000, batch=4000)
+    q = quote(
+        preset(
+            "phoenix",
+            **{"general.basket": "worst_of", "general.underlyings": ("SPX", "NDX"), "general.strike_date": DAY},
+        ),
+        ctx,
+        control=None,
+        n_paths=4000,
+        batch=4000,
+    )
     assert q.coupon_rate > 0
 
 
@@ -154,8 +174,14 @@ def test_a_calibrated_leverage_comes_with_the_snapshot_and_reprices(world):
     ctx, snap = context_at(lake, "SPX", DAY, leverage="calibrate", T_max=0.5, n_particles=20_000)
     assert snap.provenance["leverage"] == {"origin": "derived", "mode": "calibrate"}
     assert len(snap.slv["leverage"]["times"]) > 5
-    q = quote(preset("barrier_reverse_convertible", **{"general.maturity_months": 6, "general.strike_date": DAY}), ctx, model="slv",
-              control=None, n_paths=4000, batch=4000)
+    q = quote(
+        preset("barrier_reverse_convertible", **{"general.maturity_months": 6, "general.strike_date": DAY}),
+        ctx,
+        model="slv",
+        control=None,
+        n_paths=4000,
+        batch=4000,
+    )
     assert q.coupon_rate > 0
 
 

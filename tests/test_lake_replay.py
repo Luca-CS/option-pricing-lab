@@ -9,8 +9,15 @@ import pytest
 from _lake_fixture import derive_all, fill_observed, price_paths
 
 from optlab.marketdata.lake import Lake
-from optlab.marketdata.replay import (ReplayConfig, cost_table, filled_fixings, replay, replay_book, strike_trade,
-                                      struck_sheet)
+from optlab.marketdata.replay import (
+    ReplayConfig,
+    cost_table,
+    filled_fixings,
+    replay,
+    replay_book,
+    strike_trade,
+    struck_sheet,
+)
 from optlab.structured import CALENDARS, preset
 
 STRIKE = dt.date(2020, 1, 15)
@@ -20,8 +27,13 @@ CFG = ReplayConfig(n_paths=2000, batch=2000, reval_every=20)
 def scripted_paths(days):
     """SPX: flat near 100 %, down to 60 % at the end of March 2020, back above 100 % in late 2020."""
     t = pd.DatetimeIndex(days)
-    level = np.interp(t.astype("int64"), pd.to_datetime(["2019-01-01", "2020-01-15", "2020-03-23", "2020-08-31", "2020-10-20", "2022-01-01"]).astype("int64"),
-                      [1.0, 1.0, 0.6, 0.85, 1.05, 1.2])
+    level = np.interp(
+        t.astype("int64"),
+        pd.to_datetime(["2019-01-01", "2020-01-15", "2020-03-23", "2020-08-31", "2020-10-20", "2022-01-01"]).astype(
+            "int64"
+        ),
+        [1.0, 1.0, 0.6, 0.85, 1.05, 1.2],
+    )
     paths = price_paths(days)
     paths["SPX"] = 3000.0 * level
     return paths
@@ -42,8 +54,12 @@ def close_of(lake, day):
 
 
 def first_below(lake, strike, barrier):
-    rows = lake.read("prices_eod", where=f"instrument = 'SPX' AND obs_date >= DATE '{strike}'", columns="obs_date, close",
-                     order="obs_date")
+    rows = lake.read(
+        "prices_eod",
+        where=f"instrument = 'SPX' AND obs_date >= DATE '{strike}'",
+        columns="obs_date, close",
+        order="obs_date",
+    )
     level = close_of(lake, strike) * barrier
     return pd.Timestamp(rows[rows["close"] < level]["obs_date"].iloc[0]).date()
 
@@ -62,6 +78,7 @@ def phoenix(lake):
     return trade, info, replay(lake, trade, cfg=CFG, inception=info)
 
 
+@pytest.mark.slow
 def test_strike_solves_on_that_dates_market_then_fixes_the_coupon(brc):
     trade, info, _ = brc
     sheet = trade.term_sheet()
@@ -92,9 +109,11 @@ def test_brc_flows_match_an_independent_reading_of_the_fixings(lake, brc):
 
 def sheet_final(sheet):
     from optlab.structured.compiler import compile_sheet
+
     return compile_sheet(sheet, sheet.get("general.strike_date")).maturity
 
 
+@pytest.mark.slow
 def test_phoenix_is_called_on_the_first_observation_at_or_above_its_trigger(lake, phoenix):
     trade, info, result = phoenix
     sheet = trade.term_sheet()
@@ -113,7 +132,9 @@ def test_phoenix_is_called_on_the_first_observation_at_or_above_its_trigger(lake
     paid = [e for e in result.events if e.kind == "coupon_paid"]
     assert missed and paid
     after = next(e for e in paid if e.date > missed[-1])
-    assert after.amount == pytest.approx(100 * info["coupon"] / 4 * (1 + len(missed)))  # the memory pays what was missed
+    assert after.amount == pytest.approx(
+        100 * info["coupon"] / 4 * (1 + len(missed))
+    )  # the memory pays what was missed
     assert paid[-1].amount == pytest.approx(100 * info["coupon"] / 4)
     assert sheet.get("coupon.memory") is True
 
@@ -149,6 +170,7 @@ def test_explained_pnl_is_published_with_its_residual(brc):
     assert g["delta"] > 0  # a note holder is long the index
 
 
+@pytest.mark.slow
 def test_valuation_dates_use_only_past_fixings(lake):
     """A value before the knock-in does not change when the fixings after it are different."""
     sheet = preset("barrier_reverse_convertible", **{"general.maturity_months": 12, "downside.barrier": 0.7})
@@ -161,17 +183,40 @@ def test_valuation_dates_use_only_past_fixings(lake):
     assert (both["value_e"] == both["value_f"]).all()
 
 
+@pytest.mark.slow
 def test_book_adds_positions_by_date(lake):
-    a, _ = strike_trade(lake, "A", preset("barrier_reverse_convertible", **{"general.maturity_months": 6}), STRIKE, 1.0, CFG, coupon=0.08)
-    b, _ = strike_trade(lake, "B", preset("barrier_reverse_convertible", **{"general.maturity_months": 6}), STRIKE, -1.0, CFG, coupon=0.08)
+    a, _ = strike_trade(
+        lake,
+        "A",
+        preset("barrier_reverse_convertible", **{"general.maturity_months": 6}),
+        STRIKE,
+        1.0,
+        CFG,
+        coupon=0.08,
+    )
+    b, _ = strike_trade(
+        lake,
+        "B",
+        preset("barrier_reverse_convertible", **{"general.maturity_months": 6}),
+        STRIKE,
+        -1.0,
+        CFG,
+        coupon=0.08,
+    )
     out = replay_book(lake, [a, b], cfg=CFG)
-    assert out["book"]["value"].abs().max() == pytest.approx(0.0, abs=1e-9)  # same seed, same product: opposite positions
+    assert out["book"]["value"].abs().max() == pytest.approx(
+        0.0, abs=1e-9
+    )  # same seed, same product: opposite positions
     assert out["book"]["cash"].abs().max() == pytest.approx(0.0, abs=1e-9)
     assert len(out["results"]) == 2
 
 
+@pytest.mark.slow
 def test_worst_of_replay_on_two_names(lake):
-    sheet = preset("phoenix", **{"general.basket": "worst_of", "general.underlyings": ("SPX", "NDX"), "general.maturity_months": 12})
+    sheet = preset(
+        "phoenix",
+        **{"general.basket": "worst_of", "general.underlyings": ("SPX", "NDX"), "general.maturity_months": 12},
+    )
     cfg = ReplayConfig(n_paths=2000, batch=2000, reval_every=60)
     trade, info = strike_trade(lake, "WO", sheet, STRIKE, 1.0, cfg)
     out = replay(lake, trade, cfg=cfg)
@@ -181,8 +226,12 @@ def test_worst_of_replay_on_two_names(lake):
 
 def test_missing_trading_days_take_the_last_close_and_are_reported(tmp_path):
     lake = Lake(tmp_path)
-    lake.ingest("prices_eod", pd.DataFrame({"instrument": "SX5E", "obs_date": ["2020-05-20", "2020-05-22"], "close": [10.0, 12.0]}),
-                "yahoo", "observed")
+    lake.ingest(
+        "prices_eod",
+        pd.DataFrame({"instrument": "SX5E", "obs_date": ["2020-05-20", "2020-05-22"], "close": [10.0, 12.0]}),
+        "yahoo",
+        "observed",
+    )
     out, filled = filled_fixings(lake, ["SX5E"], dt.date(2020, 5, 20), dt.date(2020, 5, 22), "eurex")
     assert out["SX5E"] == {"2020-05-20": 10.0, "2020-05-21": 10.0, "2020-05-22": 12.0}
     assert filled == [("SX5E", "2020-05-21")]
@@ -194,6 +243,7 @@ def test_struck_sheet_uses_the_place_of_the_underlying():
     assert struck_sheet(worst, STRIKE).get("general.calendar") == "weekend"
 
 
+@pytest.mark.slow
 def test_cost_table_is_measured(lake, brc):
     trade, _, _ = brc
     out = cost_table(lake, "SPX", dt.date(2020, 3, 2), trade, n_paths=(1000,), particles=(5000,))

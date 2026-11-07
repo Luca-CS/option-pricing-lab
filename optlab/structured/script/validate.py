@@ -3,8 +3,23 @@
 from __future__ import annotations
 
 from .lexer import KEYWORDS, ScriptError
-from .nodes import (FUNCTIONS, TAGS, WINDOWS, Assign, Binary, Call, DateLit, If, Name, Num, Pay, Program, Terminate,
-                    Unary, Window)
+from .nodes import (
+    FUNCTIONS,
+    TAGS,
+    WINDOWS,
+    Assign,
+    Binary,
+    Call,
+    DateLit,
+    If,
+    Name,
+    Num,
+    Pay,
+    Program,
+    Terminate,
+    Unary,
+    Window,
+)
 
 MAX_UNDERLYINGS = 5  # baskets (worst-of) of up to five names
 
@@ -34,8 +49,10 @@ class _Checker:
                 raise ScriptError(f"underlying {u.name!r} declared twice", u.line, u.col)
             self.underlyings.add(u.name)
         if len(p.underlyings) > MAX_UNDERLYINGS:
-            raise ScriptError(f"at most {MAX_UNDERLYINGS} underlyings are supported, "
-                              f"found {len(p.underlyings)}", p.underlyings[MAX_UNDERLYINGS].line)
+            raise ScriptError(
+                f"at most {MAX_UNDERLYINGS} underlyings are supported, found {len(p.underlyings)}",
+                p.underlyings[MAX_UNDERLYINGS].line,
+            )
         for prm in p.params:
             _check_name(prm.name, prm.line, "parameter")
             if prm.name in self.params or prm.name in self.underlyings:
@@ -51,8 +68,11 @@ class _Checker:
                 if w is not None and type(w) is not mode:
                     raise ScriptError("dates and times (t=...) cannot be mixed in one script", ev.line, ev.col)
             if previous is not None and _key(ev.when) <= _key(previous.when):
-                raise ScriptError(f"event dates must be strictly increasing ({ev.when.value} after "
-                                  f"{previous.when.value})", ev.line, ev.col)
+                raise ScriptError(
+                    f"event dates must be strictly increasing ({ev.when.value} after {previous.when.value})",
+                    ev.line,
+                    ev.col,
+                )
             if ev.pay is not None and _key(ev.pay) < _key(ev.when):
                 raise ScriptError("the payment date is before the observation date", ev.line, ev.col)
             self.event = ev
@@ -71,8 +91,9 @@ class _Checker:
                 defined.add(s.name)
             elif isinstance(s, Pay):
                 if self.event.pay is None:
-                    raise ScriptError("'pay' in an event without a payment date (write 'event DATE pay DATE')",
-                                      s.line, s.col)
+                    raise ScriptError(
+                        "'pay' in an event without a payment date (write 'event DATE pay DATE')", s.line, s.col
+                    )
                 if s.tag not in TAGS:
                     raise ScriptError(f"unknown flow tag {s.tag!r}, expected one of {', '.join(TAGS)}", s.line, s.col)
                 self.expr(s.expr, defined)
@@ -112,8 +133,9 @@ class _Checker:
         if _key(w.end) <= _key(w.start):
             raise ScriptError(f"{w.func} window ends before it starts", w.line, w.col)
         if _key(w.end) > _key(self.event.when):
-            raise ScriptError(f"{w.func} window ends after the event date (it would read future fixings)",
-                              w.line, w.col)
+            raise ScriptError(
+                f"{w.func} window ends after the event date (it would read future fixings)", w.line, w.col
+            )
         if self.mode is DateLit and w.n is not None:
             raise ScriptError("n= is only for time windows; date windows use every business day", w.line, w.col)
         if self.mode is not DateLit and w.n is None:

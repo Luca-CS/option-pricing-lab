@@ -45,42 +45,93 @@ class Table:
 
 
 TABLES = {
-    "instruments": Table({"instrument": "str"}, {
-        "name": "str", "asset_class": "str", "currency": "str", "place": "str", "yahoo": "str", "cboe": "str",
-        "vol_index": "str", "total_return": "str", "enabled": "bool"}),
+    "instruments": Table(
+        {"instrument": "str"},
+        {
+            "name": "str",
+            "asset_class": "str",
+            "currency": "str",
+            "place": "str",
+            "yahoo": "str",
+            "cboe": "str",
+            "vol_index": "str",
+            "total_return": "str",
+            "enabled": "bool",
+        },
+    ),
     "calendars": Table({"place": "str"}, {"is_open": "bool"}),
-    "prices_eod": Table({"instrument": "str"}, {
-        "open": "float", "high": "float", "low": "float", "close": "float", "adj_close": "float", "volume": "float"},
-        partition=("instrument",)),
+    "prices_eod": Table(
+        {"instrument": "str"},
+        {"open": "float", "high": "float", "low": "float", "close": "float", "adj_close": "float", "volume": "float"},
+        partition=("instrument",),
+    ),
     "corporate_actions": Table({"instrument": "str", "kind": "str"}, {"value": "float"}),
     "vol_indices": Table({"index_name": "str"}, {"open": "float", "high": "float", "low": "float", "close": "float"}),
-    "option_quotes": Table({"underlying": "str", "root": "str", "expiry": "date", "strike": "float", "cp": "str"}, {
-        "bid": "float", "ask": "float", "iv": "float", "delta": "float", "gamma": "float", "theta": "float",
-        "vega": "float", "volume": "float", "open_interest": "float", "underlying_close": "float",
-        "settlement": "str"}, partition=("underlying",)),
+    "option_quotes": Table(
+        {"underlying": "str", "root": "str", "expiry": "date", "strike": "float", "cp": "str"},
+        {
+            "bid": "float",
+            "ask": "float",
+            "iv": "float",
+            "delta": "float",
+            "gamma": "float",
+            "theta": "float",
+            "vega": "float",
+            "volume": "float",
+            "open_interest": "float",
+            "underlying_close": "float",
+            "settlement": "str",
+        },
+        partition=("underlying",),
+    ),
     "rate_points": Table({"curve": "str", "tenor": "float"}, {"rate": "float"}),
     "discount_curves": Table({"curve": "str", "tenor": "float"}, {"zero_rate": "float", "discount": "float"}),
     "fx_spots": Table({"pair": "str"}, {"rate": "float"}),
     "fx_forwards": Table({"pair": "str", "tenor": "float"}, {"forward": "float", "points": "float"}),
     "fx_vols": Table({"pair": "str", "window": "int", "method": "str"}, {"vol": "float"}),
-    "carry_implied": Table({"underlying": "str", "tenor": "float", "method": "str"}, {
-        "carry": "float", "discount": "float", "forward_ratio": "float"}),
+    "carry_implied": Table(
+        {"underlying": "str", "tenor": "float", "method": "str"},
+        {"carry": "float", "discount": "float", "forward_ratio": "float"},
+    ),
     "credit_spreads": Table({"entity": "str", "tenor": "float"}, {"spread": "float"}),
     "correl_implied": Table({"index_name": "str", "tenor": "float"}, {"correlation": "float"}),
     "correl_realized": Table({"name_a": "str", "name_b": "str", "window": "int"}, {"correlation": "float"}),
-    "basket_spreads": Table({"basket": "str", "kind": "str", "tenor": "float", "strike": "float"}, {
-        "price": "float", "price_se": "float", "basket_price": "float", "members_price": "float", "basket_vol": "float",
-        "rho": "float", "implied_rho": "float"}),
-    "vol_surfaces": Table({"underlying": "str", "layer": "str"}, {
-        "surface": "str", "t_max_observed": "float", "extrapolated_from": "float", "inputs": "str", "fit": "str"},
-        partition=("underlying",)),
-    "calibration_runs": Table({"underlying": "str", "calibration_id": "str"}, {
-        "model": "str", "params": "str", "fit": "str", "seconds": "float", "code_version": "str"}),
-    "ingestion_runs": Table({"run": "str", "dataset": "str"}, {
-        "n_input": "int", "n_new": "int", "n_changed": "int", "started": "str", "seconds": "float", "raw_sha256": "str",
-        "status": "str"}),
-    "quality_issues": Table({"dataset": "str", "item": "str", "check_name": "str"}, {
-        "severity": "str", "detail": "str"}),
+    "basket_spreads": Table(
+        {"basket": "str", "kind": "str", "tenor": "float", "strike": "float"},
+        {
+            "price": "float",
+            "price_se": "float",
+            "basket_price": "float",
+            "members_price": "float",
+            "basket_vol": "float",
+            "rho": "float",
+            "implied_rho": "float",
+        },
+    ),
+    "vol_surfaces": Table(
+        {"underlying": "str", "layer": "str"},
+        {"surface": "str", "t_max_observed": "float", "extrapolated_from": "float", "inputs": "str", "fit": "str"},
+        partition=("underlying",),
+    ),
+    "calibration_runs": Table(
+        {"underlying": "str", "calibration_id": "str"},
+        {"model": "str", "params": "str", "fit": "str", "seconds": "float", "code_version": "str"},
+    ),
+    "ingestion_runs": Table(
+        {"run": "str", "dataset": "str"},
+        {
+            "n_input": "int",
+            "n_new": "int",
+            "n_changed": "int",
+            "started": "str",
+            "seconds": "float",
+            "raw_sha256": "str",
+            "status": "str",
+        },
+    ),
+    "quality_issues": Table(
+        {"dataset": "str", "item": "str", "check_name": "str"}, {"severity": "str", "detail": "str"}
+    ),
 }
 
 
@@ -123,8 +174,20 @@ class Lake:
             path.write_bytes(content)
         now = _utcnow().isoformat(timespec="seconds")
         with open(self._manifest, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps({"source": source, "name": name, "url": url, "fetched_at": now, "sha256": sha,
-                                 "bytes": len(content), "path": str(path.relative_to(self.root))}) + "\n")
+            fh.write(
+                json.dumps(
+                    {
+                        "source": source,
+                        "name": name,
+                        "url": url,
+                        "fetched_at": now,
+                        "sha256": sha,
+                        "bytes": len(content),
+                        "path": str(path.relative_to(self.root)),
+                    }
+                )
+                + "\n"
+            )
         return RawFile(path, sha, url, now, content)
 
     def manifest(self) -> list[dict]:
@@ -133,8 +196,16 @@ class Lake:
         return [json.loads(line) for line in self._manifest.read_text(encoding="utf-8").splitlines() if line.strip()]
 
     # --- curated rows ---
-    def ingest(self, table: str, rows: pd.DataFrame, source: str, origin: str, run_id: str | None = None,
-               quality: str = "ok", raw_sha256: str = "") -> dict:
+    def ingest(
+        self,
+        table: str,
+        rows: pd.DataFrame,
+        source: str,
+        origin: str,
+        run_id: str | None = None,
+        quality: str = "ok",
+        raw_sha256: str = "",
+    ) -> dict:
         """Append what is new or changed in `rows` (keys, values, obs_date). Idempotent: the same rows twice add
         nothing. Returns the counts, also recorded in ingestion_runs."""
         spec = TABLES[table]
@@ -160,10 +231,22 @@ class Lake:
                     self._write(table, part, fresh.drop(columns="row_hash_old"), run_id)
         summary = {"table": table, "run_id": run_id, "n_input": n_input, "n_new": n_new, "n_changed": n_changed}
         if table != "ingestion_runs":
-            row = pd.DataFrame([{"run": run_id, "dataset": table, "obs_date": started.date(), "n_input": n_input,
-                                 "n_new": n_new, "n_changed": n_changed, "started": started.isoformat(timespec="seconds"),
-                                 "seconds": (dt.datetime.now() - t0).total_seconds(), "raw_sha256": raw_sha256,
-                                 "status": "ok"}])
+            row = pd.DataFrame(
+                [
+                    {
+                        "run": run_id,
+                        "dataset": table,
+                        "obs_date": started.date(),
+                        "n_input": n_input,
+                        "n_new": n_new,
+                        "n_changed": n_changed,
+                        "started": started.isoformat(timespec="seconds"),
+                        "seconds": (dt.datetime.now() - t0).total_seconds(),
+                        "raw_sha256": raw_sha256,
+                        "status": "ok",
+                    }
+                ]
+            )
             self.ingest("ingestion_runs", row, source, "observed", run_id)
         return summary
 
@@ -205,9 +288,11 @@ class Lake:
         select = ", ".join(f'"{c}"' for c in stored)
         con = duckdb.connect()
         try:
-            known = con.execute(f"SELECT {select}, arg_max(row_hash, ingested_at) AS row_hash_old FROM "
-                                f"read_parquet(?, union_by_name=true, hive_partitioning=false) GROUP BY {select}",
-                                [[str(f) for f in files]]).df()
+            known = con.execute(
+                f"SELECT {select}, arg_max(row_hash, ingested_at) AS row_hash_old FROM "
+                f"read_parquet(?, union_by_name=true, hive_partitioning=false) GROUP BY {select}",
+                [[str(f) for f in files]],
+            ).df()
         finally:
             con.close()
         for c in spec.partition:
@@ -224,9 +309,14 @@ class Lake:
         spec = TABLES[table]
         types = {**spec.keys, **spec.values}
         names = [c for c in spec.keys if c not in spec.partition] + list(spec.values)
-        schema = pa.schema([*((c, ARROW[types[c]]) for c in names), ("obs_date", pa.date32()),
-                            ("ingested_at", pa.timestamp("s")),
-                            *((c, pa.string()) for c in ("source", "run_id", "quality", "origin", "row_hash"))])
+        schema = pa.schema(
+            [
+                *((c, ARROW[types[c]]) for c in names),
+                ("obs_date", pa.date32()),
+                ("ingested_at", pa.timestamp("s")),
+                *((c, pa.string()) for c in ("source", "run_id", "quality", "origin", "row_hash")),
+            ]
+        )
         arrow = pa.Table.from_pandas(rows[[f.name for f in schema]], schema=schema, preserve_index=False)
         folder = self._folder(table, part)
         folder.mkdir(parents=True, exist_ok=True)
@@ -253,9 +343,11 @@ class Lake:
         if as_of is not None:
             filters.append(f"ingested_at <= TIMESTAMP '{pd.Timestamp(as_of):%Y-%m-%d %H:%M:%S}'")
         clause = f"WHERE {' AND '.join(filters)}" if filters else ""
-        return (f"(SELECT * EXCLUDE (_rn, year) FROM (SELECT *, row_number() OVER (PARTITION BY {keys} "
-                f"ORDER BY ingested_at DESC, run_id DESC) AS _rn FROM read_parquet('{self._pattern(table)}', "
-                f"hive_partitioning=true, union_by_name=true, hive_types_autocast=false) {clause}) WHERE _rn = 1)")
+        return (
+            f"(SELECT * EXCLUDE (_rn, year) FROM (SELECT *, row_number() OVER (PARTITION BY {keys} "
+            f"ORDER BY ingested_at DESC, run_id DESC) AS _rn FROM read_parquet('{self._pattern(table)}', "
+            f"hive_partitioning=true, union_by_name=true, hive_types_autocast=false) {clause}) WHERE _rn = 1)"
+        )
 
     def read(self, table: str, where: str = "", as_of=None, columns: str = "*", order: str = "") -> pd.DataFrame:
         """Latest rows of a table as a DataFrame (empty, with the right columns, while it has no file)."""
@@ -274,8 +366,10 @@ class Lake:
         con = duckdb.connect()
         try:
             clause = f"WHERE {where}" if where else ""
-            return con.execute(f"SELECT * FROM read_parquet('{self._pattern(table)}', hive_partitioning=true, "
-                               f"union_by_name=true, hive_types_autocast=false) {clause} ORDER BY ingested_at, run_id").df()
+            return con.execute(
+                f"SELECT * FROM read_parquet('{self._pattern(table)}', hive_partitioning=true, "
+                f"union_by_name=true, hive_types_autocast=false) {clause} ORDER BY ingested_at, run_id"
+            ).df()
         finally:
             con.close()
 
@@ -296,10 +390,13 @@ class Lake:
                 continue
             con = duckdb.connect()
             try:
-                frames.append(con.execute(
-                    f"SELECT '{table}' AS dataset, origin, source, count(*) AS n, min(obs_date) AS first, "
-                    f"max(obs_date) AS last, max(ingested_at) AS ingested FROM read_parquet('{self._pattern(table)}', "
-                    "union_by_name=true, hive_partitioning=false) GROUP BY origin, source ORDER BY source").df())
+                frames.append(
+                    con.execute(
+                        f"SELECT '{table}' AS dataset, origin, source, count(*) AS n, min(obs_date) AS first, "
+                        f"max(obs_date) AS last, max(ingested_at) AS ingested FROM read_parquet('{self._pattern(table)}', "
+                        "union_by_name=true, hive_partitioning=false) GROUP BY origin, source ORDER BY source"
+                    ).df()
+                )
             finally:
                 con.close()
         if not frames:

@@ -37,19 +37,35 @@ _BACKEND = {"cpu": 0, "gpu": 1}
 
 class _Request(ctypes.Structure):  # optlab_request in cuda/include/optlab_cuda/capi.h
     _fields_ = [
-        ("model", ctypes.c_int), ("product", ctypes.c_int), ("legs", ctypes.c_int * 3),
-        ("strikes", ctypes.c_double * 3), ("H", ctypes.c_double), ("n_steps", ctypes.c_int),
-        ("S0", ctypes.c_double), ("r", ctypes.c_double), ("q", ctypes.c_double), ("T", ctypes.c_double),
+        ("model", ctypes.c_int),
+        ("product", ctypes.c_int),
+        ("legs", ctypes.c_int * 3),
+        ("strikes", ctypes.c_double * 3),
+        ("H", ctypes.c_double),
+        ("n_steps", ctypes.c_int),
+        ("S0", ctypes.c_double),
+        ("r", ctypes.c_double),
+        ("q", ctypes.c_double),
+        ("T", ctypes.c_double),
         ("sigma", ctypes.c_double),
-        ("v0", ctypes.c_double), ("kappa", ctypes.c_double), ("theta", ctypes.c_double), ("xi", ctypes.c_double),
+        ("v0", ctypes.c_double),
+        ("kappa", ctypes.c_double),
+        ("theta", ctypes.c_double),
+        ("xi", ctypes.c_double),
         ("rho", ctypes.c_double),
-        ("n_paths", ctypes.c_longlong), ("seed", ctypes.c_ulonglong),
+        ("n_paths", ctypes.c_longlong),
+        ("seed", ctypes.c_ulonglong),
     ]
 
 
 class _Result(ctypes.Structure):  # optlab_result
-    _fields_ = [("price", ctypes.c_double * 4), ("se", ctypes.c_double * 4), ("n_paths", ctypes.c_longlong),
-                ("kernel_ms", ctypes.c_double), ("total_ms", ctypes.c_double)]
+    _fields_ = [
+        ("price", ctypes.c_double * 4),
+        ("se", ctypes.c_double * 4),
+        ("n_paths", ctypes.c_longlong),
+        ("kernel_ms", ctypes.c_double),
+        ("total_ms", ctypes.c_double),
+    ]
 
 
 @dataclass
@@ -110,7 +126,8 @@ def _flat_rates(market: Market, T: float):
     r, carry = float(market.zero_rate(T)), float(market.carry_rate(T))
     t = np.linspace(T / 16, T, 16)
     if np.allclose(market.zero_rate(t), r, rtol=0, atol=1e-10) and np.allclose(
-            market.carry_rate(t), carry, rtol=0, atol=1e-10):
+        market.carry_rate(t), carry, rtol=0, atol=1e-10
+    ):
         return r, r - carry
     return None
 
@@ -172,8 +189,17 @@ def _numpy(res: MCResult) -> EngineResult:
     return EngineResult(res.price, res.stderr, res.n_paths, "numpy")
 
 
-def european(model: Model, market: Market, K, T, cp="call", n_paths=1_000_000, seed: int | None = None,
-             dt_max=1 / 252, backend="auto") -> EngineResult:
+def european(
+    model: Model,
+    market: Market,
+    K,
+    T,
+    cp="call",
+    n_paths=1_000_000,
+    seed: int | None = None,
+    dt_max=1 / 252,
+    backend="auto",
+) -> EngineResult:
     """European call or put. Heston takes ceil(T / dt_max) uniform QE steps; Black-Scholes one exact step."""
     reason = _unsupported(model, market, T, cp, None)
     chosen = _choose(backend, reason)
@@ -183,8 +209,18 @@ def european(model: Model, market: Market, K, T, cp="call", n_paths=1_000_000, s
     return _result(_run(model, market, T, cp, _EUROPEAN, n_steps, n_paths, seed, chosen, K), 0, chosen)
 
 
-def asian(model: Model, market: Market, K, T, n_fixings=12, cp="call", average="arithmetic",
-          n_paths=1_000_000, seed: int | None = None, backend="auto") -> EngineResult:
+def asian(
+    model: Model,
+    market: Market,
+    K,
+    T,
+    n_fixings=12,
+    cp="call",
+    average="arithmetic",
+    n_paths=1_000_000,
+    seed: int | None = None,
+    backend="auto",
+) -> EngineResult:
     """Fixed-strike Asian on n equally spaced fixings. Engine: Black-Scholes only (exact steps between
     fixings); NumPy keeps its geometric control variate for the arithmetic average."""
     if average not in ("arithmetic", "geometric"):
@@ -197,8 +233,19 @@ def asian(model: Model, market: Market, K, T, n_fixings=12, cp="call", average="
     return _result(out, 0 if average == "arithmetic" else 1, chosen)
 
 
-def barrier(model: Model, market: Market, K, H, T, kind="down-out", cp="call", n_monitor=252,
-            n_paths=1_000_000, seed: int | None = None, backend="auto") -> EngineResult:
+def barrier(
+    model: Model,
+    market: Market,
+    K,
+    H,
+    T,
+    kind="down-out",
+    cp="call",
+    n_monitor=252,
+    n_paths=1_000_000,
+    seed: int | None = None,
+    backend="auto",
+) -> EngineResult:
     """Single barrier on n_monitor equally spaced dates. Engine: down-and-out with H below the spot, one
     simulation step per monitoring date."""
     why = None

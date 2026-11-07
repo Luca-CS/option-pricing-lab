@@ -113,8 +113,14 @@ def _merge(name, measures, coef=1.0):
     return Measure(name, w)
 
 
-def plan(ctx, bumps: Bumps | None = None, options: GreekOptions | None = None, env: RiskEnv | None = None,
-         names=None, roll_spots: dict | None = None) -> tuple[dict, list]:
+def plan(
+    ctx,
+    bumps: Bumps | None = None,
+    options: GreekOptions | None = None,
+    env: RiskEnv | None = None,
+    names=None,
+    roll_spots: dict | None = None,
+) -> tuple[dict, list]:
     """(shocks, measures) of every Greek of one group's context. Measure names are "greek|name|bucket"."""
     b = bumps or Bumps()
     o = options or GreekOptions()
@@ -126,16 +132,35 @@ def plan(ctx, bumps: Bumps | None = None, options: GreekOptions | None = None, e
     M: list = []
     h, H, v, rv = b.spot, b.spot_large, b.vol, b.vol_relative
     unit_s, unit_v = 0.01 / h, 0.01 / v
-    per_name: dict = {k: [] for k in ("delta", "gamma", "gamma_5", "vega", "vega_relative", "volga", "vanna", "skew_vega",
-                                      "delta_sticky_strike", "delta_realistic", "epsilon", "repo", "vega_weighted",
-                                      "vega_weighted_direct")}
+    per_name: dict = {  # noqa: F841 (dead since v0, removed in A8)
+        k: []
+        for k in (
+            "delta",
+            "gamma",
+            "gamma_5",
+            "vega",
+            "vega_relative",
+            "volga",
+            "vanna",
+            "skew_vega",
+            "delta_sticky_strike",
+            "delta_realistic",
+            "epsilon",
+            "repo",
+            "vega_weighted",
+            "vega_weighted_direct",
+        )
+    }
     tenor_name: dict = {}
     kxt = o.kxt == "all" or (o.kxt == "single" and not basket)
     for n in names:
         S[f"s+|{n}"], S[f"s-|{n}"] = Shock(spot={n: h}), Shock(spot={n: -h})
         S[f"S+|{n}"], S[f"S-|{n}"] = Shock(spot={n: H}), Shock(spot={n: -H})
-        M += [_central(f"delta|{n}|", f"s+|{n}", f"s-|{n}", unit_s), _second(f"gamma|{n}|", f"s+|{n}", f"s-|{n}", unit_s**2),
-              _second(f"gamma_5|{n}|", f"S+|{n}", f"S-|{n}", (0.01 / H) ** 2)]
+        M += [
+            _central(f"delta|{n}|", f"s+|{n}", f"s-|{n}", unit_s),
+            _second(f"gamma|{n}|", f"s+|{n}", f"s-|{n}", unit_s**2),
+            _second(f"gamma_5|{n}|", f"S+|{n}", f"S-|{n}", (0.01 / H) ** 2),
+        ]
         if o.sticky_strike:
             S[f"ss+|{n}"] = Shock(spot={n: h}, rule="sticky_strike")
             S[f"ss-|{n}"] = Shock(spot={n: -h}, rule="sticky_strike")
@@ -146,8 +171,10 @@ def plan(ctx, bumps: Bumps | None = None, options: GreekOptions | None = None, e
             M.append(_central(f"delta_realistic|{n}|", f"rl+|{n}", f"rl-|{n}", unit_s))
         S[f"v+|{n}"], S[f"v-|{n}"] = Shock(vol={n: VolMove(v)}), Shock(vol={n: VolMove(-v)})
         S[f"vr+|{n}"], S[f"vr-|{n}"] = Shock(vol={n: VolMove(relative=rv)}), Shock(vol={n: VolMove(relative=-rv)})
-        M += [_central(f"vega|{n}|", f"v+|{n}", f"v-|{n}", unit_v),
-              _central(f"vega_relative|{n}|", f"vr+|{n}", f"vr-|{n}", 0.01 / rv)]
+        M += [
+            _central(f"vega|{n}|", f"v+|{n}", f"v-|{n}", unit_v),
+            _central(f"vega_relative|{n}|", f"vr+|{n}", f"vr-|{n}", 0.01 / rv),
+        ]
         if o.cross:
             M.append(_second(f"volga|{n}|", f"v+|{n}", f"v-|{n}", unit_v**2))
             for a, sa in (("+", h), ("-", -h)):
@@ -180,11 +207,19 @@ def plan(ctx, bumps: Bumps | None = None, options: GreekOptions | None = None, e
             for s_, x in tm.weights.items():
                 wm.weights[s_] = wm.weights.get(s_, 0.0) + x * tm.scale * float(grid.weighted_factor(grid.TENORS[j]))
         M.append(wm)
-        S[f"w|{n}"] = Shock(vol={n: VolMove(term={j: v * float(grid.weighted_factor(T)) for j, T in enumerate(grid.TENORS)})})
+        S[f"w|{n}"] = Shock(
+            vol={n: VolMove(term={j: v * float(grid.weighted_factor(T)) for j, T in enumerate(grid.TENORS)})}
+        )
         M.append(_one_sided(f"vega_weighted_direct|{n}|", f"w|{n}", unit_v))
-        S[f"q+|{n}"], S[f"q-|{n}"] = Shock(dividend={n: CurveMove(b.rate_bp)}), Shock(dividend={n: CurveMove(-b.rate_bp)})
+        S[f"q+|{n}"], S[f"q-|{n}"] = (
+            Shock(dividend={n: CurveMove(b.rate_bp)}),
+            Shock(dividend={n: CurveMove(-b.rate_bp)}),
+        )
         S[f"p+|{n}"], S[f"p-|{n}"] = Shock(repo={n: CurveMove(b.rate_bp)}), Shock(repo={n: CurveMove(-b.rate_bp)})
-        M += [_central(f"epsilon|{n}|", f"q+|{n}", f"q-|{n}", 1 / b.rate_bp), _central(f"repo|{n}|", f"p+|{n}", f"p-|{n}", 1 / b.rate_bp)]
+        M += [
+            _central(f"epsilon|{n}|", f"q+|{n}", f"q-|{n}", 1 / b.rate_bp),
+            _central(f"repo|{n}|", f"p+|{n}", f"p-|{n}", 1 / b.rate_bp),
+        ]
         if o.curves:
             for j, label in enumerate(grid.TENOR_LABELS):
                 S[f"qt{j}|{n}"] = Shock(dividend={n: CurveMove(tenors={j: b.rate_bp})})
@@ -192,10 +227,22 @@ def plan(ctx, bumps: Bumps | None = None, options: GreekOptions | None = None, e
         if n in env.quanto:
             S[f"qc+|{n}"], S[f"qc-|{n}"] = Shock(quanto_corr={n: b.corr}), Shock(quanto_corr={n: -b.corr})
             S[f"fv+|{n}"], S[f"fv-|{n}"] = Shock(fx_vol={n: v}), Shock(fx_vol={n: -v})
-            M += [_central(f"quanto_corr|{n}|", f"qc+|{n}", f"qc-|{n}", 0.01 / b.corr),
-                  _central(f"fx_vega|{n}|", f"fv+|{n}", f"fv-|{n}", unit_v)]
+            M += [
+                _central(f"quanto_corr|{n}|", f"qc+|{n}", f"qc-|{n}", 0.01 / b.corr),
+                _central(f"fx_vega|{n}|", f"fv+|{n}", f"fv-|{n}", unit_v),
+            ]
     # every name together
-    for g in ("delta", "gamma", "gamma_5", "vega", "vega_relative", "skew_vega", "vega_net", "vega_weighted", "epsilon"):
+    for g in (
+        "delta",
+        "gamma",
+        "gamma_5",
+        "vega",
+        "vega_relative",
+        "skew_vega",
+        "vega_net",
+        "vega_weighted",
+        "epsilon",
+    ):
         parts = [m for m in M if m.name.split("|")[0] == g and m.name.split("|")[1] in names]
         if len(names) > 1 and parts:
             M.append(_merge(f"{g}|*|", parts))
@@ -215,14 +262,18 @@ def plan(ctx, bumps: Bumps | None = None, options: GreekOptions | None = None, e
         S["c+"], S["c-"] = Shock(corr=b.corr), Shock(corr=-b.corr)
         M.append(_central("corr|*|", "c+", "c-", 0.01 / b.corr))
         for a_i, a in enumerate(names):
-            for bb in names[a_i + 1:]:
+            for bb in names[a_i + 1 :]:
                 pair = f"{a}|{bb}"
                 S[f"c|{pair}"] = Shock(corr_pairs={pair: b.corr})
                 M.append(_one_sided(f"corr|{a}~{bb}|", f"c|{pair}", 0.01 / b.corr))
                 for sa, xa in (("+", h), ("-", -h)):
                     for sb, xb in (("+", h), ("-", -h)):
                         S[f"g{sa}{sb}|{pair}"] = Shock(spot={a: xa, bb: xb})
-                M.append(_cross(f"cross_gamma|{a}~{bb}|", f"g++|{pair}", f"g+-|{pair}", f"g-+|{pair}", f"g--|{pair}", unit_s**2))
+                M.append(
+                    _cross(
+                        f"cross_gamma|{a}~{bb}|", f"g++|{pair}", f"g+-|{pair}", f"g-+|{pair}", f"g--|{pair}", unit_s**2
+                    )
+                )
     if o.theta:
         S["roll"] = Shock(roll_days=b.roll_days)
         M.append(_one_sided("theta|*|", "roll", 1.0))
@@ -236,6 +287,7 @@ def _forward_drift(ctx, names, days: int) -> dict:
     """{name: F(dt) / S - 1}: where the spot goes over the roll if it follows its forward."""
     from ..structured.dates import year_fraction
     from .shocks import roll_date
+
     dt_ = year_fraction(ctx.valuation, roll_date(ctx.valuation, days))
     markets = ctx.markets if isinstance(ctx, BasketContext) else {names[0]: ctx.market}
     return {n: float(markets[n].F(dt_) / markets[n].spot - 1.0) for n in names}
@@ -244,6 +296,7 @@ def _forward_drift(ctx, names, days: int) -> dict:
 @dataclass
 class RiskReport:
     """Greeks per position, per name and for the book, with standard errors, as JSON-ready data."""
+
     positions: list
     book: dict
     gross: dict
@@ -270,11 +323,17 @@ def _noise(v, se) -> bool:
     return se is not None and se > 0 and abs(v) < 2 * se
 
 
-def compute(groups: list, bumps: Bumps | None = None, options: GreekOptions | None = None, settings: RiskSettings | None = None,
-            env: RiskEnv | None = None) -> RiskReport:
+def compute(
+    groups: list,
+    bumps: Bumps | None = None,
+    options: GreekOptions | None = None,
+    settings: RiskSettings | None = None,
+    env: RiskEnv | None = None,
+) -> RiskReport:
     """Every Greek of every group, aggregated per position, per name and for the book."""
     from ..structured.dates import year_fraction
     from .shocks import roll_date
+
     t0 = time.perf_counter()
     bumps = bumps or Bumps()
     options = options or GreekOptions()
@@ -300,7 +359,9 @@ def compute(groups: list, bumps: Bumps | None = None, options: GreekOptions | No
                 if d:
                     greeks[f"delta_units|{n}|"] = [d[0] / (0.01 * spots[n]), d[1] / (0.01 * spots[n])]
                     size = abs(q) * N
-                    greeks[f"delta_notional|{n}|"] = [100 * d[0] / (0.01 * size), 100 * d[1] / (0.01 * size)] if size else [0.0, 0.0]
+                    greeks[f"delta_notional|{n}|"] = (
+                        [100 * d[0] / (0.01 * size), 100 * d[1] / (0.01 * size)] if size else [0.0, 0.0]
+                    )
             theta = None
             if "roll" in run.pnl:
                 cash_roll = run.cash.get("roll", [{}] * len(run.names))[i]
@@ -309,13 +370,33 @@ def compute(groups: list, bumps: Bumps | None = None, options: GreekOptions | No
                 W = sum(float(D.D(t)) * a for t, a in cash_base.items() if 1e-12 < t <= dt_roll + 1e-9)
                 th, th_se = run.pnl["roll"][0][i], run.pnl["roll"][1][i]
                 carry = greeks.get("theta_carry|*|", [0.0, 0.0])
-                theta = {"theta": th, "theta_se": th_se, "carry": carry[0], "carry_se": carry[1], "events": C - W,
-                         "events_cash": C, "events_expected": W, "decay": th - carry[0] - (C - W)}
+                theta = {
+                    "theta": th,
+                    "theta_se": th_se,
+                    "carry": carry[0],
+                    "carry_se": carry[1],
+                    "events": C - W,
+                    "events_cash": C,
+                    "events_expected": W,
+                    "decay": th - carry[0] - (C - W),
+                }
             noisy = sorted(k for k, (v, se) in greeks.items() if _noise(v, se))
-            positions.append({"name": pname, "group": g.label, "quantity": q, "notional": N, "value": run.values["base"][i],
-                              "value_se": run.base_se[i], "greeks": greeks, "theta": theta, "noise": noisy,
-                              "smoothing_bias": None if run.smoothing_bias is None else
-                              [run.smoothing_bias[0][i], run.smoothing_bias[1][i]]})
+            positions.append(
+                {
+                    "name": pname,
+                    "group": g.label,
+                    "quantity": q,
+                    "notional": N,
+                    "value": run.values["base"][i],
+                    "value_se": run.base_se[i],
+                    "greeks": greeks,
+                    "theta": theta,
+                    "noise": noisy,
+                    "smoothing_bias": None
+                    if run.smoothing_bias is None
+                    else [run.smoothing_bias[0][i], run.smoothing_bias[1][i]],
+                }
+            )
         for k, v in run.measures.items():
             book_v[k] = book_v.get(k, 0.0) + v[2]
             book_var[k] = book_var.get(k, 0.0) + v[3] ** 2
@@ -330,15 +411,35 @@ def compute(groups: list, bumps: Bumps | None = None, options: GreekOptions | No
         for k, v in run.measures.items():
             if k.startswith("vega_node|") or (k.startswith("vega_tenor|") and not k.startswith("vega_tenor|*")):
                 gross_nodes[k] = gross_nodes.get(k, 0.0) + v[2]
-        group_rows.append({"label": g.label, "method": run.method, "model": run.model, "currency": run.currency,
-                           "n_paths": run.n_paths, "seed": run.seed, "simulations": run.simulations, "seconds": run.seconds,
-                           "shocks": len(shocks), "warnings": run.warnings, "names": names,
-                           "smoothing_bias": None if run.smoothing_bias is None else run.smoothing_bias[2:]})
+        group_rows.append(
+            {
+                "label": g.label,
+                "method": run.method,
+                "model": run.model,
+                "currency": run.currency,
+                "n_paths": run.n_paths,
+                "seed": run.seed,
+                "simulations": run.simulations,
+                "seconds": run.seconds,
+                "shocks": len(shocks),
+                "warnings": run.warnings,
+                "names": names,
+                "smoothing_bias": None if run.smoothing_bias is None else run.smoothing_bias[2:],
+            }
+        )
     book = {k: [v, float(np.sqrt(book_var[k]))] for k, v in book_v.items()}
     gross = {}
     for k, v in gross_nodes.items():
         kind, name, _ = k.split("|")
         key = f"{kind}_gross|{name}|"
         gross[key] = gross.get(key, 0.0) + abs(v)
-    return RiskReport(positions, book, gross, group_rows, dataclasses.asdict(bumps), dataclasses.asdict(options),
-                      settings.to_dict(), time.perf_counter() - t0)
+    return RiskReport(
+        positions,
+        book,
+        gross,
+        group_rows,
+        dataclasses.asdict(bumps),
+        dataclasses.asdict(options),
+        settings.to_dict(),
+        time.perf_counter() - t0,
+    )

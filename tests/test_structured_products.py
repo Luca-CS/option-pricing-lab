@@ -32,17 +32,20 @@ def rc_reference(sheet, ctx=BS_CTX, cpn=None):
     tl, pays = times(p)
     cpn = p.program.param_values["cpn"] if cpn is None else cpn
     T = float(tl.event_times[-1])
-    ref = rc_european(100.0, cpn, pays, T, pays[-1], sheet.get("downside.strike"), sheet.get("downside.barrier"),
-                      ctx.market)
+    ref = rc_european(
+        100.0, cpn, pays, T, pays[-1], sheet.get("downside.strike"), sheet.get("downside.barrier"), ctx.market
+    )
     return p, tl, ref
 
 
 # --- test 2: reverse convertible with a European barrier ---
 
+
 @pytest.mark.parametrize("barrier", [1.0, 0.7])
 def test_reverse_convertible_matches_closed_form(barrier):
-    sheet = preset("reverse_convertible", **{"downside.barrier": barrier, "coupon.rate": 0.06,
-                                             "wrapper.solve": "upfront"})
+    sheet = preset(
+        "reverse_convertible", **{"downside.barrier": barrier, "coupon.rate": 0.06, "wrapper.solve": "upfront"}
+    )
     p, tl, ref = rc_reference(sheet)
     mc = price(p.program, BS_CTX.model("bs"), BS_CTX.market, n_paths=N_MC, seed=21, valuation=p.valuation)
     assert within(mc, ref), (mc.price, mc.stderr, ref)
@@ -74,13 +77,22 @@ def test_european_policy_on_spx_agrees_with_local_vol_monte_carlo():
 
 # --- test 9: coupon solver ---
 
+
 def test_solved_coupon_reprices_to_the_target_on_the_same_paths():
     sheet = preset("reverse_convertible", **{"downside.barrier": 0.7, "downside.observation": "daily"})
     q = quote(sheet, BS_CTX, model="bs", control=None, n_paths=40_000, batch=10_000)
     assert q.result.price == pytest.approx(98.0, abs=1e-10)
     cpn = q.coupon_rate * q.product.coupon_scale
-    again = price(q.product.program, BS_CTX.model("bs"), BS_CTX.market, n_paths=40_000, seed=q.decision.seed,
-                  batch=10_000, params={"cpn": cpn}, valuation=q.product.valuation)
+    again = price(
+        q.product.program,
+        BS_CTX.model("bs"),
+        BS_CTX.market,
+        n_paths=40_000,
+        seed=q.decision.seed,
+        batch=10_000,
+        params={"cpn": cpn},
+        valuation=q.product.valuation,
+    )
     assert again.price == pytest.approx(98.0, abs=1e-8)
     assert 0 < q.coupon_rate_se < 0.01
 
@@ -123,11 +135,15 @@ def test_quote_table_reads_like_a_term_sheet():
 
 # --- test 3: barrier reverse convertible, daily knock-in ---
 
+
 def test_barrier_reverse_convertible_matches_bgk_shifted_closed_form():
-    from _structured_refs import FLAT, R, Q
+    from _structured_refs import FLAT, Q, R
+
     from optlab import barrier_price, barrier_shift_discrete
-    sheet = preset("barrier_reverse_convertible", **{"downside.barrier": 0.8, "coupon.rate": 0.06,
-                                                     "wrapper.solve": "upfront"})
+
+    sheet = preset(
+        "barrier_reverse_convertible", **{"downside.barrier": 0.8, "coupon.rate": 0.06, "wrapper.solve": "upfront"}
+    )
     p = compile_sheet(sheet, BS_CTX.valuation)
     tl, pays = times(p)
     (fix,) = tl.windows.values()
@@ -152,17 +168,22 @@ def test_brc_policy_is_local_vol_with_an_slv_control():
 
 # --- geared put (low strike put geared at 1 / K) ---
 
+
 @pytest.mark.parametrize("K", [0.8, 0.6])
 def test_geared_put_matches_closed_form(K):
     from _structured_refs import FLAT, put_fwd
-    sheet = preset("reverse_convertible", **{"downside.type": "geared_put", "downside.strike": K,
-                                             "coupon.rate": 0.03, "wrapper.solve": "upfront"})
+
+    sheet = preset(
+        "reverse_convertible",
+        **{"downside.type": "geared_put", "downside.strike": K, "coupon.rate": 0.03, "wrapper.solve": "upfront"},
+    )
     p = compile_sheet(sheet, BS_CTX.valuation)
     tl, pays = times(p)
     T = float(tl.event_times[-1])
     cpn = p.program.param_values["cpn"]
     ref = 100 * cpn * sum(float(FLAT.D(t)) for t in pays) + float(FLAT.D(pays[-1])) * (
-        100 - 100 / K * put_fwd(K * S0, T) / S0)
+        100 - 100 / K * put_fwd(K * S0, T) / S0
+    )
     mc = price(p.program, BS_CTX.model("bs"), FLAT, n_paths=N_MC, seed=41, valuation=p.valuation)
     assert within(mc, ref), (mc.price, mc.stderr, ref)
     rep = replication_result(p.program, tl, BS_CTX.surface, FLAT, T)
@@ -174,6 +195,7 @@ def test_gearing_makes_the_loss_continuous_at_the_strike():
     p = compile_sheet(sheet, BS_CTX.valuation)
     from optlab.structured.scenario import Scenario
     from optlab.structured.script.evaluator import Evaluator
+
     tl, _ = times(p)
     perf = np.array([0.4, 0.79999, 0.8, 1.2])
     paths = np.tile(100 * perf[:, None], (1, len(tl.sim_times)))
@@ -184,8 +206,10 @@ def test_gearing_makes_the_loss_continuous_at_the_strike():
 
 # --- test 4: upside (call, call spread, digital) and the airbag ---
 
+
 def upside_reference(sheet, T, T_pay):
     from _structured_refs import FLAT, call_fwd, prob_below, put_fwd
+
     g = sheet.get
     up, kind = 0.0, g("upside.type")
     if kind == "call":
@@ -201,14 +225,19 @@ def upside_reference(sheet, T, T_pay):
     return 100 * float(FLAT.D(T_pay)) * (1 + up - loss)
 
 
-@pytest.mark.parametrize("name, changes", [
-    ("airbag", {}),
-    ("airbag", {"downside.strike": 0.7, "upside.participation": 0.8}),
-    ("capital_protected", {}),
-    ("capital_protected", {"upside.type": "call_spread", "upside.strike": 1.0, "upside.cap": 1.4,
-                           "upside.participation": 1.0}),
-    ("capital_protected", {"upside.type": "digital", "upside.strike": 1.05, "upside.digital_amount": 0.12}),
-])
+@pytest.mark.parametrize(
+    "name, changes",
+    [
+        ("airbag", {}),
+        ("airbag", {"downside.strike": 0.7, "upside.participation": 0.8}),
+        ("capital_protected", {}),
+        (
+            "capital_protected",
+            {"upside.type": "call_spread", "upside.strike": 1.0, "upside.cap": 1.4, "upside.participation": 1.0},
+        ),
+        ("capital_protected", {"upside.type": "digital", "upside.strike": 1.05, "upside.digital_amount": 0.12}),
+    ],
+)
 def test_upside_products_match_closed_forms(name, changes):
     sheet = preset(name, **changes)
     p = compile_sheet(sheet, BS_CTX.valuation)
@@ -222,6 +251,7 @@ def test_upside_products_match_closed_forms(name, changes):
     assert q.upfront == pytest.approx(ref, abs=1e-8)
 
 
+@pytest.mark.slow
 def test_airbag_quote_on_spx_in_swap_format():
     sheet = preset("airbag", **{"wrapper.format": "swap"})
     q = quote(sheet, SPX, n_paths=N_MC)
@@ -232,25 +262,39 @@ def test_airbag_quote_on_spx_in_swap_format():
 
 # --- tests 5 to 7: autocalls against the backward quadrature ---
 
+
 def mc_bs(sheet, n_paths=N_MC, seed=61, batch=25_000):
     p = compile_sheet(sheet, BS_CTX.valuation)
-    return price(p.program, BS_CTX.model("bs"), BS_CTX.market, n_paths=n_paths, seed=seed, batch=batch,
-                 valuation=p.valuation)
+    return price(
+        p.program, BS_CTX.model("bs"), BS_CTX.market, n_paths=n_paths, seed=seed, batch=batch, valuation=p.valuation
+    )
 
 
+@pytest.mark.slow
 def test_quadrature_reference_reproduces_the_rc_closed_form():
     from _structured_refs import autocall_reference
+
     sheet = preset("reverse_convertible", **{"downside.barrier": 0.7, "coupon.rate": 0.06})
     assert autocall_reference(sheet) == pytest.approx(rc_reference(sheet)[2], abs=2e-4)
 
 
 def test_single_date_autocall_is_a_digital_plus_a_put():
     from _structured_refs import FLAT, prob_below, put_fwd
+
     from optlab.structured.dates import schedule
-    sheet = preset("phoenix", **{"general.maturity_months": 6, "autocall.frequency_months": 6,
-                                 "coupon.frequency_months": 6, "coupon.rate": 0.1, "coupon.memory": False,
-                                 "wrapper.solve": "upfront"})
-    (obs, pay), = schedule(BS_CTX.valuation, 6, 6)
+
+    sheet = preset(
+        "phoenix",
+        **{
+            "general.maturity_months": 6,
+            "autocall.frequency_months": 6,
+            "coupon.frequency_months": 6,
+            "coupon.rate": 0.1,
+            "coupon.memory": False,
+            "wrapper.solve": "upfront",
+        },
+    )
+    ((obs, pay),) = schedule(BS_CTX.valuation, 6, 6)
     p = compile_sheet(sheet, BS_CTX.valuation)
     tl, _ = times(p)
     T, Tp = float(tl.event_times[-1]), tl.pay_times[-1]
@@ -262,26 +306,41 @@ def test_single_date_autocall_is_a_digital_plus_a_put():
     assert compile_sheet(sheet, BS_CTX.valuation).script.count("terminate") == 0
 
 
-@pytest.mark.parametrize("name, changes", [
-    ("athena", {"coupon.rate": 0.08}),
-    ("phoenix", {"coupon.rate": 0.08, "coupon.memory": False}),
-    ("phoenix", {"coupon.rate": 0.08, "coupon.memory": True}),
-    ("phoenix", {"coupon.rate": 0.08, "autocall.step_down": 0.05, "autocall.first_call": 2}),
-    ("phoenix", {"coupon.rate": 0.12, "coupon.frequency_months": 1, "general.maturity_months": 12}),
-])
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "name, changes",
+    [
+        ("athena", {"coupon.rate": 0.08}),
+        ("phoenix", {"coupon.rate": 0.08, "coupon.memory": False}),
+        ("phoenix", {"coupon.rate": 0.08, "coupon.memory": True}),
+        ("phoenix", {"coupon.rate": 0.08, "autocall.step_down": 0.05, "autocall.first_call": 2}),
+        ("phoenix", {"coupon.rate": 0.12, "coupon.frequency_months": 1, "general.maturity_months": 12}),
+    ],
+)
 def test_autocall_matches_backward_quadrature(name, changes):
     from _structured_refs import autocall_reference
+
     sheet = preset(name, **{"wrapper.solve": "upfront", **changes})
     ref = autocall_reference(sheet)
     mc = mc_bs(sheet)
     assert within(mc, ref), (mc.price, mc.stderr, ref)
 
 
+@pytest.mark.slow
 def test_autocall_with_daily_knock_in_matches_backward_quadrature():
     from _structured_refs import autocall_reference
-    sheet = preset("phoenix", **{"wrapper.solve": "upfront", "coupon.rate": 0.08, "coupon.memory": False,
-                                 "general.maturity_months": 12, "downside.observation": "daily",
-                                 "downside.barrier": 0.7})
+
+    sheet = preset(
+        "phoenix",
+        **{
+            "wrapper.solve": "upfront",
+            "coupon.rate": 0.08,
+            "coupon.memory": False,
+            "general.maturity_months": 12,
+            "downside.observation": "daily",
+            "downside.barrier": 0.7,
+        },
+    )
     ref = autocall_reference(sheet)
     mc = mc_bs(sheet)
     assert within(mc, ref), (mc.price, mc.stderr, ref)
@@ -300,10 +359,12 @@ def test_autocall_policy_is_local_vol_and_reports_call_probabilities():
 
 # --- test 10: Greeks ---
 
+
 def rc_closed_form(spot, vol, T, pays, cpn, K=1.0, B=0.7):
     """RC value for a spot and a vol, the product struck at S0 = 100 (strike levels fixed)."""
     from _structured_refs import FLAT, Q, R
     from scipy.stats import norm
+
     F = spot * np.exp((R - Q) * T)
     sd = vol * np.sqrt(T)
     put = float(black_price(F, B * S0, T, vol, 1.0, "put"))
@@ -314,8 +375,8 @@ def rc_closed_form(spot, vol, T, pays, cpn, K=1.0, B=0.7):
 
 def test_rc_greeks_match_closed_form_differences():
     from optlab.structured.greeks import greeks
-    sheet = preset("reverse_convertible", **{"downside.barrier": 0.7, "coupon.rate": 0.06,
-                                             "wrapper.solve": "upfront"})
+
+    sheet = preset("reverse_convertible", **{"downside.barrier": 0.7, "coupon.rate": 0.06, "wrapper.solve": "upfront"})
     p = compile_sheet(sheet, BS_CTX.valuation)
     tl, pays = times(p)
     T = float(tl.event_times[-1])
@@ -333,6 +394,7 @@ def test_rc_greeks_match_closed_form_differences():
 
 def test_slv_greeks_report_delta_but_no_vega():
     from optlab.structured.greeks import greeks
+
     p = compile_sheet(preset("phoenix", **{"general.maturity_months": 12}), SPX.valuation)
     g = greeks(p.program, SPX, "slv", n_paths=20_000, batch=10_000, params={"cpn": 0.02})
     assert g.vega is None and "recalibration" in g.note
@@ -341,6 +403,7 @@ def test_slv_greeks_report_delta_but_no_vega():
 
 def test_shifted_surface_shifts_implied_vols_and_keeps_local_vol_consistent():
     from optlab.structured.greeks import ShiftedSurface
+
     s = ShiftedSurface(SPX.surface, 0.01)
     k, T = np.array([-0.3, 0.0, 0.2]), 1.0
     np.testing.assert_allclose(s.iv(k, T), SPX.surface.iv(k, T) + 0.01, rtol=1e-12)
@@ -351,20 +414,35 @@ def test_shifted_surface_shifts_implied_vols_and_keeps_local_vol_consistent():
     np.testing.assert_allclose(wkk, (s.w(k + h, T) - 2 * w + s.w(k - h, T)) / h**2, rtol=1e-4)
 
 
+@pytest.mark.slow
 def test_quote_with_greeks_uses_the_policy_model():
     q = quote(preset("reverse_convertible", **{"downside.barrier": 0.7}), BS_CTX, control=None, with_greeks=True)
     assert q.greeks.method == "replication" and q.greeks.vega < 0 < q.greeks.delta
     assert "greeks (SURFACE)" in q.table()
-    q = quote(preset("phoenix", **{"general.maturity_months": 12}), SPX, control=None, with_greeks=True,
-              n_paths=20_000, batch=10_000)
+    q = quote(
+        preset("phoenix", **{"general.maturity_months": 12}),
+        SPX,
+        control=None,
+        with_greeks=True,
+        n_paths=20_000,
+        batch=10_000,
+    )
     assert q.greeks.model == "lv" and q.greeks.vega is not None
-    q = quote(preset("phoenix", **{"general.maturity_months": 12}), SPX, model="slv", control=None, with_greeks=True,
-              n_paths=20_000, batch=10_000)
+    q = quote(
+        preset("phoenix", **{"general.maturity_months": 12}),
+        SPX,
+        model="slv",
+        control=None,
+        with_greeks=True,
+        n_paths=20_000,
+        batch=10_000,
+    )
     assert q.greeks.model == "slv" and q.greeks.vega is None and "recalibration" in q.table()
 
 
 def test_quote_script_carries_the_solved_coupon():
     from optlab.structured.script.parser import parse
+
     q = quote(preset("reverse_convertible"), BS_CTX, control=None)
     cpn = parse(q.script).param_values["cpn"]
     assert cpn == pytest.approx(q.coupon_rate * q.product.coupon_scale, rel=1e-15)
@@ -372,15 +450,25 @@ def test_quote_script_carries_the_solved_coupon():
     assert np.isfinite(again.price)
 
 
+@pytest.mark.slow
 def test_slv_vega_by_recalibration_matches_the_smile_vega_of_a_european_product():
     # a calibrated SLV reprices vanillas, so on a European payoff its vega is the vega of the smile
     from optlab.structured.greeks import greeks
-    p = compile_sheet(preset("reverse_convertible", **{"downside.barrier": 0.7, "wrapper.solve": "upfront"}),
-                      SPX.valuation)
+
+    p = compile_sheet(
+        preset("reverse_convertible", **{"downside.barrier": 0.7, "wrapper.solve": "upfront"}), SPX.valuation
+    )
     rep = greeks(p.program, SPX, "surface", "replication")
     slv = greeks(p.program, SPX, "slv", n_paths=N_MC, slv_vega=True, n_particles=50_000)
     assert abs(slv.vega - rep.vega) <= 4 * slv.vega_se + 0.01
     assert abs(slv.delta - rep.delta) <= 4 * slv.delta_se + 0.005
-    q = quote(preset("phoenix", **{"general.maturity_months": 12}), SPX, model="slv", control=None, n_paths=20_000,
-              batch=10_000, with_greeks=True)
+    q = quote(
+        preset("phoenix", **{"general.maturity_months": 12}),
+        SPX,
+        model="slv",
+        control=None,
+        n_paths=20_000,
+        batch=10_000,
+        with_greeks=True,
+    )
     assert q.greeks.vega is None and "slv_vega=True" in q.greeks.note

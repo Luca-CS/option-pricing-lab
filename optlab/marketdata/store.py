@@ -40,10 +40,19 @@ class MarketStore:
             folder.mkdir(parents=True, exist_ok=True)
             path.write_text(snap.to_json(), encoding="utf-8")
         with self._db() as con:
-            con.execute("INSERT OR IGNORE INTO snapshots VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                        (sid, snap.underlying, snap.valuation.isoformat(), snap.asof, snap.source,
-                         str(path.relative_to(self.root)), snap.spot_scale,
-                         dt.datetime.now(dt.timezone.utc).isoformat()))
+            con.execute(
+                "INSERT OR IGNORE INTO snapshots VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    sid,
+                    snap.underlying,
+                    snap.valuation.isoformat(),
+                    snap.asof,
+                    snap.source,
+                    str(path.relative_to(self.root)),
+                    snap.spot_scale,
+                    dt.datetime.now(dt.timezone.utc).isoformat(),
+                ),
+            )
             if snap.spot_scale is not None:
                 con.execute("UPDATE snapshots SET spot_scale = ? WHERE snapshot_id = ?", (snap.spot_scale, sid))
         return sid
@@ -59,8 +68,11 @@ class MarketStore:
     def latest(self, underlying: str, on_or_before: dt.date | str | None = None) -> MarketSnapshot:
         day = (on_or_before.isoformat() if isinstance(on_or_before, dt.date) else on_or_before) or "9999-12-31"
         with self._db() as con:
-            row = con.execute("SELECT snapshot_id FROM snapshots WHERE underlying = ? AND valuation <= ? "
-                              "ORDER BY valuation DESC, asof DESC LIMIT 1", (underlying, day)).fetchone()
+            row = con.execute(
+                "SELECT snapshot_id FROM snapshots WHERE underlying = ? AND valuation <= ? "
+                "ORDER BY valuation DESC, asof DESC LIMIT 1",
+                (underlying, day),
+            ).fetchone()
         if row is None:
             raise KeyError(f"no snapshot of {underlying} on or before {day}")
         return self.get(row[0])

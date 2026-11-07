@@ -20,8 +20,13 @@ def discount_function(lake: Lake, currency: str, day: dt.date, as_of=None):
     """T -> D(T) from the stored discount curve on `day`, or the last one in the 10 days before (flat zero rate
     outside the pillars)."""
     curve = CURVE_OF_CURRENCY[currency]
-    rows = lake.read("discount_curves", where=f"curve = '{curve}' AND obs_date <= DATE '{day}' AND obs_date >= DATE '{day}'"
-                     " - INTERVAL 10 DAY", columns="obs_date, tenor, zero_rate", order="obs_date, tenor", as_of=as_of)
+    rows = lake.read(
+        "discount_curves",
+        where=f"curve = '{curve}' AND obs_date <= DATE '{day}' AND obs_date >= DATE '{day}' - INTERVAL 10 DAY",
+        columns="obs_date, tenor, zero_rate",
+        order="obs_date, tenor",
+        as_of=as_of,
+    )
     if rows.empty:
         raise KeyError(f"no {curve} curve around {day}")
     last = rows[rows["obs_date"] == rows["obs_date"].max()]
@@ -39,9 +44,16 @@ def chain_rows(lake: Lake, underlying: str, day, source: str | None = None) -> p
 
 def as_clean_input(rows: pd.DataFrame) -> pd.DataFrame:
     """The columns the cleaning reads, from option_quotes rows."""
-    return pd.DataFrame({"root": rows["root"].to_numpy(), "strike": rows["strike"].to_numpy(), "bid": rows["bid"].to_numpy(),
-                         "ask": rows["ask"].to_numpy(), "type": np.where(rows["cp"] == "C", "call", "put"),
-                         "expiry": pd.to_datetime(rows["expiry"]).dt.strftime("%Y-%m-%d").to_numpy()})
+    return pd.DataFrame(
+        {
+            "root": rows["root"].to_numpy(),
+            "strike": rows["strike"].to_numpy(),
+            "bid": rows["bid"].to_numpy(),
+            "ask": rows["ask"].to_numpy(),
+            "type": np.where(rows["cp"] == "C", "call", "put"),
+            "expiry": pd.to_datetime(rows["expiry"]).dt.strftime("%Y-%m-%d").to_numpy(),
+        }
+    )
 
 
 @dataclass
@@ -60,8 +72,15 @@ class CleanDay:
         return np.array([s["T"] for s in self.slices])
 
 
-def clean_day(lake: Lake, underlying: str, day, source: str | None = None, spot: float | None = None,
-              max_rel_spread: float = 0.5, min_strikes: int = 8) -> CleanDay:
+def clean_day(
+    lake: Lake,
+    underlying: str,
+    day,
+    source: str | None = None,
+    spot: float | None = None,
+    max_rel_spread: float = 0.5,
+    min_strikes: int = 8,
+) -> CleanDay:
     """The cleaned chain of a day, on the lake's discount curve. The spot defaults to the file's underlying close,
     else the lake's close."""
     rows = chain_rows(lake, underlying, day, source)
@@ -75,13 +94,21 @@ def clean_day(lake: Lake, underlying: str, day, source: str | None = None, spot:
         if len(closes):
             spot = float(closes.iloc[0])
         else:
-            px = lake.read("prices_eod", where=f"instrument = {sql_str(underlying)} AND obs_date = DATE '{day}'", columns="close")
+            px = lake.read(
+                "prices_eod", where=f"instrument = {sql_str(underlying)} AND obs_date = DATE '{day}'", columns="close"
+            )
             if px.empty:
                 raise KeyError(f"no close of {underlying} on {day}: give the spot")
             spot = float(px["close"].iloc[0])
     currency = _BY_ID[underlying].currency if underlying in _BY_ID else "USD"
-    market, slices, table, meta = clean_chain(as_clean_input(rows), snapshot_time(day), spot, max_rel_spread,
-                                              discount=discount_function(lake, currency, day), min_strikes=min_strikes)
+    market, slices, table, meta = clean_chain(
+        as_clean_input(rows),
+        snapshot_time(day),
+        spot,
+        max_rel_spread,
+        discount=discount_function(lake, currency, day),
+        min_strikes=min_strikes,
+    )
     return CleanDay(underlying, day, used, spot, market, slices, table, meta)
 
 
@@ -90,8 +117,10 @@ def quote_days(lake: Lake, underlying: str, source: str | None = None) -> list:
     where = f"underlying = {sql_str(underlying)}" + (f" AND source = {sql_str(source)}" if source else "")
     con = lake.connect()
     try:
-        rows = con.execute(f"SELECT DISTINCT obs_date FROM read_parquet('{lake._pattern('option_quotes')}', hive_partitioning"
-                           f"=true, hive_types_autocast=false) WHERE {where} ORDER BY obs_date").fetchall()
+        rows = con.execute(
+            f"SELECT DISTINCT obs_date FROM read_parquet('{lake._pattern('option_quotes')}', hive_partitioning"
+            f"=true, hive_types_autocast=false) WHERE {where} ORDER BY obs_date"
+        ).fetchall()
     finally:
         con.close()
     return [r[0] for r in rows]

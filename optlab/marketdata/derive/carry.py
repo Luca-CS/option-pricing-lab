@@ -52,7 +52,9 @@ def parity_forward_discount(strikes, calls, puts) -> tuple[float, float]:
     return float(-slope), float(-intercept / slope)
 
 
-def parity_carry_rows(quotes: pd.DataFrame, discount, spot: float, band: float = 0.05, min_pairs: int = 3) -> pd.DataFrame:
+def parity_carry_rows(
+    quotes: pd.DataFrame, discount, spot: float, band: float = 0.05, min_pairs: int = 3
+) -> pd.DataFrame:
     """Net carry per expiry from a day's chain (expiry, strike, cp, bid, ask): the median near the money of
     F = K + (C - P) / D, with D from the discount curve. Short maturities carry almost no information on the rate, so
     the curve is taken as given."""
@@ -70,7 +72,9 @@ def parity_carry_rows(quotes: pd.DataFrame, discount, spot: float, band: float =
             continue
         D = float(discount(T))
         F = float(np.median(pairs["strike"] + (pairs["mid_c"] - pairs["mid_p"]) / D))
-        rows.append({"obs_date": day, "tenor": T, "discount": D, "forward_ratio": F / spot, "carry": np.log(F / spot) / T})
+        rows.append(
+            {"obs_date": day, "tenor": T, "discount": D, "forward_ratio": F / spot, "carry": np.log(F / spot) / T}
+        )
     return pd.DataFrame(rows, columns=["obs_date", "tenor", "discount", "forward_ratio", "carry"])
 
 
@@ -108,7 +112,9 @@ def build_carry(lake: Lake, instruments) -> list[dict]:
         price = pd.Series(prices["close"].to_numpy(), index=pd.to_datetime(prices["obs_date"]))
         origin, method = "derived", "total_return"
         if inst.total_return:
-            tr = lake.read("prices_eod", where=f"instrument = '{inst.id}.TR'", columns="obs_date, close", order="obs_date")
+            tr = lake.read(
+                "prices_eod", where=f"instrument = '{inst.id}.TR'", columns="obs_date, close", order="obs_date"
+            )
             series = realised_yield(price, pd.Series(tr["close"].to_numpy(), index=pd.to_datetime(tr["obs_date"])))
         elif inst.asset_class == "equity":
             method = "trailing_dividends"
@@ -119,8 +125,17 @@ def build_carry(lake: Lake, instruments) -> list[dict]:
             series = pd.Series(SYNTHETIC_YIELD[inst.id], index=price.index)
         else:
             continue
-        rows = pd.DataFrame({"underlying": inst.id, "tenor": 1.0, "method": method, "obs_date": series.index,
-                             "carry": -series.to_numpy(), "discount": np.nan, "forward_ratio": np.nan})
+        rows = pd.DataFrame(
+            {
+                "underlying": inst.id,
+                "tenor": 1.0,
+                "method": method,
+                "obs_date": series.index,
+                "carry": -series.to_numpy(),
+                "discount": np.nan,
+                "forward_ratio": np.nan,
+            }
+        )
         out.append(lake.ingest("carry_implied", rows, f"derive_{method}", origin, run))
     return out
 
@@ -129,22 +144,32 @@ def build_parity_carry(lake: Lake, name: str, source: str, days=None, currency: 
     """Net carry per expiry from put-call parity, on the days with a chain: an index's carry is not split into dividend and
     repo. Stored next to the estimates from the past, which `dividend_yield_at` keeps using for a homogeneous history."""
     from ..quotes import chain_rows, discount_function, quote_days
+
     rows = []
     for day in days if days is not None else quote_days(lake, name, source):
         chain = chain_rows(lake, name, day, source)
         closes = pd.to_numeric(chain["underlying_close"], errors="coerce").dropna()
         if chain.empty or closes.empty:
             continue
-        carry = parity_carry_rows(chain[chain["root"] != "SPX"], discount_function(lake, currency, day), float(closes.iloc[0]))
+        carry = parity_carry_rows(
+            chain[chain["root"] != "SPX"], discount_function(lake, currency, day), float(closes.iloc[0])
+        )
         rows.append(carry.assign(underlying=name, method="parity"))
     if not rows:
         return {"n_new": 0, "n_changed": 0, "n_input": 0}
-    return lake.ingest("carry_implied", pd.concat(rows, ignore_index=True), f"parity_on_{source}", "derived", new_run_id("derive_parity"))
+    return lake.ingest(
+        "carry_implied",
+        pd.concat(rows, ignore_index=True),
+        f"parity_on_{source}",
+        "derived",
+        new_run_id("derive_parity"),
+    )
 
 
 @dataclass(frozen=True)
 class DividendStream:
     """Dividends to come as shares of today's spot: `times` in years from the date, `shares` paid at each."""
+
     times: np.ndarray
     shares: np.ndarray
     origin: str
@@ -189,9 +214,17 @@ def dividend_stream(lake: Lake, name: str, day, spot: float, as_of=None) -> Divi
     start = day - dt.timedelta(days=365)
     window = f"obs_date > DATE '{start}' AND obs_date <= DATE '{day}'"
     if inst.total_return:
-        rows = lake.read("prices_eod", where=f"instrument IN ({sql_str(name)}, {sql_str(name + '.TR')}) AND {window}",
-                         columns="instrument, obs_date, close", as_of=as_of)
-        wide = rows.pivot_table(index="obs_date", columns="instrument", values="close").sort_index().dropna() if len(rows) else None
+        rows = lake.read(
+            "prices_eod",
+            where=f"instrument IN ({sql_str(name)}, {sql_str(name + '.TR')}) AND {window}",
+            columns="instrument, obs_date, close",
+            as_of=as_of,
+        )
+        wide = (
+            rows.pivot_table(index="obs_date", columns="instrument", values="close").sort_index().dropna()
+            if len(rows)
+            else None
+        )
         if wide is not None and name + ".TR" in wide.columns and len(wide) > 1:
             wide.index = pd.to_datetime(wide.index)
             if (wide.index[-1] - wide.index[0]).days >= MIN_HISTORY_DAYS:
@@ -200,9 +233,15 @@ def dividend_stream(lake: Lake, name: str, day, spot: float, as_of=None) -> Divi
                 dates = [min(d, pd.Timestamp(day)) for d in months.index]
                 return _repeat_year(day, dates, months.to_numpy() / spot, "derived", "dividend_points")
     elif inst.asset_class == "equity":
-        rows = lake.read("corporate_actions", where=f"instrument = {sql_str(name)} AND kind = 'dividend' AND {window}",
-                         columns="obs_date, value", as_of=as_of)
-        return _repeat_year(day, rows["obs_date"], rows["value"].to_numpy(dtype=float) / spot, "derived", "dividend_dates")
+        rows = lake.read(
+            "corporate_actions",
+            where=f"instrument = {sql_str(name)} AND kind = 'dividend' AND {window}",
+            columns="obs_date, value",
+            as_of=as_of,
+        )
+        return _repeat_year(
+            day, rows["obs_date"], rows["value"].to_numpy(dtype=float) / spot, "derived", "dividend_dates"
+        )
     annual, origin, method = dividend_yield_at(lake, name, day, as_of)
     season = ASSUMED_SEASON.get(name, EVEN_SEASON)
     return _monthly_stream(day, annual, season, origin, "assumed_season" if name in ASSUMED_SEASON else method)
@@ -210,8 +249,12 @@ def dividend_stream(lake: Lake, name: str, day, spot: float, as_of=None) -> Divi
 
 def dividend_yield_at(lake: Lake, name: str, day: dt.date, as_of=None) -> tuple[float, str, str]:
     """(yield, origin, method): the latest estimate at or before `day` in carry_implied, tenor 1 year."""
-    rows = lake.read("carry_implied", where=f"underlying = {sql_str(name)} AND tenor = 1.0 AND obs_date <= DATE '{day}' "
-                     "AND method <> 'parity'", order="obs_date DESC LIMIT 1", as_of=as_of)
+    rows = lake.read(
+        "carry_implied",
+        where=f"underlying = {sql_str(name)} AND tenor = 1.0 AND obs_date <= DATE '{day}' AND method <> 'parity'",
+        order="obs_date DESC LIMIT 1",
+        as_of=as_of,
+    )
     if rows.empty:
         return SYNTHETIC_YIELD.get(name, 0.02), "synthetic", "assumed_yield"
     r = rows.iloc[0]

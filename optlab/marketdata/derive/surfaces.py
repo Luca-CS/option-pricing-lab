@@ -40,7 +40,10 @@ from ..universe import instrument
 LOG = get_logger(__name__)
 TERM_INDICES = {"VIX9D": 9 / 365, "VIX": 30 / 365, "VIX3M": 93 / 365, "VIX6M": 183 / 365, "VIX1Y": 365 / 365}
 EXTRAPOLATED = (1.5, 2.0, 3.0, 4.0, 5.0)
-LEVEL_POWER, LEVEL_REF = 0.12, 0.12  # 0.118 fitted without the crash, 0.121 with it; the reference sits at the bound of the fit
+LEVEL_POWER, LEVEL_REF = (
+    0.12,
+    0.12,
+)  # 0.118 fitted without the crash, 0.121 with it; the reference sits at the bound of the fit
 LAST_OBSERVABLE = 1.0  # VIX1Y: beyond it the term structure is an assumption
 OBSERVED_TARGETS = (1 / 24, 1 / 12, 1 / 6, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0)
 Z = np.linspace(-8.0, 8.0, 321)  # integration grid, in at-the-money standard deviations
@@ -54,7 +57,9 @@ class ShapePrior:
     v_inf: float  # long-run forward variance beyond one year
     kappa: float = 0.7  # speed at which the forward variance goes there
     source: str = ""
-    level_power: float = 0.0  # the slope falls as the 30-day level rises above level_ref, by (level / level_ref) ^ -level_power
+    level_power: float = (
+        0.0  # the slope falls as the 30-day level rises above level_ref, by (level / level_ref) ^ -level_power
+    )
     level_ref: float = 0.2
 
     def scaled_rho(self, factor: float) -> "ShapePrior":
@@ -86,15 +91,22 @@ def fit_shape(surface: SVISurface, kappa: float = 0.7, source: str = "") -> Shap
 
     def residuals(x):
         rho, eta, gamma = x
-        return np.concatenate([np.sqrt(np.maximum(ssvi_w(k, th, rho, eta, gamma), 1e-10) / T) - iv
-                               for k, th, T, iv in zip(grids, thetas, Ts, targets)])
+        return np.concatenate(
+            [
+                np.sqrt(np.maximum(ssvi_w(k, th, rho, eta, gamma), 1e-10) / T) - iv
+                for k, th, T, iv in zip(grids, thetas, Ts, targets)
+            ]
+        )
 
     sol = least_squares(residuals, [-0.7, 1.0, 0.3], bounds=([-0.99, 1e-3, 0.01], [-0.01, 3.0, 0.5]))
     rho, eta, gamma = sol.x
     eta = min(eta, 2.0 / (1 + abs(rho)))  # butterfly-free for every theta
     long_end = Ts >= 0.9
-    v_inf = float((thetas[-1] - thetas[long_end][0]) / (Ts[-1] - Ts[long_end][0])) if long_end.sum() >= 2 else float(
-        thetas[-1] / Ts[-1])
+    v_inf = (
+        float((thetas[-1] - thetas[long_end][0]) / (Ts[-1] - Ts[long_end][0]))
+        if long_end.sum() >= 2
+        else float(thetas[-1] / Ts[-1])
+    )
     return ShapePrior(float(rho), float(eta), float(gamma), v_inf, kappa, source)
 
 
@@ -189,16 +201,22 @@ def reconstruct(levels: dict, prior: ShapePrior, skew: float | None = None, scal
     all_T, all_th = np.concatenate([Ts, T_ext]), np.maximum.accumulate(np.concatenate([thetas, th_ext]))
     all_th = np.maximum(all_th, np.concatenate([[all_th[0]], all_th[:-1] + 1e-7]))
     params = np.array([ssvi_slice_to_svi(th, th * _phi(th, eta, prior.gamma), rho) for th in all_th])
-    return Reconstruction(SVISurface(all_T, params), float(rho), float(Ts[-1]),
-                          {"levels": {n: float(levels[n]) for n in names}, "scale": float(scale),
-                           "skew": skew, "prior": asdict(prior)})
+    return Reconstruction(
+        SVISurface(all_T, params),
+        float(rho),
+        float(Ts[-1]),
+        {"levels": {n: float(levels[n]) for n in names}, "scale": float(scale), "skew": skew, "prior": asdict(prior)},
+    )
 
 
 def static_prior(path=None) -> ShapePrior:
     """The shape of the versioned SPX calibration (27/10/2026)."""
     from ...config import paths
+
     cal = json.loads((path or paths().results / "spx_calibration.json").read_text(encoding="utf-8"))
-    shape = fit_shape(SVISurface.from_dict(cal["surface"]), source=f"calibration of {cal['meta'].get('snapshot', '')[:10]}")
+    shape = fit_shape(
+        SVISurface.from_dict(cal["surface"]), source=f"calibration of {cal['meta'].get('snapshot', '')[:10]}"
+    )
     return replace(shape, level_power=LEVEL_POWER, level_ref=LEVEL_REF)
 
 
@@ -243,8 +261,15 @@ def reconstruct_on(panel_row: pd.Series, name: str, prior: ShapePrior, use_skew:
     return reconstruct(levels, prior_for(name, prior), skew, scale)
 
 
-def build_reconstructed(lake: Lake, names, start="2018-01-01", end=None, prior: ShapePrior | None = None, step: int = 1,
-                        use_skew: bool = False) -> list[dict]:
+def build_reconstructed(
+    lake: Lake,
+    names,
+    start="2018-01-01",
+    end=None,
+    prior: ShapePrior | None = None,
+    step: int = 1,
+    use_skew: bool = False,
+) -> list[dict]:
     """Daily reconstructed surfaces, stored with their inputs."""
     prior = prior or static_prior()
     panel = index_panel(lake, start, end)
@@ -258,9 +283,18 @@ def build_reconstructed(lake: Lake, names, start="2018-01-01", end=None, prior: 
             except ValueError as exc:
                 LOG.debug("%s %s: %s", name, day.date(), exc)
                 continue
-            rows.append({"underlying": name, "layer": "reconstructed", "obs_date": day.date(),
-                         "surface": json.dumps(rec.surface.to_dict()), "t_max_observed": rec.extrapolated_from,
-                         "extrapolated_from": rec.extrapolated_from, "inputs": json.dumps(rec.inputs), "fit": None})
+            rows.append(
+                {
+                    "underlying": name,
+                    "layer": "reconstructed",
+                    "obs_date": day.date(),
+                    "surface": json.dumps(rec.surface.to_dict()),
+                    "t_max_observed": rec.extrapolated_from,
+                    "extrapolated_from": rec.extrapolated_from,
+                    "inputs": json.dumps(rec.inputs),
+                    "fit": None,
+                }
+            )
         if rows:
             out.append(lake.ingest("vol_surfaces", pd.DataFrame(rows), "vol_indices+prior", "reconstructed", run))
     return out
@@ -269,18 +303,30 @@ def build_reconstructed(lake: Lake, names, start="2018-01-01", end=None, prior: 
 def fit_observed(lake: Lake, name: str, day, source: str | None = None, targets=OBSERVED_TARGETS) -> dict:
     """SVI on a day's chain: the stored row, with the fit's error against mid and bid-ask, and the arbitrage report."""
     from ...data import select_maturities
+
     cleaned = clean_day(lake, name, day, source)
     slices = select_maturities(cleaned.slices, targets)
     surface, _ = fit_svi_surface(slices, [_weights(s) for s in slices])
     errors = [surface.iv(s["k"], s["T"]) - s["iv"] for s in slices]
     within = [np.abs(e) <= 0.5 * np.nan_to_num(s["spread_iv"], nan=0.0) for e, s in zip(errors, slices)]
-    fit = {"rmse_bp": float(np.sqrt(np.mean(np.concatenate(errors) ** 2)) * 1e4),
-           "within_spread": float(np.mean(np.concatenate(within))), "n_quotes": int(sum(len(s["k"]) for s in slices)),
-           "spot": cleaned.spot, "arbitrage": svi_arbitrage_report(surface)}
+    fit = {
+        "rmse_bp": float(np.sqrt(np.mean(np.concatenate(errors) ** 2)) * 1e4),
+        "within_spread": float(np.mean(np.concatenate(within))),
+        "n_quotes": int(sum(len(s["k"]) for s in slices)),
+        "spot": cleaned.spot,
+        "arbitrage": svi_arbitrage_report(surface),
+    }
     t_max = float(surface.maturities[-1])
-    return {"underlying": name, "layer": "observed", "obs_date": cleaned.day, "surface": json.dumps(surface.to_dict()),
-            "t_max_observed": t_max, "extrapolated_from": t_max, "inputs": json.dumps({"source": cleaned.source}),
-            "fit": json.dumps(fit)}
+    return {
+        "underlying": name,
+        "layer": "observed",
+        "obs_date": cleaned.day,
+        "surface": json.dumps(surface.to_dict()),
+        "t_max_observed": t_max,
+        "extrapolated_from": t_max,
+        "inputs": json.dumps({"source": cleaned.source}),
+        "fit": json.dumps(fit),
+    }
 
 
 def build_observed(lake: Lake, name: str, days, source: str, log=LOG.info) -> dict:
@@ -290,8 +336,11 @@ def build_observed(lake: Lake, name: str, days, source: str, log=LOG.info) -> di
             rows.append(fit_observed(lake, name, day, source))
         except (KeyError, ValueError) as exc:
             log(f"{name} {day}: {exc}")
-    return lake.ingest("vol_surfaces", pd.DataFrame(rows), f"svi_on_{source}", "observed", new_run_id("observed_fit")) if rows \
+    return (
+        lake.ingest("vol_surfaces", pd.DataFrame(rows), f"svi_on_{source}", "observed", new_run_id("observed_fit"))
+        if rows
         else {"n_new": 0, "n_changed": 0, "n_input": 0}
+    )
 
 
 def synthetic_surface(realised_vol: float, prior: ShapePrior, premium: float = 1.1) -> Reconstruction:
@@ -315,20 +364,29 @@ class SurfaceAt:
 LAYER_ORDER = ("observed", "reconstructed", "synthetic")
 
 
-def surface_at(lake: Lake, name: str, day, as_of=None, max_age_days: int = 5, min_t_max: float = 1.0,
-               layer: str | None = None) -> SurfaceAt:
+def surface_at(
+    lake: Lake, name: str, day, as_of=None, max_age_days: int = 5, min_t_max: float = 1.0, layer: str | None = None
+) -> SurfaceAt:
     """The best surface of a name at a date: an observed fit of that very day when it reaches `min_t_max`, else the
     latest reconstruction not older than `max_age_days`. Never a later date. `layer` asks for one layer only: a replay
     stays on one, since switching between layers would show up as P&L."""
     day = pd.Timestamp(day).date()
-    rows = lake.read("vol_surfaces", where=f"underlying = {sql_str(name)} AND obs_date <= DATE '{day}' AND obs_date >= DATE '{day}'"
-                     f" - INTERVAL {max_age_days} DAY", as_of=as_of, order="obs_date DESC")
+    rows = lake.read(
+        "vol_surfaces",
+        where=f"underlying = {sql_str(name)} AND obs_date <= DATE '{day}' AND obs_date >= DATE '{day}'"
+        f" - INTERVAL {max_age_days} DAY",
+        as_of=as_of,
+        order="obs_date DESC",
+    )
     if layer:
         rows = rows[rows["layer"] == layer]
     if rows.empty:
         raise KeyError(f"no {layer or 'usable'} surface of {name} around {day}")
-    observed = rows[(rows["layer"] == "observed") & (pd.to_datetime(rows["obs_date"]).dt.date == day)
-                    & (rows["t_max_observed"] >= min_t_max)]
+    observed = rows[
+        (rows["layer"] == "observed")
+        & (pd.to_datetime(rows["obs_date"]).dt.date == day)
+        & (rows["t_max_observed"] >= min_t_max)
+    ]
     r = observed.iloc[0] if len(observed) else None
     if r is None:
         fallback = rows[rows["layer"] == "reconstructed"]
@@ -337,5 +395,11 @@ def surface_at(lake: Lake, name: str, day, as_of=None, max_age_days: int = 5, mi
         if fallback.empty:
             raise KeyError(f"no usable surface of {name} around {day}")
         r = fallback.iloc[0]
-    return SurfaceAt(SVISurface.from_dict(json.loads(r["surface"])), r["layer"], r["origin"], pd.Timestamp(r["obs_date"]).date(),
-                     float(r["extrapolated_from"]), {"inputs": r["inputs"], "fit": r["fit"], "source": r["source"]})
+    return SurfaceAt(
+        SVISurface.from_dict(json.loads(r["surface"])),
+        r["layer"],
+        r["origin"],
+        pd.Timestamp(r["obs_date"]).date(),
+        float(r["extrapolated_from"]),
+        {"inputs": r["inputs"], "fit": r["fit"], "source": r["source"]},
+    )

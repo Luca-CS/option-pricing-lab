@@ -44,8 +44,10 @@ class Trade:
         if kind == "term_sheet":
             sheet = TermSheet.from_dict(self.product["term_sheet"])
             if sheet.get("general.strike_date") != self.strike_date:
-                raise TermSheetError(f"the term sheet strikes on {sheet.get('general.strike_date')}, the trade on "
-                                     f"{self.strike_date}: build it with Trade.from_term_sheet")
+                raise TermSheetError(
+                    f"the term sheet strikes on {sheet.get('general.strike_date')}, the trade on "
+                    f"{self.strike_date}: build it with Trade.from_term_sheet"
+                )
         elif kind == "script":
             if not isinstance(self.product.get("script"), str):
                 raise ValueError("a script product needs its text under 'script'")
@@ -53,24 +55,38 @@ class Trade:
             raise ValueError("product kind must be 'term_sheet' or 'script'")
 
     @classmethod
-    def from_term_sheet(cls, trade_id: str, sheet: TermSheet, quantity: float, trade_date, strike_date=None,
-                        **kw) -> "Trade":
+    def from_term_sheet(
+        cls, trade_id: str, sheet: TermSheet, quantity: float, trade_date, strike_date=None, **kw
+    ) -> "Trade":
         """A trade on a term sheet; the strike date (default: the sheet's, else the trade date) is written into
         the sheet, so that the stored product is fully determined."""
         strike = _date(strike_date or sheet.get("general.strike_date") or trade_date)
         sheet = sheet.replace(**{"general.strike_date": strike})
-        return cls(trade_id, {"kind": "term_sheet", "term_sheet": sheet.to_dict(json_safe=True)}, quantity,
-                   _date(trade_date), strike, **kw)
+        return cls(
+            trade_id,
+            {"kind": "term_sheet", "term_sheet": sheet.to_dict(json_safe=True)},
+            quantity,
+            _date(trade_date),
+            strike,
+            **kw,
+        )
 
     def term_sheet(self) -> TermSheet | None:
         return TermSheet.from_dict(self.product["term_sheet"]) if self.product["kind"] == "term_sheet" else None
 
     def to_position(self, fixings: dict | None = None):
         from .portfolio import Position
+
         if self.product["kind"] == "term_sheet":
             return Position(self.trade_id, self.term_sheet(), self.quantity, fixings=fixings)
-        return Position(self.trade_id, self.product["script"], self.quantity, dict(self.product.get("params", {})),
-                        fixings, self.product.get("format", "note"))
+        return Position(
+            self.trade_id,
+            self.product["script"],
+            self.quantity,
+            dict(self.product.get("params", {})),
+            fixings,
+            self.product.get("format", "note"),
+        )
 
     def to_json(self) -> str:
         d = asdict(self)

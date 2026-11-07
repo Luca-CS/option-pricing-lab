@@ -18,7 +18,13 @@ from .simple import _text, parse_fred
 
 ECB_CURRENCIES = ("USD", "JPY", "GBP")
 FRED_PAIRS = {"EURUSD": "DEXUSEU", "USDJPY": "DEXJPUS", "GBPUSD": "DEXUSUK"}
-PLAUSIBLE = {"EURUSD": (0.7, 1.8), "USDJPY": (60.0, 300.0), "GBPUSD": (0.8, 2.5), "EURJPY": (60.0, 300.0), "EURGBP": (0.4, 1.3)}
+PLAUSIBLE = {
+    "EURUSD": (0.7, 1.8),
+    "USDJPY": (60.0, 300.0),
+    "GBPUSD": (0.8, 2.5),
+    "EURJPY": (60.0, 300.0),
+    "EURGBP": (0.4, 1.3),
+}
 
 
 def _in_range(rows: pd.DataFrame, pair: str, column: str) -> pd.DataFrame:
@@ -26,7 +32,9 @@ def _in_range(rows: pd.DataFrame, pair: str, column: str) -> pd.DataFrame:
     low, high = PLAUSIBLE[pair]
     bad = rows[(rows[column] <= low) | (rows[column] >= high)]
     if len(bad):
-        raise ValueError(f"{pair}: {len(bad)} rates outside [{low}, {high}], first {bad[column].iloc[0]:g} on {bad['obs_date'].iloc[0]}")
+        raise ValueError(
+            f"{pair}: {len(bad)} rates outside [{low}, {high}], first {bad[column].iloc[0]:g} on {bad['obs_date'].iloc[0]}"
+        )
     return rows
 
 
@@ -39,8 +47,12 @@ def parse_ecb_fx(content, currency: str) -> pd.DataFrame:
     held = set(zip(df["CURRENCY"], df["CURRENCY_DENOM"]))
     if held - {(currency, "EUR")}:
         raise ValueError(f"expected {currency} per EUR, the file holds {sorted(held)}")
-    out = pd.DataFrame({"obs_date": pd.to_datetime(df["TIME_PERIOD"], errors="coerce"),
-                        "value": pd.to_numeric(df["OBS_VALUE"], errors="coerce")}).dropna()
+    out = pd.DataFrame(
+        {
+            "obs_date": pd.to_datetime(df["TIME_PERIOD"], errors="coerce"),
+            "value": pd.to_numeric(df["OBS_VALUE"], errors="coerce"),
+        }
+    ).dropna()
     out = out[out["value"] > 0]
     out["obs_date"] = out["obs_date"].dt.date
     out = out.reset_index(drop=True)
@@ -52,9 +64,15 @@ def ecb_pairs(per_euro: dict) -> pd.DataFrame:
     usd = per_euro["USD"].rename(columns={"value": "usd"})
     jpy = usd.merge(per_euro["JPY"].rename(columns={"value": "jpy"}), on="obs_date")
     gbp = usd.merge(per_euro["GBP"].rename(columns={"value": "gbp"}), on="obs_date")
-    rows = [pd.DataFrame({"pair": "EURUSD", "obs_date": usd["obs_date"], "rate": usd["usd"], "origin": "observed"}),
-            pd.DataFrame({"pair": "USDJPY", "obs_date": jpy["obs_date"], "rate": jpy["jpy"] / jpy["usd"], "origin": "derived"}),
-            pd.DataFrame({"pair": "GBPUSD", "obs_date": gbp["obs_date"], "rate": gbp["usd"] / gbp["gbp"], "origin": "derived"})]
+    rows = [
+        pd.DataFrame({"pair": "EURUSD", "obs_date": usd["obs_date"], "rate": usd["usd"], "origin": "observed"}),
+        pd.DataFrame(
+            {"pair": "USDJPY", "obs_date": jpy["obs_date"], "rate": jpy["jpy"] / jpy["usd"], "origin": "derived"}
+        ),
+        pd.DataFrame(
+            {"pair": "GBPUSD", "obs_date": gbp["obs_date"], "rate": gbp["usd"] / gbp["gbp"], "origin": "derived"}
+        ),
+    ]
     return pd.concat([_in_range(r, r["pair"].iloc[0], "rate") for r in rows if len(r)], ignore_index=True)
 
 

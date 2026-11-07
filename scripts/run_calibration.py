@@ -21,9 +21,10 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from plots import plot_errors, plot_mix_sweep, plot_smiles, plot_surfaces  # noqa: E402
+
 from optlab import HestonParams, Leverage, Market, SVISurface, heston_iv  # noqa: E402
 from optlab.pipeline import calibrate_all, exotics_table, fit_errors, mix_sweep  # noqa: E402
-from plots import plot_errors, plot_mix_sweep, plot_smiles, plot_surfaces  # noqa: E402
 
 RESULTS = ROOT / "results"
 FIGURES = ROOT / "reports" / "figures"
@@ -41,15 +42,27 @@ def simulated_market(noise_bp=15, seed=1):
     slices = []
     for T in SIM_MATURITIES:
         F, D = float(market.F(T)), float(market.D(T))
-        atm = np.sqrt(TRUE_HESTON.theta + (TRUE_HESTON.v0 - TRUE_HESTON.theta) * (1 - np.exp(-TRUE_HESTON.kappa * T))
-                      / (TRUE_HESTON.kappa * T))
+        atm = np.sqrt(
+            TRUE_HESTON.theta
+            + (TRUE_HESTON.v0 - TRUE_HESTON.theta) * (1 - np.exp(-TRUE_HESTON.kappa * T)) / (TRUE_HESTON.kappa * T)
+        )
         k = np.linspace(-3.0, 2.0, 31) * atm * np.sqrt(T)
         K = F * np.exp(k)
         iv = heston_iv(F, K, T, TRUE_HESTON, D) + rng.normal(0, noise_bp * 1e-4, k.size)
         ok = np.isfinite(iv)  # prices below rounding in the far wings have no implied vol
         k, K, iv = k[ok], K[ok], iv[ok]
-        slices.append({"T": T, "F": F, "D": D, "K": K, "k": k, "iv": iv,
-                       "spread_iv": np.full(k.size, 4 * noise_bp * 1e-4), "expiry": f"{T:.3f}y"})
+        slices.append(
+            {
+                "T": T,
+                "F": F,
+                "D": D,
+                "K": K,
+                "k": k,
+                "iv": iv,
+                "spread_iv": np.full(k.size, 4 * noise_bp * 1e-4),
+                "expiry": f"{T:.3f}y",
+            }
+        )
     return market, slices, {"source": "simulated", "true_heston": TRUE_HESTON.to_dict(), "noise_bp": noise_bp}
 
 
@@ -63,9 +76,13 @@ def spx_market():
     for s in slices:
         s["F"] *= scale
         s["K"] = s["K"] * scale
-    meta = {"source": "spx", "snapshot": meta["snapshot"], "zero_rate_curve": meta["zero_rate_curve"],
-            "note": "SPX option quotes from Yahoo Finance (personal use). Spot rescaled to 100; "
-                    "raw quotes are not published."}
+    meta = {
+        "source": "spx",
+        "snapshot": meta["snapshot"],
+        "zero_rate_curve": meta["zero_rate_curve"],
+        "note": "SPX option quotes from Yahoo Finance (personal use). Spot rescaled to 100; "
+        "raw quotes are not published.",
+    }
     return market, slices, meta
 
 
@@ -84,8 +101,16 @@ def _plot_all(source, slices, surface, heston, errors, leverage, sweep, exotics)
 def replot(source):
     res = json.loads((RESULTS / f"{source}_calibration.json").read_text())
     _, slices, _ = spx_market() if source == "spx" else simulated_market()
-    _plot_all(source, slices, SVISurface.from_dict(res["surface"]), HestonParams(**res["heston"]), res["errors"],
-              Leverage.from_dict(res["slv"]["leverage"]), res.get("mix_sweep"), res["exotics"])
+    _plot_all(
+        source,
+        slices,
+        SVISurface.from_dict(res["surface"]),
+        HestonParams(**res["heston"]),
+        res["errors"],
+        Leverage.from_dict(res["slv"]["leverage"]),
+        res.get("mix_sweep"),
+        res["exotics"],
+    )
     print("charts redrawn for", source)
 
 
@@ -120,9 +145,15 @@ def main():
         "arbitrage": fit["arbitrage"],
         "heston": fit["heston"].to_dict(),
         "feller": fit["heston"].feller(),
-        "slv": {"mix": fit["slv"].mix, "particles": args.particles,
-                "leverage": {"times": _round(lev.times[keep]), "x_grids": _round(lev.x_grids[keep], 5),
-                             "values": _round(lev.values[keep], 5)}},
+        "slv": {
+            "mix": fit["slv"].mix,
+            "particles": args.particles,
+            "leverage": {
+                "times": _round(lev.times[keep]),
+                "x_grids": _round(lev.x_grids[keep], 5),
+                "values": _round(lev.values[keep], 5),
+            },
+        },
         "validation_paths": args.paths,
         "errors": errors,
         "exotics": exotics,

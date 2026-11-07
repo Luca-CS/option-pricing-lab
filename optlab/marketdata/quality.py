@@ -23,8 +23,14 @@ def open_issues(lake: Lake, where: str = "", order: str = "") -> pd.DataFrame:
 
 
 def _issue(dataset, item, check, severity, detail, day) -> dict:
-    return {"dataset": dataset, "item": item, "check_name": check, "severity": severity, "detail": detail,
-            "obs_date": pd.Timestamp(day).date()}
+    return {
+        "dataset": dataset,
+        "item": item,
+        "check_name": check,
+        "severity": severity,
+        "detail": detail,
+        "obs_date": pd.Timestamp(day).date(),
+    }
 
 
 def check_prices(prices: pd.DataFrame, today: dt.date, max_move: float = 0.3) -> list[dict]:
@@ -35,19 +41,37 @@ def check_prices(prices: pd.DataFrame, today: dt.date, max_move: float = 0.3) ->
         days = pd.to_datetime(g["obs_date"])
         moves = np.abs(np.diff(np.log(close)))
         for i in np.where(moves > max_move)[0]:
-            issues.append(_issue("prices_eod", name, "large_move", "warning",
-                                 f"{moves[i]:.1%} log move from {close[i]:g} to {close[i + 1]:g}", days.iloc[i + 1]))
+            issues.append(
+                _issue(
+                    "prices_eod",
+                    name,
+                    "large_move",
+                    "warning",
+                    f"{moves[i]:.1%} log move from {close[i]:g} to {close[i + 1]:g}",
+                    days.iloc[i + 1],
+                )
+            )
         gaps = days.diff().dt.days.to_numpy()[1:]
         for i in np.where(gaps > 6)[0]:
-            issues.append(_issue("prices_eod", name, "gap", "warning", f"no price for {int(gaps[i])} days",
-                                 days.iloc[i + 1]))
+            issues.append(
+                _issue("prices_eod", name, "gap", "warning", f"no price for {int(gaps[i])} days", days.iloc[i + 1])
+            )
         bad = (g["high"] < g["low"]) | (g["close"] > g["high"] * 1.001) | (g["close"] < g["low"] * 0.999)
         if bad.any():
-            issues.append(_issue("prices_eod", name, "bar_inconsistent", "warning",
-                                 f"close outside [low, high] on {int(bad.sum())} days", days[bad.to_numpy()].iloc[-1]))
+            issues.append(
+                _issue(
+                    "prices_eod",
+                    name,
+                    "bar_inconsistent",
+                    "warning",
+                    f"close outside [low, high] on {int(bad.sum())} days",
+                    days[bad.to_numpy()].iloc[-1],
+                )
+            )
         if (today - days.iloc[-1].date()).days > STALE_DAYS:
-            issues.append(_issue("prices_eod", name, "stale", "warning", f"last price {days.iloc[-1].date()}",
-                                 days.iloc[-1]))
+            issues.append(
+                _issue("prices_eod", name, "stale", "warning", f"last price {days.iloc[-1].date()}", days.iloc[-1])
+            )
     return issues
 
 
@@ -59,11 +83,27 @@ def check_vol_indices(vols: pd.DataFrame, today: dt.date) -> list[dict]:
         if name not in ("SKEW", "VVIX", "DSPX"):
             out = (g["close"] < VOL_RANGE[0]) | (g["close"] > VOL_RANGE[1])
             if out.any():
-                issues.append(_issue("vol_indices", name, "out_of_range", "warning",
-                                     f"{int(out.sum())} levels outside {VOL_RANGE}", days[out.to_numpy()].iloc[-1]))
+                issues.append(
+                    _issue(
+                        "vol_indices",
+                        name,
+                        "out_of_range",
+                        "warning",
+                        f"{int(out.sum())} levels outside {VOL_RANGE}",
+                        days[out.to_numpy()].iloc[-1],
+                    )
+                )
         if (today - days.iloc[-1].date()).days > STALE_DAYS:
-            issues.append(_issue("vol_indices", name, "stale", "warning",
-                                 f"series stops on {days.iloc[-1].date()}: no level after this date", days.iloc[-1]))
+            issues.append(
+                _issue(
+                    "vol_indices",
+                    name,
+                    "stale",
+                    "warning",
+                    f"series stops on {days.iloc[-1].date()}: no level after this date",
+                    days.iloc[-1],
+                )
+            )
     return issues
 
 
@@ -80,8 +120,16 @@ def check_splits(prices: pd.DataFrame, actions: pd.DataFrame, max_jump: float = 
         i = int(np.argmax(after.to_numpy()))
         move = float(np.log(g["close"].iloc[i] / g["close"].iloc[i - 1]))
         if abs(move) > max_jump:
-            issues.append(_issue("prices_eod", a.instrument, "split_not_adjusted", "error",
-                                 f"split {a.value:g} on {a.obs_date}: close moves {move:.1%}", a.obs_date))
+            issues.append(
+                _issue(
+                    "prices_eod",
+                    a.instrument,
+                    "split_not_adjusted",
+                    "error",
+                    f"split {a.value:g} on {a.obs_date}: close moves {move:.1%}",
+                    a.obs_date,
+                )
+            )
     return issues
 
 
@@ -94,14 +142,31 @@ def check_fx(spots: pd.DataFrame, today: dt.date, max_gap: float = 0.02, max_mov
         days = pd.to_datetime(g["obs_date"])
         moves = np.abs(np.diff(np.log(g["rate"].to_numpy(dtype=float))))
         for i in np.where(moves > max_move)[0]:
-            issues.append(_issue("fx_spots", pair, "large_move", "warning", f"{source}: {moves[i]:.1%} log move", days.iloc[i + 1]))
+            issues.append(
+                _issue(
+                    "fx_spots", pair, "large_move", "warning", f"{source}: {moves[i]:.1%} log move", days.iloc[i + 1]
+                )
+            )
         if (today - days.iloc[-1].date()).days > STALE_DAYS:
-            issues.append(_issue("fx_spots", pair, "stale", "warning", f"{source}: last rate {days.iloc[-1].date()}", days.iloc[-1]))
+            issues.append(
+                _issue(
+                    "fx_spots", pair, "stale", "warning", f"{source}: last rate {days.iloc[-1].date()}", days.iloc[-1]
+                )
+            )
     wide = spots.pivot_table(index=["pair", "obs_date"], columns="source", values="rate")
     if wide.shape[1] == 2:
         gap = np.log(wide.iloc[:, 0] / wide.iloc[:, 1]).abs().dropna()
         for (pair, day), value in gap[gap > max_gap].items():
-            issues.append(_issue("fx_spots", pair, "sources_disagree", "warning", f"{value:.2%} between {' and '.join(wide.columns)}", day))
+            issues.append(
+                _issue(
+                    "fx_spots",
+                    pair,
+                    "sources_disagree",
+                    "warning",
+                    f"{value:.2%} between {' and '.join(wide.columns)}",
+                    day,
+                )
+            )
     return issues
 
 
@@ -110,6 +175,7 @@ def check_calendar(lake: Lake) -> list[dict]:
     here too: the fixings of that day have to be filled before a replay crosses it."""
     from ..structured.calendars import CALENDARS
     from .universe import PLACE_CALENDAR
+
     issues = []
     for place, name in PLACE_CALENDAR.items():
         rows = lake.read("calendars", where=f"place = '{place}'", order="obs_date")
@@ -123,13 +189,17 @@ def check_calendar(lake: Lake) -> list[dict]:
 
 def run_report(lake: Lake, today: dt.date | None = None, store: bool = True) -> pd.DataFrame:
     today = today or dt.date.today()
-    issues = check_prices(lake.read("prices_eod", columns="instrument, obs_date, high, low, close"), today) \
-        if lake.has("prices_eod") else []
+    issues = (
+        check_prices(lake.read("prices_eod", columns="instrument, obs_date, high, low, close"), today)
+        if lake.has("prices_eod")
+        else []
+    )
     if lake.has("vol_indices"):
         issues += check_vol_indices(lake.read("vol_indices", columns="index_name, obs_date, close"), today)
     if lake.has("corporate_actions") and lake.has("prices_eod"):
-        issues += check_splits(lake.read("prices_eod", columns="instrument, obs_date, close"),
-                               lake.read("corporate_actions"))
+        issues += check_splits(
+            lake.read("prices_eod", columns="instrument, obs_date, close"), lake.read("corporate_actions")
+        )
     if lake.has("calendars"):
         issues += check_calendar(lake)
     if lake.has("fx_spots"):
@@ -145,8 +215,10 @@ def report_text(lake: Lake, issues: pd.DataFrame) -> str:
     cov = lake.coverage()
     lines = ["dataset | origin | source | rows | first | last"]
     for r in cov.itertuples():
-        lines.append(f"{r.dataset} | {r.origin} | {r.source} | {r.n} | {pd.Timestamp(r.first).date()} | "
-                     f"{pd.Timestamp(r.last).date()}")
+        lines.append(
+            f"{r.dataset} | {r.origin} | {r.source} | {r.n} | {pd.Timestamp(r.first).date()} | "
+            f"{pd.Timestamp(r.last).date()}"
+        )
     counts = issues.groupby(["dataset", "check_name", "severity"]).size() if len(issues) else {}
     lines += ["", "issues:"] + [f"  {k}: {v}" for k, v in (counts.items() if len(issues) else [])]
     return "\n".join(lines)

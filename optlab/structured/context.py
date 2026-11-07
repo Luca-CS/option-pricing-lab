@@ -14,7 +14,14 @@ from ..svi import SVISurface
 from .surfaces import FastSVISurface
 
 DEFAULT_CALIBRATION = paths().results / "spx_calibration.json"
-LEVERAGE_HORIZONS = (1.0, 2.0, 3.0, 5.0, 7.0, 10.0)  # a leverage calibrated up to one of these serves every shorter product
+LEVERAGE_HORIZONS = (
+    1.0,
+    2.0,
+    3.0,
+    5.0,
+    7.0,
+    10.0,
+)  # a leverage calibrated up to one of these serves every shorter product
 
 
 @dataclass
@@ -31,21 +38,36 @@ class PricingContext:
     payment_currency: str | None = None  # the currency this market pays in; None when it was not built with FX in mind
 
     @classmethod
-    def from_calibration(cls, path: str | Path | None = None, underlying: str = "SPX",
-                         valuation: dt.date | str | None = None, slv_regression: str | None = None,
-                         ) -> "PricingContext":
+    def from_calibration(
+        cls,
+        path: str | Path | None = None,
+        underlying: str = "SPX",
+        valuation: dt.date | str | None = None,
+        slv_regression: str | None = None,
+    ) -> "PricingContext":
         """The calibrated market of a results/*.json file; files without a snapshot time need `valuation`.
         `slv_regression="local_linear"` recalibrates the SLV leverage at load (about 7 s) with the local linear
         regression of max(v, 0), which removes most of the ATM vanilla bias left by the stored leverage."""
         from ..marketdata import MarketSnapshot
-        snap = MarketSnapshot.from_calibration_file(path or DEFAULT_CALIBRATION, underlying, valuation,
-                                                    provenance=False)
+
+        snap = MarketSnapshot.from_calibration_file(
+            path or DEFAULT_CALIBRATION, underlying, valuation, provenance=False
+        )
         ctx = cls.from_snapshot(snap)
         if slv_regression:
             from ..slv import calibrate_leverage
-            fresh = calibrate_leverage(ctx.heston, ctx.surface, ctx.market, ctx.t_max, mix=ctx.slv.mix,
-                                       n_particles=200_000, rng=2026, regression=slv_regression,
-                                       positive_part=slv_regression == "local_linear")
+
+            fresh = calibrate_leverage(
+                ctx.heston,
+                ctx.surface,
+                ctx.market,
+                ctx.t_max,
+                mix=ctx.slv.mix,
+                n_particles=200_000,
+                rng=2026,
+                regression=slv_regression,
+                positive_part=slv_regression == "local_linear",
+            )
             ctx.slv = fresh
             ctx.snapshot_id = f"{ctx.snapshot_id}+slv-{slv_regression}"
         return ctx
@@ -56,19 +78,29 @@ class PricingContext:
         slv = SLVModel(heston, Leverage.from_dict(snap.slv["leverage"]), snap.slv["mix"])
         surface = FastSVISurface.from_dict(snap.surface)  # bit-identical to SVISurface, faster per step
         flat = (snap.provenance or {}).get("leverage", {}).get("mode") == "flat"
-        return cls(Market.from_dict(snap.market), surface, heston, slv, snap.valuation, snap.underlying,
-                   snap.snapshot_id, leverage_flat=flat,
-                   payment_currency=snap.provenance.get("payment"))
+        return cls(
+            Market.from_dict(snap.market),
+            surface,
+            heston,
+            slv,
+            snap.valuation,
+            snap.underlying,
+            snap.snapshot_id,
+            leverage_flat=flat,
+            payment_currency=snap.provenance.get("payment"),
+        )
 
     def slv_at_mix(self, mix: float, horizon: float, n_particles: int = 200_000, seed: int = 2026):
         """The SLV model with its leverage recalibrated for another mixing fraction (cached): the vanillas stay on
         the surface while the share of stochastic vol of vol changes."""
         from ..slv import calibrate_leverage
+
         T_max = round(min(max(horizon, 1 / 12), self.t_max), 6)
         key = (round(float(mix), 6), T_max, n_particles, seed)
         if key not in self.slv_cache:
-            self.slv_cache[key] = calibrate_leverage(self.heston, self.surface, self.market, T_max, mix=float(mix),
-                                                     n_particles=n_particles, rng=seed)
+            self.slv_cache[key] = calibrate_leverage(
+                self.heston, self.surface, self.market, T_max, mix=float(mix), n_particles=n_particles, rng=seed
+            )
         return self.slv_cache[key]
 
     def slv_model(self, horizon: float = 1.0, mix: float | None = None):
@@ -99,9 +131,11 @@ class PricingContext:
             return HestonModel(self.heston)
         if name == "lv" and fast:
             from .fastmodels import TabulatedLocalVol
+
             return TabulatedLocalVol(self.surface)
         if name == "slv" and fast:
             from .fastmodels import fast_slv
+
             return fast_slv(self.slv_model(T))
         if name == "lv":
             return LocalVolModel(self.surface)

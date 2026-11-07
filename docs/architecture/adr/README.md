@@ -5,8 +5,8 @@ with Luca's agreement (rule of the refactor, `HANDOFF_REFACTOR_1_ARCHITECTURE.md
 consequences, alternatives. "Safety above all": when a nicer option and a safer one compete, the safer one wins and
 the ADR says so.
 
-Status of every ADR below: **Proposed** at the A0 checkpoint (7 November 2026), **Accepted** once Luca validates
-them in the A0 pull request.
+Status of every ADR below: **Accepted** by Luca at the A0 checkpoint (7 November 2026). ADR-0017 keeps one open
+item: the tolerance across platforms.
 
 | ADR | Decision | Handoff §1 row |
 |---|---|---|

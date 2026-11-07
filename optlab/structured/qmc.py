@@ -52,8 +52,9 @@ def bridge_normals(z: np.ndarray, times: np.ndarray) -> np.ndarray:
             W[:, i] = np.sqrt(times[i]) * z[:, k]
             continue
         tl, ti, tr = times[lo], times[i], times[hi]
-        W[:, i] = ((tr - ti) * W[:, lo] + (ti - tl) * W[:, hi]) / (tr - tl) + \
-            np.sqrt((ti - tl) * (tr - ti) / (tr - tl)) * z[:, k]
+        W[:, i] = ((tr - ti) * W[:, lo] + (ti - tl) * W[:, hi]) / (tr - tl) + np.sqrt(
+            (ti - tl) * (tr - ti) / (tr - tl)
+        ) * z[:, k]
     return np.diff(W, axis=1) / np.sqrt(np.diff(times))
 
 
@@ -96,12 +97,24 @@ def simulation_grid(model, times, dt_max=1 / 252, dt_min=1 / 2000) -> np.ndarray
     return time_grid(times, dt_max, dt_min)
 
 
-def price_rqmc(script, model, market, params: dict | None = None, fmt=None, m: int = 14, replications: int = 16,
-               seed=0, valuation=None, calendar=None, fixings: dict | None = None,
-               initial_fixing: float | None = None) -> StructuredResult:
+def price_rqmc(
+    script,
+    model,
+    market,
+    params: dict | None = None,
+    fmt=None,
+    m: int = 14,
+    replications: int = 16,
+    seed=0,
+    valuation=None,
+    calendar=None,
+    fixings: dict | None = None,
+    initial_fixing: float | None = None,
+) -> StructuredResult:
     """RQMC price of a single-underlying script: `replications` scramblings of 2^m antithetic pairs each. The SE
     is the standard deviation of the scrambled estimates over sqrt(replications)."""
     from ..models import simulate
+
     t0 = time.perf_counter()
     fmt = fmt or Note()
     program = _program(script)
@@ -130,9 +143,20 @@ def price_rqmc(script, model, market, params: dict | None = None, fmt=None, m: i
     seconds = time.perf_counter() - t0
     n_ev = len(program.events)
     return StructuredResult(
-        value=value, price=100 * value.price / N, stderr=100 * value.stderr / N, fmt=fmt.name, notional=N,
-        n_paths=value.n_paths, seconds=seconds, timings={"rqmc": seconds, "dimensions": len(grid[1:]) * n_factors},
-        event_times=timeline.event_times, termination=np.zeros(n_ev), expected_flows={},
-        expected_life=float(timeline.event_times[-1]), redemption_probabilities={},
+        value=value,
+        price=100 * value.price / N,
+        stderr=100 * value.stderr / N,
+        fmt=fmt.name,
+        notional=N,
+        n_paths=value.n_paths,
+        seconds=seconds,
+        timings={"rqmc": seconds, "dimensions": len(grid[1:]) * n_factors},
+        event_times=timeline.event_times,
+        termination=np.zeros(n_ev),
+        expected_flows={},
+        expected_life=float(timeline.event_times[-1]),
+        redemption_probabilities={},
         warnings=[f"RQMC: {replications} scramblings of 2^{m} pairs; SE from the scramblings"],
-        method="rqmc", pairs=np.concatenate(pairs))
+        method="rqmc",
+        pairs=np.concatenate(pairs),
+    )

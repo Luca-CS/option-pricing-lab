@@ -5,11 +5,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-python -m venv .venv
-.venv/Scripts/pip install -r requirements.txt          # Windows; .venv/bin/pip elsewhere
-.venv/Scripts/python -m pytest -q tests/test_closed_forms.py   # fast sanity check (seconds)
-.venv/Scripts/python -m pytest tests/test_monte_carlo.py::test_heston_mc_matches_fourier   # single test
-.venv/Scripts/python -m pytest                          # full suite, ~10 min (mostly SLV in test_calibration.py)
+uv sync --locked --all-extras                          # .venv from uv.lock (hashes); dev tools in the dev group
+uv run pytest -q tests/test_closed_forms.py            # fast sanity check (seconds)
+uv run pytest tests/test_monte_carlo.py::test_heston_mc_matches_fourier   # single test
+uv run pytest -m "not slow and not gpu and not lake" -n auto   # what CI runs (a few minutes)
+uv run pytest                                          # full suite, about 33 min (real lake, GPU, node when present)
+uv run python tests/golden/golden.py check [--local]   # golden numbers, bit for bit (local: lake, showcase, GPU)
+uv run pre-commit install                              # ruff, ruff-format, gitleaks and file checks before each commit
 ```
 
 - Structured products: `.venv/Scripts/python -m pytest -q tests/test_structured_*.py` (about a minute);

@@ -1,6 +1,6 @@
 # ADR-0011: Duplicates: `space/` removed, `docs/lab.js` frozen
 
-- Status: Proposed (A0, 7 November 2026)
+- Status: Accepted (A0 checkpoint, 7 November 2026)
 - Handoff §1: Doublons
 
 ## Context

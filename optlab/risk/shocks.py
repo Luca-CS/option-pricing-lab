@@ -58,6 +58,7 @@ def _nodes_dict(d) -> dict:
 @dataclass
 class VolMove:
     """Moves of one name's implied volatilities."""
+
     parallel: float = 0.0
     relative: float = 0.0
     skew: float = 0.0
@@ -66,13 +67,25 @@ class VolMove:
     term: dict = field(default_factory=dict)  # {tenor index: absolute at-the-money bump, every strike}
 
     def __bool__(self):
-        return bool(self.parallel or self.relative or self.skew or any(self.nodes.values())
-                    or any(self.relative_nodes.values()) or any(self.term.values()))
+        return bool(
+            self.parallel
+            or self.relative
+            or self.skew
+            or any(self.nodes.values())
+            or any(self.relative_nodes.values())
+            or any(self.term.values())
+        )
 
     def __add__(self, o: "VolMove") -> "VolMove":
         f = lambda a, b: a + b  # noqa: E731
-        return VolMove(self.parallel + o.parallel, self.relative + o.relative, self.skew + o.skew,
-                       _merge(self.nodes, o.nodes, f), _merge(self.relative_nodes, o.relative_nodes, f), _merge(self.term, o.term, f))
+        return VolMove(
+            self.parallel + o.parallel,
+            self.relative + o.relative,
+            self.skew + o.skew,
+            _merge(self.nodes, o.nodes, f),
+            _merge(self.relative_nodes, o.relative_nodes, f),
+            _merge(self.term, o.term, f),
+        )
 
     def matrices(self):
         shape = (len(grid.STRIKES), len(grid.TENORS))
@@ -90,25 +103,38 @@ class VolMove:
         return bumped_surface(surface, self.parallel, self.relative, self.skew, H, R, t)
 
     def to_dict(self) -> dict:
-        return {"parallel": self.parallel, "relative": self.relative, "skew": self.skew,
-                "nodes": {f"{i},{j}": v for (i, j), v in self.nodes.items()},
-                "relative_nodes": {f"{i},{j}": v for (i, j), v in self.relative_nodes.items()},
-                "term": {str(int(j)): v for j, v in self.term.items()}}
+        return {
+            "parallel": self.parallel,
+            "relative": self.relative,
+            "skew": self.skew,
+            "nodes": {f"{i},{j}": v for (i, j), v in self.nodes.items()},
+            "relative_nodes": {f"{i},{j}": v for (i, j), v in self.relative_nodes.items()},
+            "term": {str(int(j)): v for j, v in self.term.items()},
+        }
 
     @classmethod
     def from_dict(cls, d) -> "VolMove":
         if isinstance(d, (int, float)):
             return cls(float(d))
         d = d or {}
-        return cls(float(d.get("parallel", 0.0)), float(d.get("relative", 0.0)), float(d.get("skew", 0.0)),
-                   _nodes_dict(d.get("nodes")), _nodes_dict(d.get("relative_nodes")),
-                   {int(j): float(v) for j, v in (d.get("term") or {}).items()})
+        return cls(
+            float(d.get("parallel", 0.0)),
+            float(d.get("relative", 0.0)),
+            float(d.get("skew", 0.0)),
+            _nodes_dict(d.get("nodes")),
+            _nodes_dict(d.get("relative_nodes")),
+            {int(j): float(v) for j, v in (d.get("term") or {}).items()},
+        )
 
     def key(self):
-        return (round(self.parallel, 12), round(self.relative, 12), round(self.skew, 12),
-                tuple(sorted((k, round(v, 12)) for k, v in self.nodes.items() if v)),
-                tuple(sorted((k, round(v, 12)) for k, v in self.relative_nodes.items() if v)),
-                tuple(sorted((int(k), round(v, 12)) for k, v in self.term.items() if v)))
+        return (
+            round(self.parallel, 12),
+            round(self.relative, 12),
+            round(self.skew, 12),
+            tuple(sorted((k, round(v, 12)) for k, v in self.nodes.items() if v)),
+            tuple(sorted((k, round(v, 12)) for k, v in self.relative_nodes.items() if v)),
+            tuple(sorted((int(k), round(v, 12)) for k, v in self.term.items() if v)),
+        )
 
 
 @dataclass
@@ -135,8 +161,11 @@ class Shock:
             raise ValueError(f"unknown vol rule {self.rule!r}, expected one of {', '.join(RULES)}")
         self.vol = {n: v if isinstance(v, VolMove) else VolMove.from_dict(v) for n, v in self.vol.items()}
         for name in ("rates", "discount", "forward_rate", "dividend", "repo"):
-            setattr(self, name, {k: v if isinstance(v, CurveMove) else CurveMove.from_dict(v)
-                                 for k, v in getattr(self, name).items()})
+            setattr(
+                self,
+                name,
+                {k: v if isinstance(v, CurveMove) else CurveMove.from_dict(v) for k, v in getattr(self, name).items()},
+            )
 
     def __add__(self, o: "Shock") -> "Shock":
         if self.rule != o.rule and "sticky_moneyness" not in (self.rule, o.rule):
@@ -150,20 +179,43 @@ class Shock:
             for x in (self, o):
                 if x.rule != "sticky_moneyness":
                     rule_spot = _merge(rule_spot, x.spot if x.rule_spot is None else x.rule_spot, mult)
-        return Shock(_merge(self.spot, o.spot, lambda a, b: (1 + a) * (1 + b) - 1), _merge(self.vol, o.vol, add), rule,
-                     _merge(self.rates, o.rates, add), _merge(self.discount, o.discount, add),
-                     _merge(self.forward_rate, o.forward_rate, add), _merge(self.dividend, o.dividend, add),
-                     _merge(self.dividend_relative, o.dividend_relative, lambda a, b: (1 + a) * (1 + b) - 1),
-                     _merge(self.repo, o.repo, add), self.corr + o.corr, _merge(self.corr_pairs, o.corr_pairs, add),
-                     _merge(self.fx, o.fx, lambda a, b: (1 + a) * (1 + b) - 1), _merge(self.quanto_corr, o.quanto_corr, add),
-                     _merge(self.fx_vol, o.fx_vol, add), self.roll_days + o.roll_days, rule_spot)
+        return Shock(
+            _merge(self.spot, o.spot, lambda a, b: (1 + a) * (1 + b) - 1),
+            _merge(self.vol, o.vol, add),
+            rule,
+            _merge(self.rates, o.rates, add),
+            _merge(self.discount, o.discount, add),
+            _merge(self.forward_rate, o.forward_rate, add),
+            _merge(self.dividend, o.dividend, add),
+            _merge(self.dividend_relative, o.dividend_relative, lambda a, b: (1 + a) * (1 + b) - 1),
+            _merge(self.repo, o.repo, add),
+            self.corr + o.corr,
+            _merge(self.corr_pairs, o.corr_pairs, add),
+            _merge(self.fx, o.fx, lambda a, b: (1 + a) * (1 + b) - 1),
+            _merge(self.quanto_corr, o.quanto_corr, add),
+            _merge(self.fx_vol, o.fx_vol, add),
+            self.roll_days + o.roll_days,
+            rule_spot,
+        )
 
     def to_dict(self) -> dict:
-        d = {"spot": dict(self.spot), "vol": {n: v.to_dict() for n, v in self.vol.items()}, "rule": self.rule,
-             **{k: {c: m.to_dict() for c, m in getattr(self, k).items()} for k in ("rates", "discount", "forward_rate", "dividend", "repo")},
-             "dividend_relative": dict(self.dividend_relative), "corr": self.corr, "corr_pairs": dict(self.corr_pairs),
-             "fx": dict(self.fx), "quanto_corr": dict(self.quanto_corr), "fx_vol": dict(self.fx_vol), "roll_days": self.roll_days,
-             "rule_spot": None if self.rule_spot is None else dict(self.rule_spot)}
+        d = {
+            "spot": dict(self.spot),
+            "vol": {n: v.to_dict() for n, v in self.vol.items()},
+            "rule": self.rule,
+            **{
+                k: {c: m.to_dict() for c, m in getattr(self, k).items()}
+                for k in ("rates", "discount", "forward_rate", "dividend", "repo")
+            },
+            "dividend_relative": dict(self.dividend_relative),
+            "corr": self.corr,
+            "corr_pairs": dict(self.corr_pairs),
+            "fx": dict(self.fx),
+            "quanto_corr": dict(self.quanto_corr),
+            "fx_vol": dict(self.fx_vol),
+            "roll_days": self.roll_days,
+            "rule_spot": None if self.rule_spot is None else dict(self.rule_spot),
+        }
         return {k: v for k, v in d.items() if v or k == "rule"}
 
     @classmethod
@@ -186,6 +238,7 @@ BASE = Shock()
 class RiskEnv:
     """What a shock needs beyond the context: spot-vol betas per name ({name: list per tenor}), quanto links
     ({name: (rho, vol_fx)}), the reporting currency, and SLV settings when the base model is SLV."""
+
     betas: dict = field(default_factory=dict)
     quanto: dict = field(default_factory=dict)
     currency: str = "USD"
@@ -195,6 +248,7 @@ class RiskEnv:
 @dataclass
 class NameMove:
     """A shock read for one name of a context."""
+
     spot: float = 0.0
     vol: VolMove = field(default_factory=VolMove)
     strike_shift: float = 0.0  # sticky strike: the surface is read at k + ln(1 + strike_shift)
@@ -247,6 +301,7 @@ def context_currency(ctx) -> str:
     if cur:
         return cur
     from ..marketdata.universe import _BY_ID
+
     name = ctx.names[0] if isinstance(ctx, BasketContext) else ctx.underlying
     inst = _BY_ID.get(name)
     return inst.currency if inst is not None else "USD"
@@ -255,6 +310,7 @@ def context_currency(ctx) -> str:
 def moved_corr(corr, shock: Shock, names) -> np.ndarray:
     """The correlation matrix with every pair moved by shock.corr and the listed pairs by their own move, repaired."""
     from ..marketdata.derive.correl import nearest_correlation
+
     c = np.array(corr, dtype=float)
     if not shock.corr and not shock.corr_pairs:
         return c
@@ -282,8 +338,11 @@ def _quanto_forward(market, surface, drift: float):
         return market
     from ..market import Market
     from ..structured.quanto import integrated_vol
+
     t = np.asarray(market.to_dict()["pillars"], dtype=float)
-    return Market(market.spot, t, np.asarray(market.D(t)), np.asarray(market.F(t)) * np.exp(-drift * integrated_vol(t, surface)))
+    return Market(
+        market.spot, t, np.asarray(market.D(t)), np.asarray(market.F(t)) * np.exp(-drift * integrated_vol(t, surface))
+    )
 
 
 def shocked_market(market, surface, move: NameMove, discount: CurveMove | None = None, with_spot: bool = True):
@@ -297,6 +356,7 @@ def shocked_market(market, surface, move: NameMove, discount: CurveMove | None =
 def shocked_surface(surface, move: NameMove):
     """Sticky strike reindexing first (the base smile at absolute strikes), then the vol moves."""
     from ..structured.greeks import StickyStrikeSurface
+
     s = surface
     if move.strike_shift and not np.isscalar(s):
         s = StickyStrikeSurface(s, move.strike_shift)
@@ -305,6 +365,7 @@ def shocked_surface(surface, move: NameMove):
 
 def roll_date(valuation, days: int, calendar: str = "nyse"):
     from ..structured.calendars import calendar as get_calendar
+
     if not days:
         return valuation
     return get_calendar(calendar).add_business_days(valuation, int(days))
@@ -322,12 +383,24 @@ def apply(ctx, shock: Shock, env: RiskEnv | None = None):
             mv = name_moves(shock, n, cur, env)
             markets[n] = shocked_market(ctx.markets[n], ctx.vols[n], mv, disc)
             vols[n] = shocked_surface(ctx.vols[n], mv)
-        out = BasketContext(ctx.names, markets, vols, moved_corr(ctx.corr, shock, list(ctx.names)), ctx.valuation,
-                            ctx.contexts, ctx.correlation_cache, ctx.payment_currency)
+        out = BasketContext(
+            ctx.names,
+            markets,
+            vols,
+            moved_corr(ctx.corr, shock, list(ctx.names)),
+            ctx.valuation,
+            ctx.contexts,
+            ctx.correlation_cache,
+            ctx.payment_currency,
+        )
     else:
         mv = name_moves(shock, ctx.underlying, cur, env)
-        out = dataclasses.replace(ctx, market=shocked_market(ctx.market, ctx.surface, mv, disc),
-                                  surface=shocked_surface(ctx.surface, mv), slv_cache={})
+        out = dataclasses.replace(
+            ctx,
+            market=shocked_market(ctx.market, ctx.surface, mv, disc),
+            surface=shocked_surface(ctx.surface, mv),
+            slv_cache={},
+        )
     if shock.roll_days:
         out = dataclasses.replace(out, valuation=roll_date(ctx.valuation, shock.roll_days))
     return out
@@ -352,8 +425,16 @@ def simulation_part(ctx, shock: Shock, env: RiskEnv | None = None):
     cur = context_currency(ctx)
     if isinstance(ctx, BasketContext):
         vols = {n: shocked_surface(ctx.vols[n], name_moves(shock, n, cur, env)) for n in ctx.names}
-        out = BasketContext(ctx.names, dict(ctx.markets), vols, moved_corr(ctx.corr, shock, list(ctx.names)), ctx.valuation,
-                            ctx.contexts, ctx.correlation_cache, ctx.payment_currency)
+        out = BasketContext(
+            ctx.names,
+            dict(ctx.markets),
+            vols,
+            moved_corr(ctx.corr, shock, list(ctx.names)),
+            ctx.valuation,
+            ctx.contexts,
+            ctx.correlation_cache,
+            ctx.payment_currency,
+        )
     else:
         mv = name_moves(shock, ctx.underlying, cur, env)
         surface = shocked_surface(ctx.surface, mv)

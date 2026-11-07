@@ -52,6 +52,7 @@ class Evaluation:
 @dataclass
 class Totals:
     """Aggregated results of one evaluation over all batches."""
+
     pairs: list = field(default_factory=list)
     terminated: np.ndarray | None = None
     flows: dict = field(default_factory=dict)
@@ -75,8 +76,11 @@ class Totals:
 def _scenario(model, market, name, times, size, seed, spot0, history, sim_kwargs):
     rng = np.random.default_rng(seed)
     if isinstance(model, Basket):
-        paths = simulate_basket(model, times, size, rng, **sim_kwargs) if len(times) else \
-            {n: np.empty((size, 0)) for n in model.names}
+        paths = (
+            simulate_basket(model, times, size, rng, **sim_kwargs)
+            if len(times)
+            else {n: np.empty((size, 0)) for n in model.names}
+        )
         return BasketScenario(times, paths, spot0, history)
     paths = simulate(model, market, times, size, rng, **sim_kwargs) if len(times) else np.empty((size, 0))
     return Scenario(name, times, paths, spot0, history)
@@ -93,8 +97,10 @@ def _scaled(scenario, factor):
         if all(_no_change(f) for f in factor.values()):
             return scenario
         paths = {n: p if _no_change(factor.get(n, 1.0)) else p * factor[n] for n, p in scenario.paths.items()}
-        windows = {k: {n: (lo * factor.get(n, 1.0), hi * factor.get(n, 1.0)) for n, (lo, hi) in w.items()}
-                   for k, w in scenario.windows.items()}  # reduced windows only come with one factor per name
+        windows = {
+            k: {n: (lo * factor.get(n, 1.0), hi * factor.get(n, 1.0)) for n, (lo, hi) in w.items()}
+            for k, w in scenario.windows.items()
+        }  # reduced windows only come with one factor per name
         return BasketScenario(scenario.times, paths, scenario.spot0, scenario.history, windows)
     if _no_change(factor):
         return scenario
@@ -190,6 +196,7 @@ def reduction(times, evaluations) -> tuple:
     reads a window): the engine then returns the event dates and two columns per window instead of one per day.
     (None, (), ()) when there is nothing to gain or a window is not a contiguous run of simulated dates."""
     from .scenario import window_key
+
     for ev in evaluations:  # a factor per date (a forward bump) would scale a window's days unequally
         factors = ev.spot_factor.values() if isinstance(ev.spot_factor, dict) else [ev.spot_factor]
         if any(np.ndim(f) > 0 for f in factors):
@@ -221,6 +228,7 @@ def reduction(times, evaluations) -> tuple:
 
 def _run_native(backend, model, market, name, times, n_paths, seed, spot0, history, evaluations, sim_kwargs):
     from .multiasset import Basket
+
     t_start = time.perf_counter()
     plan = native.plan(model, market, times, sim_kwargs.get("dt_max", 1 / 252), sim_kwargs.get("dt_min", 1 / 2000))
     key = native.seed64(seed)
@@ -235,8 +243,9 @@ def _run_native(backend, model, market, name, times, n_paths, seed, spot0, histo
 
     def produce(k):
         t = time.perf_counter()
-        spots, extremes, timing = native.run(plan, sizes[k], key, int(starts[k]), backend,
-                                             int(sim_kwargs.get("threads", 0)), keep, windows)
+        spots, extremes, timing = native.run(
+            plan, sizes[k], key, int(starts[k]), backend, int(sim_kwargs.get("threads", 0)), keep, windows
+        )
         if basket:
             reduced = {wk: {nm: extremes[a][w] for a, nm in enumerate(plan.names)} for w, wk in enumerate(wkeys)}
             scenario = BasketScenario(kept_times, dict(zip(plan.names, spots)), spot0, history, reduced)
@@ -275,12 +284,33 @@ def _run_native(backend, model, market, name, times, n_paths, seed, spot0, histo
                 sims[k + threads + 1] = producer.submit(produce, k + threads + 1)
         for j in sorted(evals):
             collect(j)
-    return totals, {"simulation": t_sim, "evaluation": t_eval, "wall": time.perf_counter() - t_start, "workers": threads,
-                    "engine": backend, "kernel_ms": kernel, "batches": n, "columns": columns, "windows": len(windows)}
+    return totals, {
+        "simulation": t_sim,
+        "evaluation": t_eval,
+        "wall": time.perf_counter() - t_start,
+        "workers": threads,
+        "engine": backend,
+        "kernel_ms": kernel,
+        "batches": n,
+        "columns": columns,
+        "windows": len(windows),
+    }
 
 
-def run(model, market, name, times, n_paths: int, seed, batch, spot0, history, evaluations: list,
-        workers: int | None = None, **sim_kwargs):
+def run(
+    model,
+    market,
+    name,
+    times,
+    n_paths: int,
+    seed,
+    batch,
+    spot0,
+    history,
+    evaluations: list,
+    workers: int | None = None,
+    **sim_kwargs,
+):
     """Totals per evaluation and timings {"simulation", "evaluation", "wall", "workers", "engine"}. `engine` in
     sim_kwargs picks the source of the paths (numpy, cpu, gpu, auto)."""
     backend, why = native.choose(sim_kwargs.pop("engine", None), model)
@@ -292,8 +322,9 @@ def run(model, market, name, times, n_paths: int, seed, batch, spot0, history, e
     sim_kwargs.pop("eval_threads", None)
     sizes = batch_sizes(n_paths, batch)
     seeds = [seed] if len(sizes) == 1 else list(np.random.SeedSequence(seed).spawn(len(sizes)))
-    jobs = [(model, market, name, times, size, s, spot0, history, evaluations, sim_kwargs)
-            for size, s in zip(sizes, seeds)]
+    jobs = [
+        (model, market, name, times, size, s, spot0, history, evaluations, sim_kwargs) for size, s in zip(sizes, seeds)
+    ]
     t0 = time.perf_counter()
     if workers and workers > 1 and len(jobs) > 1:
         results = list(process_pool(workers).map(run_batch, jobs))
@@ -306,5 +337,11 @@ def run(model, market, name, times, n_paths: int, seed, batch, spot0, history, e
         t_sim, t_eval = t_sim + ts, t_eval + te
         for tot, summary in zip(totals, summaries):
             tot.add(summary)
-    return totals, {"simulation": t_sim, "evaluation": t_eval, "wall": time.perf_counter() - t0, "workers": workers,
-                    "engine": "numpy", **({"engine_note": why} if why else {})}
+    return totals, {
+        "simulation": t_sim,
+        "evaluation": t_eval,
+        "wall": time.perf_counter() - t0,
+        "workers": workers,
+        "engine": "numpy",
+        **({"engine_note": why} if why else {}),
+    }

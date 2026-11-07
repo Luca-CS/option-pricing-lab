@@ -1,6 +1,6 @@
 # ADR-0009: Linux containers in WSL2, with Docker Engine and the NVIDIA Container Toolkit
 
-- Status: Proposed (A0, 7 November 2026); the lake's location is decided by a measurement in A7
+- Status: Accepted (A0 checkpoint, 7 November 2026); the lake's location is decided by a measurement in A7
 - Handoff §1: Exécution; §4.7
 
 ## Context

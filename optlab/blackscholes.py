@@ -48,8 +48,11 @@ def bs_greeks(S, K, T, r, q, vol, cp="call") -> dict:
     delta = phi * dq * ndtr(phi * d1)
     gamma = dq * _npdf(d1) / (S * sd)
     vega = S * dq * _npdf(d1) * np.sqrt(T)
-    theta = (-S * dq * _npdf(d1) * vol / (2 * np.sqrt(T))
-             - phi * r * K * dr * ndtr(phi * d2) + phi * q * S * dq * ndtr(phi * d1))
+    theta = (
+        -S * dq * _npdf(d1) * vol / (2 * np.sqrt(T))
+        - phi * r * K * dr * ndtr(phi * d2)
+        + phi * q * S * dq * ndtr(phi * d1)
+    )
     rho = phi * K * T * dr * ndtr(phi * d2)
     return {"delta": delta, "gamma": gamma, "vega": vega, "theta": theta, "rho": rho}
 
@@ -145,10 +148,12 @@ def _barrier_out(S, K, H, T, r, q, vol, direction, phi):
     y2 = np.log(H / S) / sd + (1 + mu) * sd
     A = phi * carry * ndtr(phi * x1) - phi * disc * ndtr(phi * x1 - phi * sd)
     B = phi * carry * ndtr(phi * x2) - phi * disc * ndtr(phi * x2 - phi * sd)
-    C = (phi * carry * (H / S) ** (2 * (mu + 1)) * ndtr(eta * y1)
-         - phi * disc * (H / S) ** (2 * mu) * ndtr(eta * y1 - eta * sd))
-    D = (phi * carry * (H / S) ** (2 * (mu + 1)) * ndtr(eta * y2)
-         - phi * disc * (H / S) ** (2 * mu) * ndtr(eta * y2 - eta * sd))
+    C = phi * carry * (H / S) ** (2 * (mu + 1)) * ndtr(eta * y1) - phi * disc * (H / S) ** (2 * mu) * ndtr(
+        eta * y1 - eta * sd
+    )
+    D = phi * carry * (H / S) ** (2 * (mu + 1)) * ndtr(eta * y2) - phi * disc * (H / S) ** (2 * mu) * ndtr(
+        eta * y2 - eta * sd
+    )
     call = phi > 0
     if direction == "down" and call:
         return A - C if K > H else B - D

@@ -4,12 +4,11 @@ import json
 
 import numpy as np
 import pytest
+from _risk_refs import S0, VOL, Q, R, book, engine_name, flat_ctx, forward_contract, vanilla, within
 from scipy.stats import norm
 
-from _risk_refs import Q, R, S0, VOL, book, engine_name, flat_ctx, forward_contract, vanilla, within
 from optlab.blackscholes import bs_greeks, bs_price
-from optlab.risk import CurveMove, Measure, RiskGroup, RiskSettings, Shock, VolMove, apply, revalue
-from optlab.risk import grid
+from optlab.risk import CurveMove, Measure, RiskGroup, RiskSettings, Shock, VolMove, apply, grid, revalue
 from optlab.risk.curves import bumped_market, forward_ratio
 from optlab.risk.shocks import RiskEnv, sim_key
 from optlab.risk.surfaces import TentBumpedSurface, arbitrage
@@ -106,16 +105,19 @@ def test_kxt_vega_of_a_call_sits_on_the_nodes_around_its_strike_and_maturity():
     T = days / 365
     K = float(SPX.market.F(T))
     b = book(vanilla(K, days, valuation=SPX.valuation))
-    run = revalue([RiskGroup("SPX", b, SPX, 1)], _kxt_shocks(),
-                  [Measure("vega", {"parallel_up": 0.5, "parallel_down": -0.5})])
+    run = revalue(
+        [RiskGroup("SPX", b, SPX, 1)], _kxt_shocks(), [Measure("vega", {"parallel_up": 0.5, "parallel_down": -0.5})]
+    )
     g = run.groups[0]
     assert g.method == "replication"
     nodes = np.array([[g.pnl[f"n{i},{j}"][2] for j in range(len(grid.TENORS))] for i in range(len(grid.STRIKES))])
     total = nodes.sum()
     i_atm, j6, j1 = grid.STRIKES.index(1.0), grid.TENORS.index(0.5), grid.TENORS.index(1.0)
-    near = nodes[i_atm - 1:i_atm + 2, [j6, j1]].sum()
+    near = nodes[i_atm - 1 : i_atm + 2, [j6, j1]].sum()
     assert near / total > 0.85  # the strike tents are smoothed over about 0.1 sqrt(T) of log moneyness (grid.py)
-    assert np.all(nodes[:, :j6] == 0) and np.all(nodes[:, j1 + 1:] == 0)  # tenors that do not bracket 9 months: nothing
+    assert np.all(nodes[:, :j6] == 0) and np.all(
+        nodes[:, j1 + 1 :] == 0
+    )  # tenors that do not bracket 9 months: nothing
     parallel = g.measures["vega"][2]
     assert abs(total - parallel) / parallel < 2e-3  # one-sided node bumps against a central parallel one
 
@@ -129,8 +131,12 @@ def test_rho_and_epsilon_by_tenor_sit_on_the_bracketing_tenors_and_add_up_to_the
     for j in range(len(grid.TENORS)):
         shocks[f"r{j}"] = Shock(rates={"*": CurveMove(tenors={j: 1.0})})
         shocks[f"q{j}"] = Shock(dividend={"*": CurveMove(tenors={j: 1.0})})
-    shocks |= {"r": Shock(rates={"*": CurveMove(1.0)}), "q": Shock(dividend={"*": CurveMove(1.0)}),
-               "D": Shock(discount={"*": CurveMove(1.0)}), "F": Shock(forward_rate={"*": CurveMove(1.0)})}
+    shocks |= {
+        "r": Shock(rates={"*": CurveMove(1.0)}),
+        "q": Shock(dividend={"*": CurveMove(1.0)}),
+        "D": Shock(discount={"*": CurveMove(1.0)}),
+        "F": Shock(forward_rate={"*": CurveMove(1.0)}),
+    }
     g = revalue([RiskGroup("SPX", b, ctx, 1)], shocks).groups[0]
     rho = np.array([g.pnl[f"r{j}"][2] for j in range(len(grid.TENORS))])
     eps = np.array([g.pnl[f"q{j}"][2] for j in range(len(grid.TENORS))])
@@ -152,6 +158,7 @@ def test_rho_and_epsilon_by_tenor_sit_on_the_bracketing_tenors_and_add_up_to_the
 def test_forward_and_spot_moves_on_the_paths_equal_a_new_simulation_on_the_moved_market():
     """Under local vol at sticky moneyness the factor on the paths is exact: same numbers as pricing the moved market."""
     from optlab.structured import preset
+
     sheet = preset("phoenix", **{"general.maturity_months": 12, "wrapper.solve": "upfront", "coupon.rate": 0.08})
     b = Book([Position("ph", sheet, -1.0)])
     shock = Shock(spot={"*": 0.03}, dividend={"*": CurveMove(25.0, {3: 40.0})}, repo={"*": CurveMove(-10.0)})
@@ -159,9 +166,22 @@ def test_forward_and_spot_moves_on_the_paths_equal_a_new_simulation_on_the_moved
     g = revalue([RiskGroup("SPX", b, SPX, 5)], {"s": shock}, settings=settings).groups[0]
     assert g.simulations == 1  # spot and forwards ride on the base simulation
     moved = apply(SPX, shock)
-    ref = b.price(SPX, model="lv", market=moved.market, n_paths=20_000, batch=10_000, seed=5, initial_fixing=SPX.market.spot,
-                  engine="numpy") if "engine" in Book.price.__code__.co_varnames else \
-        b.price(SPX, model="lv", market=moved.market, n_paths=20_000, batch=10_000, seed=5, initial_fixing=SPX.market.spot)
+    ref = (
+        b.price(
+            SPX,
+            model="lv",
+            market=moved.market,
+            n_paths=20_000,
+            batch=10_000,
+            seed=5,
+            initial_fixing=SPX.market.spot,
+            engine="numpy",
+        )
+        if "engine" in Book.price.__code__.co_varnames
+        else b.price(
+            SPX, model="lv", market=moved.market, n_paths=20_000, batch=10_000, seed=5, initial_fixing=SPX.market.spot
+        )
+    )
     np.testing.assert_allclose(g.values["s"][0], ref.positions[0].value, rtol=1e-10)
     base = b.price(SPX, model="lv", n_paths=20_000, batch=10_000, seed=5)
     np.testing.assert_allclose(g.values["base"][0], base.positions[0].value, rtol=1e-12)
@@ -173,20 +193,33 @@ def test_forward_ratio_reproduces_the_bumped_forward():
     np.testing.assert_allclose(forward_ratio(SPX.market, m, t) * SPX.market.F(t), m.F(t), rtol=1e-13)
     np.testing.assert_allclose(m.D(t), SPX.market.D(t), rtol=1e-13)
     base_pillars = np.asarray(SPX.market.to_dict()["pillars"])
-    np.testing.assert_allclose(bumped_market(SPX.market, CurveMove(0.0, {0: 0.0}), CurveMove(1e-12)).D(base_pillars),
-                               SPX.market.D(base_pillars), rtol=1e-12)
+    np.testing.assert_allclose(
+        bumped_market(SPX.market, CurveMove(0.0, {0: 0.0}), CurveMove(1e-12)).D(base_pillars),
+        SPX.market.D(base_pillars),
+        rtol=1e-12,
+    )
 
 
+@pytest.mark.slow
 def test_vanilla_greeks_under_monte_carlo_on_the_engine_match_black_scholes():
     """Local vol on a flat surface is Black-Scholes: delta, vega and rho of a call within 4 SE of the closed forms."""
     eng = engine_name()
     n = 200_000 if eng != "numpy" else 40_000
     ctx = flat_ctx()
     b = book(vanilla(100.0, 365))
-    shocks = {"up": Shock(spot={"*": 0.01}), "dn": Shock(spot={"*": -0.01}), "vu": Shock(vol={"*": VolMove(0.01)}),
-              "vd": Shock(vol={"*": VolMove(-0.01)}), "ru": Shock(rates={"*": CurveMove(10.0)}), "rd": Shock(rates={"*": CurveMove(-10.0)})}
-    ms = [Measure("delta", {"up": 0.5, "dn": -0.5}), Measure("vega", {"vu": 0.5, "vd": -0.5}),
-          Measure("rho", {"ru": 0.05, "rd": -0.05})]
+    shocks = {
+        "up": Shock(spot={"*": 0.01}),
+        "dn": Shock(spot={"*": -0.01}),
+        "vu": Shock(vol={"*": VolMove(0.01)}),
+        "vd": Shock(vol={"*": VolMove(-0.01)}),
+        "ru": Shock(rates={"*": CurveMove(10.0)}),
+        "rd": Shock(rates={"*": CurveMove(-10.0)}),
+    }
+    ms = [
+        Measure("delta", {"up": 0.5, "dn": -0.5}),
+        Measure("vega", {"vu": 0.5, "vd": -0.5}),
+        Measure("rho", {"ru": 0.05, "rd": -0.05}),
+    ]
     g = revalue([RiskGroup("SPX", b, ctx, 11)], shocks, ms, RiskSettings(model="lv", n_paths=n, engine=eng)).groups[0]
     ref = bs_greeks(S0, 100.0, 1.0, R, Q, VOL)
     gamma = ref["gamma"] * S0**2 * 1e-4
@@ -199,8 +232,11 @@ def test_vanilla_greeks_under_monte_carlo_on_the_engine_match_black_scholes():
 def test_a_forward_contract_is_linear_in_the_spot_exactly():
     b = book(forward_contract(365))
     ctx = flat_ctx()
-    g = revalue([RiskGroup("SPX", b, ctx, 1)], {"up": Shock(spot={"*": 0.1}), "dn": Shock(spot={"*": -0.3})},
-                settings=RiskSettings(model="lv", n_paths=20_000, engine="numpy")).groups[0]
+    g = revalue(
+        [RiskGroup("SPX", b, ctx, 1)],
+        {"up": Shock(spot={"*": 0.1}), "dn": Shock(spot={"*": -0.3})},
+        settings=RiskSettings(model="lv", n_paths=20_000, engine="numpy"),
+    ).groups[0]
     D = float(ctx.market.D(1.0))
     held = g.values["base"][0] + 100 * D  # 100 D E[S_T] / S0 on these paths
     np.testing.assert_allclose(g.pnl["up"][2], 0.1 * held, rtol=1e-12)
@@ -208,7 +244,12 @@ def test_a_forward_contract_is_linear_in_the_spot_exactly():
 
 
 def test_shocks_add_round_trip_through_json_and_group_by_simulation():
-    a = Shock(spot={"SPX": 0.1}, vol={"*": VolMove(0.01, nodes={(2, 3): 0.005})}, rates={"USD": CurveMove(10, {1: 5})}, corr=0.02)
+    a = Shock(
+        spot={"SPX": 0.1},
+        vol={"*": VolMove(0.01, nodes={(2, 3): 0.005})},
+        rates={"USD": CurveMove(10, {1: 5})},
+        corr=0.02,
+    )
     b = Shock(spot={"SPX": -0.05}, vol={"*": VolMove(relative=0.01)}, dividend_relative={"*": -0.3}, roll_days=1)
     c = a + b
     assert c.spot["SPX"] == pytest.approx(1.1 * 0.95 - 1)

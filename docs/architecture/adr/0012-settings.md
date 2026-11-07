@@ -1,6 +1,6 @@
 # ADR-0012: One Settings object
 
-- Status: Proposed (A0, 7 November 2026)
+- Status: Accepted (A0 checkpoint, 7 November 2026)
 - Handoff §1: Configuration; §4.4
 
 ## Context

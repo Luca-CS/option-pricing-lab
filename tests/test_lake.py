@@ -8,7 +8,15 @@ import pandas as pd
 import pytest
 
 from optlab import config
-from optlab.marketdata.ingest import load_cboe, load_ecb, load_fred, load_stoxx, load_treasury, load_universe, update_all
+from optlab.marketdata.ingest import (
+    load_cboe,
+    load_ecb,
+    load_fred,
+    load_stoxx,
+    load_treasury,
+    load_universe,
+    update_all,
+)
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.quality import check_prices, check_splits, check_vol_indices, run_report
 from optlab.marketdata.sources import simple, yahoo
@@ -20,8 +28,16 @@ def lake(tmp_path):
 
 
 def vol_rows(values=(20.0, 21.0)):
-    return pd.DataFrame({"index_name": "VIX", "obs_date": ["2020-03-02", "2020-03-03"][:len(values)], "open": np.nan,
-                         "high": np.nan, "low": np.nan, "close": values})
+    return pd.DataFrame(
+        {
+            "index_name": "VIX",
+            "obs_date": ["2020-03-02", "2020-03-03"][: len(values)],
+            "open": np.nan,
+            "high": np.nan,
+            "low": np.nan,
+            "close": values,
+        }
+    )
 
 
 def test_lake_paths_follow_the_environment(monkeypatch, tmp_path):
@@ -86,8 +102,19 @@ def test_curated_rows_carry_the_standard_columns_and_partition_by_year(lake):
 
 
 def test_partitioned_table_and_date_keys_stay_idempotent(lake):
-    rows = pd.DataFrame({"underlying": "SPX", "root": "SPXW", "expiry": ["2022-09-16", "2022-09-16"], "strike": [4000.0, 4100.0],
-                         "cp": "C", "obs_date": "2022-07-01", "bid": [1.0, 2.0], "ask": [1.5, 2.5], "settlement": "PM"})
+    rows = pd.DataFrame(
+        {
+            "underlying": "SPX",
+            "root": "SPXW",
+            "expiry": ["2022-09-16", "2022-09-16"],
+            "strike": [4000.0, 4100.0],
+            "cp": "C",
+            "obs_date": "2022-07-01",
+            "bid": [1.0, 2.0],
+            "ask": [1.5, 2.5],
+            "settlement": "PM",
+        }
+    )
     assert lake.ingest("option_quotes", rows, "archive", "observed")["n_new"] == 2
     assert lake.ingest("option_quotes", rows, "archive", "observed")["n_new"] == 0
     got = lake.read("option_quotes", where="underlying = 'SPX'", order="strike")
@@ -113,14 +140,20 @@ def test_duckdb_views_cover_the_tables(lake):
 
 
 # --- parsers, on the real formats probed on 5 November 2026 ---
-CBOE_OHLC = "DATE,OPEN,HIGH,LOW,CLOSE\n01/02/1990,17.240000,17.240000,17.240000,17.240000\n01/03/1990,18.19,18.19,18.19,18.19\n"
+CBOE_OHLC = (
+    "DATE,OPEN,HIGH,LOW,CLOSE\n01/02/1990,17.240000,17.240000,17.240000,17.240000\n01/03/1990,18.19,18.19,18.19,18.19\n"
+)
 CBOE_ONE = "DATE,SKEW\n01/02/1990,126.090000\n01/03/1990,123.340000\n"
 CBOE_VVIX = "DATE,VVIX\n03/15/2006,15.71\n06/01/2006,80.5\n"
-STOXX = "Date;Symbol;Indexvalue\n04.01.1999;V2TX;18.2033\n05.01.1999;V2TX;29.6912\n05.01.1999;OTHER;1\n06.01.1999;V2TX;\n"
+STOXX = (
+    "Date;Symbol;Indexvalue\n04.01.1999;V2TX;18.2033\n05.01.1999;V2TX;29.6912\n05.01.1999;OTHER;1\n06.01.1999;V2TX;\n"
+)
 FRED = "observation_date,DGS10\n2020-01-02,1.88\n2020-01-03,\n2020-01-06,1.81\n"
 TREASURY = 'Date,"1 Mo","1.5 Month","2 Mo","1 Yr","30 Yr"\n11/04/2026,4.01,4.08,4.15,4.39,5.28\n11/03/2026,4.03,,4.15,4.40,5.32\n'
-ECB = ("KEY,FREQ,TIME_PERIOD,OBS_VALUE,OBS_STATUS\n"
-       "YC.B.U2,B,2026-10-28,2.9081346669,A\nYC.B.U2,B,2026-10-29,2.8810573843,A\n")
+ECB = (
+    "KEY,FREQ,TIME_PERIOD,OBS_VALUE,OBS_STATUS\n"
+    "YC.B.U2,B,2026-10-28,2.9081346669,A\nYC.B.U2,B,2026-10-29,2.8810573843,A\n"
+)
 
 
 def test_cboe_parser_reads_both_layouts():
@@ -163,9 +196,19 @@ def test_ecb_parser_refuses_an_html_answer():
 
 def yahoo_frame():
     idx = pd.DatetimeIndex(["2026-11-03", "2026-11-04", "2026-11-05"], tz="Europe/Paris")
-    return pd.DataFrame({"Open": [10.0, 11.0, 12.0], "High": [11.0, 12.0, 13.0], "Low": [9.0, 10.0, 11.0],
-                         "Close": [10.5, 11.5, np.nan], "Adj Close": [10.4, 11.5, np.nan], "Volume": [1, 2, 3],
-                         "Dividends": [0.0, 0.5, 0.0], "Stock Splits": [0.0, 0.0, 20.0]}, index=idx)
+    return pd.DataFrame(
+        {
+            "Open": [10.0, 11.0, 12.0],
+            "High": [11.0, 12.0, 13.0],
+            "Low": [9.0, 10.0, 11.0],
+            "Close": [10.5, 11.5, np.nan],
+            "Adj Close": [10.4, 11.5, np.nan],
+            "Volume": [1, 2, 3],
+            "Dividends": [0.0, 0.5, 0.0],
+            "Stock Splits": [0.0, 0.0, 20.0],
+        },
+        index=idx,
+    )
 
 
 def test_yahoo_parser_drops_the_nan_of_the_day_and_keeps_local_dates():
@@ -176,9 +219,19 @@ def test_yahoo_parser_drops_the_nan_of_the_day_and_keeps_local_dates():
 
 
 def test_yahoo_chain_parser():
-    raw = pd.DataFrame({"contractSymbol": ["SPXW261120C05000000", "SPX261218P05000000"], "strike": [5000.0, 5000.0],
-                        "bid": [1.0, 2.0], "ask": [1.5, 2.5], "volume": [1, 2], "openInterest": [3, 4],
-                        "impliedVolatility": [0.2, 0.3], "type": ["call", "put"], "expiry": ["2026-11-20", "2026-12-18"]})
+    raw = pd.DataFrame(
+        {
+            "contractSymbol": ["SPXW261120C05000000", "SPX261218P05000000"],
+            "strike": [5000.0, 5000.0],
+            "bid": [1.0, 2.0],
+            "ask": [1.5, 2.5],
+            "volume": [1, 2],
+            "openInterest": [3, 4],
+            "impliedVolatility": [0.2, 0.3],
+            "type": ["call", "put"],
+            "expiry": ["2026-11-20", "2026-12-18"],
+        }
+    )
     out = yahoo.parse_chain(raw, "SPX", dt.date(2026, 11, 4), 5100.0)
     assert out["root"].tolist() == ["SPXW", "SPX"] and out["cp"].tolist() == ["C", "P"]
     assert out["settlement"].tolist() == ["PM", "AM"]
@@ -198,11 +251,13 @@ def fake_fetch(url, headers=None):
     return ECB.encode()
 
 
+@pytest.mark.slow
 def test_loads_are_idempotent_end_to_end(lake):
     def run():
         out = load_cboe(lake, fake_fetch) + load_stoxx(lake, fake_fetch) + load_fred(lake, fake_fetch, lambda: None)
         out += load_treasury(lake, fake_fetch, 2026, 2026) + load_ecb(lake, fake_fetch) + [load_universe(lake)]
         return out
+
     assert sum(r["n_new"] for r in run()) > 0
     assert sum(r["n_new"] + r["n_changed"] for r in run()) == 0
     assert set(lake.read("rate_points")["curve"]) >= {"USD.TREASURY", "EUR.AAA", "USD.SOFR"}
@@ -215,6 +270,7 @@ def test_a_failing_source_is_reported_and_does_not_stop_the_load(lake, monkeypat
 
     def down(_lake):
         raise ConnectionError("no route")
+
     monkeypatch.setitem(ingest.STEPS, "stoxx", down)
     monkeypatch.setitem(ingest.STEPS, "universe", load_universe)
     report = update_all(lake, only=("stoxx", "universe"))
@@ -225,8 +281,15 @@ def test_a_failing_source_is_reported_and_does_not_stop_the_load(lake, monkeypat
 
 # --- quality ---
 def test_quality_flags_jumps_gaps_and_stale_series(lake):
-    prices = pd.DataFrame({"instrument": "X", "obs_date": ["2020-01-02", "2020-01-03", "2020-02-03"],
-                           "high": [100.0, 150.0, 151.0], "low": [99.0, 100.0, 149.0], "close": [100.0, 150.0, 150.0]})
+    prices = pd.DataFrame(
+        {
+            "instrument": "X",
+            "obs_date": ["2020-01-02", "2020-01-03", "2020-02-03"],
+            "high": [100.0, 150.0, 151.0],
+            "low": [99.0, 100.0, 149.0],
+            "close": [100.0, 150.0, 150.0],
+        }
+    )
     checks = {i["check_name"] for i in check_prices(prices, dt.date(2026, 1, 1))}
     assert checks == {"large_move", "gap", "stale"}
     vols = pd.DataFrame({"index_name": "VXAPL", "obs_date": ["2020-01-02"], "close": [500.0]})
@@ -253,6 +316,7 @@ def test_term_sheet_underlyings_come_from_the_registry_and_need_their_own_market
     from optlab.marketdata.universe import enabled_names, instrument
     from optlab.structured import PricingContext, TermSheet, quote
     from optlab.structured.schema import SECTIONS
+
     field = next(f for f in SECTIONS["general"].fields if f.name == "underlying")
     assert field.choices == enabled_names() and "NDX" in field.choices and "NVDA" not in field.choices
     assert instrument("NVDA").enabled is False
@@ -263,6 +327,7 @@ def test_term_sheet_underlyings_come_from_the_registry_and_need_their_own_market
 
 def test_rule_calendars_know_the_special_closures_and_eurex():
     from optlab.structured.calendars import CALENDARS
+
     assert not CALENDARS["nyse"].is_business_day(dt.date(2025, 1, 9))
     assert not CALENDARS["nyse"].is_business_day(dt.date(2018, 12, 5))
     eurex = CALENDARS["eurex"]
@@ -271,13 +336,21 @@ def test_rule_calendars_know_the_special_closures_and_eurex():
     assert eurex.is_business_day(dt.date(2020, 7, 3))  # a US holiday
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("script", ["lake_update", "lake_derive", "lake_surface_test", "lake_replay"])
 def test_lake_scripts_start_from_their_path_alone(script):
     import os
     import subprocess
     import sys
     from pathlib import Path
+
     root = Path(__file__).resolve().parents[1]
     env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
-    done = subprocess.run([sys.executable, str(root / "scripts" / f"{script}.py"), "--help"], cwd=root, env=env, capture_output=True, text=True)
+    done = subprocess.run(
+        [sys.executable, str(root / "scripts" / f"{script}.py"), "--help"],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
     assert done.returncode == 0, done.stderr

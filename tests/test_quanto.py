@@ -4,8 +4,14 @@ import datetime as dt
 
 import numpy as np
 import pytest
-from _structured_refs import (flat_surface, quanto_call_by_change_of_measure, quanto_call_undiscounted, quanto_forward, worst_digital,
-                              worst_put)
+from _structured_refs import (
+    flat_surface,
+    quanto_call_by_change_of_measure,
+    quanto_call_undiscounted,
+    quanto_forward,
+    worst_digital,
+    worst_put,
+)
 
 from optlab import BlackScholesModel, Market
 from optlab.blackscholes import black_price
@@ -36,14 +42,23 @@ def sx5e_in_usd(rho, vol=VOL_S):
 def single_context(rho):
     """SX5E paid in dollars in a Black-Scholes world."""
     spx = PricingContext.from_calibration()
-    ctx = PricingContext(sx5e_in_usd(rho), flat_surface(VOL_S), spx.heston, spx.slv, VAL, "SX5E", payment_currency="USD")
+    ctx = PricingContext(
+        sx5e_in_usd(rho), flat_surface(VOL_S), spx.heston, spx.slv, VAL, "SX5E", payment_currency="USD"
+    )
     ctx.model = lambda name, T=1.0: BlackScholesModel(VOL_S) if name in ("bs", "lv") else spx.model(name, T)
     return ctx
 
 
 def basket_context(rho_fx, rho=0.6):
     markets = {"SPX": Market.flat(S0, R_USD, Q_USD), "SX5E": sx5e_in_usd(rho_fx)}
-    return BasketContext(("SPX", "SX5E"), markets, {"SPX": VOL_US, "SX5E": VOL_S}, np.array([[1, rho], [rho, 1]]), VAL, payment_currency="USD")
+    return BasketContext(
+        ("SPX", "SX5E"),
+        markets,
+        {"SPX": VOL_US, "SX5E": VOL_S},
+        np.array([[1, rho], [rho, 1]]),
+        VAL,
+        payment_currency="USD",
+    )
 
 
 def times(p):
@@ -56,6 +71,7 @@ def within(res, ref, se=4):
 
 
 # --- the forward ---
+
 
 @pytest.mark.parametrize("rho", [-0.5, 0.0, 0.4])
 def test_the_market_has_the_closed_form_forward_and_the_payment_curve(rho):
@@ -78,6 +94,7 @@ def test_a_flat_surface_integrates_like_a_flat_vol_and_a_term_structure_like_its
     np.testing.assert_allclose(integrated_vol(T, flat_surface(VOL_S)), VOL_S * T, rtol=1e-10)
     # total variance 0.04 T to one year, then 0.09 per year: forward vols of 0.2 then 0.3
     from optlab import SVISurface
+
     mats = np.array([0.5, 1.0, 2.0, 3.0])
     total = np.array([0.02, 0.04, 0.13, 0.22])
     surface = SVISurface(mats, [[w, 0.0, 0.0, 0.0, 0.1] for w in total])
@@ -104,6 +121,7 @@ def test_bad_inputs_are_refused():
 
 # --- the sign, with no quanto formula on the reference side ---
 
+
 @pytest.mark.parametrize("rho", [-0.6, 0.6])
 def test_the_closed_form_agrees_with_a_change_of_measure(rho):
     K, T = 105.0, 2.0
@@ -118,10 +136,18 @@ def test_the_closed_form_agrees_with_a_change_of_measure(rho):
 
 # --- through the pricing chain ---
 
+
 @pytest.mark.parametrize("rho", [-0.6, 0.6])
 def test_a_quanto_note_on_one_name_matches_the_closed_form_at_4_se(rho):
-    sheet = preset("capital_protected", **{"general.underlying": "SX5E", "general.payment_currency": "USD", "wrapper.solve": "upfront",
-                                           "general.pay_lag": 0})
+    sheet = preset(
+        "capital_protected",
+        **{
+            "general.underlying": "SX5E",
+            "general.payment_currency": "USD",
+            "wrapper.solve": "upfront",
+            "general.pay_lag": 0,
+        },
+    )
     q = quote(sheet, single_context(rho), model="lv", control=None, n_paths=N_MC, seed=11)
     p = q.product
     T, pays = times(p)
@@ -132,14 +158,29 @@ def test_a_quanto_note_on_one_name_matches_the_closed_form_at_4_se(rho):
 
 
 def test_a_quanto_note_is_priced_by_replication_too_when_the_policy_chooses_it():
-    sheet = preset("capital_protected", **{"general.underlying": "SX5E", "general.payment_currency": "USD", "wrapper.solve": "upfront",
-                                           "general.pay_lag": 0})
+    sheet = preset(
+        "capital_protected",
+        **{
+            "general.underlying": "SX5E",
+            "general.payment_currency": "USD",
+            "wrapper.solve": "upfront",
+            "general.pay_lag": 0,
+        },
+    )
     rho = -0.4
     q = quote(sheet, single_context(rho), control=None)
     assert q.decision.method == "replication"
     T, pays = times(q.product)
-    ref = 100 * np.exp(-R_USD * pays[-1]) * (1 + sheet.get("upside.participation")
-                                             * quanto_call_undiscounted(S0, sheet.get("upside.strike") * S0, T, R_EUR, Q_EUR, VOL_S, VOL_FX, rho) / S0)
+    ref = (
+        100
+        * np.exp(-R_USD * pays[-1])
+        * (
+            1
+            + sheet.get("upside.participation")
+            * quanto_call_undiscounted(S0, sheet.get("upside.strike") * S0, T, R_EUR, Q_EUR, VOL_S, VOL_FX, rho)
+            / S0
+        )
+    )
     assert q.result.price == pytest.approx(ref, abs=1e-3)
 
 
@@ -148,32 +189,69 @@ def test_a_worst_of_spx_sx5e_in_dollars_matches_the_closed_form_at_4_se(rho_fx):
     """The name in euros carries the quanto drift, the name in dollars does not. In dollars r = R_USD, so SX5E's effective yield is
     what brings its drift to r_eur - q - rho sigma sigma."""
     K, B, rho = 1.0, 0.7, 0.6
-    sheet = preset("reverse_convertible", **{"general.basket": "worst_of", "general.underlyings": ("SPX", "SX5E"), "wrapper.solve": "upfront",
-                                             "downside.barrier": B, "coupon.rate": 0.08, "general.payment_currency": "USD"})
+    sheet = preset(
+        "reverse_convertible",
+        **{
+            "general.basket": "worst_of",
+            "general.underlyings": ("SPX", "SX5E"),
+            "wrapper.solve": "upfront",
+            "downside.barrier": B,
+            "coupon.rate": 0.08,
+            "general.payment_currency": "USD",
+        },
+    )
     ctx = basket_context(rho_fx, rho)
     p = compile_sheet(sheet, VAL)
-    res = price(p.program, ctx.model("bs", p.horizon, p.program.underlying_names), ctx.market, n_paths=N_MC, seed=13, batch=25_000, valuation=VAL)
+    res = price(
+        p.program,
+        ctx.model("bs", p.horizon, p.program.underlying_names),
+        ctx.market,
+        n_paths=N_MC,
+        seed=13,
+        batch=25_000,
+        valuation=VAL,
+    )
     T, pays = times(p)
     q_eff = R_USD - (R_EUR - Q_EUR - rho_fx * VOL_S * VOL_FX)
     vols, qs = (VOL_US, VOL_S), (Q_USD, q_eff)
     loss = worst_put(B, T, vols, rho, R_USD, qs) + (K - B) * (1 - worst_digital(B, T, vols, rho, R_USD, qs))
-    D = lambda t: np.exp(-R_USD * t)
+    D = lambda t: np.exp(-R_USD * t)  # noqa: E731
     ref = 100 * 0.02 * sum(D(t) for t in pays) + 100 * D(pays[-1]) * (1 - loss)
     within(res, ref)
 
 
 def test_the_adjustment_moves_a_worst_of_by_many_standard_errors():
     """So the 4 SE test above would catch a missing or wrongly signed adjustment."""
-    sheet = preset("reverse_convertible", **{"general.basket": "worst_of", "general.underlyings": ("SPX", "SX5E"), "wrapper.solve": "upfront",
-                                             "downside.barrier": 0.7, "coupon.rate": 0.08, "general.payment_currency": "USD"})
+    sheet = preset(
+        "reverse_convertible",
+        **{
+            "general.basket": "worst_of",
+            "general.underlyings": ("SPX", "SX5E"),
+            "wrapper.solve": "upfront",
+            "downside.barrier": 0.7,
+            "coupon.rate": 0.08,
+            "general.payment_currency": "USD",
+        },
+    )
     p = compile_sheet(sheet, VAL)
 
     def run(rho_fx):
         ctx = basket_context(rho_fx)
-        return price(p.program, ctx.model("bs", p.horizon, p.program.underlying_names), ctx.market, n_paths=N_MC, seed=13, batch=25_000, valuation=VAL).value
+        return price(
+            p.program,
+            ctx.model("bs", p.horizon, p.program.underlying_names),
+            ctx.market,
+            n_paths=N_MC,
+            seed=13,
+            batch=25_000,
+            valuation=VAL,
+        ).value
 
     up, down = run(-0.5), run(0.5)
-    assert up.price - down.price > 8 * np.hypot(up.stderr, down.stderr), (up, down)  # rho < 0 lifts the forward, so the note is worth more
+    assert up.price - down.price > 8 * np.hypot(up.stderr, down.stderr), (
+        up,
+        down,
+    )  # rho < 0 lifts the forward, so the note is worth more
 
 
 def test_the_first_name_gives_the_discount_curve_whichever_it_is():
@@ -184,11 +262,17 @@ def test_the_first_name_gives_the_discount_curve_whichever_it_is():
 
 # --- the term sheet ---
 
+
 def test_the_field_resolves_to_the_first_names_currency():
     assert preset("phoenix").payment_currency == "USD"
     assert preset("phoenix", **{"general.underlying": "SX5E"}).payment_currency == "EUR"
-    assert preset("phoenix", **{"general.basket": "worst_of", "general.underlyings": ("SX5E", "SPX")}).payment_currency == "EUR"
-    assert preset("phoenix", **{"general.underlying": "SX5E", "general.payment_currency": "USD"}).payment_currency == "USD"
+    assert (
+        preset("phoenix", **{"general.basket": "worst_of", "general.underlyings": ("SX5E", "SPX")}).payment_currency
+        == "EUR"
+    )
+    assert (
+        preset("phoenix", **{"general.underlying": "SX5E", "general.payment_currency": "USD"}).payment_currency == "USD"
+    )
     with pytest.raises(TermSheetError, match="payment_currency"):
         preset("phoenix", **{"general.payment_currency": "CHF"})
 

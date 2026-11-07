@@ -46,7 +46,9 @@ SEED = 2026
 
 def closes_wide(lake: Lake, names, day=None, as_of=None) -> pd.DataFrame:
     quoted = ", ".join(sql_str(n) for n in names)
-    where = f"instrument IN ({quoted})" + (f" AND obs_date <= DATE '{pd.Timestamp(day).date()}'" if day is not None else "")
+    where = f"instrument IN ({quoted})" + (
+        f" AND obs_date <= DATE '{pd.Timestamp(day).date()}'" if day is not None else ""
+    )
     rows = lake.read("prices_eod", where=where, columns="instrument, obs_date, close", as_of=as_of)
     wide = rows.pivot_table(index="obs_date", columns="instrument", values="close").sort_index()
     wide.index = pd.to_datetime(wide.index)
@@ -91,7 +93,7 @@ def realised_matrix(closes: pd.DataFrame, names, window: int = 120) -> np.ndarra
     out = np.eye(n)
     for i in range(n):
         for j in range(i + 1, n):
-            series = rolling_pair(closes.iloc[-(window + CROSS_ZONE_HORIZON + 10):], names[i], names[j], window)
+            series = rolling_pair(closes.iloc[-(window + CROSS_ZONE_HORIZON + 10) :], names[i], names[j], window)
             out[i, j] = out[j, i] = float(series.iloc[-1]) if len(series) else 0.0
     return nearest_correlation(out)
 
@@ -108,7 +110,7 @@ def premium_series(implied: pd.Series, closes: pd.DataFrame, names, window: int)
     """lambda from an implied average correlation (fraction) and the realised average of `names`, in [0, 1]."""
     pairs = []
     for i, a in enumerate(names):
-        for b in names[i + 1:]:
+        for b in names[i + 1 :]:
             pairs.append(rolling_pair(closes, a, b, window))
     avg = pd.concat(pairs, axis=1).mean(axis=1)
     both = pd.concat({"imp": implied, "avg": avg}, axis=1).dropna()
@@ -120,10 +122,14 @@ def build_realized(lake: Lake, names) -> list[dict]:
     run = new_run_id("derive_correl")
     rows = []
     for i, a in enumerate(names):
-        for b in names[i + 1:]:
+        for b in names[i + 1 :]:
             for w in WINDOWS:
                 s = rolling_pair(closes, a, b, w)
-                rows.append(pd.DataFrame({"name_a": a, "name_b": b, "window": w, "obs_date": s.index, "correlation": s.to_numpy()}))
+                rows.append(
+                    pd.DataFrame(
+                        {"name_a": a, "name_b": b, "window": w, "obs_date": s.index, "correlation": s.to_numpy()}
+                    )
+                )
     return [lake.ingest("correl_realized", pd.concat(rows, ignore_index=True), "prices_eod", "derived", run)]
 
 
@@ -132,24 +138,39 @@ def build_premium(lake: Lake, us_shares=("AAPL", "AMZN", "GOOGL", "GS", "IBM")) 
     run = new_run_id("derive_premium")
     out = []
     for name, window in TENOR_WINDOW.items():
-        cor = lake.read("correl_implied", where=f"index_name = '{name}' AND source = 'cboe'", columns="obs_date, tenor, correlation")
+        cor = lake.read(
+            "correl_implied", where=f"index_name = '{name}' AND source = 'cboe'", columns="obs_date, tenor, correlation"
+        )
         if cor.empty:
             continue
         implied = pd.Series(cor["correlation"].to_numpy(), index=pd.to_datetime(cor["obs_date"])).sort_index()
         lam = premium_series(implied, closes, list(us_shares), window)
-        rows = pd.DataFrame({"index_name": f"LAMBDA.{name}", "tenor": float(cor["tenor"].iloc[0]), "obs_date": lam.index,
-                             "correlation": lam.to_numpy()})
+        rows = pd.DataFrame(
+            {
+                "index_name": f"LAMBDA.{name}",
+                "tenor": float(cor["tenor"].iloc[0]),
+                "obs_date": lam.index,
+                "correlation": lam.to_numpy(),
+            }
+        )
         out.append(lake.ingest("correl_implied", rows, "cor_vs_realised", "derived", run))
     return out
 
 
 def premium_at(lake: Lake, day, index_name: str = "COR3M", as_of=None) -> float:
-    rows = lake.read("correl_implied", where=f"index_name = 'LAMBDA.{index_name}' AND obs_date <= DATE '{pd.Timestamp(day).date()}'",
-                     columns="obs_date, correlation", order="obs_date DESC LIMIT 1", as_of=as_of)
+    rows = lake.read(
+        "correl_implied",
+        where=f"index_name = 'LAMBDA.{index_name}' AND obs_date <= DATE '{pd.Timestamp(day).date()}'",
+        columns="obs_date, correlation",
+        order="obs_date DESC LIMIT 1",
+        as_of=as_of,
+    )
     return float(rows["correlation"].iloc[0]) if len(rows) else 0.0
 
 
-def correlation_at(lake: Lake, names, day, window: int = 120, implied: bool = True, as_of=None) -> tuple[np.ndarray, dict]:
+def correlation_at(
+    lake: Lake, names, day, window: int = 120, implied: bool = True, as_of=None
+) -> tuple[np.ndarray, dict]:
     """The correlation matrix of `names` from what is known at `day`: realised, with the implied premium when asked."""
     names = list(names)
     closes = closes_wide(lake, names, day, as_of)
@@ -197,6 +218,7 @@ def copula_expectation(payoff, q_a, q_b, rho: float, n: int = 200) -> float:
 class CorrelationSkew:
     """The assumption behind the pseudo-quotes: an offset to the correlation that depends on the strike only, higher below
     the spot and lower above. It cannot depend on the kind, since a CvC and a PvP on one strike are one instrument."""
+
     slope_down: float = 0.5
     slope_up: float = 0.25
 
@@ -215,6 +237,7 @@ def skewed_matrix(matrix, strike: float, skew: CorrelationSkew = CorrelationSkew
 def basket_paths(quantiles, forwards, matrix, n_pairs: int, seed: int = SEED) -> np.ndarray:
     """Antithetic pairs of S_i(T) / S_i(0): the marginals of the surfaces joined by a Gaussian copula."""
     from ...structured.multiasset import correlation_root
+
     z = np.random.default_rng(seed).standard_normal((n_pairs, len(quantiles)))
     u = ndtr(np.concatenate([z, -z]) @ correlation_root(np.asarray(matrix, dtype=float)).T)
     return np.column_stack([f * q(u[:, i]) for i, (f, q) in enumerate(zip(forwards, quantiles))])
@@ -263,13 +286,32 @@ def spread_quote(surfaces, forwards, x, matrix, kind: str, strike: float, T: flo
     members = float(np.mean(black_price(np.asarray(forwards, dtype=float), strike, T, vols, 1.0, CP[kind])))
     spread = float(pairs.mean())
     implied, basket_vol = read_correlation(members + spread, kind, strike, T, forwards, vols)
-    return {"kind": kind, "strike": strike, "tenor": T, "price": 100 * spread, "price_se": 100 * float(pairs.std(ddof=1)) / np.sqrt(half),
-            "basket_price": 100 * (members + spread), "members_price": 100 * members, "basket_vol": basket_vol,
-            "rho": average_correlation(matrix, forwards, vols), "implied_rho": implied}
+    return {
+        "kind": kind,
+        "strike": strike,
+        "tenor": T,
+        "price": 100 * spread,
+        "price_se": 100 * float(pairs.std(ddof=1)) / np.sqrt(half),
+        "basket_price": 100 * (members + spread),
+        "members_price": 100 * members,
+        "basket_vol": basket_vol,
+        "rho": average_correlation(matrix, forwards, vols),
+        "implied_rho": implied,
+    }
 
 
-def basket_rows(day, names, surfaces, forward, base_matrix, tenors=(0.25, 0.5, 1.0), strikes=STRIKES, n_pairs: int = 100_000,
-                skew: CorrelationSkew = CorrelationSkew(), seed: int = SEED) -> list[dict]:
+def basket_rows(
+    day,
+    names,
+    surfaces,
+    forward,
+    base_matrix,
+    tenors=(0.25, 0.5, 1.0),
+    strikes=STRIKES,
+    n_pairs: int = 100_000,
+    skew: CorrelationSkew = CorrelationSkew(),
+    seed: int = SEED,
+) -> list[dict]:
     """Every line of one basket on one day. `forward(T)` gives S_i-forward over spot per member. Simulated once per strike, so
     a CvC and a PvP on one strike share their paths and differ by nothing."""
     label = "+".join(names)
@@ -282,7 +324,9 @@ def basket_rows(day, names, surfaces, forward, base_matrix, tenors=(0.25, 0.5, 1
             x = basket_paths(quantiles, f, matrix, n_pairs, seed)
             for kind, ks in strikes.items():
                 if strike in ks:
-                    rows.append({"basket": label, "obs_date": day, **spread_quote(surfaces, f, x, matrix, kind, strike, T)})
+                    rows.append(
+                        {"basket": label, "obs_date": day, **spread_quote(surfaces, f, x, matrix, kind, strike, T)}
+                    )
     return rows
 
 
@@ -291,13 +335,17 @@ def build_basket_quotes(lake: Lake, baskets, days, n_pairs: int = 100_000, as_of
     is skipped and counted: nothing is carried over."""
     from ..pit import MODEL_SPOT, market_curves
     from .surfaces import surface_at
+
     rows, skipped = [], 0
     for day in days:
         cache = {}
 
         def parts(name):
             if name not in cache:
-                cache[name] = (surface_at(lake, name, day, as_of, layer="reconstructed").surface, market_curves(lake, name, day, as_of)[0])
+                cache[name] = (
+                    surface_at(lake, name, day, as_of, layer="reconstructed").surface,
+                    market_curves(lake, name, day, as_of)[0],
+                )
             return cache[name]
 
         for names in baskets:
@@ -307,12 +355,22 @@ def build_basket_quotes(lake: Lake, baskets, days, n_pairs: int = 100_000, as_of
             except KeyError:
                 skipped += 1
                 continue
-            rows += basket_rows(pd.Timestamp(day).date(), names, surfaces, lambda T, m=markets: [float(x.F(T)) / MODEL_SPOT for x in m], base,
-                                n_pairs=n_pairs)
+            rows += basket_rows(
+                pd.Timestamp(day).date(),
+                names,
+                surfaces,
+                lambda T, m=markets: [float(x.F(T)) / MODEL_SPOT for x in m],
+                base,
+                n_pairs=n_pairs,
+            )
         if log:
             log(f"{pd.Timestamp(day).date()}: {len(rows)} lines, {skipped} skipped")
     if skipped:
         LOG.warning("basket quotes: %d basket-days skipped, a member had no market", skipped)
     if not rows:
         return []
-    return [lake.ingest("basket_spreads", pd.DataFrame(rows), "copula_on_surfaces", "synthetic", new_run_id("derive_baskets"))]
+    return [
+        lake.ingest(
+            "basket_spreads", pd.DataFrame(rows), "copula_on_surfaces", "synthetic", new_run_id("derive_baskets")
+        )
+    ]

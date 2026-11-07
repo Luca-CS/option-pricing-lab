@@ -1,0 +1,27 @@
+# Updates come as pull requests, reviewed and merged by hand, never automatically (docs/architecture/security.md).
+# A cooldown lets a new release age two weeks before it is proposed. Docker images join in A7, npm in session 2.
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 14
+    open-pull-requests-limit: 5
+    groups:
+      dev-tools:
+        dependency-type: development
+    commit-message:
+      prefix: "Deps"
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 14
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "CI"

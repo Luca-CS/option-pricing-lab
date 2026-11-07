@@ -31,11 +31,17 @@ class FastSVISurface(SVISurface):
         alpha, dalpha = (th - lo) / (hi - lo), dth / (hi - lo)
         w0, wk0, wkk0 = self._slice_derivs(j - 1, k)
         w1, wk1, wkk1 = self._slice_derivs(j, k)
-        return ((1 - alpha) * w0 + alpha * w1, (1 - alpha) * wk0 + alpha * wk1,
-                (1 - alpha) * wkk0 + alpha * wkk1, dalpha * (w1 - w0))
+        return (
+            (1 - alpha) * w0 + alpha * w1,
+            (1 - alpha) * wk0 + alpha * wk1,
+            (1 - alpha) * wkk0 + alpha * wkk1,
+            dalpha * (w1 - w0),
+        )
 
 
-SKEW_WIDTH = 0.3  # log-moneyness over which a skew bump saturates: far wings keep their shape, so Lee's bounds are not touched
+SKEW_WIDTH = (
+    0.3  # log-moneyness over which a skew bump saturates: far wings keep their shape, so Lee's bounds are not touched
+)
 SKEW_T_FLOOR = 1 / 12  # no shorter maturity sees a larger rotation
 _SKEW_NORM = 1.0 / (np.tanh(-np.log(0.9) / SKEW_WIDTH) + np.tanh(np.log(1.1) / SKEW_WIDTH))
 
@@ -66,8 +72,12 @@ class BumpedSurface:
         u = k / SKEW_WIDTH
         tanh = np.tanh(u)
         sech2 = 1.0 - tanh * tanh
-        return (self.vol + a * scale * tanh, a * scale * sech2 / SKEW_WIDTH,
-                -2.0 * a * scale * tanh * sech2 / SKEW_WIDTH**2, a * dscale * tanh)
+        return (
+            self.vol + a * scale * tanh,
+            a * scale * sech2 / SKEW_WIDTH,
+            -2.0 * a * scale * tanh * sech2 / SKEW_WIDTH**2,
+            a * dscale * tanh,
+        )
 
     def derivatives(self, k, T):
         w, wk, wkk, wT = self.base.derivatives(k, T)

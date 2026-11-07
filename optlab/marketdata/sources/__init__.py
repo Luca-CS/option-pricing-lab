@@ -34,8 +34,11 @@ def curl_get(url: str, timeout: float = 90.0, retries: int = 3) -> bytes:
     """GET through the system's curl: FRED drops the connections of Python HTTP clients and answers curl at once."""
     last = ""
     for attempt in range(retries):
-        out = subprocess.run(["curl", "-sSL", "--fail", "-A", USER_AGENT, "-m", str(int(timeout)), url],
-                             capture_output=True, timeout=timeout + 10)
+        out = subprocess.run(
+            ["curl", "-sSL", "--fail", "-A", USER_AGENT, "-m", str(int(timeout)), url],
+            capture_output=True,
+            timeout=timeout + 10,
+        )
         if out.returncode == 0:
             return out.stdout
         last = out.stderr.decode(errors="replace").strip()

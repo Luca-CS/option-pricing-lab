@@ -100,8 +100,12 @@ class SVISurface:
                 dalpha = dth[sel] / (hi - lo)
                 w0, wk0, wkk0 = self._slice_derivs(j - 1, kk)
                 w1, wk1, wkk1 = self._slice_derivs(j, kk)
-                vals = ((1 - alpha) * w0 + alpha * w1, (1 - alpha) * wk0 + alpha * wk1,
-                        (1 - alpha) * wkk0 + alpha * wkk1, dalpha * (w1 - w0))
+                vals = (
+                    (1 - alpha) * w0 + alpha * w1,
+                    (1 - alpha) * wk0 + alpha * wk1,
+                    (1 - alpha) * wkk0 + alpha * wkk1,
+                    dalpha * (w1 - w0),
+                )
             for o, v in zip(out, vals):
                 o[sel] = v
         return tuple(out)
@@ -154,8 +158,14 @@ def _inner_fit(m, sig, k, w_mkt, wt, k_grid, w_floor, rho_max=0.0, x0=None):
 
     H = (X * wt[:, None]).T @ X
     f = (X * wt[:, None]).T @ w_mkt
-    res = minimize(lambda x: 0.5 * x @ H @ x - f @ x, x0, jac=lambda x: H @ x - f, method="SLSQP",
-                   constraints=[LinearConstraint(A, lb, ub)], options={"maxiter": 300, "ftol": 1e-14})
+    res = minimize(
+        lambda x: 0.5 * x @ H @ x - f @ x,
+        x0,
+        jac=lambda x: H @ x - f,
+        method="SLSQP",
+        constraints=[LinearConstraint(A, lb, ub)],
+        options={"maxiter": 300, "ftol": 1e-14},
+    )
     x = res.x
     r = X @ x - w_mkt
     return x, float(r @ (wt * r))
@@ -241,6 +251,10 @@ def svi_arbitrage_report(surf: SVISurface, n_t=120) -> dict:
     k_abs = np.linspace(CALENDAR_K[0], CALENDAR_K[-1], 301)
     W = np.array([surf.w(k_abs, t) for t in T])
     min_cal = float(np.diff(W, axis=0).min())
-    return {"min_g": min_g, "min_calendar_increment": min_cal, "butterfly_free": bool(min_g > 0),
-            "calendar_free": bool(min_cal >= -1e-6), "max_lee_slope": float(np.max(surf.params[:, 1] * (
-                1 + np.abs(surf.params[:, 2]))))}
+    return {
+        "min_g": min_g,
+        "min_calendar_increment": min_cal,
+        "butterfly_free": bool(min_g > 0),
+        "calendar_free": bool(min_cal >= -1e-6),
+        "max_lee_slope": float(np.max(surf.params[:, 1] * (1 + np.abs(surf.params[:, 2])))),
+    }

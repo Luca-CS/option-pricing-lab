@@ -20,6 +20,7 @@ STRIKE = dt.date(2026, 4, 27)
 
 # --- term sheets and trades ---
 
+
 @pytest.mark.parametrize("name", list(PRESETS))
 def test_term_sheets_round_trip_through_json(name):
     sheet = preset(name, **{"general.strike_date": VAL})
@@ -67,6 +68,7 @@ def test_a_trade_prices_like_its_term_sheet_bit_for_bit():
     trade = Trade.from_term_sheet("RC-1", sheet, 3.0, VAL)
     a = Book([trade.to_position()]).price(CTX, model="bs", n_paths=20_000, seed=5, batch=10_000)
     from optlab.structured.portfolio import Position
+
     b = Book([Position("RC-1", sheet, 3.0)]).price(CTX, model="bs", n_paths=20_000, seed=5, batch=10_000)
     assert a.value == b.value and a.stderr == b.stderr
 
@@ -80,6 +82,7 @@ def test_a_script_trade():
 
 # --- market snapshots ---
 
+
 def test_snapshot_ids_are_stable_and_the_context_is_unchanged():
     a = MarketSnapshot.from_calibration_file(DEFAULT_CALIBRATION)
     b = MarketSnapshot.from_calibration_file(DEFAULT_CALIBRATION, provenance=False)
@@ -88,8 +91,13 @@ def test_snapshot_ids_are_stable_and_the_context_is_unchanged():
     ctx = PricingContext.from_calibration()
     assert ctx.snapshot_id == a.snapshot_id
     q1 = quote(preset("phoenix", **{"general.maturity_months": 12}), ctx, control=None, n_paths=20_000, batch=10_000)
-    q2 = quote(preset("phoenix", **{"general.maturity_months": 12}), PricingContext.from_snapshot(a), control=None,
-               n_paths=20_000, batch=10_000)
+    q2 = quote(
+        preset("phoenix", **{"general.maturity_months": 12}),
+        PricingContext.from_snapshot(a),
+        control=None,
+        n_paths=20_000,
+        batch=10_000,
+    )
     assert q1.coupon_rate == q2.coupon_rate and q1.snapshot_id == a.snapshot_id
 
 

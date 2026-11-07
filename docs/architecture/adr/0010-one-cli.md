@@ -1,6 +1,6 @@
 # ADR-0010: One `optlab` command line
 
-- Status: Proposed (A0, 7 November 2026)
+- Status: Accepted (A0 checkpoint, 7 November 2026)
 - Handoff §1: CLI; §4.6
 
 ## Context

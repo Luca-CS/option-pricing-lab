@@ -16,8 +16,26 @@ Grammar (one statement per line, blocks closed by `end`):
 from __future__ import annotations
 
 from .lexer import ScriptError, Token, tokenize
-from .nodes import (FUNCTIONS, WINDOWS, Assign, Binary, Call, DateLit, Event, If, Name, Num, Param, Pay, Program,
-                    Terminate, TimeLit, Unary, Underlying, Window)
+from .nodes import (
+    FUNCTIONS,
+    WINDOWS,
+    Assign,
+    Binary,
+    Call,
+    DateLit,
+    Event,
+    If,
+    Name,
+    Num,
+    Param,
+    Pay,
+    Program,
+    Terminate,
+    TimeLit,
+    Unary,
+    Underlying,
+    Window,
+)
 
 COMPARISONS = ("<", "<=", ">", ">=", "==")
 
@@ -67,9 +85,9 @@ class Parser:
         underlyings, params, events = [], [], []
         self.skip_newlines()
         while not self.check("EOF"):
-            if (tok := self.accept("KEYWORD", "underlying")):
+            if tok := self.accept("KEYWORD", "underlying"):
                 underlyings.append(Underlying(self.expect("NAME", what="underlying name").text, tok.line, tok.col))
-            elif (tok := self.accept("KEYWORD", "param")):
+            elif tok := self.accept("KEYWORD", "param"):
                 name = self.expect("NAME", what="parameter name").text
                 self.expect("OP", "=")
                 sign = -1.0 if self.accept("OP", "-") else 1.0
@@ -144,18 +162,18 @@ class Parser:
     # --- expressions ---
     def expr(self):
         left = self.and_expr()
-        while (tok := self.accept("KEYWORD", "or")):
+        while tok := self.accept("KEYWORD", "or"):
             left = Binary("or", left, self.and_expr(), tok.line, tok.col)
         return left
 
     def and_expr(self):
         left = self.not_expr()
-        while (tok := self.accept("KEYWORD", "and")):
+        while tok := self.accept("KEYWORD", "and"):
             left = Binary("and", left, self.not_expr(), tok.line, tok.col)
         return left
 
     def not_expr(self):
-        if (tok := self.accept("KEYWORD", "not")):
+        if tok := self.accept("KEYWORD", "not"):
             return Unary("not", self.not_expr(), tok.line, tok.col)
         return self.comparison()
 
@@ -186,7 +204,7 @@ class Parser:
         return left
 
     def unary(self):
-        if (tok := self.accept("OP", "-")):
+        if tok := self.accept("OP", "-"):
             return Unary("-", self.unary(), tok.line, tok.col)
         return self.primary()
 

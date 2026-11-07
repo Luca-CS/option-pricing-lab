@@ -5,7 +5,7 @@ session 2 (front) checks every screen line against its new screen. Measured on `
 7 November 2026.
 
 Status: **kept** (same function, new place), **merged** (folded into another line, named), **dropped** (only with
-Luca's agreement; the ones proposed here are marked *proposed* until the A0 checkpoint).
+Luca's agreement, given at the A0 checkpoint on 7 November 2026).
 
 Routes are written without the `/api/v1` prefix. `202` marks a route that answers with a job (`POST` returns
 `{job_id}`, progress on `GET /jobs/{id}` and `GET /jobs/{id}/events`). Roles are the minimum to call the route
@@ -164,8 +164,8 @@ Every option is kept unless the row says otherwise. Each script is deleted once 
 | `plots.py` | report charts (matplotlib, site palette) | library module of `calib report` (extra `[reports]`) | — | merged |
 | `build_widget_data.py` | `docs/pricer-data.js` from the SPX calibration | `optlab demo widget-data` | none | kept until session 2 replaces `docs/lab.js` |
 | `download_spx.py` | SPX chain snapshot to `data/raw/` | `optlab calib download-spx` | none | kept |
-| `fix_asian_exotic.py` | one-off recomputation of the Asian cell in `results/*.json` | — | `--source` | **dropped (proposed)**: a migration already applied to the versioned results |
-| `rewrite_leverage.py` | one-off rewrite of the stored SLV leverage at every time step | — | `--source`, `--dry-run` | **dropped (proposed)**: already applied |
+| `fix_asian_exotic.py` | one-off recomputation of the Asian cell in `results/*.json` | — | `--source` | **dropped** (agreed at A0): a migration already applied to the versioned results |
+| `rewrite_leverage.py` | one-off rewrite of the stored SLV leverage at every time step | — | `--source`, `--dry-run` | **dropped** (agreed at A0): already applied |
 | `lake_update.py` | update the lake from public sources, quality report | `optlab lake update` | `--only`, `--lake`, `--yahoo-chains`, `--import-sample`, `--dolt` | kept (and a planned job of the worker, off by default) |
 | `lake_derive.py` | derived tables: curves, carry, bank, FX, surfaces, correlation, pairs, observed fits | `optlab lake derive` | `--only`, `--lake` | kept |
 | `lake_fx_check.py` | FX against H.10 and CME, quanto size: `reports/fx_check.md` | `optlab lake fx-check` | `--lake`, `--n-paths` | kept |

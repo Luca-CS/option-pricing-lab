@@ -40,5 +40,10 @@ def paths() -> Paths:
     root = Path(home or REPO_ROOT)
     data = root / "data"
     stable = _stable_data(home) or data
-    return Paths(root, root / "results", data, Path(os.environ.get("OPTLAB_STORE") or stable / "store"),
-                 Path(os.environ.get("OPTLAB_LAKE") or stable / "lake"))
+    return Paths(
+        root,
+        root / "results",
+        data,
+        Path(os.environ.get("OPTLAB_STORE") or stable / "store"),
+        Path(os.environ.get("OPTLAB_LAKE") or stable / "lake"),
+    )

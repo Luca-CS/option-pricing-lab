@@ -1,6 +1,6 @@
 # ADR-0001: A self-hosted server on this PC
 
-- Status: Proposed (A0, 7 November 2026)
+- Status: Accepted (A0 checkpoint, 7 November 2026)
 - Handoff §1: Cible, Priorité, Utilisateurs
 
 ## Context

@@ -34,8 +34,9 @@ def test_a_one_position_book_is_the_product_price_bit_for_bit():
     sheet = preset("phoenix", **{"wrapper.solve": "upfront", "general.maturity_months": 12})
     book = Book([Position("phoenix", sheet, 1.0)]).price(BS_CTX, model="bs", n_paths=N, seed=5, batch=10_000)
     p = compile_sheet(sheet, BS_CTX.valuation)
-    alone = price(p.program, BS_CTX.model("bs"), BS_CTX.market, n_paths=N, seed=5, batch=10_000,
-                  valuation=BS_CTX.valuation)
+    alone = price(
+        p.program, BS_CTX.model("bs"), BS_CTX.market, n_paths=N, seed=5, batch=10_000, valuation=BS_CTX.valuation
+    )
     assert book.value == alone.value.price and book.stderr == alone.value.stderr
     assert book.positions[0].unit_price == pytest.approx(alone.price, rel=1e-14)
 
@@ -43,7 +44,8 @@ def test_a_one_position_book_is_the_product_price_bit_for_bit():
 def test_long_and_short_the_same_product_is_exactly_flat():
     sheet = preset("phoenix", **{"wrapper.solve": "upfront", "general.maturity_months": 12})
     book = Book([Position("long", sheet, 3.0), Position("short", sheet, -3.0)]).price(
-        BS_CTX, model="bs", n_paths=N, seed=5)
+        BS_CTX, model="bs", n_paths=N, seed=5
+    )
     assert book.value == 0.0 and book.stderr == 0.0
     assert book.positions[0].value == -book.positions[1].value
 
@@ -62,11 +64,13 @@ def test_positions_on_different_dates_agree_with_standalone_prices():
     phoenix = preset("phoenix", **{"wrapper.solve": "upfront", "general.maturity_months": 12})
     brc = preset("barrier_reverse_convertible", **{"wrapper.solve": "upfront", "coupon.rate": 0.06})
     res = Book([Position("phoenix", phoenix, 2.0), Position("brc", brc, -1.0)]).price(
-        BS_CTX, model="bs", n_paths=N, seed=9, batch=10_000)
+        BS_CTX, model="bs", n_paths=N, seed=9, batch=10_000
+    )
     for pos, sheet in zip(res.positions, (phoenix, brc)):
         p = compile_sheet(sheet, BS_CTX.valuation)
-        alone = price(p.program, BS_CTX.model("bs"), BS_CTX.market, n_paths=N, seed=19, batch=10_000,
-                      valuation=BS_CTX.valuation)
+        alone = price(
+            p.program, BS_CTX.model("bs"), BS_CTX.market, n_paths=N, seed=19, batch=10_000, valuation=BS_CTX.valuation
+        )
         assert abs(pos.unit_price - alone.price) <= 4 * np.hypot(pos.unit_stderr, alone.stderr)
 
 
@@ -109,7 +113,8 @@ def test_book_greeks_are_the_sum_of_position_greeks_and_match_replication():
 
 def test_book_greeks_under_slv_have_no_vega():
     g = Book([Position("phoenix", preset("phoenix", **{"general.maturity_months": 12}), 1.0)]).greeks(
-        SPX, model="slv", n_paths=20_000, batch=10_000)
+        SPX, model="slv", n_paths=20_000, batch=10_000
+    )
     assert g["model"] == "slv" and g["vega"] is None and g["delta"]["total_se"] > 0
 
 

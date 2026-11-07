@@ -1,6 +1,6 @@
 # ADR-0015: Clean-up, measured before and after
 
-- Status: Proposed (A0, 7 November 2026)
+- Status: Accepted (A0 checkpoint, 7 November 2026)
 - Handoff §1: Clean; §4.11
 
 ## Context

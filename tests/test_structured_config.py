@@ -11,6 +11,8 @@ from optlab.structured.context import DEFAULT_CALIBRATION
 def test_paths_default_to_the_repository_and_follow_the_environment(monkeypatch, tmp_path):
     assert DEFAULT_CALIBRATION == config.REPO_ROOT / "results" / "spx_calibration.json"
     assert DEFAULT_CALIBRATION.exists()
+    for var in ("OPTLAB_DATA", "OPTLAB_STORE", "OPTLAB_LAKE"):  # the run's own settings must not leak in
+        monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("OPTLAB_HOME", str(tmp_path))
     p = config.paths()
     assert p.results == tmp_path / "results" and p.store == tmp_path / "data" / "store"

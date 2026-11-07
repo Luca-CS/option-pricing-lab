@@ -2,8 +2,9 @@
 
 import numpy as np
 import pytest
+from _risk_refs import S0, VOL, Q, R, book, flat_ctx, vanilla
+from _structured_refs import flat_surface
 
-from _risk_refs import Q, R, S0, VOL, book, flat_ctx, vanilla
 from optlab.blackscholes import bs_price
 from optlab.risk import RiskGroup
 from optlab.risk import scenarios as sc
@@ -11,7 +12,6 @@ from optlab.risk.shocks import RiskEnv
 from optlab.risk.store import RiskStore
 from optlab.structured.context import PricingContext
 from optlab.structured.surfaces import BumpedSurface
-from _structured_refs import flat_surface
 
 BETA_1Y = -0.46
 BETAS = [-1.5, -0.96, -0.69, BETA_1Y, -0.37, -0.31, -0.24, -0.16]
@@ -21,7 +21,14 @@ def test_defaults_are_starting_values_saved_edited_and_signed(tmp_path):
     store = RiskStore(tmp_path / "risk.sqlite")
     first = sc.load(store)
     assert first["starting"] and first["version"] is None
-    assert [s.name for s in first["scenarios"]] == ["Equity crash", "Grind down", "Vol spike", "Rally", "Dividend cut", "Rates up"]
+    assert [s.name for s in first["scenarios"]] == [
+        "Equity crash",
+        "Grind down",
+        "Vol spike",
+        "Rally",
+        "Dividend cut",
+        "Rates up",
+    ]
     assert all(s.label == sc.STARTING for s in first["scenarios"])
     with pytest.raises(ValueError, match="signed"):
         sc.save(store, first["scenarios"], "")
@@ -65,9 +72,15 @@ def test_scenarios_replayed_on_a_vanilla_match_the_closed_forms():
 def test_shocked_surfaces_are_checked_for_arbitrage():
     spx = PricingContext.from_calibration()
     crash = sc.Scenario("Vol collapse", "vols -15 points", sc.Shock(vol={"*": sc.VolMove(-0.15)}))
-    rep = sc.run([RiskGroup("SPX", book(vanilla(100.0, 365, valuation=spx.valuation)), spx, 1)], [crash] + sc.defaults()[1:3],
-                 spot_vol_grid=False)
+    rep = sc.run(
+        [RiskGroup("SPX", book(vanilla(100.0, 365, valuation=spx.valuation)), spx, 1)],
+        [crash] + sc.defaults()[1:3],
+        spot_vol_grid=False,
+    )
     flags = {s["name"]: s for s in rep.scenarios}
     assert flags["Vol collapse"]["arbitrage"] == ["SPX:SPX"]  # the short wing vols go negative
     assert flags["Grind down"]["arbitrage"] == []
-    assert flags["Vol collapse"]["flags"]["SPX:SPX"]["butterfly_free"] is False or flags["Vol collapse"]["flags"]["SPX:SPX"]["calendar_free"] is False
+    assert (
+        flags["Vol collapse"]["flags"]["SPX:SPX"]["butterfly_free"] is False
+        or flags["Vol collapse"]["flags"]["SPX:SPX"]["calendar_free"] is False
+    )

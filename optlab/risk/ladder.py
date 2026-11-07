@@ -32,9 +32,11 @@ POINTS = (-0.30, -0.20, -0.10, -0.05, 0.0, 0.05, 0.10)
 
 # --- betas ---
 
+
 def estimate_betas(lake, name: str, day, window: int = 500, layer: str = "reconstructed") -> dict:
     """Spot-vol betas of a name at a date: d(ATM vol at T) = a + beta_T d ln S, per tenor, with standard errors."""
     from .history import closes, vol_factors
+
     day = pd.Timestamp(day).date()
     start = (pd.Timestamp(day) - pd.tseries.offsets.BDay(window + 10)).date()
     vols = vol_factors(lake, name, start, day, layer)
@@ -55,12 +57,26 @@ def estimate_betas(lake, name: str, day, window: int = 500, layer: str = "recons
         ses.append(float(np.sqrt(s2 / (x @ x))))
         r2.append(float(1 - (resid @ resid) / (y @ y)) if y @ y > 0 else 0.0)
     origins = sorted(set(df["origin"]))
-    return {"name": name, "day": day.isoformat(), "window": window, "n": int(len(x)), "layer": layer, "origin": origins,
-            "start": df.index[0].isoformat(), "end": df.index[-1].isoformat(), "tenors": list(grid.TENOR_LABELS),
-            "betas": betas, "se": ses, "r2": r2, "unit": "vol (fraction) per unit of daily log return"}
+    return {
+        "name": name,
+        "day": day.isoformat(),
+        "window": window,
+        "n": int(len(x)),
+        "layer": layer,
+        "origin": origins,
+        "start": df.index[0].isoformat(),
+        "end": df.index[-1].isoformat(),
+        "tenors": list(grid.TENOR_LABELS),
+        "betas": betas,
+        "se": ses,
+        "r2": r2,
+        "unit": "vol (fraction) per unit of daily log return",
+    }
 
 
-def stored_betas(store, lake, names, day, window: int = 500, layer: str = "reconstructed", refresh: bool = False) -> dict:
+def stored_betas(
+    store, lake, names, day, window: int = 500, layer: str = "reconstructed", refresh: bool = False
+) -> dict:
     """{name: betas record} for a date: read from the store, estimated and stored when missing (or with `refresh`)."""
     out = {}
     for n in names:
@@ -80,6 +96,7 @@ def env_with_betas(env: RiskEnv | None, betas: dict) -> RiskEnv:
 
 
 # --- ladder ---
+
 
 @dataclass
 class LadderOptions:
@@ -120,12 +137,17 @@ def plan(ctx, options: LadderOptions, env: RiskEnv | None = None) -> tuple[dict,
                 S[key] = P
             tag = f"{rule}@{p:+.4f}"
             M.append(Measure(f"value@{tag}", {key: 1.0}))
-            M.append(Measure(f"pnl@{tag}", {key: 1.0, "base": -1.0}) if key != "base" else Measure(f"pnl@{tag}", {"base": 0.0}))
+            M.append(
+                Measure(f"pnl@{tag}", {key: 1.0, "base": -1.0})
+                if key != "base"
+                else Measure(f"pnl@{tag}", {"base": 0.0})
+            )
             if not o.greeks:
                 continue
             if p == 0 and rule != o.rules[0]:  # the point 0 is the same for every rule
                 for g in ("delta", "gamma", "vega", "volga", "vanna", "rho", "epsilon") + tuple(
-                        f"vega_tenor:{lab}" for lab in (grid.TENOR_LABELS if o.tenors else ())):
+                    f"vega_tenor:{lab}" for lab in (grid.TENOR_LABELS if o.tenors else ())
+                ):
                     first = f"{g}@{o.rules[0]}@{p:+.4f}"
                     M.append(Measure(f"{g}@{tag}", {"__alias__": 0.0, first: 0.0}))
                 continue
@@ -137,20 +159,30 @@ def plan(ctx, options: LadderOptions, env: RiskEnv | None = None) -> tuple[dict,
 
             up, dn = add("s+", Shock(spot={"*": h})), add("s-", Shock(spot={"*": -h}))
             vu, vd = add("v+", Shock(vol={"*": VolMove(v)})), add("v-", Shock(vol={"*": VolMove(-v)}))
-            ru, rd = add("r+", Shock(rates={cur: CurveMove(o.rate_bp)})), add("r-", Shock(rates={cur: CurveMove(-o.rate_bp)}))
-            qu, qd = add("q+", Shock(dividend={"*": CurveMove(o.rate_bp)})), add("q-", Shock(dividend={"*": CurveMove(-o.rate_bp)}))
+            ru, rd = (
+                add("r+", Shock(rates={cur: CurveMove(o.rate_bp)})),
+                add("r-", Shock(rates={cur: CurveMove(-o.rate_bp)})),
+            )
+            qu, qd = (
+                add("q+", Shock(dividend={"*": CurveMove(o.rate_bp)})),
+                add("q-", Shock(dividend={"*": CurveMove(-o.rate_bp)})),
+            )
             pp = add("x++", Shock(spot={"*": h}, vol={"*": VolMove(v)}))
             pm = add("x+-", Shock(spot={"*": h}, vol={"*": VolMove(-v)}))
             mp = add("x-+", Shock(spot={"*": -h}, vol={"*": VolMove(v)}))
             mm = add("x--", Shock(spot={"*": -h}, vol={"*": VolMove(-v)}))
             us, uv = 0.01 / h, 0.01 / v
-            M += [Measure(f"delta@{tag}", {up: 0.5 * us, dn: -0.5 * us}),
-                  Measure(f"gamma@{tag}", {up: us**2, key: -2 * us**2, dn: us**2}),
-                  Measure(f"vega@{tag}", {vu: 0.5 * uv, vd: -0.5 * uv}),
-                  Measure(f"volga@{tag}", {vu: uv**2, key: -2 * uv**2, vd: uv**2}),
-                  Measure(f"vanna@{tag}", {pp: 0.25 * us * uv, pm: -0.25 * us * uv, mp: -0.25 * us * uv, mm: 0.25 * us * uv}),
-                  Measure(f"rho@{tag}", {ru: 0.5 / o.rate_bp, rd: -0.5 / o.rate_bp}),
-                  Measure(f"epsilon@{tag}", {qu: 0.5 / o.rate_bp, qd: -0.5 / o.rate_bp})]
+            M += [
+                Measure(f"delta@{tag}", {up: 0.5 * us, dn: -0.5 * us}),
+                Measure(f"gamma@{tag}", {up: us**2, key: -2 * us**2, dn: us**2}),
+                Measure(f"vega@{tag}", {vu: 0.5 * uv, vd: -0.5 * uv}),
+                Measure(f"volga@{tag}", {vu: uv**2, key: -2 * uv**2, vd: uv**2}),
+                Measure(
+                    f"vanna@{tag}", {pp: 0.25 * us * uv, pm: -0.25 * us * uv, mp: -0.25 * us * uv, mm: 0.25 * us * uv}
+                ),
+                Measure(f"rho@{tag}", {ru: 0.5 / o.rate_bp, rd: -0.5 / o.rate_bp}),
+                Measure(f"epsilon@{tag}", {qu: 0.5 / o.rate_bp, qd: -0.5 / o.rate_bp}),
+            ]
             if o.tenors:
                 for j, lab in enumerate(grid.TENOR_LABELS):
                     k = add(f"t{j}", Shock(vol={"*": VolMove(term={j: v})}))
@@ -180,8 +212,13 @@ class LadderReport:
         return [(p, *src[f"{what}@{rule}@{p:+.4f}"]) for p in self.points]
 
 
-def ladder(groups: list, options: LadderOptions | None = None, settings: RiskSettings | None = None, env: RiskEnv | None = None,
-           betas: dict | None = None) -> LadderReport:
+def ladder(
+    groups: list,
+    options: LadderOptions | None = None,
+    settings: RiskSettings | None = None,
+    env: RiskEnv | None = None,
+    betas: dict | None = None,
+) -> LadderReport:
     t0 = time.perf_counter()
     o = options or LadderOptions()
     settings = settings or RiskSettings(smoothing=0.005)
@@ -196,14 +233,39 @@ def ladder(groups: list, options: LadderOptions | None = None, settings: RiskSet
             src = next(k for k in m.weights if k != "__alias__")
             run.measures[m.name] = run.measures[src]
         for i, name in enumerate(run.names):
-            positions.append({"name": name, "group": g.label, "quantity": run.quantities[i],
-                              "values": {k: [v[0][i], v[1][i]] for k, v in run.measures.items()}})
+            positions.append(
+                {
+                    "name": name,
+                    "group": g.label,
+                    "quantity": run.quantities[i],
+                    "values": {k: [v[0][i], v[1][i]] for k, v in run.measures.items()},
+                }
+            )
         for k, v in run.measures.items():
             book_v[k] = book_v.get(k, 0.0) + v[2]
             book_var[k] = book_var.get(k, 0.0) + v[3] ** 2
-        rows.append({"label": g.label, "method": run.method, "model": run.model, "n_paths": run.n_paths, "seed": run.seed,
-                     "simulations": run.simulations, "shocks": len(shocks), "seconds": run.seconds, "warnings": run.warnings})
+        rows.append(
+            {
+                "label": g.label,
+                "method": run.method,
+                "model": run.model,
+                "n_paths": run.n_paths,
+                "seed": run.seed,
+                "simulations": run.simulations,
+                "shocks": len(shocks),
+                "seconds": run.seconds,
+                "warnings": run.warnings,
+            }
+        )
     book = {k: [v, float(np.sqrt(book_var[k]))] for k, v in book_v.items()}
-    return LadderReport(list(o.points), list(o.rules), positions, book, rows, betas or {},
-                        {**dataclasses.asdict(o), "points": list(o.points), "rules": list(o.rules)}, settings.to_dict(),
-                        time.perf_counter() - t0)
+    return LadderReport(
+        list(o.points),
+        list(o.rules),
+        positions,
+        book,
+        rows,
+        betas or {},
+        {**dataclasses.asdict(o), "points": list(o.points), "rules": list(o.rules)},
+        settings.to_dict(),
+        time.perf_counter() - t0,
+    )

@@ -11,8 +11,8 @@ from ..log import get_logger
 from ..market import Market
 from ..models import Model
 from ..products import MCResult
-from .cashflows import Note
 from . import engine
+from .cashflows import Note
 from .engine import Evaluation
 from .multiasset import Basket
 from .script.evaluator import Evaluator
@@ -20,7 +20,6 @@ from .script.nodes import DateLit, Program
 from .script.parser import parse
 from .script.timeline import Clock, Timeline, build_timeline
 from .script.validate import validate
-
 
 LOG = get_logger(__name__)
 
@@ -53,12 +52,29 @@ def _program(script) -> Program:
     return validate(parse(script) if isinstance(script, str) else script)
 
 
-def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_paths: int = 100_000, seed=0,
-               batch: int | None = None, smoothing: float = 0.0, valuation=None, calendar=None, notional=None,
-               check_redemption: bool = True, initial_fixing: float | dict | None = None,
-               fixings: dict | None = None, workers: int | None = None, spot_factors: list | None = None,
-               smoothings: list | None = None, control_forwards: bool = False, ramps: list | None = None,
-               **sim_kwargs) -> list[StructuredResult]:
+def price_many(
+    script,
+    model: Model,
+    market: Market,
+    param_sets,
+    fmt=None,
+    n_paths: int = 100_000,
+    seed=0,
+    batch: int | None = None,
+    smoothing: float = 0.0,
+    valuation=None,
+    calendar=None,
+    notional=None,
+    check_redemption: bool = True,
+    initial_fixing: float | dict | None = None,
+    fixings: dict | None = None,
+    workers: int | None = None,
+    spot_factors: list | None = None,
+    smoothings: list | None = None,
+    control_forwards: bool = False,
+    ramps: list | None = None,
+    **sim_kwargs,
+) -> list[StructuredResult]:
     """Price one script for several parameter sets on the same paths (common random numbers). `fixings` gives the
     past fixings of a running product as {underlying: {date: level}}; flows paid up to the valuation date are
     excluded from the value. `workers` runs the batches on a process pool (same numbers bit for bit);
@@ -98,11 +114,30 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
         spot0 = market.spot if initial_fixing is None else initial_fixing
     n_sets = len(param_sets)
     controls = _forward_controls(program, timeline, model, market) if control_forwards else ()
-    evaluations = [Evaluation(program, timeline, p, fmt, N, eps, check_redemption, f, controls, r)
-                   for p, N, f, eps, r in zip(param_sets, notionals, spot_factors or [1.0] * n_sets,
-                                              smoothings or [smoothing] * n_sets, ramps or [None] * n_sets)]
-    totals, timings = engine.run(model, market, name, timeline.sim_times, n_paths, seed, batch, spot0, history,
-                                 evaluations, workers, **sim_kwargs)
+    evaluations = [
+        Evaluation(program, timeline, p, fmt, N, eps, check_redemption, f, controls, r)
+        for p, N, f, eps, r in zip(
+            param_sets,
+            notionals,
+            spot_factors or [1.0] * n_sets,
+            smoothings or [smoothing] * n_sets,
+            ramps or [None] * n_sets,
+        )
+    ]
+    totals, timings = engine.run(
+        model,
+        market,
+        name,
+        timeline.sim_times,
+        n_paths,
+        seed,
+        batch,
+        spot0,
+        history,
+        evaluations,
+        workers,
+        **sim_kwargs,
+    )
     t_sim, t_eval = timings["simulation"], timings["evaluation"]
     seconds = time.perf_counter() - t_start
     warnings = []
@@ -111,8 +146,15 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
     if smoothing or any(smoothings or []):
         eps = max([smoothing, *(smoothings or [])])
         warnings.append(f"digital smoothing active (eps = {eps:.2%}): prices are biased, see the solver notes")
-    LOG.debug("priced %s param set(s), %s paths, model %s, %s dates: simulation %.3f s, evaluation %.3f s",
-              len(evaluations), n_paths, type(model).__name__, len(timeline.sim_times), t_sim, t_eval)
+    LOG.debug(
+        "priced %s param set(s), %s paths, model %s, %s dates: simulation %.3f s, evaluation %.3f s",
+        len(evaluations),
+        n_paths,
+        type(model).__name__,
+        len(timeline.sim_times),
+        t_sim,
+        t_eval,
+    )
     results = []
     for i in range(len(evaluations)):
         tot = totals[i]
@@ -130,18 +172,31 @@ def price_many(script, model: Model, market: Market, param_sets, fmt=None, n_pat
         remaining = np.maximum(timeline.event_times, 0.0)  # from the valuation date, for a running product
         life = float(np.dot(term, remaining) + alive_end * remaining[-1])
         N = notionals[i]
-        results.append(StructuredResult(
-            value=value, price=100 * value.price / N, stderr=100 * value.stderr / N, fmt=fmt.name, notional=N,
-            n_paths=n_paths, seconds=seconds, timings=own_timings,
-            event_times=timeline.event_times, termination=term,
-            expected_flows={k: v / n_paths for k, v in tot.flows.items()}, expected_life=life,
-            redemption_probabilities={t: v / n_paths for t, v in tot.redemption.items()}, warnings=own,
-            pairs=d))
+        results.append(
+            StructuredResult(
+                value=value,
+                price=100 * value.price / N,
+                stderr=100 * value.stderr / N,
+                fmt=fmt.name,
+                notional=N,
+                n_paths=n_paths,
+                seconds=seconds,
+                timings=own_timings,
+                event_times=timeline.event_times,
+                termination=term,
+                expected_flows={k: v / n_paths for k, v in tot.flows.items()},
+                expected_life=life,
+                redemption_probabilities={t: v / n_paths for t, v in tot.redemption.items()},
+                warnings=own,
+                pairs=d,
+            )
+        )
     return results
 
 
 def _forward_controls(program, timeline, model, market) -> tuple:
     from .profile import profile
+
     times = profile(program, timeline).observation_times
     names = program.underlying_names
     markets = model.markets if isinstance(model, Basket) else {names[0]: market}
@@ -161,9 +216,11 @@ def check_fixing_scale(history: dict, spot: float, name: str, band=(0.2, 5.0)):
     100 (or the reverse): refuse them instead of pricing a product struck at the wrong level."""
     for t, level in history.items():
         if not band[0] * spot <= level <= band[1] * spot:
-            raise ValueError(f"fixing {level:g} of {name} (t = {t:.4f}) is {level / spot:.1f} times the model spot "
-                             f"{spot:g}: real index levels against a market rescaled to 100? convert them with "
-                             "optlab.marketdata.to_model_scale")
+            raise ValueError(
+                f"fixing {level:g} of {name} (t = {t:.4f}) is {level / spot:.1f} times the model spot "
+                f"{spot:g}: real index levels against a market rescaled to 100? convert them with "
+                "optlab.marketdata.to_model_scale"
+            )
 
 
 def basket_history(fixings: dict | None, names, clock: Clock) -> dict:
@@ -190,7 +247,16 @@ def history_times(fixings: dict | None, name: str, clock: Clock) -> dict:
     return out
 
 
-def price(script, model: Model, market: Market, fmt=None, n_paths: int = 100_000, seed=0, batch: int | None = None,
-          params: dict | None = None, **kwargs) -> StructuredResult:
+def price(
+    script,
+    model: Model,
+    market: Market,
+    fmt=None,
+    n_paths: int = 100_000,
+    seed=0,
+    batch: int | None = None,
+    params: dict | None = None,
+    **kwargs,
+) -> StructuredResult:
     """Price a script (text or parsed Program) under a model. The price is in % of the notional (param N)."""
     return price_many(script, model, market, [params or {}], fmt, n_paths, seed, batch, **kwargs)[0]

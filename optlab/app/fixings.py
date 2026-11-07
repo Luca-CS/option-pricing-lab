@@ -34,7 +34,7 @@ def parse_fixings(text: str) -> tuple[dict, list]:
         day = _date(cells[0]) if cells else None
         try:
             level = float(cells[col])
-        except (IndexError, ValueError):
+        except IndexError, ValueError:
             level = float("nan")
         if day is not None and level > 0:
             levels[day] = level

@@ -38,12 +38,14 @@ def asian_script(times):
     events = [f"event t={number(times[0])}\n  total = SPX\nend\n"]
     events += [f"event t={number(t)}\n  total = total + SPX\nend\n" for t in times[1:-1]]
     T = number(times[-1])
-    events.append(f"event t={T} pay t={T}\n  total = total + SPX\n"
-                  f"  pay max(total / {len(times)} - K, 0) as redemption\nend\n")
+    events.append(
+        f"event t={T} pay t={T}\n  total = total + SPX\n  pay max(total / {len(times)} - K, 0) as redemption\nend\n"
+    )
     return "underlying SPX\nparam K = 100\n" + "\n".join(events)
 
 
 # --- test 1: the scripting layer reproduces the existing pricers on the same paths ---
+
 
 @pytest.mark.parametrize("model", MODELS)
 @pytest.mark.parametrize("cp", ["call", "put"])
@@ -83,18 +85,41 @@ def test_script_price_is_in_percent_of_notional():
 
 # --- dates, batches and formats ---
 
+
 def phoenix_script(months=12, freq=3, cpn=0.02, ac=1.0, cb=0.7, ki=0.6):
     from optlab.structured.dates import schedule
+
     dates = schedule(CTX.valuation, months, freq, "modified_following", 5)
-    lines = ["underlying SPX", "param N = 100", f"param cpn = {cpn}", f"param ac = {ac}", f"param cb = {cb}",
-             f"param ki = {ki}", "", f"event {CTX.valuation}", "  S0 = SPX", "end"]
+    lines = [
+        "underlying SPX",
+        "param N = 100",
+        f"param cpn = {cpn}",
+        f"param ac = {ac}",
+        f"param cb = {cb}",
+        f"param ki = {ki}",
+        "",
+        f"event {CTX.valuation}",
+        "  S0 = SPX",
+        "end",
+    ]
     for k, (obs, pay) in enumerate(dates):
         last = k == len(dates) - 1
-        lines += ["", f"event {obs} pay {pay}", "  perf = SPX / S0", "  if perf >= cb then",
-                  "    pay N * cpn as coupon", "  end"]
+        lines += [
+            "",
+            f"event {obs} pay {pay}",
+            "  perf = SPX / S0",
+            "  if perf >= cb then",
+            "    pay N * cpn as coupon",
+            "  end",
+        ]
         if last:
-            lines += ["  if perf >= ki then", "    pay N as redemption", "  else", "    pay N * perf as redemption",
-                      "  end"]
+            lines += [
+                "  if perf >= ki then",
+                "    pay N as redemption",
+                "  else",
+                "    pay N * perf as redemption",
+                "  end",
+            ]
         else:
             lines += ["  if perf >= ac then", "    pay N as redemption", "    terminate", "  end"]
         lines.append("end")
@@ -104,13 +129,20 @@ def phoenix_script(months=12, freq=3, cpn=0.02, ac=1.0, cb=0.7, ki=0.6):
 def test_date_script_matches_time_script_on_the_same_paths():
     m = CTX.model("lv")
     by_time = price(EUROPEAN.format(sign=""), m, CTX.market, n_paths=N_REPRO, seed=5)
-    by_date = price(EUROPEAN.format(sign="").replace("event t=1 pay t=1", "event 2027-10-27 pay 2027-10-27"),
-                    m, CTX.market, n_paths=N_REPRO, seed=5, valuation=CTX.valuation)
+    by_date = price(
+        EUROPEAN.format(sign="").replace("event t=1 pay t=1", "event 2027-10-27 pay 2027-10-27"),
+        m,
+        CTX.market,
+        n_paths=N_REPRO,
+        seed=5,
+        valuation=CTX.valuation,
+    )
     assert by_date.value.price == by_time.value.price
 
 
 def test_note_minus_swap_is_the_discounted_redemption_date():
     from optlab.structured import Note, Swap
+
     script, kw = phoenix_script(), dict(n_paths=N_REPRO, seed=3, batch=5_000, valuation=CTX.valuation)
     note = price(script, CTX.model("bs"), CTX.market, fmt=Note(), **kw)
     swap = price(script, CTX.model("bs"), CTX.market, fmt=Swap(), **kw)
@@ -123,6 +155,7 @@ def test_note_minus_swap_is_the_discounted_redemption_date():
 
 def test_issuer_spread_lowers_the_note_consistently_with_flow_timing():
     from optlab.structured import Note
+
     script, kw = phoenix_script(), dict(n_paths=N_REPRO, seed=3, valuation=CTX.valuation)
     m = CTX.model("bs")
     p0 = price(script, m, CTX.market, fmt=Note(0.0), **kw)

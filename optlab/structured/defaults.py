@@ -25,27 +25,83 @@ def _tiers(**columns) -> list:
 
 
 STARTING = {
-    "index_us": {"label": "US index", "currency": "USD", "tiers": _tiers(
-        vol=(-0.0025, -0.005, -0.01), skew=(-0.0025, -0.005, -0.01), corr=(0.01, 0.02, 0.04), corr_skew=(0.01, 0.02, 0.04), dividend=(-0.05, -0.10, -0.15),
-        repo=(-0.0005, -0.001, -0.002), spot=(0.0002, 0.0005, 0.001), slv_mix=(0.5, 0.5, 0.5), min_spread=(0.005, 0.01, 0.02),
-        delta_max_coupon=(1.0, 1.0, 0.5), delta_max_autocall=(1.0, 1.0, 0.5), delta_max_barrier=(5.0, 5.0, 2.5), delta_max_upside=(1.0, 1.0, 0.5))},
-    "index_eu": {"label": "European index", "currency": "EUR", "tiers": _tiers(
-        vol=(-0.0025, -0.005, -0.01), skew=(-0.0025, -0.005, -0.01), corr=(0.01, 0.02, 0.04), corr_skew=(0.01, 0.02, 0.04), dividend=(-0.10, -0.15, -0.20),
-        repo=(-0.0005, -0.001, -0.002), spot=(0.0003, 0.0007, 0.0015), slv_mix=(0.5, 0.5, 0.5), min_spread=(0.005, 0.01, 0.02),
-        delta_max_coupon=(1.0, 1.0, 0.5), delta_max_autocall=(1.0, 1.0, 0.5), delta_max_barrier=(5.0, 5.0, 2.5), delta_max_upside=(1.0, 1.0, 0.5))},
-    "equity_us": {"label": "US large-cap share", "currency": "USD", "tiers": _tiers(
-        vol=(-0.005, -0.01, -0.02), skew=(-0.005, -0.01, -0.02), corr=(0.02, 0.03, 0.05), corr_skew=(0.02, 0.03, 0.05), dividend=(-0.05, -0.10, -0.20),
-        repo=(-0.001, -0.002, -0.004), spot=(0.0005, 0.001, 0.002), slv_mix=(0.5, 0.5, 0.5), min_spread=(0.01, 0.02, 0.03),
-        delta_max_coupon=(1.0, 1.0, 0.5), delta_max_autocall=(1.0, 1.0, 0.5), delta_max_barrier=(5.0, 5.0, 2.5), delta_max_upside=(1.0, 1.0, 0.5))},
+    "index_us": {
+        "label": "US index",
+        "currency": "USD",
+        "tiers": _tiers(
+            vol=(-0.0025, -0.005, -0.01),
+            skew=(-0.0025, -0.005, -0.01),
+            corr=(0.01, 0.02, 0.04),
+            corr_skew=(0.01, 0.02, 0.04),
+            dividend=(-0.05, -0.10, -0.15),
+            repo=(-0.0005, -0.001, -0.002),
+            spot=(0.0002, 0.0005, 0.001),
+            slv_mix=(0.5, 0.5, 0.5),
+            min_spread=(0.005, 0.01, 0.02),
+            delta_max_coupon=(1.0, 1.0, 0.5),
+            delta_max_autocall=(1.0, 1.0, 0.5),
+            delta_max_barrier=(5.0, 5.0, 2.5),
+            delta_max_upside=(1.0, 1.0, 0.5),
+        ),
+    },
+    "index_eu": {
+        "label": "European index",
+        "currency": "EUR",
+        "tiers": _tiers(
+            vol=(-0.0025, -0.005, -0.01),
+            skew=(-0.0025, -0.005, -0.01),
+            corr=(0.01, 0.02, 0.04),
+            corr_skew=(0.01, 0.02, 0.04),
+            dividend=(-0.10, -0.15, -0.20),
+            repo=(-0.0005, -0.001, -0.002),
+            spot=(0.0003, 0.0007, 0.0015),
+            slv_mix=(0.5, 0.5, 0.5),
+            min_spread=(0.005, 0.01, 0.02),
+            delta_max_coupon=(1.0, 1.0, 0.5),
+            delta_max_autocall=(1.0, 1.0, 0.5),
+            delta_max_barrier=(5.0, 5.0, 2.5),
+            delta_max_upside=(1.0, 1.0, 0.5),
+        ),
+    },
+    "equity_us": {
+        "label": "US large-cap share",
+        "currency": "USD",
+        "tiers": _tiers(
+            vol=(-0.005, -0.01, -0.02),
+            skew=(-0.005, -0.01, -0.02),
+            corr=(0.02, 0.03, 0.05),
+            corr_skew=(0.02, 0.03, 0.05),
+            dividend=(-0.05, -0.10, -0.20),
+            repo=(-0.001, -0.002, -0.004),
+            spot=(0.0005, 0.001, 0.002),
+            slv_mix=(0.5, 0.5, 0.5),
+            min_spread=(0.01, 0.02, 0.03),
+            delta_max_coupon=(1.0, 1.0, 0.5),
+            delta_max_autocall=(1.0, 1.0, 0.5),
+            delta_max_barrier=(5.0, 5.0, 2.5),
+            delta_max_upside=(1.0, 1.0, 0.5),
+        ),
+    },
 }
 # Parameter -> how groups combine when it is not a signed bump: the widest spread and the tightest delta limit are the prudent ones.
-RULES = {"slv_mix": "max", "min_spread": "max", "delta_max_coupon": "min", "delta_max_autocall": "min", "delta_max_barrier": "min", "delta_max_upside": "min"}
+RULES = {
+    "slv_mix": "max",
+    "min_spread": "max",
+    "delta_max_coupon": "min",
+    "delta_max_autocall": "min",
+    "delta_max_barrier": "min",
+    "delta_max_upside": "min",
+}
 SKIP = ("side",)
 
 
 def parameters(sheet: TermSheet | None = None) -> list:
     """The fields of the costs section that carry a default, visible on this sheet if one is given."""
-    return [f for f in SECTIONS["costs"].fields if f.name not in SKIP and (sheet is None or sheet.visible(f"costs.{f.name}"))]
+    return [
+        f
+        for f in SECTIONS["costs"].fields
+        if f.name not in SKIP and (sheet is None or sheet.visible(f"costs.{f.name}"))
+    ]
 
 
 def merged(table: dict | None) -> dict:
@@ -89,7 +145,11 @@ def validate_table(groups: dict) -> dict:
                     raise ValueError(f"{name}: {f.label} = {value} is outside {f.minimum} to {f.maximum}")
                 row[key] = value
             rows.append(row)
-        clean[name] = {"label": str(group.get("label", name)), "currency": str(group.get("currency", "")), "tiers": rows}
+        clean[name] = {
+            "label": str(group.get("label", name)),
+            "currency": str(group.get("currency", "")),
+            "tiers": rows,
+        }
     return clean
 
 
@@ -117,6 +177,7 @@ def _prudent(key: str, by_group: dict) -> tuple[float, tuple | None]:
 @dataclass
 class Resolved:
     """The defaults of one sheet, the values it uses, and what stops it being priced."""
+
     groups: dict  # name -> group
     tiers: dict  # group -> {"index", "max_notional"} or None above the last tier
     params: dict  # parameter -> {"value", "default", "overridden", "missing", "by_group", "conflict", "starting"}
@@ -139,7 +200,14 @@ class Resolved:
         return CostInputs(bumps, self.side, defaults, candidates, mix, spread, delta)
 
     def as_json(self) -> dict:
-        return {"groups": self.groups, "tiers": self.tiers, "params": self.params, "side": self.side, "alerts": self.alerts, "missing": self.missing}
+        return {
+            "groups": self.groups,
+            "tiers": self.tiers,
+            "params": self.params,
+            "side": self.side,
+            "alerts": self.alerts,
+            "missing": self.missing,
+        }
 
 
 def resolve(table: dict | None, sheet: TermSheet) -> Resolved:
@@ -159,12 +227,18 @@ def resolve(table: dict | None, sheet: TermSheet) -> Resolved:
         got = _tier(group, notional)
         if got is None:
             last = group["tiers"][-1]["max_notional"]
-            alerts.append(f"A notional of {notional:,.0f} is above the last tier of {group['label']} ({last:,.0f} {group['currency']}): enter the values.")
+            alerts.append(
+                f"A notional of {notional:,.0f} is above the last tier of {group['label']} ({last:,.0f} {group['currency']}): enter the values."
+            )
             tiers[g] = None
         else:
             tiers[g] = {"index": got[0], "max_notional": got[1]["max_notional"]}
             by_group[g] = got[1]
-    start = {g: STARTING[g]["tiers"][min(tiers[g]["index"], len(STARTING[g]["tiers"]) - 1)] for g in by_group if g in STARTING}
+    start = {
+        g: STARTING[g]["tiers"][min(tiers[g]["index"], len(STARTING[g]["tiers"]) - 1)]
+        for g in by_group
+        if g in STARTING
+    }
     complete = len(by_group) == len(tiers) and all(t is not None for t in tiers.values())
     params = {}
     for f in parameters(sheet):
@@ -173,9 +247,14 @@ def resolve(table: dict | None, sheet: TermSheet) -> Resolved:
         default, conflict = _prudent(f.name, values) if values and complete else (None, None)
         missing = override is None and default is None
         params[f.name] = {
-            "value": override if override is not None else default, "default": default, "overridden": override is not None,
-            "missing": missing, "by_group": values, "conflict": conflict,
-            "starting": bool(values) and all(g in start and start[g].get(f.name) == v for g, v in values.items())}
+            "value": override if override is not None else default,
+            "default": default,
+            "overridden": override is not None,
+            "missing": missing,
+            "by_group": values,
+            "conflict": conflict,
+            "starting": bool(values) and all(g in start and start[g].get(f.name) == v for g, v in values.items()),
+        }
     return Resolved({n: g for n, g in names.items()}, tiers, params, sheet.get("costs.side", "sell"), alerts)
 
 

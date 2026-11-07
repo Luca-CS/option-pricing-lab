@@ -25,6 +25,7 @@ BP = 1e-4
 @dataclass
 class CurveMove:
     """A rate move in basis points: parallel, plus one bump per tenor of the grid ({tenor index: bp})."""
+
     parallel: float = 0.0
     tenors: dict = field(default_factory=dict)
 
@@ -73,8 +74,9 @@ def _pillars(market: Market) -> np.ndarray:
     return np.unique(np.concatenate([base, np.asarray(grid.TENORS), dense]))
 
 
-def bumped_market(market: Market, discount: CurveMove | None = None, carry: CurveMove | None = None,
-                  dividend_relative: float = 0.0) -> Market:
+def bumped_market(
+    market: Market, discount: CurveMove | None = None, carry: CurveMove | None = None, dividend_relative: float = 0.0
+) -> Market:
     """The market with the discount rate moved by `discount` and the forward's carry by `carry` (both in bp), and the
     dividends scaled by (1 + dividend_relative) as `structured.costs.forward_bumped` does (steps and season kept)."""
     if not discount and not carry and not dividend_relative:

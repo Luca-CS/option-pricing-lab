@@ -22,8 +22,17 @@ class Jobs:
 
     def submit(self, kind: str, fn, *args, **kwargs) -> str:
         job_id = uuid.uuid4().hex[:12]
-        job = {"id": job_id, "kind": kind, "state": "queued", "created": time.time(), "started": None,
-               "finished": None, "result": None, "error": None, "cancelled": False}
+        job = {
+            "id": job_id,
+            "kind": kind,
+            "state": "queued",
+            "created": time.time(),
+            "started": None,
+            "finished": None,
+            "result": None,
+            "error": None,
+            "cancelled": False,
+        }
         with self._lock:
             self._jobs[job_id] = job
             if len(self._jobs) > self._keep:
@@ -73,8 +82,9 @@ class Jobs:
     def running(self) -> list[dict]:
         with self._lock:
             jobs = list(self._jobs.values())
-        return [{"id": j["id"], "kind": j["kind"], "state": j["state"]} for j in jobs
-                if j["state"] in ("queued", "running")]
+        return [
+            {"id": j["id"], "kind": j["kind"], "state": j["state"]} for j in jobs if j["state"] in ("queued", "running")
+        ]
 
     def shutdown(self):
         self._pool.shutdown(wait=False, cancel_futures=True)

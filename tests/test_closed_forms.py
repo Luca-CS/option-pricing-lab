@@ -1,8 +1,19 @@
 import numpy as np
 import pytest
 
-from optlab import (HestonParams, Market, barrier_price, binomial_price, black_price, bs_greeks, bs_price,
-                    geometric_asian_price, heston_iv, heston_price, implied_vol)
+from optlab import (
+    HestonParams,
+    Market,
+    barrier_price,
+    binomial_price,
+    black_price,
+    bs_greeks,
+    bs_price,
+    geometric_asian_price,
+    heston_iv,
+    heston_price,
+    implied_vol,
+)
 
 S, r, q, vol = 100.0, 0.03, 0.01, 0.2
 
@@ -86,7 +97,8 @@ def test_barrier_in_out_parity_and_bounds(kind, H, cp, K):
 
 def test_barrier_far_away_is_vanilla():
     assert barrier_price(S, 100, 1.0, 1.0, r, q, vol, "down-out", "call") == pytest.approx(
-        bs_price(S, 100, 1.0, r, q, vol, "call"), abs=1e-8)
+        bs_price(S, 100, 1.0, r, q, vol, "call"), abs=1e-8
+    )
 
 
 @pytest.mark.parametrize("cp", ["call", "put"])

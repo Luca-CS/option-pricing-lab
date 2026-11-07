@@ -47,6 +47,7 @@ def fast_slv(model: SLVModel, n_x: int = 321) -> SLVModel:
 @dataclass
 class TabulatedLocalVol(Model):
     """Dupire local variance tabulated per time step on x in [lo, hi] * atm_vol * sqrt(t) (flat beyond)."""
+
     surface: object
     n_x: int = 801
     sd_range: tuple = (-8.0, 6.0)

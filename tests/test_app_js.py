@@ -11,7 +11,7 @@ import pytest
 
 UI = Path(__file__).resolve().parent.parent / "optlab" / "app" / "static" / "js" / "ui.js"
 NODE = shutil.which("node")
-pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
+pytestmark = [pytest.mark.node, pytest.mark.skipif(NODE is None, reason="node is not installed")]
 
 
 def run_js(expr):

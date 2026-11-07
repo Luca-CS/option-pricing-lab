@@ -31,7 +31,7 @@ def _result(discounted, n_paths) -> MCResult:
     """Antithetic pairs are averaged first so the standard error accounts for their correlation."""
     d = np.asarray(discounted)
     if len(d) % 2 == 0:
-        d = 0.5 * (d[: len(d) // 2] + d[len(d) // 2:])
+        d = 0.5 * (d[: len(d) // 2] + d[len(d) // 2 :])
     return MCResult(float(d.mean()), float(d.std(ddof=1) / np.sqrt(len(d))), n_paths)
 
 
@@ -44,8 +44,19 @@ def fixing_dates(T, n_fixings):
     return np.linspace(T / n_fixings, T, n_fixings)
 
 
-def asian_mc(model: Model, market: Market, K, T, n_fixings=12, cp="call", average="arithmetic",
-             n_paths=100_000, rng=None, dt_max=1 / 252, control_variate=True):
+def asian_mc(
+    model: Model,
+    market: Market,
+    K,
+    T,
+    n_fixings=12,
+    cp="call",
+    average="arithmetic",
+    n_paths=100_000,
+    rng=None,
+    dt_max=1 / 252,
+    control_variate=True,
+):
     """Fixed-strike Asian on n equally spaced fixings, paid at T.
 
     Under Black-Scholes, the arithmetic price uses the geometric Asian (closed form) as a control
@@ -68,8 +79,19 @@ def asian_mc(model: Model, market: Market, K, T, n_fixings=12, cp="call", averag
     return _result(arith_pay - beta * (geo_pay - exact), n_paths)
 
 
-def barrier_mc(model: Model, market: Market, K, H, T, kind="down-out", cp="call", n_monitor=252,
-               n_paths=100_000, rng=None, dt_max=1 / 252):
+def barrier_mc(
+    model: Model,
+    market: Market,
+    K,
+    H,
+    T,
+    kind="down-out",
+    cp="call",
+    n_monitor=252,
+    n_paths=100_000,
+    rng=None,
+    dt_max=1 / 252,
+):
     """Single barrier monitored on n_monitor equally spaced dates (daily by default), no rebate."""
     times = np.linspace(T / n_monitor, T, n_monitor)
     S = simulate(model, market, times, n_paths, rng, dt_max)
@@ -87,8 +109,9 @@ def _basis(s, v=None):
     return np.column_stack(cols)
 
 
-def american_lsm(model: Model, market: Market, K, T, cp="put", n_exercise=50, n_paths=100_000,
-                 rng=None, dt_max=1 / 252):
+def american_lsm(
+    model: Model, market: Market, K, T, cp="put", n_exercise=50, n_paths=100_000, rng=None, dt_max=1 / 252
+):
     """Longstaff-Schwartz with a cubic polynomial basis in S/K (plus v, v^2 and S v when the model
     has a variance factor), regressing on in-the-money paths only.
 

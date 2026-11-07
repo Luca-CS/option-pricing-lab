@@ -31,8 +31,10 @@ def main():
     old = cal["exotics"][KEY][MODEL]
     cal["exotics"][KEY][MODEL] = {"price": res.price / S0 * 100, "stderr": res.stderr / S0 * 100}
     path.write_text(json.dumps(cal, indent=1))
-    print(f"{KEY}, {MODEL}: {old['price']:.4f} ({old['stderr']:.4f}) -> {res.price / S0 * 100:.4f} "
-          f"({res.stderr / S0 * 100:.4f}); wrote {path}")
+    print(
+        f"{KEY}, {MODEL}: {old['price']:.4f} ({old['stderr']:.4f}) -> {res.price / S0 * 100:.4f} "
+        f"({res.stderr / S0 * 100:.4f}); wrote {path}"
+    )
 
 
 if __name__ == "__main__":

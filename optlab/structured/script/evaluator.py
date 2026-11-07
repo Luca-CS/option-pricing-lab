@@ -30,6 +30,7 @@ HARD = {"<": np.less, "<=": np.less_equal, ">": np.greater, ">=": np.greater_equ
 class BatchFlows:
     """Undiscounted flows of one batch, keyed by (payment time, tag), plus redemption weights per payment time
     (the probability-like weight with which the redemption is paid there) and the alive mass lost per event."""
+
     n_paths: int
     flows: dict = field(default_factory=dict)
     redemption_weights: dict = field(default_factory=dict)
@@ -42,6 +43,7 @@ class BatchFlows:
 class Ramp:
     """A comparison a >= b or a < b read as a call or put spread on one side of b: over [b, b (1 + width)] on side "up", over [b (1 - width), b] on
     side "down". With `shift`, the level moves to the far end of that interval and the comparison stays hard."""
+
     side: str  # up or down
     width: float  # relative to |b|
     shift: bool = False
@@ -52,7 +54,11 @@ def _ramped(op, a, b, ramp: Ramp):
     lo = np.where(np.asarray(ramp.side == "up"), b, np.subtract(b, w))
     if ramp.shift:
         level = np.add(b, w) if ramp.side == "up" else np.subtract(b, w)
-        out = HARD[op](a, level).astype(float) if isinstance(a, np.ndarray) or isinstance(level, np.ndarray) else float(HARD[op](a, level))
+        out = (
+            HARD[op](a, level).astype(float)
+            if isinstance(a, np.ndarray) or isinstance(level, np.ndarray)
+            else float(HARD[op](a, level))
+        )
     else:
         with np.errstate(divide="ignore", invalid="ignore"):
             position = np.clip((np.subtract(a, lo)) / w, 0.0, 1.0)
@@ -64,8 +70,11 @@ def _ramped(op, a, b, ramp: Ramp):
 
 
 def _compare(op, a, b, eps):
-    hard = HARD[op](a, b).astype(float) if isinstance(a, np.ndarray) or isinstance(b, np.ndarray) \
+    hard = (
+        HARD[op](a, b).astype(float)
+        if isinstance(a, np.ndarray) or isinstance(b, np.ndarray)
         else float(HARD[op](a, b))
+    )
     if _any_nan(a, b):  # NaN compares as False: keep it undefined instead of sending the path to `else`
         hard = np.where(np.isnan(a) | np.isnan(b), np.nan, hard)
     if eps == 0 or op == "==":
@@ -82,8 +91,15 @@ def _any_nan(a, b) -> bool:
 
 
 class Evaluator:
-    def __init__(self, program: Program, timeline: Timeline, params: dict | None = None, smoothing: float = 0.0,
-                 check_redemption: bool = True, ramps: dict | None = None):
+    def __init__(
+        self,
+        program: Program,
+        timeline: Timeline,
+        params: dict | None = None,
+        smoothing: float = 0.0,
+        check_redemption: bool = True,
+        ramps: dict | None = None,
+    ):
         self.program = program
         self.timeline = timeline
         self.params = {**program.param_values, **(params or {})}
@@ -113,8 +129,10 @@ class Evaluator:
             tol = 1e-12 if not self.smooth else 1e-9
             bad = ~(np.abs(total - 1.0) <= tol)  # NaN weights fail too
             if bad.any():
-                message = (f"the redemption is not paid exactly once on {bad.mean():.2%} of the paths "
-                           "(a valid product pays one 'redemption' per path)")
+                message = (
+                    f"the redemption is not paid exactly once on {bad.mean():.2%} of the paths "
+                    "(a valid product pays one 'redemption' per path)"
+                )
                 if not self.smooth or not np.all(np.isfinite(total)):
                     raise ScriptError(message, self.program.events[-1].line)
                 out.warnings.append(message + " in the smoothing ramps")
@@ -148,8 +166,11 @@ class Evaluator:
                 undefined = np.isnan(c)
                 if np.any(undefined):
                     # a path that already terminated pays nothing more: its conditions do not matter
-                    self._check_defined(undefined & (np.asarray(m * self.out.alive) != 0), s.line,
-                                        "the condition is undefined (NaN, e.g. the log of a negative number)")
+                    self._check_defined(
+                        undefined & (np.asarray(m * self.out.alive) != 0),
+                        s.line,
+                        "the condition is undefined (NaN, e.g. the log of a negative number)",
+                    )
                     c = np.where(undefined, 0.0, c)  # reached by no path
                 self.block(s.body, m * c)
                 if s.orelse:

@@ -45,8 +45,9 @@ def download_chain(ticker="^SPX", min_days=7, max_days=800, out_dir=RAW_DIR) -> 
             continue
         chain = tk.option_chain(expiry)
         for kind, df in (("call", chain.calls), ("put", chain.puts)):
-            df = df[["contractSymbol", "strike", "bid", "ask", "lastPrice", "volume", "openInterest",
-                     "lastTradeDate"]].copy()
+            df = df[
+                ["contractSymbol", "strike", "bid", "ask", "lastPrice", "volume", "openInterest", "lastTradeDate"]
+            ].copy()
             df["type"] = kind
             df["expiry"] = expiry
             rows.append(df)
@@ -114,8 +115,15 @@ def build_iv_table(path: Path, max_rel_spread=0.5, k_sd_range=(-3.0, 2.5)):
     return clean_chain(raw, snapshot, spot, max_rel_spread, k_sd_range)
 
 
-def clean_chain(raw: pd.DataFrame, snapshot: dt.datetime, spot: float, max_rel_spread=0.5, k_sd_range=(-3.0, 2.5),
-                discount=None, min_strikes: int = 8):
+def clean_chain(
+    raw: pd.DataFrame,
+    snapshot: dt.datetime,
+    spot: float,
+    max_rel_spread=0.5,
+    k_sd_range=(-3.0, 2.5),
+    discount=None,
+    min_strikes: int = 8,
+):
     """The cleaning shared by every source. raw: root, strike, bid, ask, type (call or put), expiry (ISO text).
 
     slices is a list of dicts (T, F, D, K, k, iv, spread_iv) ready for calibration; table is the
@@ -153,7 +161,9 @@ def clean_chain(raw: pd.DataFrame, snapshot: dt.datetime, spot: float, max_rel_s
         Ts = np.array([g[1] for g in groups])
         zeros = np.array([-np.log(g[4]) / g[1] for g in groups])
         use = (Ts > 2 / 12) & (zeros > -0.02) & (zeros < 0.15)
-        a, b = np.polyfit(Ts[use], zeros[use], 1, w=np.sqrt(Ts[use])) if use.sum() >= 3 else (0.0, np.median(zeros[use]))
+        a, b = (
+            np.polyfit(Ts[use], zeros[use], 1, w=np.sqrt(Ts[use])) if use.sum() >= 3 else (0.0, np.median(zeros[use]))
+        )
         zero_curve = {"slope": float(a), "intercept": float(b), "n_maturities": int(use.sum())}
     else:
         zero_curve = {"given": True}
@@ -168,8 +178,7 @@ def clean_chain(raw: pd.DataFrame, snapshot: dt.datetime, spot: float, max_rel_s
         sign = np.where(otm["cp"] == "call", 1.0, -1.0)
         K = otm["strike"].to_numpy()
         iv, iv_bid, iv_ask = (implied_vol(otm[col].to_numpy(), F, K, T, D, sign) for col in ("mid", "bid", "ask"))
-        otm = otm.assign(iv=iv, iv_bid=iv_bid, iv_ask=iv_ask, k=np.log(otm["strike"] / F), T=T, F=F, D=D,
-                         expiry=expiry)
+        otm = otm.assign(iv=iv, iv_bid=iv_bid, iv_ask=iv_ask, k=np.log(otm["strike"] / F), T=T, F=F, D=D, expiry=expiry)
         otm = otm.dropna(subset=["iv"])
         if len(otm) < min_strikes:
             continue
@@ -178,19 +187,34 @@ def clean_chain(raw: pd.DataFrame, snapshot: dt.datetime, spot: float, max_rel_s
         otm = otm[(otm["k"] > k_sd_range[0] * sd) & (otm["k"] < k_sd_range[1] * sd)]
         pillars.append((T, D, F))
         tables.append(otm)
-        slices.append({"T": T, "F": F, "D": D, "K": otm["strike"].to_numpy(), "k": otm["k"].to_numpy(),
-                       "iv": otm["iv"].to_numpy(),
-                       "spread_iv": (otm["iv_ask"] - otm["iv_bid"]).to_numpy(), "expiry": expiry})
+        slices.append(
+            {
+                "T": T,
+                "F": F,
+                "D": D,
+                "K": otm["strike"].to_numpy(),
+                "k": otm["k"].to_numpy(),
+                "iv": otm["iv"].to_numpy(),
+                "spread_iv": (otm["iv_ask"] - otm["iv_bid"]).to_numpy(),
+                "expiry": expiry,
+            }
+        )
 
     if not pillars:
         raise ValueError(f"no maturity with {min_strikes} usable strikes on {snapshot.date()}")
     pillars = np.array(sorted(pillars))
     # spot consistent with the option quotes: intercept of ln F(T) on the three shortest pillars
-    implied_spot = float(np.exp(np.polyfit(pillars[:3, 0], np.log(pillars[:3, 2]), 1)[1])) if len(pillars) >= 3 else spot
+    implied_spot = (
+        float(np.exp(np.polyfit(pillars[:3, 0], np.log(pillars[:3, 2]), 1)[1])) if len(pillars) >= 3 else spot
+    )
     market = Market(implied_spot, pillars[:, 0], pillars[:, 1], pillars[:, 2])
     table = pd.concat(tables, ignore_index=True)
-    meta = {"snapshot": snapshot.isoformat(), "yahoo_spot": spot, "implied_spot": implied_spot,
-            "zero_rate_curve": zero_curve}
+    meta = {
+        "snapshot": snapshot.isoformat(),
+        "yahoo_spot": spot,
+        "implied_spot": implied_spot,
+        "zero_rate_curve": zero_curve,
+    }
     return market, sorted(slices, key=lambda s: s["T"]), table, meta
 
 

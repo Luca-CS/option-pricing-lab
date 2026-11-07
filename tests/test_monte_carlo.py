@@ -1,9 +1,23 @@
 import numpy as np
 import pytest
 
-from optlab import (BlackScholesModel, HestonModel, HestonParams, Market, american_lsm, asian_mc, barrier_mc,
-                    barrier_price, barrier_shift_discrete, binomial_price, bs_price, european_mc,
-                    geometric_asian_price, heston_price, simulate)
+from optlab import (
+    BlackScholesModel,
+    HestonModel,
+    HestonParams,
+    Market,
+    american_lsm,
+    asian_mc,
+    barrier_mc,
+    barrier_price,
+    barrier_shift_discrete,
+    binomial_price,
+    bs_price,
+    european_mc,
+    geometric_asian_price,
+    heston_price,
+    simulate,
+)
 
 S, r, q, vol = 100.0, 0.03, 0.01, 0.2
 MARKET = Market.flat(S, r, q)
@@ -68,8 +82,10 @@ def test_arithmetic_asian_control_variate():
     assert cv.price > geometric_asian_price(S, 100, r, q, vol, np.linspace(1 / 12, 1.0, 12))
 
 
-@pytest.mark.parametrize("kind,H,cp", [("down-out", 85.0, "call"), ("up-out", 120.0, "call"),
-                                       ("down-in", 90.0, "put"), ("up-in", 115.0, "call")])
+@pytest.mark.parametrize(
+    "kind,H,cp",
+    [("down-out", 85.0, "call"), ("up-out", 120.0, "call"), ("down-in", 90.0, "put"), ("up-in", 115.0, "call")],
+)
 def test_daily_barrier_matches_broadie_glasserman_kou(kind, H, cp):
     res = barrier_mc(BS, MARKET, 100, H, 1.0, kind, cp, n_monitor=252, n_paths=200_000, rng=9)
     shifted = barrier_shift_discrete(H, S, vol, 1 / 252)

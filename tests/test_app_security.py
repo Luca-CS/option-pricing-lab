@@ -38,8 +38,9 @@ def test_a_cross_site_text_plain_post_writes_nothing(server):
     before = desk.fixings("SPX")
     status, _ = call(port, "POST", "/api/fixings", FIXING, {"Content-Type": "text/plain"})
     assert status == 415
-    status, _ = call(port, "POST", "/api/fixings", FIXING,
-                     {"Content-Type": "application/json", "Origin": "https://evil.example"})
+    status, _ = call(
+        port, "POST", "/api/fixings", FIXING, {"Content-Type": "application/json", "Origin": "https://evil.example"}
+    )
     assert status == 403
     status, _ = call(port, "POST", "/api/fixings", FIXING, {"Content-Type": "application/json", "Origin": "null"})
     assert status == 403
@@ -48,8 +49,9 @@ def test_a_cross_site_text_plain_post_writes_nothing(server):
 
 def test_the_desk_s_own_page_and_scripts_still_write(server):
     desk, port = server
-    status, body = call(port, "POST", "/api/fixings", FIXING,
-                        {"Content-Type": "application/json", "Origin": f"http://127.0.0.1:{port}"})
+    status, body = call(
+        port, "POST", "/api/fixings", FIXING, {"Content-Type": "application/json", "Origin": f"http://127.0.0.1:{port}"}
+    )
     assert status == 200, body
     status, body = call(port, "POST", "/api/fixings", FIXING, {"Content-Type": "application/json; charset=utf-8"})
     assert status == 200, body  # no Origin: a script, not a browser
@@ -70,8 +72,36 @@ def test_the_rule_beyond_this_machine():
     h = {"Host": "192.168.1.20:8765"}
     assert cross_site_refusal("GET", h, None)[0] == 403
     assert cross_site_refusal("GET", h, "t") is None
-    assert cross_site_refusal("POST", h | {"Origin": "http://192.168.1.20:8765", "Content-Type": "application/json",
-                                           "Content-Length": "2"}, "t") is None
-    assert cross_site_refusal("POST", h | {"Origin": "http://other:8765", "Content-Type": "application/json"}, "t")[0] == 403
+    assert (
+        cross_site_refusal(
+            "POST",
+            h | {"Origin": "http://192.168.1.20:8765", "Content-Type": "application/json", "Content-Length": "2"},
+            "t",
+        )
+        is None
+    )
+    assert (
+        cross_site_refusal("POST", h | {"Origin": "http://other:8765", "Content-Type": "application/json"}, "t")[0]
+        == 403
+    )
     assert cross_site_refusal("DELETE", {"Host": "127.0.0.1:8765", "Origin": "https://evil.example"}, None)[0] == 403
     assert cross_site_refusal("POST", {"Host": "127.0.0.1:1", "Content-Length": "x"}, None)[0] == 400
+
+
+def test_no_url_reads_a_file_outside_the_static_folder(server):
+    _, port = server
+    status, page = call(port, "GET", "/")
+    assert status == 200 and b"<html" in page.lower()
+    status, body = call(port, "GET", "/js/main.js")
+    assert status == 200 and b"import { api }" in body
+    for path in (
+        "/../server.py",
+        "/js/../../server.py",
+        "/%2e%2e/server.py",
+        "/..%2fserver.py",
+        "/C:/Windows/win.ini",
+        "//etc/passwd",
+        "/static/../../api.py",
+    ):
+        status, body = call(port, "GET", path)
+        assert status == 200 and body == page, path  # an unknown path is the page, never another file

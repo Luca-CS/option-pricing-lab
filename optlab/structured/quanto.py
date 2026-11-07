@@ -59,6 +59,8 @@ def payment_warnings(sheet, ctx) -> list[str]:
         return []
     what = ", ".join(f"{n} ({_BY_ID[n].currency})" for n in others)
     if sheet.get("general.payment_currency") != "native":
-        raise ValueError(f"paying {what} in {pay} needs a quanto adjustment and this market has no FX: use the lake's market "
-                         "(pit.market_at, pit.basket_at)")
+        raise ValueError(
+            f"paying {what} in {pay} needs a quanto adjustment and this market has no FX: use the lake's market "
+            "(pit.market_at, pit.basket_at)"
+        )
     return [f"{what} paid in {pay}: performances are not adjusted for FX, this market has no FX inputs"]

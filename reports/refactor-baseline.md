@@ -82,8 +82,21 @@ Largest (radon): `structured/costs.py desk_price` 80, `risk/engine.py run_group`
 
 ## 5. Tests and coverage
 
-- Full suite (`pytest`, NumPy engine, the real lake, the GPU library absent in the run's worktree): *pending*.
-- Coverage (`pytest-cov` 7.0.0, line coverage of `optlab`): *pending*.
+- **831 tests** in v0 (52 test files). Two runs:
+  - on the risk branch's worktree (no CUDA library built there, no node): **818 passed, 13 skipped in 1,979 s**,
+    on a machine shared with the golden recordings;
+  - on this worktree with everything available (the CUDA library, node 26, the real lake), under coverage: **831 of
+    v0 plus the 4 new security tests, 835 passed, 0 skipped, in 1,941 s** (coverage adds its own overhead; neither
+    run is a clean timing, which A8 will measure on an idle machine).
+- Slowest tests (coverage run): `test_risk_pnl.py::test_eod_is_stored_replayed_bit_for_bit_and_the_backfill_is_idempotent`
+  161 s, `test_structured_basket_slv.py::test_the_worst_of_has_its_slv_provision_on_common_numbers` 62 s,
+  `test_lake_desk.py::test_showcase_seed_...` 59 s, `test_risk_pnl.py::test_the_cascade_adds_up_...` 56 s,
+  `test_structured_localcorr.py::test_a_worst_of_has_both_provisions_...` 56 s.
+- **Line coverage of `optlab`** (`pytest-cov` 7.0.0, in-process only: the spawned VaR and batch processes are not
+  measured): **92.6 %** (11,342 of 12,246 statements). By package: structured 96.6 %, marketdata 92.6 %, core 91.6 %,
+  risk 91.2 %, app 85.3 %. Lowest files of 30 statements or more: `app/__main__.py` 0 %, `pipeline.py` 27.7 % (exercised
+  by the calibration golden instead), `app/tunnel.py` 38.9 %, `marketdata/sources/yahoo.py` 54.3 %,
+  `sources/dolthub.py` 55.8 %, `risk/report.py` 69.1 %, `app/risk_api.py` 72.5 %.
 - CI: none in v0.
 
 ## 6. Business times (reference, Windows native, GPU warmed)

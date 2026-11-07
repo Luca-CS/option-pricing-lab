@@ -6,26 +6,47 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 import pytest
+from _lake_fixture import synthetic_lake
+from _structured_refs import worst_put
 from scipy.special import ndtr
 
 from optlab.blackscholes import black_price
-from optlab.marketdata.derive.correl import (CorrelationSkew, apply_premium, average_correlation, basket_paths, basket_rows,
-                                             build_basket_quotes, build_premium, build_realized, closes_wide, copula_expectation,
-                                             correlation_at, forward_quantile, member_vols, nearest_correlation, pair_horizon,
-                                             premium_series, read_correlation, realised_matrix, rolling_pair, skewed_matrix,
-                                             spread_payoff, spread_quote)
+from optlab.marketdata.derive.correl import (
+    CorrelationSkew,
+    apply_premium,
+    average_correlation,
+    basket_paths,
+    basket_rows,
+    build_basket_quotes,
+    build_premium,
+    build_realized,
+    closes_wide,
+    copula_expectation,
+    correlation_at,
+    forward_quantile,
+    member_vols,
+    nearest_correlation,
+    pair_horizon,
+    premium_series,
+    read_correlation,
+    realised_matrix,
+    rolling_pair,
+    skewed_matrix,
+    spread_payoff,
+    spread_quote,
+)
 from optlab.marketdata.lake import Lake
 from optlab.structured.multiasset import correlation_root
 from optlab.svi import SVISurface
-from _lake_fixture import synthetic_lake
-from _structured_refs import worst_put
 
 
 def correlated_closes(rho=0.6, n=800, names=("SPX", "NDX", "RUT"), seed=3):
     rng = np.random.default_rng(seed)
     c = np.full((len(names), len(names)), rho) + (1 - rho) * np.eye(len(names))
     r = rng.standard_normal((n, len(names))) @ np.linalg.cholesky(c).T * 0.01
-    return pd.DataFrame(100 * np.exp(np.cumsum(r, axis=0)), index=pd.bdate_range("2017-01-02", periods=n), columns=list(names))
+    return pd.DataFrame(
+        100 * np.exp(np.cumsum(r, axis=0)), index=pd.bdate_range("2017-01-02", periods=n), columns=list(names)
+    )
 
 
 class FlatSurface:
@@ -135,9 +156,15 @@ def exact_spread(vols, rho, kind, strike, T=1.0, forwards=None, n_pairs=1_000_00
     return 100 * pairs.mean(), 100 * pairs.std(ddof=1) / np.sqrt(n_pairs)
 
 
-@pytest.mark.parametrize("vols,rho,kind,strike", [((0.25, 0.35), 0.6, "cvc", 1.1), ((0.25, 0.35), 0.6, "pvp", 0.9),
-                                                  ((0.25, 0.28, 0.30, 0.35, 0.40), 0.5, "cvc", 1.0),
-                                                  ((0.25, 0.28, 0.30, 0.35, 0.40), 0.5, "pvp", 0.9)])
+@pytest.mark.parametrize(
+    "vols,rho,kind,strike",
+    [
+        ((0.25, 0.35), 0.6, "cvc", 1.1),
+        ((0.25, 0.35), 0.6, "pvp", 0.9),
+        ((0.25, 0.28, 0.30, 0.35, 0.40), 0.5, "cvc", 1.0),
+        ((0.25, 0.28, 0.30, 0.35, 0.40), 0.5, "pvp", 0.9),
+    ],
+)
 def test_spread_matches_exact_lognormal_paths(vols, rho, kind, strike):
     got, _, _ = flat_quote(vols, rho, kind, strike)
     ref, se = exact_spread(vols, rho, kind, strike)
@@ -147,7 +174,13 @@ def test_spread_matches_exact_lognormal_paths(vols, rho, kind, strike):
 def test_spread_on_two_names_matches_the_tensor_quadrature():
     vols, rho, K, T = (0.25, 0.35), 0.6, 1.1, 1.0
     qa, qb = forward_quantile(FlatSurface(vols[0]), T), forward_quantile(FlatSurface(vols[1]), T)
-    ref = copula_expectation(lambda a, b: spread_payoff("cvc", K, np.stack([a, b], axis=-1).reshape(-1, 2)).reshape(a.shape), qa, qb, rho, 300)
+    ref = copula_expectation(
+        lambda a, b: spread_payoff("cvc", K, np.stack([a, b], axis=-1).reshape(-1, 2)).reshape(a.shape),
+        qa,
+        qb,
+        rho,
+        300,
+    )
     got, _, _ = flat_quote(vols, rho, "cvc", K)
     assert abs(got["price"] - 100 * ref) < 4 * got["price_se"] + 2e-3
 
@@ -156,7 +189,9 @@ def test_members_are_black_prices_and_the_basket_is_their_sum_with_the_spread():
     vols, K, T = (0.25, 0.35), 0.9, 0.5
     f = np.array([1.01, 0.99])
     got, _, _ = flat_quote(vols, 0.6, "pvp", K, T, f)
-    assert got["members_price"] == pytest.approx(100 * np.mean(black_price(f, K, T, np.array(vols), 1.0, "put")), abs=1e-10)
+    assert got["members_price"] == pytest.approx(
+        100 * np.mean(black_price(f, K, T, np.array(vols), 1.0, "put")), abs=1e-10
+    )
     assert got["basket_price"] == pytest.approx(got["members_price"] + got["price"], abs=1e-12)
 
 
@@ -189,7 +224,7 @@ def test_the_direct_reading_gives_back_the_correlation_without_a_smile(vols, rho
 def test_reading_uses_the_shares_of_the_members():
     vols, f, T, K, rho = np.array([0.2, 0.4]), np.array([1.2, 0.8]), 1.0, 1.0, 0.5
     a = f / f.sum()
-    s_b = np.sqrt(a[0]**2 * 0.04 + a[1]**2 * 0.16 + 2 * rho * a[0] * a[1] * 0.08)
+    s_b = np.sqrt(a[0] ** 2 * 0.04 + a[1] ** 2 * 0.16 + 2 * rho * a[0] * a[1] * 0.08)
     price = float(black_price(f.mean(), K, T, s_b, 1.0, "call"))
     got, vol = read_correlation(price, "cvc", K, T, f, vols)
     assert vol == pytest.approx(s_b, abs=1e-9)
@@ -213,8 +248,17 @@ def test_member_volatility_is_read_at_the_one_strike_of_the_structure():
 def test_rows_on_a_smile_have_one_correlation_per_strike_and_cvc_equal_to_pvp():
     params = [[0.01, 0.1, -0.4, 0.0, 0.2], [0.04, 0.15, -0.4, 0.0, 0.3]]
     surf = SVISurface([0.25, 1.0], params)
-    rows = pd.DataFrame(basket_rows(dt.date(2022, 7, 1), ("SPX", "NDX"), [surf, surf], lambda T: [1.0, 1.0], constant(0.7, 2),
-                                    tenors=(1.0,), n_pairs=20_000))
+    rows = pd.DataFrame(
+        basket_rows(
+            dt.date(2022, 7, 1),
+            ("SPX", "NDX"),
+            [surf, surf],
+            lambda T: [1.0, 1.0],
+            constant(0.7, 2),
+            tenors=(1.0,),
+            n_pairs=20_000,
+        )
+    )
     assert rows["basket"].unique().tolist() == ["SPX+NDX"]
     assert sorted(rows[rows["kind"] == "cvc"]["strike"]) == [1.0, 1.1]
     assert sorted(rows[rows["kind"] == "pvp"]["strike"]) == [0.9, 1.0]
@@ -227,6 +271,7 @@ def test_rows_on_a_smile_have_one_correlation_per_strike_and_cvc_equal_to_pvp():
     assert (rows["basket_price"] > 0).all() and rows["implied_rho"].notna().all()
 
 
+@pytest.mark.slow
 def test_quotes_in_the_lake_are_synthetic_and_reload_to_nothing(tmp_path):
     lake, days, _ = synthetic_lake(tmp_path, "2019-01-01", "2019-12-31")
     day = days[-1]
@@ -269,7 +314,9 @@ def test_a_low_barrier_takes_a_higher_correlation_and_the_matrix_stays_valid():
     down = skewed_matrix(m, 0.6)
     up = skewed_matrix(m, 1.2)
     assert skewed_matrix(m, 1.0) == pytest.approx(m, abs=1e-12)
-    assert CorrelationSkew().offset(0.9) == pytest.approx(0.05) and CorrelationSkew().offset(1.1) == pytest.approx(-0.025)
+    assert CorrelationSkew().offset(0.9) == pytest.approx(0.05) and CorrelationSkew().offset(1.1) == pytest.approx(
+        -0.025
+    )
     assert down[0, 2] > 0.5 > up[0, 2]
     assert np.linalg.eigvalsh(down).min() >= -1e-10 and np.allclose(np.diag(down), 1.0)
     correlation_root(down)

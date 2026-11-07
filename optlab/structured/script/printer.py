@@ -86,4 +86,3 @@ def to_text(program: Program) -> str:
     for ev in program.events:
         lines += ["", *event(ev)]
     return "\n".join(lines) + "\n"
-

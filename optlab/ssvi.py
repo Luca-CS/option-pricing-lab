@@ -118,8 +118,12 @@ class SSVI:
         return np.sqrt(self.local_var(k, T))
 
     def to_dict(self) -> dict:
-        return {"maturities": self.maturities.tolist(), "thetas": self.thetas.tolist(),
-                "psis": self.psis.tolist(), "rhos": self.rhos.tolist()}
+        return {
+            "maturities": self.maturities.tolist(),
+            "thetas": self.thetas.tolist(),
+            "psis": self.psis.tolist(),
+            "rhos": self.rhos.tolist(),
+        }
 
     @classmethod
     def from_dict(cls, d: dict) -> "SSVI":
@@ -127,6 +131,7 @@ class SSVI:
 
 
 # ---------------------------------------------------------------- fitting
+
 
 def _sigmoid(x):
     return 1.0 / (1.0 + np.exp(-x))
@@ -173,8 +178,7 @@ def _fit_power_law(slices, weights, Ts):
 
     def residuals(x):
         surf = SSVI.power_law(*unpack(x)[:3], Ts, unpack(x)[3])
-        return 1e4 * np.concatenate([np.sqrt(w) * (surf.iv(s["k"], s["T"]) - s["iv"])
-                                     for s, w in zip(slices, weights)])
+        return 1e4 * np.concatenate([np.sqrt(w) * (surf.iv(s["k"], s["T"]) - s["iv"]) for s, w in zip(slices, weights)])
 
     sol = least_squares(residuals, x0, xtol=1e-10, ftol=1e-10, gtol=1e-10, max_nfev=1000)
     return SSVI.power_law(*unpack(sol.x)[:3], Ts, unpack(sol.x)[3])
@@ -194,13 +198,14 @@ def fit_ssvi(slices, weights=None, penalty=10.0):
     floor_th = 1e-4 * start.thetas[-1] / n
     a0 = start.psis * (1 + start.rhos)
     b0 = start.psis * (1 - start.rhos)
-    x0 = np.concatenate([_increments(start.thetas, floor_th), _increments(a0, 1e-4 * a0[-1] / n),
-                         _increments(b0, 1e-4 * b0[-1] / n)])
+    x0 = np.concatenate(
+        [_increments(start.thetas, floor_th), _increments(a0, 1e-4 * a0[-1] / n), _increments(b0, 1e-4 * b0[-1] / n)]
+    )
 
     def unpack(x):
         th = np.cumsum(np.exp(x[:n]))
-        a = np.cumsum(np.exp(x[n:2 * n]))
-        b = np.cumsum(np.exp(x[2 * n:]))
+        a = np.cumsum(np.exp(x[n : 2 * n]))
+        b = np.cumsum(np.exp(x[2 * n :]))
         psi = 0.5 * (a + b)
         return th, psi, (a - b) / (a + b), a, b
 

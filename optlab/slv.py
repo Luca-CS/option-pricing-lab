@@ -54,10 +54,23 @@ def _conditional_mean(x, v, x_eval, bandwidth, n_bins=400, regression="nadaraya_
     return np.maximum(np.where(ok, ll, nw), 1e-8)
 
 
-def calibrate_leverage(params: HestonParams, surface: SSVI, market: Market, T_max: float,
-                       mix: float = 1.0, n_particles: int = 100_000, dt_max=1 / 100, dt_min=1 / 2000, n_x=81,
-                       bandwidth_scale=1.0, rng=None, l_bounds=(0.05, 8.0), regression="nadaraya_watson",
-                       positive_part=False, engine: str | None = None) -> SLVModel:
+def calibrate_leverage(
+    params: HestonParams,
+    surface: SSVI,
+    market: Market,
+    T_max: float,
+    mix: float = 1.0,
+    n_particles: int = 100_000,
+    dt_max=1 / 100,
+    dt_min=1 / 2000,
+    n_x=81,
+    bandwidth_scale=1.0,
+    rng=None,
+    l_bounds=(0.05, 8.0),
+    regression="nadaraya_watson",
+    positive_part=False,
+    engine: str | None = None,
+) -> SLVModel:
     """Return the SLV model whose leverage reproduces the local volatility of `surface` up to T_max.
 
     `regression="local_linear"` (with `positive_part=True`, the regression of max(v, 0)) estimates E[v | x] with
@@ -65,10 +78,26 @@ def calibrate_leverage(params: HestonParams, surface: SSVI, market: Market, T_ma
     `engine` (else the default of `optlab.native`): cpu, gpu or auto run the same method on the compiled engine
     (auto falls back here without it), numpy keeps this implementation. A Generator as `rng` stays on NumPy."""
     from . import native
+
     choice = (engine or native.default_engine()).lower()
     if choice != "numpy" and not isinstance(rng, np.random.Generator) and (choice != "auto" or native.available()):
-        return native.calibrate_leverage(params, surface, market, T_max, mix, n_particles, dt_max, dt_min, n_x,
-                                         bandwidth_scale, rng, l_bounds, regression, positive_part, choice)
+        return native.calibrate_leverage(
+            params,
+            surface,
+            market,
+            T_max,
+            mix,
+            n_particles,
+            dt_max,
+            dt_min,
+            n_x,
+            bandwidth_scale,
+            rng,
+            l_bounds,
+            regression,
+            positive_part,
+            choice,
+        )
     rng = np.random.default_rng(rng)
     grid = time_grid([T_max], dt_max, dt_min)
     p = HestonParams(params.v0, params.kappa, params.theta, mix * params.xi, params.rho)

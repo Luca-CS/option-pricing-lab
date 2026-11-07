@@ -56,11 +56,17 @@ class RiskApi:
         model = opts.get("model") or None
         if model not in (None, "slv"):
             raise ApiError("the risk engine runs on the policy's base (local vol) or on SLV", 422, "model")
-        return RiskSettings(n_paths=int(opts.get("n_paths") or n_paths), batch=batch, model=model, smoothing=smoothing,
-                            workers=self.desk.workers)
+        return RiskSettings(
+            n_paths=int(opts.get("n_paths") or n_paths),
+            batch=batch,
+            model=model,
+            smoothing=smoothing,
+            workers=self.desk.workers,
+        )
 
     def _names(self, groups) -> list:
         from ..risk.var import group_names
+
         return sorted({n for g in groups for n in group_names(g)})
 
     def _betas(self, groups) -> dict:
@@ -72,14 +78,26 @@ class RiskApi:
 
     def _meta(self, groups, settings) -> dict:
         ctx = self.desk.ctx
-        return {"snapshot_id": ctx.snapshot_id, "valuation": ctx.valuation.isoformat(), "origin": self.desk._origin(ctx.snapshot_id),
-                "groups": [{"label": g.label, "positions": [p.name for p in g.book.positions], "seed": g.seed} for g in groups],
-                "settings": settings.to_dict(), "code": code_version(), "engine": os.environ.get("OPTLAB_ENGINE")}
+        return {
+            "snapshot_id": ctx.snapshot_id,
+            "valuation": ctx.valuation.isoformat(),
+            "origin": self.desk._origin(ctx.snapshot_id),
+            "groups": [
+                {"label": g.label, "positions": [p.name for p in g.book.positions], "seed": g.seed} for g in groups
+            ],
+            "settings": settings.to_dict(),
+            "code": code_version(),
+            "engine": os.environ.get("OPTLAB_ENGINE"),
+        }
 
     def _save(self, kind: str, groups, settings, params: dict, payload: dict, seconds: float) -> str:
         meta = self._meta(groups, settings)
-        key = run_key(kind=kind, meta=meta, params=params, at=time.time())  # interactive runs are kept, each its own version
-        return self.store.save_run(kind, self.desk.ctx.valuation, key, {**params, **meta}, payload, seconds, meta["code"])
+        key = run_key(
+            kind=kind, meta=meta, params=params, at=time.time()
+        )  # interactive runs are kept, each its own version
+        return self.store.save_run(
+            kind, self.desk.ctx.valuation, key, {**params, **meta}, payload, seconds, meta["code"]
+        )
 
     # --- Greeks ---
     def run(self, body: dict) -> dict:
@@ -95,8 +113,14 @@ class RiskApi:
             env = env_with_betas(None, betas)
             rep = compute(groups, bumps, options, settings, env).to_dict()
             payload = clean({**rep, "betas": betas, "meta": self._meta(groups, settings)})
-            payload["run_id"] = self._save("risk", groups, settings, {"bumps": rep["bumps"], "options": rep["options"]}, payload,
-                                           time.perf_counter() - t0)
+            payload["run_id"] = self._save(
+                "risk",
+                groups,
+                settings,
+                {"bumps": rep["bumps"], "options": rep["options"]},
+                payload,
+                time.perf_counter() - t0,
+            )
             return payload
 
         return {"job": self.desk.jobs.submit("risk", job)}
@@ -126,10 +150,20 @@ class RiskApi:
             betas = self._betas(groups) if "realistic" in lo.rules else {}
             rules = lo.rules if betas or "realistic" not in lo.rules else tuple(r for r in lo.rules if r != "realistic")
             import dataclasses
+
             rep = ladder(groups, dataclasses.replace(lo, rules=rules), settings, None, betas).to_dict()
-            payload = clean({**rep, "meta": self._meta(groups, settings),
-                             "note": None if rules == lo.rules else "no spot-vol betas in the lake: the realistic rule is left out"})
-            payload["run_id"] = self._save("ladder", groups, settings, {"ladder": rep["options"]}, payload, time.perf_counter() - t0)
+            payload = clean(
+                {
+                    **rep,
+                    "meta": self._meta(groups, settings),
+                    "note": None
+                    if rules == lo.rules
+                    else "no spot-vol betas in the lake: the realistic rule is left out",
+                }
+            )
+            payload["run_id"] = self._save(
+                "ladder", groups, settings, {"ladder": rep["options"]}, payload, time.perf_counter() - t0
+            )
             return payload
 
         return {"job": self.desk.jobs.submit("ladder", job)}
@@ -157,12 +191,26 @@ class RiskApi:
             t0 = time.perf_counter()
             betas = self._betas(groups)
             usable = [s for s in chosen if s.shock.rule != "realistic" or betas]
-            rep = sc.run(groups, usable, settings, env_with_betas(None, betas), bool(body.get("grid", True)),
-                         version=got["version"]).to_dict()
-            payload = clean({**rep, "starting": got["starting"], "signed_by": got["signed_by"], "meta": self._meta(groups, settings),
-                             "skipped": [s.name for s in chosen if s not in usable]})
-            payload["run_id"] = self._save("scenarios", groups, settings, {"version": got["version"]}, payload,
-                                           time.perf_counter() - t0)
+            rep = sc.run(
+                groups,
+                usable,
+                settings,
+                env_with_betas(None, betas),
+                bool(body.get("grid", True)),
+                version=got["version"],
+            ).to_dict()
+            payload = clean(
+                {
+                    **rep,
+                    "starting": got["starting"],
+                    "signed_by": got["signed_by"],
+                    "meta": self._meta(groups, settings),
+                    "skipped": [s.name for s in chosen if s not in usable],
+                }
+            )
+            payload["run_id"] = self._save(
+                "scenarios", groups, settings, {"version": got["version"]}, payload, time.perf_counter() - t0
+            )
             return payload
 
         return {"job": self.desk.jobs.submit("scenarios", job)}
@@ -170,6 +218,7 @@ class RiskApi:
     # --- VaR ---
     def var(self, body: dict) -> dict:
         from ..risk.var import run_var
+
         opts = body.get("options") or {}
         groups = self.groups()
         settings = self._settings(opts)
@@ -178,12 +227,28 @@ class RiskApi:
 
         def job():
             t0 = time.perf_counter()
-            rep = compute(groups, Bumps(), GreekOptions(kxt="none", sticky_strike=False, realistic=False, theta=False),
-                          RiskSettings(n_paths=settings.n_paths, batch=settings.batch, smoothing=0.005))
-            out = run_var(groups, self.desk.lake, self.desk.ctx.valuation, settings, days=days, ten_day=bool(body.get("ten_day", True)),
-                          greeks_report=rep, workers=workers, store=self.store, with_stressed=bool(body.get("stressed", True)))
+            rep = compute(
+                groups,
+                Bumps(),
+                GreekOptions(kxt="none", sticky_strike=False, realistic=False, theta=False),
+                RiskSettings(n_paths=settings.n_paths, batch=settings.batch, smoothing=0.005),
+            )
+            out = run_var(
+                groups,
+                self.desk.lake,
+                self.desk.ctx.valuation,
+                settings,
+                days=days,
+                ten_day=bool(body.get("ten_day", True)),
+                greeks_report=rep,
+                workers=workers,
+                store=self.store,
+                with_stressed=bool(body.get("stressed", True)),
+            )
             payload = clean({**out, "meta": self._meta(groups, settings), "workers": workers})
-            payload["run_id"] = self._save("var", groups, settings, {"days": days, "workers": workers}, payload, time.perf_counter() - t0)
+            payload["run_id"] = self._save(
+                "var", groups, settings, {"days": days, "workers": workers}, payload, time.perf_counter() - t0
+            )
             return payload
 
         return {"job": self.desk.jobs.submit("var", job)}
@@ -191,16 +256,24 @@ class RiskApi:
     # --- explained P&L ---
     def pnl(self, start: str | None, end: str | None) -> dict:
         from ..risk.pnl import cumulative
+
         runs = self.store.runs("pnl")
         if not runs:
-            return {"daily": [], "days": [], "curve": [], "runs": [], "eod": clean(self.store.runs("eod")),
-                    "note": "no stored P&L run: run the EOD backfill first"}
+            return {
+                "daily": [],
+                "days": [],
+                "curve": [],
+                "runs": [],
+                "eod": clean(self.store.runs("eod")),
+                "note": "no stored P&L run: run the EOD backfill first",
+            }
         start = start or runs[0]["params"].get("from") or runs[0]["day"]
         end = end or runs[-1]["day"]
         return clean({**cumulative(self.store, start, end), "eod": self.store.runs("eod", start, end)})
 
     def pnl_eod(self, body: dict) -> dict:
         from ..risk.pnl import backfill
+
         opts = body.get("options") or {}
         settings = self._settings(opts)
         start = body.get("from")
@@ -210,12 +283,14 @@ class RiskApi:
         for d in (start, end):
             try:
                 dt.date.fromisoformat(d)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 raise ApiError(f"not a date: {d!r}", 422)
         trades = self.desk.repo.trades()
 
         def job():
-            out = backfill(self.desk.lake, trades, start, end, self.store, settings, greeks=bool(body.get("greeks", True)))
+            out = backfill(
+                self.desk.lake, trades, start, end, self.store, settings, greeks=bool(body.get("greeks", True))
+            )
             return clean({"runs": out, "from": start, "to": end})
 
         return {"job": self.desk.jobs.submit("eod", job)}

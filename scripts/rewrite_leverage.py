@@ -35,20 +35,33 @@ def main():
     cal = json.loads(path.read_text())
     surface = SVISurface.from_dict(cal["surface"])
     t0 = time.time()
-    slv = calibrate_leverage(HestonParams(**cal["heston"]), surface, Market.from_dict(cal["market"]),
-                             float(surface.maturities[-1]), mix=cal["slv"]["mix"], n_particles=cal["slv"]["particles"],
-                             rng=SEED)
+    slv = calibrate_leverage(
+        HestonParams(**cal["heston"]),
+        surface,
+        Market.from_dict(cal["market"]),
+        float(surface.maturities[-1]),
+        mix=cal["slv"]["mix"],
+        n_particles=cal["slv"]["particles"],
+        rng=SEED,
+    )
     lev = slv.leverage
     keep = np.unique(np.concatenate([np.arange(0, len(lev.times), 3), [len(lev.times) - 1]]))
     stored = cal["slv"]["leverage"]
-    gap = max(float(np.max(np.abs(np.round(lev.values[keep], 5) - np.array(stored["values"])))),
-              float(np.max(np.abs(np.round(lev.times[keep], 6) - np.array(stored["times"])))))
-    print(f"recalibrated in {time.time() - t0:.1f} s: {len(lev.times)} steps (stored: {len(stored['times'])}); "
-          f"largest gap to the stored values on their steps {gap:.1e}")
+    gap = max(
+        float(np.max(np.abs(np.round(lev.values[keep], 5) - np.array(stored["values"])))),
+        float(np.max(np.abs(np.round(lev.times[keep], 6) - np.array(stored["times"])))),
+    )
+    print(
+        f"recalibrated in {time.time() - t0:.1f} s: {len(lev.times)} steps (stored: {len(stored['times'])}); "
+        f"largest gap to the stored values on their steps {gap:.1e}"
+    )
     if gap > 1e-5:
         raise SystemExit("the recalibration does not reproduce the stored leverage: not rewriting")
-    cal["slv"]["leverage"] = {"times": np.round(lev.times, 6).tolist(), "x_grids": np.round(lev.x_grids, 5).tolist(),
-                              "values": np.round(lev.values, 5).tolist()}
+    cal["slv"]["leverage"] = {
+        "times": np.round(lev.times, 6).tolist(),
+        "x_grids": np.round(lev.x_grids, 5).tolist(),
+        "values": np.round(lev.values, 5).tolist(),
+    }
     if args.dry_run:
         print("dry run: nothing written")
         return

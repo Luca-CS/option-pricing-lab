@@ -25,9 +25,19 @@ from .script.evaluator import Ramp
 from .script.nodes import Assign, Binary, Call, If, Name, Num, Window
 from .script.timeline import Clock, build_timeline
 
-KINDS = {"coupon": "Digital: coupon barrier", "autocall": "Digital: autocall trigger", "barrier": "Digital: final barrier",
-         "upside": "Digital: upside", "daily": "Barrier observed daily"}
-DELTA_FIELD = {"coupon": "delta_max_coupon", "autocall": "delta_max_autocall", "barrier": "delta_max_barrier", "upside": "delta_max_upside"}
+KINDS = {
+    "coupon": "Digital: coupon barrier",
+    "autocall": "Digital: autocall trigger",
+    "barrier": "Digital: final barrier",
+    "upside": "Digital: upside",
+    "daily": "Barrier observed daily",
+}
+DELTA_FIELD = {
+    "coupon": "delta_max_coupon",
+    "autocall": "delta_max_autocall",
+    "barrier": "delta_max_barrier",
+    "upside": "delta_max_upside",
+}
 
 
 @dataclass(frozen=True)

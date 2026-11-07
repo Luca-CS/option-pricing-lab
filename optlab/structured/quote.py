@@ -13,12 +13,12 @@ from .cashflows import FundedSwap, Note, Swap, funding_periods
 from .compiler import CompiledProduct, compile_sheet
 from .context import PricingContext
 from .costs import desk_price
-from .policy import PricingDecision, decide
 from .multiasset import BasketContext
+from .policy import PricingDecision, decide
 from .pricer import StructuredResult, check_fixing_scale, history_times, price_many
 from .profile import ProductProfile, profile
-from .replication import replication_result
 from .quanto import payment_warnings
+from .replication import replication_result
 from .schema import TermSheet
 from .script.nodes import Param, Program
 from .script.printer import to_text
@@ -65,41 +65,75 @@ class Quote:
 
     def table(self) -> str:
         from .report import quote_table
+
         return quote_table(self)
 
 
 LOG = get_logger(__name__)
 
 
-def _book_greeks(sheet: TermSheet, params: dict, fixings, ctx, decision: PricingDecision, slv_vega: bool,
-                 workers: int | None = None):
+def _book_greeks(
+    sheet: TermSheet, params: dict, fixings, ctx, decision: PricingDecision, slv_vega: bool, workers: int | None = None
+):
     """Greeks of a running product or of a basket, through a one-position book (which keeps the fixings and bumps
     each name), converted to % of notional. For a basket, delta and vega are the sums over the names (all names
     moved together, to first order) and `per_name` holds each name; the SE of a sum adds the SEs in quadrature."""
     from .greeks import Greeks
     from .portfolio import Book, Position
+
     model = None if decision.method == "replication" else decision.model
     g = Book([Position("quote", sheet, 1.0, params=params, fixings=fixings)]).greeks(
-        ctx, model=model, n_paths=decision.n_paths, seed=decision.seed, batch=decision.batch, slv_vega=slv_vega,
-        workers=workers)
+        ctx,
+        model=model,
+        n_paths=decision.n_paths,
+        seed=decision.seed,
+        batch=decision.batch,
+        slv_vega=slv_vega,
+        workers=workers,
+    )
     scale = 100 / sheet.get("general.notional")
 
     def one(d):
         return (scale * d["positions"][0], scale * d["positions_se"][0]) if d is not None else (None, None)
 
     if isinstance(ctx, BasketContext):
-        per = {n: dict(zip(("delta", "delta_se"), one(g["delta"][n])), **dict(zip(("vega", "vega_se"),
-               one(g["vega"][n])))) for n in g["delta"]}
+        per = {
+            n: dict(zip(("delta", "delta_se"), one(g["delta"][n])), **dict(zip(("vega", "vega_se"), one(g["vega"][n]))))
+            for n in g["delta"]
+        }
         delta = sum(v["delta"] for v in per.values())
         delta_se = float(np.sqrt(sum(v["delta_se"] ** 2 for v in per.values())))
         vega = sum(v["vega"] for v in per.values())
         vega_se = float(np.sqrt(sum(v["vega_se"] ** 2 for v in per.values())))
-        return Greeks(delta, delta_se, vega, vega_se, g["smoothing"], 0.0, 0.0, g["method"], g["model"], {},
-                      "basket: delta and vega summed over the names, see per_name", per_name=per)
+        return Greeks(
+            delta,
+            delta_se,
+            vega,
+            vega_se,
+            g["smoothing"],
+            0.0,
+            0.0,
+            g["method"],
+            g["model"],
+            {},
+            "basket: delta and vega summed over the names, see per_name",
+            per_name=per,
+        )
     delta, delta_se = one(g["delta"])
     vega, vega_se = one(g.get("vega"))
-    return Greeks(delta, delta_se, vega, vega_se, g["smoothing"], 0.0, 0.0, g["method"], g["model"], {},
-                  g.get("note", "running product: Greeks through a one-position book, fixings kept"))
+    return Greeks(
+        delta,
+        delta_se,
+        vega,
+        vega_se,
+        g["smoothing"],
+        0.0,
+        0.0,
+        g["method"],
+        g["model"],
+        {},
+        g.get("note", "running product: Greeks through a one-position book, fixings kept"),
+    )
 
 
 def wrapper(sheet: TermSheet, product: CompiledProduct):
@@ -109,8 +143,15 @@ def wrapper(sheet: TermSheet, product: CompiledProduct):
     if sheet.get("wrapper.funding") != "floating":
         return Swap()
     g = sheet.get
-    periods = funding_periods(product.strike_date, g("general.maturity_months"), g("wrapper.funding_frequency_months"),
-                              product.valuation, g("general.convention"), g("general.pay_lag"), product.calendar)
+    periods = funding_periods(
+        product.strike_date,
+        g("general.maturity_months"),
+        g("wrapper.funding_frequency_months"),
+        product.valuation,
+        g("general.convention"),
+        g("general.pay_lag"),
+        product.calendar,
+    )
     tl = build_timeline(product.program, Clock(product.valuation, product.calendar))
     return FundedSwap(g("wrapper.funding_spread"), periods, tuple(float(t) for t in tl.event_times))
 
@@ -118,14 +159,25 @@ def wrapper(sheet: TermSheet, product: CompiledProduct):
 def _mix_band(mixes, product, ctx, fmt, decision, prof, fixings, workers, margin, sheet) -> dict:
     """Coupon (or upfront) under SLV for each mixing fraction, and the ATM vol error of each recalibrated model."""
     from ..validation import mc_smile
+
     T = max(product.horizon, 1 / 365)
     T_check = min(T, ctx.t_max)
     F = float(ctx.market.F(T_check))
     out = {}
     for mix in mixes:
         model = ctx.slv_at_mix(mix, T)
-        run = _pricer(product, ctx, fmt, decision, prof, "slv", "monte_carlo", fixings=fixings, workers=workers,
-                      model_object=model)
+        run = _pricer(
+            product,
+            ctx,
+            fmt,
+            decision,
+            prof,
+            "slv",
+            "monte_carlo",
+            fixings=fixings,
+            workers=workers,
+            model_object=model,
+        )
         if sheet.get("wrapper.solve") == "coupon":
             target = 100 - margin if fmt.name == "note" else -margin
             r0, r1 = run([{product.coupon_param: 0.0}, {product.coupon_param: 1.0}])
@@ -139,9 +191,21 @@ def _mix_band(mixes, product, ctx, fmt, decision, prof, fixings, workers, margin
     return out
 
 
-def _pricer(product: CompiledProduct, ctx: PricingContext, fmt, decision: PricingDecision, prof: ProductProfile,
-            model_name: str, method: str, n_paths: int | None = None, fixings: dict | None = None,
-            workers: int | None = None, control_forwards: bool = False, fast: bool = False, model_object=None):
+def _pricer(
+    product: CompiledProduct,
+    ctx: PricingContext,
+    fmt,
+    decision: PricingDecision,
+    prof: ProductProfile,
+    model_name: str,
+    method: str,
+    n_paths: int | None = None,
+    fixings: dict | None = None,
+    workers: int | None = None,
+    control_forwards: bool = False,
+    fast: bool = False,
+    model_object=None,
+):
     program, valuation = product.program, product.valuation
     clock = Clock(valuation, product.calendar)
     timeline = build_timeline(program, clock)
@@ -153,8 +217,10 @@ def _pricer(product: CompiledProduct, ctx: PricingContext, fmt, decision: Pricin
     def run(param_sets):
         if method == "replication":
             T_obs = prof.observation_times[-1] if prof.observation_times else timeline.horizon
-            return [replication_result(program, timeline, ctx.surface, ctx.market, T_obs, fmt, p, history=history)
-                    for p in param_sets]
+            return [
+                replication_result(program, timeline, ctx.surface, ctx.market, T_obs, fmt, p, history=history)
+                for p in param_sets
+            ]
         T = max(product.horizon, 1 / 365)
         if model_object is not None:
             model = model_object
@@ -162,17 +228,44 @@ def _pricer(product: CompiledProduct, ctx: PricingContext, fmt, decision: Pricin
             model = ctx.model(model_name, T, names)
         else:  # `fast` only when asked, so that contexts with their own model(name, T) keep working
             model = ctx.model(model_name, T, fast=True) if fast else ctx.model(model_name, T)
-        return price_many(program, model, ctx.market, param_sets, fmt, n_paths or decision.n_paths, decision.seed,
-                          decision.batch, valuation=valuation, fixings=fixings, calendar=product.calendar,
-                          workers=workers, control_forwards=control_forwards)
+        return price_many(
+            program,
+            model,
+            ctx.market,
+            param_sets,
+            fmt,
+            n_paths or decision.n_paths,
+            decision.seed,
+            decision.batch,
+            valuation=valuation,
+            fixings=fixings,
+            calendar=product.calendar,
+            workers=workers,
+            control_forwards=control_forwards,
+        )
+
     return run
 
 
-def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None = None, control="default",
-          n_paths: int = 200_000, batch: int = 25_000, seed: int = DEFAULT_SEED, control_paths: int | None = None,
-          fixings: dict | None = None, with_greeks: bool = False, slv_vega: bool = False,
-          workers: int | None = None, control_forwards: bool = False, fast: bool = False,
-          sticky: str = "moneyness", mix_band: tuple | None = None, costs=None) -> Quote:
+def quote(
+    sheet: TermSheet,
+    ctx: PricingContext | None = None,
+    model: str | None = None,
+    control="default",
+    n_paths: int = 200_000,
+    batch: int = 25_000,
+    seed: int = DEFAULT_SEED,
+    control_paths: int | None = None,
+    fixings: dict | None = None,
+    with_greeks: bool = False,
+    slv_vega: bool = False,
+    workers: int | None = None,
+    control_forwards: bool = False,
+    fast: bool = False,
+    sticky: str = "moneyness",
+    mix_band: tuple | None = None,
+    costs=None,
+) -> Quote:
     """Price a term sheet with the policy model. In 'coupon' mode the coupon is solved so that the note price is
     100 - margin, or the swap upfront is -margin (zero upfront paid, the margin kept by the bank); in 'upfront' mode
     the coupon is given and the result is the note price, or the swap upfront paid by the investor (leg value +
@@ -195,23 +288,41 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
     if basket != isinstance(ctx, BasketContext):
         raise ValueError("a worst-of term sheet needs a BasketContext, a single-name one a PricingContext")
     if not basket and getattr(ctx, "underlying", None) not in (None, *sheet.underlyings):
-        raise ValueError(f"the market in use is {ctx.underlying}, the term sheet is on {sheet.underlyings[0]}: "
-                         "choose a market of that name")
+        raise ValueError(
+            f"the market in use is {ctx.underlying}, the term sheet is on {sheet.underlyings[0]}: "
+            "choose a market of that name"
+        )
     payment_notes = payment_warnings(sheet, ctx)
-    decision = decide(prof, ctx.t_max, model, control, n_paths, batch, seed,
-                      has_surfaces=getattr(ctx, "has_surfaces", True))
+    decision = decide(
+        prof, ctx.t_max, model, control, n_paths, batch, seed, has_surfaces=getattr(ctx, "has_surfaces", True)
+    )
     fmt = wrapper(sheet, product)
     margin = 100 * sheet.get("wrapper.margin")
-    run = _pricer(product, ctx, fmt, decision, prof, decision.model, decision.method, fixings=fixings,
-                  workers=workers, control_forwards=control_forwards, fast=fast)
+    run = _pricer(
+        product,
+        ctx,
+        fmt,
+        decision,
+        prof,
+        decision.model,
+        decision.method,
+        fixings=fixings,
+        workers=workers,
+        control_forwards=control_forwards,
+        fast=fast,
+    )
     cpn = product.coupon_param
     target = rate = rate_se = upfront = desk = None
     if costs is not None and decision.model not in ("lv", "surface"):
         costs = None
-        decision.warnings.append(f"no hedging costs under {decision.model.upper()}: they are measured on a base in local vol or replication")
+        decision.warnings.append(
+            f"no hedging costs under {decision.model.upper()}: they are measured on a base in local vol or replication"
+        )
     if costs is not None:
         aim = (100 - margin if fmt.name == "note" else -margin) if sheet.get("wrapper.solve") == "coupon" else None
-        desk, base, x, x_se = desk_price(product, ctx, fmt, decision, prof, costs, aim, cpn, product.coupon_scale, fixings, workers, fast)
+        desk, base, x, x_se = desk_price(
+            product, ctx, fmt, decision, prof, costs, aim, cpn, product.coupon_scale, fixings, workers, fast
+        )
         if aim is not None:
             target = aim
             result = base.at(x)
@@ -239,8 +350,19 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
     if desk is not None and decision.control in desk.model_results:  # on the base's paths already
         ctrl = desk.model_results[decision.control]
     elif decision.control:
-        ctrl_run = _pricer(product, ctx, fmt, decision, prof, decision.control, "monte_carlo",
-                           control_paths or decision.n_paths, fixings, workers, fast=fast)
+        ctrl_run = _pricer(
+            product,
+            ctx,
+            fmt,
+            decision,
+            prof,
+            decision.control,
+            "monte_carlo",
+            control_paths or decision.n_paths,
+            fixings,
+            workers,
+            fast=fast,
+        )
         (ctrl,) = ctrl_run([params])
     warnings = list(decision.warnings) + payment_notes + (desk.warnings if desk else [])
     if rate is not None and rate < 0:
@@ -250,14 +372,55 @@ def quote(sheet: TermSheet, ctx: PricingContext | None = None, model: str | None
         g = _book_greeks(sheet, params, fixings, ctx, decision, slv_vega, workers)
     elif with_greeks:
         from .greeks import greeks
-        g = greeks(product.program, ctx, decision.model, decision.method, params, fmt, product.valuation,
-                   decision.n_paths, decision.seed, decision.batch, slv_vega=slv_vega, calendar=product.calendar,
-                   workers=workers, sticky=sticky)
+
+        g = greeks(
+            product.program,
+            ctx,
+            decision.model,
+            decision.method,
+            params,
+            fmt,
+            product.valuation,
+            decision.n_paths,
+            decision.seed,
+            decision.batch,
+            slv_vega=slv_vega,
+            calendar=product.calendar,
+            workers=workers,
+            sticky=sticky,
+        )
     seconds = time.perf_counter() - t0
-    LOG.info("quote %s %s: %s, %s, %.2f s", sheet.mask.name, ", ".join(sheet.underlyings), decision.label,
-             f"coupon {rate:.6f} p.a." if rate is not None else f"upfront {upfront:.4f} %", seconds)
+    LOG.info(
+        "quote %s %s: %s, %s, %.2f s",
+        sheet.mask.name,
+        ", ".join(sheet.underlyings),
+        decision.label,
+        f"coupon {rate:.6f} p.a." if rate is not None else f"upfront {upfront:.4f} %",
+        seconds,
+    )
     if band:
-        warnings += [f"mix {m:.2f}: the recalibrated SLV misses the ATM vol at the horizon by {b['atm_error_bp']:+.1f} "
-                     "bp (over 5 bp)" for m, b in band.items() if abs(b["atm_error_bp"]) > 5]
-    return Quote(product, prof, decision, fmt.name, result, target, rate, rate_se, upfront, margin, ctrl,
-                 seconds, warnings, g, getattr(ctx, "snapshot_id", None), band, desk)
+        warnings += [
+            f"mix {m:.2f}: the recalibrated SLV misses the ATM vol at the horizon by {b['atm_error_bp']:+.1f} "
+            "bp (over 5 bp)"
+            for m, b in band.items()
+            if abs(b["atm_error_bp"]) > 5
+        ]
+    return Quote(
+        product,
+        prof,
+        decision,
+        fmt.name,
+        result,
+        target,
+        rate,
+        rate_se,
+        upfront,
+        margin,
+        ctrl,
+        seconds,
+        warnings,
+        g,
+        getattr(ctx, "snapshot_id", None),
+        band,
+        desk,
+    )

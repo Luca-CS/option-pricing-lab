@@ -54,21 +54,27 @@ def main():
 
     if args.command in ("eod", "backfill", "pnl"):
         from optlab.app.repository import Repository
+
         trades = Repository(store_path).trades()
         if args.command == "eod":
             r = P.eod(lake, trades, args.date, risk, settings, greeks=not args.no_greeks)
-            print(f"{r['run_id']}{' (reused)' if r.get('reused') else ''}: {len(r['positions'])} trades, value {r['value']:,.0f} "
-                  f"± {r['value_se']:,.0f}")
+            print(
+                f"{r['run_id']}{' (reused)' if r.get('reused') else ''}: {len(r['positions'])} trades, value {r['value']:,.0f} "
+                f"± {r['value_se']:,.0f}"
+            )
         elif args.command == "backfill":
             P.backfill(lake, trades, args.start, args.end, risk, settings, greeks=not args.no_greeks, log=print)
         else:
             c = P.cumulative(risk, args.start, args.end)
             print(f"P&L {c['from']} to {c['to']}: {c['total']:,.0f}")
             for s in c["order"]:
-                print(f"  {s:10s} cascade {c['steps'][s]:>14,.0f}   greeks {c['predicted'][s]:>14,.0f}   unexplained {c['unexplained'][s]:>12,.0f}")
+                print(
+                    f"  {s:10s} cascade {c['steps'][s]:>14,.0f}   greeks {c['predicted'][s]:>14,.0f}   unexplained {c['unexplained'][s]:>12,.0f}"
+                )
     else:
         from optlab.app.api import Desk
         from optlab.app.risk_api import RiskApi
+
         desk = Desk(store_path, engine=args.engine)
         try:
             if args.market:
@@ -85,11 +91,16 @@ def main():
                 for k in ("one_day", "ten_day", "stressed"):
                     if res.get(k):
                         r = res[k]
-                        print(f"{k:9s} VaR {r['var']:>12,.0f} (SE of its scenario {r['var_se']:,.0f})  ES {r['es']:>12,.0f}  on {r['var_date']}  "
-                              f"window {r['start']} to {r['end']}  {r['seconds']:.0f} s")
+                        print(
+                            f"{k:9s} VaR {r['var']:>12,.0f} (SE of its scenario {r['var_se']:,.0f})  ES {r['es']:>12,.0f}  on {r['var_date']}  "
+                            f"window {r['start']} to {r['end']}  {r['seconds']:.0f} s"
+                        )
             else:
                 for rule in res["rules"]:
-                    print(rule, "  ".join(f"{p:+.0%} {res['book'][f'pnl@{rule}@{p:+.4f}'][0]:,.0f}" for p in res["points"]))
+                    print(
+                        rule,
+                        "  ".join(f"{p:+.0%} {res['book'][f'pnl@{rule}@{p:+.4f}'][0]:,.0f}" for p in res["points"]),
+                    )
             print(f"stored as {res['run_id']}")
         finally:
             desk.jobs.shutdown()

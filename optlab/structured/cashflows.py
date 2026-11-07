@@ -61,6 +61,7 @@ class FundedSwap:
 
     periods: (start time, end time, payment time, accrual) tuples; event_times: observation time of each script
     event (to read the survival after each event)."""
+
     spread: float
     periods: tuple
     event_times: tuple
@@ -95,14 +96,22 @@ class FundedSwap:
         return leg - self.survival(flows) @ amounts
 
 
-def funding_periods(strike, months: int, freq_months: int, valuation, convention="modified_following",
-                    pay_lag: int = 5, calendar=None) -> tuple:
+def funding_periods(
+    strike, months: int, freq_months: int, valuation, convention="modified_following", pay_lag: int = 5, calendar=None
+) -> tuple:
     """Funding periods from the strike date: (start, end, payment, ACT/360 accrual), times from the valuation."""
     from .dates import schedule, year_fraction
+
     start, out = strike, []
     for end, pay in schedule(strike, months, freq_months, convention, pay_lag, calendar):
-        out.append((year_fraction(valuation, start), year_fraction(valuation, end), year_fraction(valuation, pay),
-                    year_fraction(start, end, "ACT/360")))
+        out.append(
+            (
+                year_fraction(valuation, start),
+                year_fraction(valuation, end),
+                year_fraction(valuation, pay),
+                year_fraction(start, end, "ACT/360"),
+            )
+        )
         start = end
     return tuple(out)
 
@@ -112,4 +121,4 @@ def pair_averages(values: np.ndarray) -> np.ndarray:
     d = np.asarray(values)
     if len(d) % 2:
         raise ValueError("a batch must hold an even number of paths")
-    return 0.5 * (d[: len(d) // 2] + d[len(d) // 2:])
+    return 0.5 * (d[: len(d) // 2] + d[len(d) // 2 :])

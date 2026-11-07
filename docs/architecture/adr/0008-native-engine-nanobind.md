@@ -1,6 +1,6 @@
 # ADR-0008: The native engine as a nanobind wheel
 
-- Status: Proposed (A0, 7 November 2026)
+- Status: Accepted (A0 checkpoint, 7 November 2026)
 - Handoff §1: Moteur natif; §4.5
 
 ## Context

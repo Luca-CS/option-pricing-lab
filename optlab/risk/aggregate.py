@@ -76,12 +76,18 @@ def vega_summary(report, name: str, position: str | None = None) -> dict:
     m = vega_matrix(report, name, position)
     buckets = np.array([b[1] for b in tenor_buckets(report, "vega_tenor", name, position)])
     gross = float(np.nansum(np.abs(m[0]))) if m is not None else float(np.sum(np.abs(buckets)))
-    return {"parallel": tuple(src.get(f"vega|{name}|", (np.nan, np.nan))), "net": tuple(src.get(f"vega_net|{name}|", (np.nan, np.nan))),
-            "gross": gross, "gross_over": "nodes" if m is not None else "tenors",
-            "weighted": tuple(src.get(f"vega_weighted|{name}|", (np.nan, np.nan))),
-            "weighted_direct": tuple(src.get(f"vega_weighted_direct|{name}|", (np.nan, np.nan))),
-            "relative": tuple(src.get(f"vega_relative|{name}|", (np.nan, np.nan))),
-            "nonlinearity": float(src[f"vega_net|{name}|"][0] - src[f"vega|{name}|"][0]) if f"vega_net|{name}|" in src else None}
+    return {
+        "parallel": tuple(src.get(f"vega|{name}|", (np.nan, np.nan))),
+        "net": tuple(src.get(f"vega_net|{name}|", (np.nan, np.nan))),
+        "gross": gross,
+        "gross_over": "nodes" if m is not None else "tenors",
+        "weighted": tuple(src.get(f"vega_weighted|{name}|", (np.nan, np.nan))),
+        "weighted_direct": tuple(src.get(f"vega_weighted_direct|{name}|", (np.nan, np.nan))),
+        "relative": tuple(src.get(f"vega_relative|{name}|", (np.nan, np.nan))),
+        "nonlinearity": float(src[f"vega_net|{name}|"][0] - src[f"vega|{name}|"][0])
+        if f"vega_net|{name}|" in src
+        else None,
+    }
 
 
 def gamma_summary(report, position: str | None = None) -> dict:
@@ -100,6 +106,11 @@ def gamma_summary(report, position: str | None = None) -> dict:
 def rho_summary(report, currency: str = "USD", position: str | None = None) -> dict:
     src = source(report, position)
     buckets = tenor_buckets(report, "rho_tenor", currency, position)
-    return {"total": tuple(src.get(f"rho|{currency}|", (np.nan, np.nan))), "discount": tuple(src.get(f"rho_discount|{currency}|", (np.nan, np.nan))),
-            "forward": tuple(src.get(f"rho_forward|{currency}|", (np.nan, np.nan))), "net": float(sum(b[1] for b in buckets)),
-            "gross": float(sum(abs(b[1]) for b in buckets)), "buckets": buckets}
+    return {
+        "total": tuple(src.get(f"rho|{currency}|", (np.nan, np.nan))),
+        "discount": tuple(src.get(f"rho_discount|{currency}|", (np.nan, np.nan))),
+        "forward": tuple(src.get(f"rho_forward|{currency}|", (np.nan, np.nan))),
+        "net": float(sum(b[1] for b in buckets)),
+        "gross": float(sum(abs(b[1]) for b in buckets)),
+        "buckets": buckets,
+    }

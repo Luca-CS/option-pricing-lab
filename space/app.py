@@ -24,11 +24,32 @@ for root in (HERE, HERE.parent):  # the Space ships optlab/ next to app.py; the 
         sys.path.insert(0, str(root))
         break
 
-from optlab import (BlackScholesModel, HestonModel, HestonParams, Leverage, LocalVolModel, Market,  # noqa: E402
-                    SLVModel, SVISurface, american_lsm, asian_mc, barrier_mc, barrier_price,
-                    barrier_shift_discrete, binomial_price, black_price, bs_price, calibrate_heston,
-                    calibrate_leverage, european_mc, geometric_asian_price, heston_iv, heston_price,
-                    implied_vol, simulate)
+from optlab import (  # noqa: E402 (space/ is removed in A8)
+    BlackScholesModel,
+    HestonModel,
+    HestonParams,
+    Leverage,
+    LocalVolModel,
+    Market,  # noqa: E402
+    SLVModel,
+    SVISurface,
+    american_lsm,
+    asian_mc,
+    barrier_mc,
+    barrier_price,
+    barrier_shift_discrete,
+    binomial_price,
+    black_price,
+    bs_price,
+    calibrate_heston,
+    calibrate_leverage,
+    european_mc,
+    geometric_asian_price,
+    heston_iv,
+    heston_price,
+    implied_vol,
+    simulate,
+)
 
 RESULTS = next(p for p in (HERE / "results", HERE.parent / "results") if p.is_dir())
 FIGURES = next((p for p in (HERE / "figures", HERE.parent / "reports" / "figures") if p.is_dir()), None)
@@ -43,13 +64,28 @@ T_MAX = float(SURFACE.maturities[-1])
 
 PAPER, INK, MUTED, LINE = "#fbfaf7", "#17191e", "#5d6370", "#e3e0d7"
 BLUE, ORANGE, AQUA = "#2a78d6", "#eb6834", "#1baf7a"
-plt.rcParams.update({
-    "figure.facecolor": PAPER, "axes.facecolor": PAPER, "savefig.facecolor": PAPER,
-    "font.family": "serif", "font.serif": ["DejaVu Serif"], "font.size": 9, "axes.edgecolor": LINE,
-    "axes.labelcolor": INK, "text.color": INK, "xtick.color": MUTED, "ytick.color": MUTED, "axes.grid": True,
-    "grid.color": LINE, "grid.linewidth": 0.6, "axes.spines.top": False, "axes.spines.right": False,
-    "legend.frameon": False, "lines.linewidth": 2,
-})
+plt.rcParams.update(
+    {
+        "figure.facecolor": PAPER,
+        "axes.facecolor": PAPER,
+        "savefig.facecolor": PAPER,
+        "font.family": "serif",
+        "font.serif": ["DejaVu Serif"],
+        "font.size": 9,
+        "axes.edgecolor": LINE,
+        "axes.labelcolor": INK,
+        "text.color": INK,
+        "xtick.color": MUTED,
+        "ytick.color": MUTED,
+        "axes.grid": True,
+        "grid.color": LINE,
+        "grid.linewidth": 0.6,
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "legend.frameon": False,
+        "lines.linewidth": 2,
+    }
+)
 
 MODELS = ["Black-Scholes", "Heston", "Local vol (Dupire)", "SLV (Heston + leverage)"]
 PRODUCTS = ["European", "American", "Asian (arithmetic)", "Barrier"]
@@ -91,12 +127,20 @@ def _references(product, cp, K, T, H, kind, n_fix, model_name, bs_vol):
         refs.append(("European, Fourier (lower bound)", float(heston_price(F, K, T, HESTON, D, cp)[0])))
     elif product == "Asian (arithmetic)" and model_name == "Black-Scholes":
         fix = np.linspace(T / n_fix, T, n_fix)
-        refs.append(("Geometric Asian, closed form (lower bound for a call)",
-                     float(geometric_asian_price(S0, K, r, q, bs_vol, fix, cp))))
+        refs.append(
+            (
+                "Geometric Asian, closed form (lower bound for a call)",
+                float(geometric_asian_price(S0, K, r, q, bs_vol, fix, cp)),
+            )
+        )
     elif product == "Barrier" and model_name == "Black-Scholes":
         Hs = barrier_shift_discrete(H, S0, bs_vol, 1 / 252)
-        refs.append(("Closed form, Broadie-Glasserman-Kou daily correction",
-                     barrier_price(S0, K, Hs, T, r, q, bs_vol, kind, cp)))
+        refs.append(
+            (
+                "Closed form, Broadie-Glasserman-Kou daily correction",
+                barrier_price(S0, K, Hs, T, r, q, bs_vol, kind, cp),
+            )
+        )
     return refs
 
 
@@ -120,14 +164,18 @@ def price(model_name, product, cp, strike_pct, T, barrier_kind, barrier_pct, n_f
         bad = (barrier_kind.startswith("down") and H >= 100) or (barrier_kind.startswith("up") and H <= 100)
         if bad:
             return "A down barrier must be below the spot (100) and an up barrier above it.", None
-        res = barrier_mc(model, MARKET, K, H, T, barrier_kind, cp, n_monitor=max(12, int(252 * T)),
-                         n_paths=n_paths, rng=rng)
+        res = barrier_mc(
+            model, MARKET, K, H, T, barrier_kind, cp, n_monitor=max(12, int(252 * T)), n_paths=n_paths, rng=rng
+        )
     elapsed = time.time() - t0
 
-    lines = [f"### {res.price:.4f} % of spot",
-             f"Monte Carlo, {n_paths:,} paths (antithetic): standard error {res.stderr:.4f}, "
-             f"95 % interval [{res.price - 1.96 * res.stderr:.4f}, {res.price + 1.96 * res.stderr:.4f}], "
-             f"{elapsed:.1f} s.", ""]
+    lines = [
+        f"### {res.price:.4f} % of spot",
+        f"Monte Carlo, {n_paths:,} paths (antithetic): standard error {res.stderr:.4f}, "
+        f"95 % interval [{res.price - 1.96 * res.stderr:.4f}, {res.price + 1.96 * res.stderr:.4f}], "
+        f"{elapsed:.1f} s.",
+        "",
+    ]
     refs = _references(product, cp, K, T, H, barrier_kind, int(n_fix), model_name, bs_vol)
     if refs:
         lines.append("| Reference | Value | Difference in standard errors |")
@@ -136,9 +184,11 @@ def price(model_name, product, cp, strike_pct, T, barrier_kind, barrier_pct, n_f
             z = (res.price - val) / res.stderr if res.stderr > 0 else float("nan")
             lines.append(f"| {name} | {val:.4f} | {z:+.1f} |")
         lines.append("")
-    lines.append(f"Forward {float(MARKET.F(T)):.3f}, discount factor {float(MARKET.D(T)):.4f}, "
-                 f"ATM implied vol {100 * atm:.2f} % (SPX snapshot of {SNAPSHOT}, spot rescaled to 100)."
-                 + (f" Black-Scholes vol used: {100 * bs_vol:.2f} %." if model_name == "Black-Scholes" else ""))
+    lines.append(
+        f"Forward {float(MARKET.F(T)):.3f}, discount factor {float(MARKET.D(T)):.4f}, "
+        f"ATM implied vol {100 * atm:.2f} % (SPX snapshot of {SNAPSHOT}, spot rescaled to 100)."
+        + (f" Black-Scholes vol used: {100 * bs_vol:.2f} %." if model_name == "Black-Scholes" else "")
+    )
     return "\n".join(lines), _paths_figure(model, T, K, H if product == "Barrier" else None)
 
 
@@ -146,8 +196,13 @@ def _paths_figure(model, T, K, H):
     times = np.linspace(T / 100, T, 100)
     S = simulate(model, MARKET, times, 60, rng=1)
     fig, ax = plt.subplots(figsize=(6.4, 3.0))
-    ax.plot(np.concatenate([[0], times]), np.column_stack([np.full(len(S), MARKET.spot), S]).T,
-            color=BLUE, lw=0.7, alpha=0.35)
+    ax.plot(
+        np.concatenate([[0], times]),
+        np.column_stack([np.full(len(S), MARKET.spot), S]).T,
+        color=BLUE,
+        lw=0.7,
+        alpha=0.35,
+    )
     ax.axhline(K, color=INK, lw=1, ls="--")
     ax.text(0.0, K, " strike", va="bottom", color=INK, fontsize=8)
     if H is not None:
@@ -174,8 +229,14 @@ def surface_figure(T):
     a1.set_title(f"Implied volatility, T = {T:.2f} y")
     a1.legend()
     a2.plot(k, 100 * SURFACE.local_vol(k, T), color=BLUE, label="Dupire local vol")
-    a2.plot(k, SLV.leverage(T, k) * 100 * np.sqrt(max(HESTON.theta, 1e-4)), color=AQUA, ls="-.", lw=1.6,
-            label="SLV leverage x sqrt(theta)")
+    a2.plot(
+        k,
+        SLV.leverage(T, k) * 100 * np.sqrt(max(HESTON.theta, 1e-4)),
+        color=AQUA,
+        ls="-.",
+        lw=1.6,
+        label="SLV leverage x sqrt(theta)",
+    )
     a2.set_xlabel("log-moneyness ln(S/F)")
     a2.set_ylabel("vol (%)")
     a2.set_title(f"Local vol and SLV leverage, t = {T:.2f} y")
@@ -201,12 +262,20 @@ def mix_experiment(mix, n_particles):
         rows.append(f"| {100 * K / F:.0f} % | {100 * float(SURFACE.iv(np.log(K / F), 1.0)):.2f} | {100 * iv:.2f} |")
     dao = barrier_mc(model, MARKET, 100, 80, 1.0, "down-out", "call", n_paths=100_000, rng=7)
     uao = barrier_mc(model, MARKET, 100, 120, 1.0, "up-out", "call", n_paths=100_000, rng=7)
-    text = [f"Leverage calibrated with {int(n_particles):,} particles in {t_cal:.1f} s.", "",
-            "**Vanillas, 1 year** (should stay on the market whatever the mix):", "",
-            "| Strike / forward | Market (SVI) vol % | SLV vol % |", "|---|---|---|", *rows, "",
-            "**Barriers, 1 year, 100 000 paths** (these move with the mix):", "",
-            f"- down-and-out call K 100, H 80: **{dao.price:.3f}** (s.e. {dao.stderr:.3f})",
-            f"- up-and-out call K 100, H 120: **{uao.price:.3f}** (s.e. {uao.stderr:.3f})"]
+    text = [
+        f"Leverage calibrated with {int(n_particles):,} particles in {t_cal:.1f} s.",
+        "",
+        "**Vanillas, 1 year** (should stay on the market whatever the mix):",
+        "",
+        "| Strike / forward | Market (SVI) vol % | SLV vol % |",
+        "|---|---|---|",
+        *rows,
+        "",
+        "**Barriers, 1 year, 100 000 paths** (these move with the mix):",
+        "",
+        f"- down-and-out call K 100, H 80: **{dao.price:.3f}** (s.e. {dao.stderr:.3f})",
+        f"- up-and-out call K 100, H 120: **{uao.price:.3f}** (s.e. {uao.stderr:.3f})",
+    ]
     return "\n".join(text)
 
 
@@ -230,17 +299,28 @@ def calibration_lab(v0, kappa, theta, xi, rho, noise_bp, seed):
     for n, a, b in zip(names, true.as_array(), fit.as_array()):
         table.append(f"| {n} | {a:.4f} | {b:.4f} |")
     rmse = 1e4 * np.sqrt(np.mean(sol.fun**2))
-    text = "\n".join(table + ["", f"Fit RMSE {rmse:.1f} bp of vol for {noise_bp} bp of noise, "
-                                  f"{sol.nfev} evaluations, {elapsed:.1f} s. Feller ratio of the fit: "
-                                  f"{fit.feller():.2f}."])
+    text = "\n".join(
+        table
+        + [
+            "",
+            f"Fit RMSE {rmse:.1f} bp of vol for {noise_bp} bp of noise, "
+            f"{sol.nfev} evaluations, {elapsed:.1f} s. Feller ratio of the fit: "
+            f"{fit.feller():.2f}.",
+        ]
+    )
     fig, ax = plt.subplots(figsize=(6.4, 3.2))
     colors = plt.cm.Blues(np.linspace(0.45, 0.95, len(quotes)))
     for q, c in zip(quotes, colors):
         k = np.log(q["K"] / q["F"])
         ax.plot(k, 100 * q["iv"], "o", ms=3, color=c)
         kk = np.linspace(k.min(), k.max(), 100)
-        ax.plot(kk, 100 * heston_iv(q["F"], q["F"] * np.exp(kk), q["T"], fit, q["D"]), color=c, lw=1.4,
-                label=f"T = {q['T']:.2f}")
+        ax.plot(
+            kk,
+            100 * heston_iv(q["F"], q["F"] * np.exp(kk), q["T"], fit, q["D"]),
+            color=c,
+            lw=1.4,
+            label=f"T = {q['T']:.2f}",
+        )
     ax.set_xlabel("log-moneyness ln(K/F)")
     ax.set_ylabel("implied vol (%)")
     ax.set_title("Noisy quotes (dots) and calibrated Heston smiles (lines)", fontsize=9)
@@ -254,18 +334,23 @@ def exotics_markdown():
     models = list(next(iter(table.values())).keys())
     lines = ["| Product (1 year) | " + " | ".join(models) + " |", "|---" * (len(models) + 1) + "|"]
     for pname, row in table.items():
-        lines.append(f"| {pname} | " + " | ".join(f"{row[m]['price']:.3f} ({row[m]['stderr']:.3f})"
-                                                   for m in models) + " |")
+        lines.append(
+            f"| {pname} | " + " | ".join(f"{row[m]['price']:.3f} ({row[m]['stderr']:.3f})" for m in models) + " |"
+        )
     return "\n".join(lines)
 
 
 def errors_markdown():
-    lines = ["| Expiry | T (y) | Quotes | Half bid-ask | SVI | Heston | Local vol (MC) | SLV (MC) |",
-             "|---|---|---|---|---|---|---|---|"]
+    lines = [
+        "| Expiry | T (y) | Quotes | Half bid-ask | SVI | Heston | Local vol (MC) | SLV (MC) |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
     for e in CAL["errors"]:
         hs = e["median_spread_bp"] / 2 if e.get("median_spread_bp") is not None else float("nan")
-        lines.append(f"| {e['expiry']} | {e['T']:.2f} | {e['n_quotes']} | {hs:.1f} | {e['svi_rmse_bp']:.1f} | "
-                     f"{e['heston_rmse_bp']:.0f} | {e['lv_mae_bp']:.1f} | {e['slv_mae_bp']:.1f} |")
+        lines.append(
+            f"| {e['expiry']} | {e['T']:.2f} | {e['n_quotes']} | {hs:.1f} | {e['svi_rmse_bp']:.1f} | "
+            f"{e['heston_rmse_bp']:.0f} | {e['lv_mae_bp']:.1f} | {e['slv_mae_bp']:.1f} |"
+        )
     return "\n".join(lines)
 
 
@@ -279,9 +364,12 @@ an SPX option snapshot of {SNAPSHOT} (Yahoo Finance, spot rescaled to 100). Code
 [github.com/Luca-CS/option-pricing-lab](https://github.com/Luca-CS/option-pricing-lab).
 """
 
-THEME = gr.themes.Default(primary_hue="blue", neutral_hue="stone",
-                          font=["Iowan Old Style", "Charter", "Cambria", "Georgia", "serif"],
-                          font_mono=["ui-monospace", "Consolas", "monospace"])
+THEME = gr.themes.Default(
+    primary_hue="blue",
+    neutral_hue="stone",
+    font=["Iowan Old Style", "Charter", "Cambria", "Georgia", "serif"],
+    font_mono=["ui-monospace", "Consolas", "monospace"],
+)
 
 with gr.Blocks(title="Option pricing lab") as demo:
     gr.Markdown(INTRO)
@@ -294,8 +382,11 @@ with gr.Blocks(title="Option pricing lab") as demo:
                 strike_in = gr.Slider(60, 140, value=100, step=1, label="Strike (% of spot)")
                 T_in = gr.Slider(0.1, round(min(2.0, T_MAX), 2), value=1.0, step=0.05, label="Maturity (years)")
                 with gr.Accordion("Barrier and Asian settings", open=False):
-                    kind_in = gr.Dropdown(["down-out", "down-in", "up-out", "up-in"], value="down-out",
-                                          label="Barrier type (monitored daily)")
+                    kind_in = gr.Dropdown(
+                        ["down-out", "down-in", "up-out", "up-in"],
+                        value="down-out",
+                        label="Barrier type (monitored daily)",
+                    )
                     barrier_in = gr.Slider(50, 150, value=80, step=1, label="Barrier (% of spot)")
                     fix_in = gr.Slider(2, 52, value=12, step=1, label="Asian fixings")
                 with gr.Accordion("Simulation", open=False):
@@ -306,13 +397,18 @@ with gr.Blocks(title="Option pricing lab") as demo:
             with gr.Column(scale=2):
                 out_md = gr.Markdown()
                 out_plot = gr.Plot()
-        go.click(price, [model_in, product_in, cp_in, strike_in, T_in, kind_in, barrier_in, fix_in, paths_in,
-                         vol_in, seed_in], [out_md, out_plot])
+        go.click(
+            price,
+            [model_in, product_in, cp_in, strike_in, T_in, kind_in, barrier_in, fix_in, paths_in, vol_in, seed_in],
+            [out_md, out_plot],
+        )
 
     with gr.Tab("SPX surface"):
-        gr.Markdown("Calibration in three steps: raw SVI slices under no-arbitrage constraints, Heston on the "
-                    "same vanillas, then the SLV leverage by particles. Errors in basis points of implied vol; "
-                    "local vol and SLV are repriced by Monte Carlo against the SVI surface they target.")
+        gr.Markdown(
+            "Calibration in three steps: raw SVI slices under no-arbitrage constraints, Heston on the "
+            "same vanillas, then the SLV leverage by particles. Errors in basis points of implied vol; "
+            "local vol and SLV are repriced by Monte Carlo against the SVI surface they target."
+        )
         gr.Markdown(errors_markdown())
         t_slider = gr.Slider(0.05, round(T_MAX, 2), value=0.5, step=0.05, label="Maturity (years)")
         surf_plot = gr.Plot(surface_figure(0.5))
@@ -322,13 +418,17 @@ with gr.Blocks(title="Option pricing lab") as demo:
             gr.Image(str(FIGURES / "spx_errors.png"), label="Fit errors", show_label=True)
 
     with gr.Tab("Model risk"):
-        gr.Markdown("The four models agree (almost) on vanillas but not on path-dependent payoffs. "
-                    "Prices in % of spot, Monte Carlo standard errors in brackets.")
+        gr.Markdown(
+            "The four models agree (almost) on vanillas but not on path-dependent payoffs. "
+            "Prices in % of spot, Monte Carlo standard errors in brackets."
+        )
         gr.Markdown(exotics_markdown())
         if FIGURES is not None and (FIGURES / "spx_mix.png").exists():
             gr.Image(str(FIGURES / "spx_mix.png"), label="Barrier prices against the SLV mixing fraction")
-        gr.Markdown("**Try it**: recalibrate the leverage with your own mixing fraction (0: pure local vol, "
-                    "1: the full Heston vol-of-vol). Vanillas stay put; barriers move.")
+        gr.Markdown(
+            "**Try it**: recalibrate the leverage with your own mixing fraction (0: pure local vol, "
+            "1: the full Heston vol-of-vol). Vanillas stay put; barriers move."
+        )
         with gr.Row():
             mix_in = gr.Slider(0.0, 1.0, value=0.5, step=0.05, label="Mixing fraction")
             part_in = gr.Slider(20_000, 200_000, value=50_000, step=10_000, label="Particles")
@@ -337,8 +437,10 @@ with gr.Blocks(title="Option pricing lab") as demo:
         mix_go.click(mix_experiment, [mix_in, part_in], mix_out)
 
     with gr.Tab("Calibration lab"):
-        gr.Markdown("A simulated market: quotes generated by a Heston model you choose, plus Gaussian noise. "
-                    "The calibration should find the parameters back.")
+        gr.Markdown(
+            "A simulated market: quotes generated by a Heston model you choose, plus Gaussian noise. "
+            "The calibration should find the parameters back."
+        )
         with gr.Row():
             v0_in = gr.Slider(0.005, 0.15, value=0.03, step=0.005, label="v0")
             kappa_in = gr.Slider(0.2, 6.0, value=2.0, step=0.1, label="kappa")
@@ -351,8 +453,9 @@ with gr.Blocks(title="Option pricing lab") as demo:
         lab_go = gr.Button("Generate and calibrate", variant="primary")
         lab_md = gr.Markdown()
         lab_plot = gr.Plot()
-        lab_go.click(calibration_lab, [v0_in, kappa_in, theta_in, xi_in, rho_in, noise_in, lab_seed],
-                     [lab_md, lab_plot])
+        lab_go.click(
+            calibration_lab, [v0_in, kappa_in, theta_in, xi_in, rho_in, noise_in, lab_seed], [lab_md, lab_plot]
+        )
 
 if __name__ == "__main__":
     demo.launch(theme=THEME)

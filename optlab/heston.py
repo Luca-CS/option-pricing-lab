@@ -56,8 +56,9 @@ def _lewis_integral(F, K, T, p: HestonParams):
     u_max = float(np.clip(40.0 / vol_scale, 60.0, 5000.0))
     # two short panels near u = 0, where the integrand varies fastest at short maturities
     edges = np.concatenate([[0.0, 2.0, 10.0], np.linspace(10.0, u_max, 9)[1:]])
-    u = (0.5 * (edges[1:, None] - edges[:-1, None]) * _GL_X[None, :]
-         + 0.5 * (edges[1:, None] + edges[:-1, None])).ravel()
+    u = (
+        0.5 * (edges[1:, None] - edges[:-1, None]) * _GL_X[None, :] + 0.5 * (edges[1:, None] + edges[:-1, None])
+    ).ravel()
     w = (0.5 * (edges[1:, None] - edges[:-1, None]) * _GL_W[None, :]).ravel()
     phi = char_function(u - 0.5j, T, p)
     logfk = np.log(np.asarray(F, dtype=float) / np.asarray(K, dtype=float))
@@ -115,6 +116,13 @@ def calibrate_heston(quotes, x0: HestonParams | None = None, weights=None):
         return np.concatenate(out)
 
     start = np.clip(x0.as_array(), BOUNDS[0] + 1e-6, BOUNDS[1] - 1e-6)
-    sol = least_squares(residuals, start, bounds=BOUNDS, x_scale=np.array([0.01, 1.0, 0.01, 0.3, 0.3]),
-                        xtol=1e-10, ftol=1e-12, max_nfev=400)
+    sol = least_squares(
+        residuals,
+        start,
+        bounds=BOUNDS,
+        x_scale=np.array([0.01, 1.0, 0.01, 0.3, 0.3]),
+        xtol=1e-10,
+        ftol=1e-12,
+        max_nfev=400,
+    )
     return HestonParams(*sol.x), sol

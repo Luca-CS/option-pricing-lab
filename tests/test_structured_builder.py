@@ -28,11 +28,24 @@ def prof(sheet):
 
 # --- schema and masks ---
 
+
 def test_masks_expose_their_sections():
-    assert [s["name"] for s in describe("autocall")["sections"]] == ["general", "wrapper", "autocall", "coupon",
-                                                                     "downside", "costs"]
-    assert [s["name"] for s in describe("bullet")["sections"]] == ["general", "wrapper", "coupon", "upside",
-                                                                   "downside", "costs"]
+    assert [s["name"] for s in describe("autocall")["sections"]] == [
+        "general",
+        "wrapper",
+        "autocall",
+        "coupon",
+        "downside",
+        "costs",
+    ]
+    assert [s["name"] for s in describe("bullet")["sections"]] == [
+        "general",
+        "wrapper",
+        "coupon",
+        "upside",
+        "downside",
+        "costs",
+    ]
 
 
 def test_visible_fields_follow_the_choices():
@@ -53,20 +66,23 @@ def test_visible_fields_follow_the_choices():
     assert "issuer_spread" not in fields(TermSheet("bullet", {"wrapper": {"format": "swap"}}), "wrapper")
 
 
-@pytest.mark.parametrize("mask, values, message", [
-    ("bullet", {"coupon": {"type": "snowball"}}, "not allowed for the bullet mask"),
-    ("autocall", {"upside": {"type": "call"}}, "section 'upside' is not part of the autocall mask"),
-    ("bullet", {"downside": {"type": "none", "barrier": 0.5}}, "downside.barrier is not used here"),
-    ("bullet", {"downside": {"type": "geared_put", "gearing": 2.0}}, "is computed"),
-    ("bullet", {"downside": {"strike": 0.8, "barrier": 0.9}}, "at or below the put strike"),
-    ("bullet", {"general": {"maturity_months": 12}, "coupon": {"frequency_months": 5}}, "multiple of"),
-    ("bullet", {"coupon": {"type": "none"}}, "no coupon to solve for"),
-    ("bullet", {"coupon": {"rate": "high"}}, "must be a number"),
-    ("bullet", {"downside": {"strike": -0.1}}, "below the minimum"),
-    ("bullet", {"coupon": {"colour": 1}}, "unknown field"),
-    ("swap", {}, "unknown product type"),
-    ("autocall", {"general": {"maturity_months": 12}, "autocall": {"first_call": 5}}, "after the last"),
-])
+@pytest.mark.parametrize(
+    "mask, values, message",
+    [
+        ("bullet", {"coupon": {"type": "snowball"}}, "not allowed for the bullet mask"),
+        ("autocall", {"upside": {"type": "call"}}, "section 'upside' is not part of the autocall mask"),
+        ("bullet", {"downside": {"type": "none", "barrier": 0.5}}, "downside.barrier is not used here"),
+        ("bullet", {"downside": {"type": "geared_put", "gearing": 2.0}}, "is computed"),
+        ("bullet", {"downside": {"strike": 0.8, "barrier": 0.9}}, "at or below the put strike"),
+        ("bullet", {"general": {"maturity_months": 12}, "coupon": {"frequency_months": 5}}, "multiple of"),
+        ("bullet", {"coupon": {"type": "none"}}, "no coupon to solve for"),
+        ("bullet", {"coupon": {"rate": "high"}}, "must be a number"),
+        ("bullet", {"downside": {"strike": -0.1}}, "below the minimum"),
+        ("bullet", {"coupon": {"colour": 1}}, "unknown field"),
+        ("swap", {}, "unknown product type"),
+        ("autocall", {"general": {"maturity_months": 12}, "autocall": {"first_call": 5}}, "after the last"),
+    ],
+)
 def test_term_sheet_errors(mask, values, message):
     with pytest.raises(TermSheetError, match=message):
         TermSheet(mask, values)
@@ -89,9 +105,11 @@ def test_every_preset_compiles_to_a_valid_round_tripping_script(name):
 
 # --- compiler details ---
 
+
 def test_schedules_coupon_and_call_frequencies_independently():
-    sheet = preset("phoenix", **{"coupon.frequency_months": 1, "autocall.frequency_months": 3,
-                                 "general.maturity_months": 12})
+    sheet = preset(
+        "phoenix", **{"coupon.frequency_months": 1, "autocall.frequency_months": 3, "general.maturity_months": 12}
+    )
     events = compiled(sheet).program.events
     assert len(events) == 1 + 12  # strike + monthly observations; quarterly calls fall on coupon dates
     calls = [e for e in events if any("terminate" in line for line in event_lines(e))]
@@ -99,8 +117,7 @@ def test_schedules_coupon_and_call_frequencies_independently():
 
 
 def test_step_down_and_non_call_period():
-    sheet = preset("phoenix", **{"autocall.step_down": 0.05, "autocall.first_call": 2,
-                                 "general.maturity_months": 12})
+    sheet = preset("phoenix", **{"autocall.step_down": 0.05, "autocall.first_call": 2, "general.maturity_months": 12})
     text = compiled(sheet).script
     assert "param step_down = 0.05" in text
     assert "if perf >= trigger then" in text and "if perf >= trigger - 1 * step_down then" in text
@@ -124,10 +141,18 @@ def test_payment_dates_are_t_plus_5_business_days():
 
 # --- profile and policy ---
 
-@pytest.mark.parametrize("name, cls", [
-    ("reverse_convertible", "european"), ("airbag", "european"), ("capital_protected", "european"),
-    ("barrier_reverse_convertible", "path_dependent"), ("phoenix", "callable"), ("athena", "callable"),
-])
+
+@pytest.mark.parametrize(
+    "name, cls",
+    [
+        ("reverse_convertible", "european"),
+        ("airbag", "european"),
+        ("capital_protected", "european"),
+        ("barrier_reverse_convertible", "path_dependent"),
+        ("phoenix", "callable"),
+        ("athena", "callable"),
+    ],
+)
 def test_profile_classes(name, cls):
     assert prof(preset(name)).product_class == cls
 
@@ -160,6 +185,7 @@ def test_policy_overrides_and_warnings():
 
 def test_describe_is_json_serialisable_for_a_front_end():
     import json
+
     sheet = preset("phoenix", **{"general.strike_date": dt.date(2026, 11, 2)})
     out = json.loads(json.dumps(describe("autocall", sheet)))
     general = next(s for s in out["sections"] if s["name"] == "general")

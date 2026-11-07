@@ -1,6 +1,6 @@
 # ADR-0021: The v0 front during session 1
 
-- Status: Proposed (A0, 7 November 2026)
+- Status: Accepted (A0 checkpoint, 7 November 2026)
 - Handoff §1: Front pendant cette session
 
 ## Context

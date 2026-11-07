@@ -19,17 +19,38 @@ CTX = flat_context()
 
 def test_easter_and_nyse_holidays():
     assert [easter(y) for y in (2026, 2027, 2028)] == [D(2026, 4, 5), D(2027, 3, 28), D(2028, 4, 16)]
-    assert NYSE.holidays(2027) == (D(2027, 1, 1), D(2027, 1, 18), D(2027, 2, 15), D(2027, 3, 26), D(2027, 5, 31),
-                                   D(2027, 6, 18), D(2027, 7, 5), D(2027, 9, 6), D(2027, 11, 25), D(2027, 12, 24))
+    assert NYSE.holidays(2027) == (
+        D(2027, 1, 1),
+        D(2027, 1, 18),
+        D(2027, 2, 15),
+        D(2027, 3, 26),
+        D(2027, 5, 31),
+        D(2027, 6, 18),
+        D(2027, 7, 5),
+        D(2027, 9, 6),
+        D(2027, 11, 25),
+        D(2027, 12, 24),
+    )
     assert NYSE.holidays(2026)[-4:] == (D(2026, 7, 3), D(2026, 9, 7), D(2026, 11, 26), D(2026, 12, 25))
     assert D(2028, 1, 1) not in NYSE.holidays(2028) and D(2027, 12, 31) not in NYSE.holidays(2027)  # Saturday rule
 
 
 def test_the_ten_us_holidays_of_a_one_year_window():
-    days = set(business_days(D(2026, 10, 27), D(2027, 10, 27))) - set(NYSE.business_days(D(2026, 10, 27),
-                                                                                            D(2027, 10, 27)))
-    assert sorted(days) == [D(2026, 11, 26), D(2026, 12, 25), D(2027, 1, 1), D(2027, 1, 18), D(2027, 2, 15),
-                            D(2027, 3, 26), D(2027, 5, 31), D(2027, 6, 18), D(2027, 7, 5), D(2027, 9, 6)]
+    days = set(business_days(D(2026, 10, 27), D(2027, 10, 27))) - set(
+        NYSE.business_days(D(2026, 10, 27), D(2027, 10, 27))
+    )
+    assert sorted(days) == [
+        D(2026, 11, 26),
+        D(2026, 12, 25),
+        D(2027, 1, 1),
+        D(2027, 1, 18),
+        D(2027, 2, 15),
+        D(2027, 3, 26),
+        D(2027, 5, 31),
+        D(2027, 6, 18),
+        D(2027, 7, 5),
+        D(2027, 9, 6),
+    ]
 
 
 def test_rolls_and_payment_lags_skip_holidays():
@@ -43,8 +64,10 @@ def test_rolls_and_payment_lags_skip_holidays():
 def test_default_calendar_leaves_every_script_unchanged():
     for name in ("phoenix", "barrier_reverse_convertible"):
         sheet = preset(name)
-        assert compile_sheet(sheet, CTX.valuation).script == \
-            compile_sheet(sheet, CTX.valuation, calendar=WeekendCalendar()).script
+        assert (
+            compile_sheet(sheet, CTX.valuation).script
+            == compile_sheet(sheet, CTX.valuation, calendar=WeekendCalendar()).script
+        )
 
 
 def test_daily_windows_follow_the_sheet_calendar():
@@ -57,21 +80,39 @@ def test_daily_windows_follow_the_sheet_calendar():
 
 def test_a_running_brc_priced_with_exchange_fixings_only():
     strike = D(2026, 4, 27)
-    sheet = preset("barrier_reverse_convertible", **{"general.strike_date": strike, "wrapper.solve": "upfront",
-                                                     "general.calendar": "nyse"})
+    sheet = preset(
+        "barrier_reverse_convertible",
+        **{"general.strike_date": strike, "wrapper.solve": "upfront", "general.calendar": "nyse"},
+    )
     closes = {d: 100.0 for d in NYSE.business_days(strike, CTX.valuation)}
     q = quote(sheet, CTX, model="bs", control=None, n_paths=4_000, batch=None, fixings={"SPX": closes})
     assert 80 < q.upfront < 110
     with pytest.raises(KeyError, match="no fixing of SPX"):  # Monday-Friday wants the Good Friday close too
-        quote(sheet.replace(**{"general.calendar": "weekend"}), CTX, model="bs", control=None, n_paths=4_000,
-              batch=None, fixings={"SPX": closes})
+        quote(
+            sheet.replace(**{"general.calendar": "weekend"}),
+            CTX,
+            model="bs",
+            control=None,
+            n_paths=4_000,
+            batch=None,
+            fixings={"SPX": closes},
+        )
 
 
 # --- lifecycle ---
 
+
 def phoenix(**changes):
-    return preset("phoenix", **{"general.strike_date": D(2026, 4, 27), "general.maturity_months": 12,
-                                "wrapper.solve": "upfront", "coupon.rate": 0.08, **changes})
+    return preset(
+        "phoenix",
+        **{
+            "general.strike_date": D(2026, 4, 27),
+            "general.maturity_months": 12,
+            "wrapper.solve": "upfront",
+            "coupon.rate": 0.08,
+            **changes,
+        },
+    )
 
 
 def test_a_phoenix_called_at_its_first_date():
@@ -99,8 +140,15 @@ def test_a_daily_knock_in_is_dated_at_the_first_close_below():
 
 def test_a_matured_product_reports_its_redemption():
     sheet = preset("reverse_convertible", **{"general.strike_date": D(2025, 10, 27)})
-    fix = {"SPX": {D(2025, 10, 27): 100.0, D(2026, 1, 27): 90.0, D(2026, 4, 27): 90.0, D(2026, 7, 27): 90.0,
-                   D(2026, 10, 27): 90.0}}
+    fix = {
+        "SPX": {
+            D(2025, 10, 27): 100.0,
+            D(2026, 1, 27): 90.0,
+            D(2026, 4, 27): 90.0,
+            D(2026, 7, 27): 90.0,
+            D(2026, 10, 27): 90.0,
+        }
+    }
     ev = events(sheet, fix, CTX.valuation)
     assert [e.kind for e in ev] == ["coupon_paid"] * 4 + ["knocked_in", "matured"]
     assert ev[-1].amount == pytest.approx(90.0)  # the preset knocks in at the strike: redeemed at 90 %

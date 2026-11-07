@@ -31,8 +31,17 @@ def run(lake):
 
 def test_lab_lists_days_per_name_and_source(lake):
     rows = lab_days(lake)
-    assert rows == [{"underlying": "SPX", "source": "archive", "days": [str(DAY)], "first": str(DAY), "last": str(DAY), "n": 1,
-                     "quality": ["ok"]}]
+    assert rows == [
+        {
+            "underlying": "SPX",
+            "source": "archive",
+            "days": [str(DAY)],
+            "first": str(DAY),
+            "last": str(DAY),
+            "n": 1,
+            "quality": ["ok"],
+        }
+    ]
 
 
 def test_quote_table_gives_bid_mid_ask_vols(lake):
