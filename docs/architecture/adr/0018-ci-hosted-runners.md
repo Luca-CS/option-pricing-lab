@@ -1,6 +1,6 @@
 # ADR-0018: GitHub Actions on hosted runners only
 
-- Status: Proposed (A0, 7 November 2026)
+- Status: Accepted (A0 checkpoint, 7 November 2026)
 - Handoff §1: CI; §4.8
 
 ## Context

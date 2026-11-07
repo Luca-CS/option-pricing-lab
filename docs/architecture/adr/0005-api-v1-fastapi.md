@@ -1,6 +1,6 @@
 # ADR-0005: API v1 on FastAPI and Pydantic v2
 
-- Status: Proposed (A0, 7 November 2026)
+- Status: Accepted (A0 checkpoint, 7 November 2026)
 - Handoff §1: API; §4.2
 
 ## Context

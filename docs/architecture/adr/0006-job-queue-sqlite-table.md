@@ -1,6 +1,6 @@
 # ADR-0006: A home-made job table on SQLite, not huey
 
-- Status: Proposed (A0, 7 November 2026); the comparison asked by the handoff is below
+- Status: Accepted (A0 checkpoint, 7 November 2026); the comparison asked by the handoff is below
 - Handoff §1: Jobs; §4.3
 
 ## Context

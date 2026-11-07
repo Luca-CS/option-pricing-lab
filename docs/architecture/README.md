@@ -1,6 +1,6 @@
 # optlab v1: target architecture
 
-Status: **proposed** (A0, 7 November 2026), for Luca's review at the A0 checkpoint. Decisions are in `adr/`, the parity
+Status: **accepted** by Luca at the A0 checkpoint (7 November 2026). Decisions are in `adr/`, the parity
 list in `feature-inventory.md`, the threat model in `security.md`, the vocabulary in `glossary.md`.
 
 optlab is an option pricing library (closed forms, Heston, local vol, SLV, structured products, a risk engine, a

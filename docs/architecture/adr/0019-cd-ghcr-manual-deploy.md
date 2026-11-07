@@ -1,6 +1,6 @@
 # ADR-0019: Images on GHCR, a manual deploy with rollback
 
-- Status: Proposed (A0, 7 November 2026)
+- Status: Accepted (A0 checkpoint, 7 November 2026)
 - Handoff §1: CD; §4.9
 
 ## Context

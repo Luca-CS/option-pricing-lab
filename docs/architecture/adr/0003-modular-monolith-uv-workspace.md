@@ -1,6 +1,6 @@
 # ADR-0003: A modular monolith in a uv workspace of namespace packages
 
-- Status: Proposed (A0, 7 November 2026)
+- Status: Accepted (A0 checkpoint, 7 November 2026)
 - Handoff §1: Architecture
 
 ## Context

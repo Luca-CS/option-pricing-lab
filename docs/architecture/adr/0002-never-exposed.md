@@ -1,6 +1,6 @@
 # ADR-0002: The real instance is never exposed to the internet
 
-- Status: Proposed (A0, 7 November 2026)
+- Status: Accepted (A0 checkpoint, 7 November 2026)
 - Handoff §1: Exposition, Repo
 
 ## Context

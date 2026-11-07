@@ -1,6 +1,6 @@
 # ADR-0004: Dependency direction, from the measured import graph
 
-- Status: Proposed (A0, 7 November 2026) — **amends the handoff's draft** (`core <- structured`, `core <- marketdata`
+- Status: Accepted (A0 checkpoint, 7 November 2026) — **amends the handoff's draft** (`core <- structured`, `core <- marketdata`
   side by side) after measuring the real graph, as the handoff asked
 - Handoff §1: Architecture; §3
 

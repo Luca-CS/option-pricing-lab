@@ -1,6 +1,6 @@
 # ADR-0007: SQLite in WAL with SQLAlchemy Core and Alembic
 
-- Status: Proposed (A0, 7 November 2026)
+- Status: Accepted (A0 checkpoint, 7 November 2026)
 - Handoff §1: Stockage; §4.4
 
 ## Context

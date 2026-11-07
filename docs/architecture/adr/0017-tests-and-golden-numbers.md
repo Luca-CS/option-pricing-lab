@@ -1,6 +1,6 @@
 # ADR-0017: Golden numbers, a fast CI, the full suite on the machine
 
-- Status: Proposed (A0, 7 November 2026)
+- Status: Accepted (A0 checkpoint, 7 November 2026); the tolerance across platforms below is still open
 - Handoff §1: Tests; §5
 
 ## Context
