@@ -1,17 +1,10 @@
-/* C interface of the engine, exported by the optlab_cuda_c shared library and called from Python through ctypes
-   (optlab/gpu.py). Plain C types only; the layouts below are mirrored there field by field. */
-#ifndef OPTLAB_CUDA_CAPI_H
-#define OPTLAB_CUDA_CAPI_H
+// Requests of the engine, checked and converted for the engines: what the Python module (bindings/ext.cpp, built into
+// optlab.native._ext by nanobind) fills from NumPy arrays and what the C++ tests call. Errors are exceptions
+// (std::invalid_argument for a bad request, std::runtime_error for a missing device), never an exit or an error code:
+// the engine runs inside the Python process. These layouts were the C API of the ctypes bridge until A3.
+#pragma once
 
-#ifdef _WIN32
-#define OPTLAB_API __declspec(dllexport)
-#else
-#define OPTLAB_API __attribute__((visibility("default")))
-#endif
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include <string>
 
 /* model: 0 Black-Scholes, 1 Heston. product: 0 European, 1 Asian, 2 down-and-out barrier.
    legs: 0 none, 1 call, 2 put, 3 forward. Outputs as in params.hpp: European out[k] = leg k; Asian out[0]
@@ -35,18 +28,6 @@ typedef struct {
     double kernel_ms, total_ms;
 } optlab_result;
 
-/* Number of CUDA devices, 0 without device or driver. */
-OPTLAB_API int optlab_gpu_count(void);
-
-/* backend: 0 double CPU reference on n_threads threads (0: all), 1 GPU (float). Returns 0 on success; otherwise
-   -1, and optlab_last_error() holds the message. Not thread-safe on the GPU backend. */
-OPTLAB_API int optlab_price(const optlab_request* rq, int backend, int n_threads, optlab_result* out);
-
-/* Message of the last failed call on this thread, or "" */
-OPTLAB_API const char* optlab_last_error(void);
-
-/* Device 0 as "name (sm_XY, N SM)", or "" without device */
-OPTLAB_API const char* optlab_gpu_name(void);
 
 /* Paths for the Python library (paths.hpp): every model of optlab (constant, tabulated local variance, Heston, SLV),
    1 to 8 correlated names, an optional local correlation. Arrays in double, row major; out has n_names * n_cols
@@ -81,8 +62,6 @@ typedef struct {
     double kernel_ms, total_ms;  /* filled on return */
 } optlab_paths_request;
 
-/* backend 0: CPU in double on n_threads threads (0: all); 1: GPU in float. Returns 0, or -1 and optlab_last_error(). */
-OPTLAB_API int optlab_paths(optlab_paths_request* rq, int backend, int n_threads);
 
 typedef struct {
     char name[256];
@@ -91,11 +70,6 @@ typedef struct {
     int integrated, kernel_timeout;
 } optlab_device;
 
-/* 1 and the properties of a CUDA device, or 0 without it. */
-OPTLAB_API int optlab_device_info(int device, optlab_device* out);
-
-/* 1 when the library was built with CUDA, 0 for a CPU-only build. */
-OPTLAB_API int optlab_has_cuda(void);
 
 /* SLV leverage by the particle method (leverage.hpp), the algorithm of optlab.slv.calibrate_leverage. The local
    variance comes as uniform rows, one per step start. Fills x_grids and values (n_steps x n_x). */
@@ -118,14 +92,19 @@ typedef struct {
     double total_ms;  /* filled on return */
 } optlab_leverage_request;
 
-/* backend 0: CPU (double) on n_threads threads (0: all); 1: GPU (float particles). 0 on success, -1 otherwise. */
-OPTLAB_API int optlab_leverage(optlab_leverage_request* rq, int backend, int n_threads);
+namespace optlab::api {
 
-/* Hardware threads seen by the library. */
-OPTLAB_API int optlab_cpu_threads(void);
+int gpu_count();         // CUDA devices, 0 without device, driver or CUDA build
+bool has_cuda();         // built with the CUDA backend
+int cpu_threads();       // hardware threads
+std::string gpu_name();  // device 0 as "name (sm_XY, N SM)", or "" without device
+bool device_info(int device, optlab_device& out);  // false without that device
 
-#ifdef __cplusplus
-}
-#endif
+// backend 0: the double CPU reference on n_threads threads (0: all); 1: the GPU (float). Not thread-safe on the GPU.
+optlab_result price(const optlab_request& rq, int backend, int n_threads);
+// backend 0: CPU in double on n_threads threads (0: all); 1: GPU in float. Fills rq.out and the timings.
+void paths(optlab_paths_request& rq, int backend, int n_threads);
+// backend 0: CPU (double) on n_threads threads (0: all); 1: GPU (float particles). Fills x_grids, values, total_ms.
+void leverage(optlab_leverage_request& rq, int backend, int n_threads);
 
-#endif
+}  // namespace optlab::api

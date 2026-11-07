@@ -58,14 +58,15 @@ products.
 
 ## GPU Monte Carlo
 
-[`cuda/`](cuda/README.md) is a C++/CUDA Monte Carlo engine for Black-Scholes and Heston (Andersen's QE scheme):
+[`packages/native/cuda/`](packages/native/cuda/README.md) is a C++/CUDA Monte Carlo engine for Black-Scholes and Heston (Andersen's QE scheme):
 European, Asian and daily barrier options, validated against closed forms, Fourier and the Python library
 within 4 standard errors. On an RTX 2070 Super, a Heston down-and-out call with 10^7 paths × 252 daily steps
 takes 91 ms, 165 times faster than the same code in double-precision C++ on 12 CPU threads. Float paths agree
 with double to 0.006 standard errors. The engine comes with a measured optimisation study (FP64, fast-math
 intrinsics rejected for a 0.13 SE bias, Kahan float sums, stored against fused paths) and a Nsight Compute
 profile: it found warps half idle in the QE step, and the fix cut the Heston kernel time by 31 %. From Python,
-`optlab.gpu` calls the engine through `ctypes` and falls back to the NumPy pricers without a GPU.
+`optlab.native.gpu` calls the engine through a nanobind module, built with the package, and falls back to the NumPy
+pricers without a GPU.
 
 The same directory holds the **path engine of the library** (`optlab.native`): every model (Black-Scholes, local
 vol, Heston, SLV, correlated baskets with a local correlation) simulated with the library's discretisation on every
@@ -80,8 +81,8 @@ with `engine="auto"`; NumPy stays the default of the library and the reference o
 | SLV leverage, 1 year, 200,000 particles | 4.5 s | | 1.3 s | 0.16 s |
 
 Prices agree with NumPy within the Monte Carlo error; the machine, the method and the next steps are in
-[cuda/ROADMAP.md](cuda/ROADMAP.md). Without an NVIDIA card the engine builds for the CPU alone
-(`-DOPTLAB_WITH_CUDA=OFF`), and without a compiler everything stays on NumPy.
+[packages/native/cuda/ROADMAP.md](packages/native/cuda/ROADMAP.md). Without an NVIDIA card the engine builds for the
+CPU alone (`OPTLAB_WITH_CUDA=OFF`, or no CUDA toolkit found).
 
 ## Structured products
 
@@ -324,13 +325,12 @@ A uv workspace: six distributions share the namespace `optlab`, each in `package
 | Path | Content |
 |---|---|
 | `packages/core` | `optlab.core`: curves (`market`), closed forms, Greeks and implied vol (`blackscholes`), the CRR tree, Heston (`heston`), implied surfaces and Dupire local variance (`ssvi`, `svi`), path simulation (`models`), Monte Carlo pricers and Longstaff-Schwartz (`products`), the SLV leverage (`slv`), the calibration chain (`pipeline`), the instrument registry and snapshot type, the engine registry; numpy and scipy only |
-| `packages/native` | `optlab.native`: the Python bridge to the CUDA engine, NumPy fallback |
+| `packages/native` | `optlab.native`: the C++/CUDA engine (`cuda/`: sources, C++ tests, benchmarks and optimisation study) and its nanobind module, NumPy fallback |
 | `packages/structured` | `optlab.structured`: script language, term-sheet builder, policy, pricers, desk costs, books |
 | `packages/marketdata` | `optlab.marketdata`: the historical lake, its sources and derivations, point-in-time markets, replays, the SPX chain download and cleaning |
 | `packages/risk` | `optlab.risk`: shocks and one revaluation engine, Greeks, ladder, scenarios, VaR, EOD runs and explained P&L |
 | `packages/server` | `optlab.server`: the local web desk: HTTP server, JSON API, jobs, SQLite store, reports, the page in `static/` |
 | `scripts/` | calibration runs, lake updates, report and charts |
-| `cuda/` | C++/CUDA Monte Carlo engine, benchmarks and optimisation study |
 | `docs/` | demo page (GitHub Pages); `docs/architecture/` the target architecture and its decisions |
 | `space/` | Gradio app, run locally |
 | `tests/` | the golden numbers and the fixtures shared across packages |

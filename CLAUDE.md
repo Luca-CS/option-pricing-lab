@@ -17,8 +17,10 @@ uv run python tools/pyright_baseline.py               # pyright may only go down
 ```
 
 Tests live beside their package (`packages/<name>/tests`); fixtures shared across packages are in `tests/helpers`
-(on pytest's `pythonpath`), the golden recorder in `tests/golden`. Outside this repository's own checkout, set
-`OPTLAB_CUDA_LIB` to the built engine (`build/Release/optlab_cuda_c.dll`) and `OPTLAB_NODE` (or PATH) to a node.
+(on pytest's `pythonpath`), the golden recorder in `tests/golden`. `uv sync` builds the native module
+(`optlab.native._ext`, CMake through scikit-build-core, CUDA when a toolkit is found: about 80 s here, again only when
+`packages/native` changes); `OPTLAB_WITH_CUDA=OFF` or `OPTLAB_CUDA_ARCHS=portable` change that build. Node: `OPTLAB_NODE`
+or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
 
 - Structured products: `uv run pytest -q packages/structured/tests` (about a minute);
   `scripts/structured_examples.py [--quick]` prints the autocall model-risk table, timings and example quotes.
@@ -33,10 +35,11 @@ Tests live beside their package (`packages/<name>/tests`); fixtures shared acros
   `scripts/make_report.py` writes `reports/calibration.md` and figures; `scripts/build_widget_data.py`
   regenerates `docs/pricer-data.js` from `results/spx_calibration.json`. `--source spx` needs a snapshot
   from `scripts/download_spx.py` in `data/raw/`.
-- CUDA engine (`cuda/`, needs CUDA 12.x and VS 2022 Build Tools; RTX 2070 Super, `sm_75`):
-  `cmake -S cuda -B build -G "Visual Studio 17 2022" -A x64`, `cmake --build build --config Release`,
+- CUDA engine (`packages/native/cuda/`, needs CUDA 12.x and VS 2022 Build Tools; RTX 2070 Super, `sm_75`), its own
+  C++ tests and benchmarks: `cmake -S packages/native/cuda -B build -G "Visual Studio 17 2022" -A x64`,
+  `cmake --build build --config Release`,
   `ctest --test-dir build -C Release`. `build\Release\test_prices.exe cpu|gpu|double|closed|qe-bias` runs one suite.
-  Benchmarks, from the repo root: `cuda/bench/bench_numpy.py` (venv) then `build\Release\bench.exe`;
+  Benchmarks, from the repo root: `packages/native/cuda/bench/bench_numpy.py` (venv) then `build\Release\bench.exe`;
   `build\Release\ablation.exe` (plus `ablation_ieee`, `ablation_fastmath`: same library, other nvcc math flags).
   Time the GPU only after a sustained warm-up (seconds of CPU work drop it to the 300 MHz idle clock).
   `-DOPTLAB_WITH_CUDA=OFF` builds the CPU engines only; `-DOPTLAB_CUDA_ARCHS=portable` targets sm_61 to sm_120.
@@ -84,19 +87,22 @@ Tests live beside their package (`packages/<name>/tests`); fixtures shared acros
 - **`docs/`** is the GitHub Pages demo. `docs/lab.js` is an independent JavaScript re-implementation (closed
   forms, CRR, American PDE, Heston Fourier, Monte Carlo with Andersen's QE scheme for Heston in `simulate`,
   LSM) exposed as `window.PricerWidget`; changes to its pricers should keep `test_widget_js.py` passing.
-- **`cuda/`** is a C++/CUDA Monte Carlo engine. `include/optlab_cuda/schemes.hpp` holds the path schemes (exact BS
+- **`packages/native/cuda/`** is a C++/CUDA Monte Carlo engine. `include/optlab_cuda/schemes.hpp` holds the path schemes (exact BS
   steps, Andersen QE-M for Heston, in the log-return y = ln(S/S0)) as `__host__ __device__` templates on the real
   type, shared by the double CPU reference (`cpu_mc.cpp`) and the float/double GPU kernels (`gpu_mc.cu`). Philox
   subsequence = pair index, so prices depend only on (seed, N), not on grid, block size or launch chunking.
   Keep path math free of double literals (`R(0.5)`), as FP64 runs at 1/32 rate on this card. Production defaults
   (float, Kahan float sums, `-prec-div=false -prec-sqrt=false -ftz=true`, block 512) come from the measured
   ablation; `__expf`/`__logf` stay off because they bias the Heston barrier by 0.13 SE.
-- **`optlab.native.gpu`** calls the CUDA engine from Python through `ctypes` (`build/Release/optlab_cuda_c.dll`, C API in
-  `cuda/src/capi.cpp`; the `_Request`/`_Result` structures mirror `capi.h` field by field) and falls back to the
-  NumPy pricers without the library, without a GPU, or outside the engine's cases. Engine errors are C++
-  exceptions turned into an error code, never `exit`: the engine runs inside the Python process.
-  `test_gpu.py` skips the engine tests when the library or the GPU is missing.
-- **`optlab.native`** drives the path engine of `cuda/` (`paths.hpp`: one header for the CPU in double and the GPU in
+- **`optlab.native._ext`** is the engine seen from Python: a nanobind module (`packages/native/bindings/ext.cpp`) over
+  the checked requests of `requests.hpp`/`requests.cpp`, NumPy arrays passed without a copy and size-checked, the GIL
+  released while the engine runs, engine errors (C++ exceptions, never `exit`) raised as `optlab.core.engines.EngineError`.
+  Its stub `_ext.pyi` is versioned and generated (`uv run python -m nanobind.stubgen -m optlab.native._ext -o
+  packages/native/src/optlab/native/_ext.pyi`); `test_stub.py` fails when it drifts.
+- **`optlab.native.gpu`** prices the fixed products of the CUDA study on that module and falls back to the NumPy
+  pricers without the module, without a GPU, or outside the engine's cases. `test_gpu.py` skips the engine tests when
+  the module or the GPU is missing.
+- **`optlab.native`** drives the path engine (`paths.hpp`: one header for the CPU in double and the GPU in
   float; `leverage.hpp`: the SLV particle method): `plan()` turns a model or a `Basket` into arrays (local variance and
   squared leverage as uniform rows per step), `run()` simulates a range of pairs. Normals are Philox, a function of
   (seed, pair, rank of the normal), so prices depend on (seed, n_paths) only and the CPU and GPU share their draws.
@@ -105,8 +111,10 @@ Tests live beside their package (`packages/<name>/tests`); fixtures shared acros
   default is numpy, so the library's numbers and its bit-for-bit tests are unchanged; `structured/engine.py` falls
   back to NumPy with the reason in `timings["engine_note"]`. On the engine, batches are sized by memory, evaluated on
   several threads while the next one simulates, and daily windows come back as their lowest and highest spot.
-  `slv.calibrate_leverage(engine=...)` uses the same switch. The desk starts with `--engine auto`. Keep the
-  `_PathsRequest` and `_LeverageRequest` structures field by field equal to `capi.h`.
+  `slv.calibrate_leverage(engine=...)` uses the same switch. The desk starts with `--engine auto`. A field added to a
+  request goes into `requests.hpp`, `ext.cpp` (its argument and size check) and the caller here, then the stub is
+  regenerated. GPU reductions (fixed products, leverage histograms) use `atomicAdd`: their last bits vary from run to
+  run (`WITHIN` in `tests/golden/golden.py`); paths do not.
 - **`optlab.structured`** prices structured products in three layers. Engine: a payoff script language
   (`script/`: hand-written lexer and recursive-descent parser, AST in `nodes.py`, printer, `validate`, `timeline`,
   vectorised `evaluator` with float masks: `x = e` under a mask m is `m*e + (1-m)*x`, `pay` adds `m*alive*e`,

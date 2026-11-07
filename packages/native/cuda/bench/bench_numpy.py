@@ -14,7 +14,7 @@ import sys
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[4]  # the repository (packages/native/cuda/bench/)
 sys.path.insert(0, str(ROOT))
 
 from optlab.core import BlackScholesModel, HestonModel, HestonParams, Market, barrier_mc, european_mc  # noqa: E402

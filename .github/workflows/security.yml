@@ -43,11 +43,17 @@ jobs:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
           queries: security-extended
-      - name: Build the CPU engine (C++)
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        if: matrix.language == 'c-cpp'
+        with:
+          version: "0.13.1"
+          python-version: "3.14.7"
+      - name: Build the CPU engine, its C++ tests and its Python binding
         if: matrix.language == 'c-cpp'
         run: |
-          cmake -S cuda -B build -DOPTLAB_WITH_CUDA=OFF -DCMAKE_BUILD_TYPE=Release
+          cmake -S packages/native/cuda -B build -DOPTLAB_WITH_CUDA=OFF -DCMAKE_BUILD_TYPE=Release
           cmake --build build --parallel
+          OPTLAB_WITH_CUDA=OFF uv build --wheel packages/native --out-dir "$RUNNER_TEMP/dist"
       - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066  # v4.39.3
         with:
           category: /language:${{ matrix.language }}
