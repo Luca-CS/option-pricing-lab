@@ -25,6 +25,14 @@ within 4 standard errors. The refactor moves every file: something must prove th
   then a relative tolerance is fixed (expected near 1e-12 for deterministic numbers, well under 0.01 SE for Monte
   Carlo), written in this ADR's follow-up, never widened silently. A golden difference blocks a PR unless it is a
   documented bug fix (number before and after).
+- **Measured in A0 across platforms** (`reports/refactor-baseline.md` §7): closed forms and the Monte Carlo pricers
+  with fixed inputs differ by at most 2.6e-14 relative (5.7e-14 SE) between Windows and Linux; the calibration pipeline
+  amplifies those last bits (SLV leverage samples up to 1.7 %), and prices computed on a recalibrated market differ by up
+  to 0.07 SE. Proposed tolerance across platforms: `rtol = 1e-12` for every group that takes fixed inputs
+  (`closed_forms`, `mc_products`, `labjs`, and later the native engine's CPU groups); for the groups that recalibrate
+  (`calibration_simulated`, `presets_simulated`, `structured_extra`), Monte Carlo values within 0.1 SE and fitted
+  parameters within `rtol = 2e-2`, checked by a dedicated comparison, not bit for bit. Within one platform the rule
+  stays equality to the last bit. To be confirmed at the A0 checkpoint.
 - **CI under 5 minutes**, measured: `pytest -m "not slow and not gpu and not lake"` with xdist on a synthetic
   mini-lake generated deterministically by the tests (no binary fixture), plus the CI golden groups.
 - **The full suite and the GPU on the machine**: `optlab check full` (the real lake, about 30 minutes) and `optlab check

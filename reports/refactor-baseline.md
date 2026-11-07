@@ -88,10 +88,57 @@ Largest (radon): `structured/costs.py desk_price` 80, `risk/engine.py run_group`
 
 ## 6. Business times (reference, Windows native, GPU warmed)
 
-*Pending*: quote (`structured_examples.py --quick`), showcase book valuation and Greeks (GPU, Standard), 1-day VaR of
-the showcase, `bench_accel.py`.
+Run in sequence on an otherwise idle machine, after a GPU warm-up of 90 s (499 Phoenix quotes on the GPU), with the
+CUDA library built from this commit (`cmake --build build --config Release`, 65 s). The showcase runs go through the
+desk's own routes (`Desk`, `RiskApi`) on a copy of `optlab-data/showcase`, market `SPX-20261104T1600-8b7fa10118`,
+engine `gpu`, `--workers 6`. The SM clock sampled between steps read 300 to 765 MHz (maximum 2,145): these workloads
+alternate CPU and GPU, so the card never stays at full clock; the numbers are what the desk gets.
 
-## 7. How to reproduce
+| Measure | Time | Result (same as the golden files) |
+|---|---|---|
+| Six presets quoted on the SPX calibration, GPU, 100,000 paths | 2.1 s in all | `presets_spx_gpu` |
+| `structured_examples.py --quick` (NumPy, 20,000 paths) | 29 s | BRC quote 0.94 s, reverse convertible 0.49 s, Phoenix 24M by model 0.0 to 0.7 s |
+| Showcase book, value with delta and vega (Standard) | 11.6 s | -56,390,954 ± 10,087; reserves left 571,911; net -56,962,865 |
+| Showcase Greeks (`POST /api/risk/run`, Standard, node vegas for SPX) | 147.4 s | `showcase_book` (123 s measured by the risk session on 7 November) |
+| Showcase VaR (`POST /api/risk/var`: Taylor-check Greeks, stressed window search, three horizons; 5 processes on the GPU) | 768.8 s | 1 day 573,576 (SE 3,275), ES 643,073, on 27/05/2025; 10 days 1,768,567; stressed 1,508,111 (29/03/2019 - 07/04/2020): equal to the last digit to `reports/risk.md` (620 s in script, 13 min 12 s from the desk button) |
+| `bench_accel.py` (1,000,000 paths, batches of 50,000) | 277 s | table below |
+
+`bench_accel.py`, wall time per quote of 1,000,000 paths:
+
+| Case | NumPy, 1 worker | NumPy, 6 workers | CPU engine | GPU engine |
+|---|---|---|---|---|
+| Phoenix 2y, LV | 34.10 s | 13.23 s | 2.98 s | 0.33 s |
+| Phoenix 2y, SLV | 26.23 s | 6.06 s | 3.69 s | 0.35 s |
+| BRC 1y daily, LV | 23.52 s | 7.45 s | 1.86 s | 0.24 s |
+| Phoenix 2y worst-of 3, LV | 100.09 s | 38.58 s | 5.96 s | 0.54 s |
+| SLV leverage 1y, 200,000 particles | 4.45 s | | 1.36 s | 0.24 s |
+
+NumPy and the native engines draw different normals, so their prices differ within the SE (for example 99.0067 against
+99.0137 ± 0.0120); the CPU and GPU engines agree to the last digit shown.
+
+## 7. Windows against Linux (golden numbers)
+
+The versioned groups recomputed under Linux (WSL2 Ubuntu 24.04, kernel 6.18, Python 3.14.7, the same numpy 2.5.4,
+scipy 1.18.1, pandas 3.1.0 wheels, scipy-openblas on both) and compared with the Windows recording
+(`golden.py check --dump`):
+
+| Group | Differing floats | Max relative gap | Max gap of a Monte Carlo value, in its SE |
+|---|---|---|---|
+| `closed_forms` | 5 (Heston Fourier only) | 2.6e-14 | — |
+| `mc_products` (fixed models, including an SLV leverage of 20,000 particles) | 19 | 1.7e-14 | 5.7e-14 |
+| `calibration_simulated` | 566 | 1.7e-2 (SLV leverage samples); SVI parameters 1e-8 to 1e-6 | — |
+| `presets_simulated` (on that calibration) | 28 | 4.9e-5 | 7.5e-3 |
+| `structured_extra` (on that calibration) | 172 | 1.65e-2 (the SLV provision line) | 7.0e-2 |
+
+Reading: the closed forms and every Monte Carlo pricer with fixed inputs differ only in the last bits of libm
+(1e-14). The calibration pipeline amplifies those bits: the SVI and Heston least-squares fits move by 1e-8 to 1e-6, and
+the SLV leverage of the particle method (40,000 particles in this golden) moves by up to 1.7 % at sampled points; prices
+computed on that calibration then differ by up to 0.07 SE (the SLV provision of a Phoenix: 0.326 against 0.321 % of
+notional, SE 0.075). This is above the 0.01 SE the handoff expected for Monte Carlo numbers; it comes from the
+recalibration on each platform, not from the pricers. The tolerance across platforms is proposed in ADR-0017 and fixed at
+the A0 checkpoint.
+
+## 8. How to reproduce
 
 ```bash
 uvx ruff@0.14.4 check optlab scripts tests space cuda/bench --select C901 --config 'lint.mccabe.max-complexity=15'
