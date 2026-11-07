@@ -118,9 +118,19 @@ def routes(desk: Desk):
     ]
 
 
+def static_files(root: Path = STATIC) -> dict[str, Path]:
+    """The files the page may load, keyed by their path in the URL. A request is looked up here and never joined to a
+    path, so no URL (`..`, a drive, a link) reaches a file outside the folder."""
+    root = root.resolve()
+    return {
+        p.relative_to(root).as_posix(): p for p in root.rglob("*") if p.is_file() and p.resolve().is_relative_to(root)
+    }
+
+
 def make_handler(desk: Desk, token: str | None = None):
     table = [(meth, re.compile(f"^{pat}$"), fn) for meth, pat, fn in routes(desk)]
     risk = desk.risk
+    files = static_files()
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "optlab-desk"
@@ -219,10 +229,11 @@ def make_handler(desk: Desk, token: str | None = None):
             self._send(200, html.encode("utf-8"), "text/html; charset=utf-8", extra | {"Content-Disposition": "inline"})
 
         def _static(self, path, extra):
+            nonlocal files
             rel = "index.html" if path in ("", "/") else path.lstrip("/")
-            target = (STATIC / rel).resolve()
-            if not target.is_relative_to(STATIC) or not target.is_file():
-                target = STATIC / "index.html"  # client-side routes fall back to the page
+            if rel not in files:
+                files = static_files()  # a file added since the start is found; a miss costs one walk of the folder
+            target = files.get(rel) or STATIC / "index.html"  # client-side routes fall back to the page
             ctype = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
             if target.suffix == ".js":
                 ctype = "text/javascript"
