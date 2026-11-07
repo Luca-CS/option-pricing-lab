@@ -56,3 +56,19 @@ pythonPlatform = "All"  # the same counts on the Windows and Linux runners
 typeCheckingMode = "standard"
 venvPath = "."
 venv = ".venv"
+
+# Boundaries that already hold in v0; the layers of ADR-0004 replace them when the packages split (A2)
+[tool.importlinter]
+root_package = "optlab"
+
+[[tool.importlinter.contracts]]
+name = "Only the desk imports the desk"
+type = "forbidden"
+source_modules = ["optlab.structured", "optlab.marketdata", "optlab.risk"]
+forbidden_modules = ["optlab.app"]
+
+[[tool.importlinter.contracts]]
+name = "Products and market data do not import the risk engine"
+type = "forbidden"
+source_modules = ["optlab.structured", "optlab.marketdata"]
+forbidden_modules = ["optlab.risk"]

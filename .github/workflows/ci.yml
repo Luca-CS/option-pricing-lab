@@ -1,0 +1,118 @@
+# Lint, types, the offline tests and the CPU engine, on Linux and Windows hosted runners (ADR-0018).
+# Never a self-hosted runner: GPU and real-lake checks run on the machine (`optlab check gpu`, `check full`).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.13.1"
+  PYTHON_VERSION: "3.14.7"
+  UV_LOCKED: "1"
+
+jobs:
+  lint:
+    name: lint and types
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: "26"
+      - name: Install
+        run: uv sync --locked --all-extras
+      - name: ruff check
+        run: uv run --no-sync ruff check . --output-format github
+      - name: ruff format
+        run: uv run --no-sync ruff format --check .
+      - name: import contracts
+        run: uv run --no-sync lint-imports
+      - name: pyright against its baseline
+        env:
+          PYRIGHT_PYTHON_GLOBAL_NODE: "1"
+        run: uv run --no-sync python tools/pyright_baseline.py
+
+  test:
+    name: tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      OPTLAB_DATA: ${{ github.workspace }}/../optlab-data-ci  # empty: no real lake, no showcase (ADR-0017)
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: "26"
+      - name: Install
+        run: uv sync --locked --all-extras
+      - name: Offline tests
+        run: uv run --no-sync pytest -m "not slow and not gpu and not lake and not native" -n auto -q -rs --durations=15
+      - name: Golden numbers (versioned groups)
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            uv run --no-sync python tests/golden/golden.py check
+          else
+            uv run --no-sync python tests/golden/golden.py check --group closed_forms mc_products labjs --rtol 1e-12
+          fi
+
+  native-cpu:
+    name: CPU engine (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - name: Configure (no CUDA)
+        run: cmake -S cuda -B build -DOPTLAB_WITH_CUDA=OFF -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build --config Release --parallel
+      - name: Engine tests
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Install
+        run: uv sync --locked --all-extras
+      - name: Python against the CPU engine
+        shell: bash
+        run: |
+          lib=$(find build -name 'optlab_cuda_c.dll' -o -name 'liboptlab_cuda_c.so' | head -1)
+          echo "engine library: $lib"
+          OPTLAB_CUDA_LIB="$PWD/$lib" uv run --no-sync pytest -m "native and not gpu and not slow" -n auto -q -rs
