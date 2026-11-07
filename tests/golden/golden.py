@@ -277,6 +277,50 @@ def structured_extra() -> dict:
     return out
 
 
+def _node() -> str:
+    node = shutil.which("node") or os.environ.get("OPTLAB_NODE")
+    if not node:
+        raise RuntimeError("node is not on PATH (or set OPTLAB_NODE)")
+    return node
+
+
+def labjs() -> dict:
+    """The JavaScript pricers of the Pages demo (docs/lab.js), frozen until session 2 replaces them."""
+    js = (ROOT / "docs" / "lab.js").read_text(encoding="utf-8")
+    cases = [(100, 100, 1.0, 0.04, 0.01, 0.20, "true"), (100, 90, 0.5, 0.03, 0.0, 0.35, "false"),
+             (100, 120, 2.0, 0.05, 0.02, 0.15, "true"), (100, 105, 0.25, 0.0, 0.01, 0.25, "false")]
+    h = '{"v0": 0.0228466, "kappa": 3.0892636, "theta": 0.0537246, "xi": 1.3077452, "rho": -0.6879607}'
+    parts = {
+        "bs": [f"W.bs({S},{K},{T},{r},{q},{v},{c}).price" for S, K, T, r, q, v, c in cases],
+        "crr": [f"[W.crr({S},{K},{T},{r},{q},{v},{c},400,true),W.crr({S},{K},{T},{r},{q},{v},{c},400,false)]"
+                for S, K, T, r, q, v, c in cases],
+        "american_pde": [f"W.american({S},{K},{T},{r},{q},{v},{c})" for S, K, T, r, q, v, c in cases],
+        "exercise_boundary": ["W.exerciseBoundary(100,100,1,0.04,0.01,0.2,false)"],
+        "geo_asian": [f"W.geoAsian({S},{K},{T},{r},{q},{v},12,{c})" for S, K, T, r, q, v, c in cases],
+        "levy_asian": [f"W.levyAsian(100,{K},1.0,0.04,0.01,0.2,12,true)" for K in (90, 100, 110)],
+        "asian_mc": ["W.asianMC(100,100,1.0,0.04,0.01,0.2,12,true,40000,7)"],
+        "barrier": [f"[W.barrier(100,100,{H},1.0,0.04,0.01,0.25,'{kind}',true,false),"
+                    f"W.barrier(100,100,{H},1.0,0.04,0.01,0.25,'{kind}',true,true)]"
+                    for kind, H in (("down-out", 80), ("down-in", 85), ("up-out", 120), ("up-in", 130))],
+        "heston_fourier": [f"W.hestonPrice(100,{K},{T},0.04,0.01,{h},{c})"
+                           for K, T, c in ((100, 1.0, "true"), (119, 1.0, "true"), (85, 0.5, "false"), (110, 2.0, "false"))],
+        "lsm": ["(() => { const st = {product: 'american', call: false, model: 'bs', K: 100, T: 1, v: 0.2, r: 0.04, q: 0.01};"
+                " const c = W.convergence(W.payoffs(st, W.simulate(st, 20000, 50, 3)).pay, 100); return c[c.length - 1]; })()"],
+        "heston_qe_barrier": ["(() => { const st = {product: 'european', call: true, model: 'heston', K: 119, T: 1, v: 0.2,"
+                              f" r: 0.04, q: 0.01, heston: {h}}};"
+                              " const c = W.convergence(W.payoffs(st, W.simulate(st, 40000, 252, 5)).pay, 100);"
+                              " return c[c.length - 1]; })()"],
+    }
+    expr = "{" + ",".join(f'"{k}": [{",".join(v)}]' for k, v in parts.items()) + "}"
+    script = f"global.window = {{}};\n{js}\nconst W = window.PricerWidget;\nconsole.log(JSON.stringify({expr}));"
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "golden.js"
+        path.write_text(script, encoding="utf-8")
+        out = subprocess.run([_node(), str(path)], capture_output=True, text=True, check=True, timeout=300)
+    version = subprocess.run([_node(), "--version"], capture_output=True, text=True, check=True).stdout.strip()
+    return {"node": version.split(".")[0], "values": json.loads(out.stdout)}
+
+
 # ---------------------------------------------------------------------------------------------------- local groups
 
 def _spx_context():
@@ -409,6 +453,7 @@ GROUPS = {
     "calibration_simulated": ("ci", calibration_simulated),
     "presets_simulated": ("ci", presets_simulated),
     "structured_extra": ("ci", structured_extra),
+    "labjs": ("ci", labjs),
     "presets_spx_numpy": ("local", presets_spx_numpy),
     "lake_derived": ("local", lake_derived),
     "pnl_cascade": ("local", pnl_cascade),
