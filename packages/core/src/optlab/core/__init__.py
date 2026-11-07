@@ -1,4 +1,11 @@
-"""optlab: option pricing under Black-Scholes, Heston, Dupire local volatility and Heston SLV."""
+"""optlab.core: option pricing under Black-Scholes, Heston, Dupire local volatility and Heston SLV.
+
+Closed forms, the market container, the models and their simulation, the Monte Carlo pricers and the calibration
+chain (SSVI, SVI, Heston, SLV leverage), plus the reference data every other package shares: the instrument registry
+(`instruments`), the snapshot type (`snapshot`), the correlation repair (`correlation`) and the registry of compiled
+engines (`engines`). It needs numpy and scipy only, does no I/O and starts no thread at import, and imports no other
+optlab package (ADR-0004). The names below are its public API; the modules hold the rest.
+"""
 
 from optlab.core.blackscholes import (
     barrier_price,
