@@ -83,11 +83,12 @@ jobs:
           uv run --no-sync python -c "import platform, numpy;
           cpu = next((l.split(':', 1)[1].strip() for l in open('/proc/cpuinfo') if l.startswith('model name')), '') if platform.system() == 'Linux' else platform.processor();
           print(platform.platform(), '|', cpu); numpy.show_runtime()"
-      - name: Golden numbers with fixed inputs
-        run: uv run --no-sync python tests/golden/golden.py check --group closed_forms mc_products labjs --rtol 1e-12
-      - name: Golden numbers that recalibrate (reported, not blocking, until ADR-0017 sets their tolerance across machines)
+      - name: Golden numbers, across machines (ADR-0017)
+        run: uv run --no-sync python tests/golden/golden.py check --across --group closed_forms mc_products labjs presets_simulated
+      - name: Golden numbers whose SLV leverage is recalibrated (reported, not blocking, pending ADR-0017)
+        # one SLV price each moves past 0.1 SE on Linux (0.32 and 0.13 SE): the rule for them waits for Luca
         continue-on-error: true
-        run: uv run --no-sync python tests/golden/golden.py check --group calibration_simulated presets_simulated structured_extra
+        run: uv run --no-sync python tests/golden/golden.py check --across --group calibration_simulated structured_extra
 
   native-cpu:
     name: CPU engine (${{ matrix.os }})

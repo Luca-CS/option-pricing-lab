@@ -24,6 +24,11 @@ a stranger, on Luca's machine. GitHub is the only external service allowed.
   github-actions, docker; npm in session 2).
 - Repository settings (announced to Luca): `main` protected (PR required, required checks, no force push, no
   deletion), secret scanning and push protection, private vulnerability reporting, `SECURITY.md`.
+  **Decided by Luca (7 November 2026)**: no one else will be added to the repository, so `main` stays unprotected and
+  private vulnerability reporting stays off; secret scanning, push protection and the dependency graph are on, the
+  workflows' default token is read-only, and GitHub's default approval of first-time contributors' workflows stays.
+  `SECURITY.md` asks for a contentless issue and a private channel instead. The sessions keep their own rule: never a
+  push to `main`, never a force push; only Luca merges.
 
 ## Consequences
 
