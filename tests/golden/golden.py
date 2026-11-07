@@ -23,6 +23,7 @@ import json
 import math
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -544,7 +545,9 @@ def main(argv=None) -> int:
         else:
             gold = json.loads(target.read_text(encoding="utf-8"))
             d = diff(gold["values"], values, args.rtol)
-            print(f"{g}: {'OK' if not d else f'{len(d)} differences'} ({seconds:.1f} s, rtol {args.rtol:g})")
+            rels = [float(x) for line in d for x in re.findall(r"\(rel ([0-9.e+-]+)\)", line)]
+            worst = f", max rel {max(rels):.2e}" if rels else ""
+            print(f"{g}: {'OK' if not d else f'{len(d)} differences{worst}'} ({seconds:.1f} s, rtol {args.rtol:g})")
             for line in d[:20]:
                 print("   ", line)
             failed += bool(d)
