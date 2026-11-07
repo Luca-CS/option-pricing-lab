@@ -19,7 +19,8 @@ from urllib.parse import parse_qs, urlparse
 
 from ..log import get_logger
 from .api import ApiError, Desk
-from .report import book_report, desk_snapshot, quote_report
+from .report import book_report, desk_snapshot, quote_report, risk_report
+from .risk_api import risk_routes
 
 STATIC = Path(__file__).resolve().parent / "static"
 LOG = get_logger(__name__)
@@ -76,11 +77,13 @@ def routes(desk: Desk):
         ("PUT", r"/api/basket", lambda m, q, b: desk.put_basket(b)),
         ("POST", r"/api/script/check", lambda m, q, b: desk.script_check(b)),
         ("POST", r"/api/script/price", lambda m, q, b: desk.script_price(b)),
+        *risk_routes(desk),
     ]
 
 
 def make_handler(desk: Desk, token: str | None = None):
     table = [(meth, re.compile(f"^{pat}$"), fn) for meth, pat, fn in routes(desk)]
+    risk = desk.risk
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "optlab-desk"
@@ -165,6 +168,8 @@ def make_handler(desk: Desk, token: str | None = None):
                     html = book_report(desk)
                 elif path == "/report/desk":
                     html = desk_snapshot(desk)
+                elif path == "/report/risk":
+                    html = risk_report(risk)
                 elif m := re.match(r"^/report/quote/(\w+)$", path):
                     html = quote_report(desk.saved_quote(m[1]))
                 else:

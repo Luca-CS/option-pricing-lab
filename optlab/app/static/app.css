@@ -345,3 +345,6 @@ th[aria-sort="descending"] .sort::after { content: "↓"; color: var(--accent); 
 .editor textarea:focus-visible { outline: none; }
 .kbd-hint { font-family: var(--mono); font-size: 11.5px; padding: 1px 5px; border: 1px solid var(--line-strong);
   border-radius: 4px; color: var(--muted); }
+
+/* risk: heatmap cells carry their value as text; the colour only adds the size and the sign */
+table.data.heat td.num { font-variant-numeric: tabular-nums; }

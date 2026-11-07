@@ -310,3 +310,17 @@ def desk_snapshot(desk, fragment: bool = False, note: str | None = None) -> str:
             f"<div class='cols'><div><h2>Next 60 days</h2>{events_html}</div>"
             f"<div><h2>Recent quotes</h2>{quotes_html}</div></div>{others}")
     return _page("Desk snapshot", body, fragment)
+
+
+def risk_report(risk) -> str:
+    """The last stored runs of the risk engine: Greeks, ladder, scenarios, VaR, and the explained P&L."""
+    from ..risk import report as R
+
+    def last(kind):
+        runs = risk.store.runs(kind, latest=False)
+        return risk.store.run(runs[-1]["run_id"])["payload"] if runs else None
+
+    cum = risk.pnl(None, None)
+    body = ("<h1>Risk and P&L</h1>" + R.greeks_section(last("risk")) + R.ladder_section(last("ladder"))
+            + R.scenarios_section(last("scenarios")) + R.var_section(last("var")) + R.pnl_section(cum))
+    return _page("Risk and P&L", body)
