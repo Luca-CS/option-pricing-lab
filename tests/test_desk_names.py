@@ -55,6 +55,7 @@ def options(**kw):
     return {"precision": "quick", "n_paths": PATHS, "greeks": False, "control": False, "costs": False, **kw}
 
 
+@pytest.mark.slow
 def test_a_sheet_on_another_name_is_priced_on_that_names_market(desk):
     q = wait(desk, desk.quote({"sheet": body(underlying="AAPL"), "options": options(model="lv")})["job"])
     ctx, _ = context_at(desk.lake, "AAPL", DAY, layer="reconstructed")
@@ -70,6 +71,7 @@ def test_a_sheet_on_another_name_is_priced_on_that_names_market(desk):
     )  # another surface, another coupon
 
 
+@pytest.mark.slow
 def test_a_market_without_a_leverage_calibrates_on_first_slv_use(desk):
     ctx, _ = desk.names.context("AAPL", DAY)
     assert ctx.leverage_flat and ctx.slv.leverage.values.shape[0] == 1
@@ -146,6 +148,7 @@ def test_a_basket_without_the_active_name_discounts_on_its_first_name(desk):
     )
 
 
+@pytest.mark.slow
 def test_the_book_prices_one_group_per_name_and_the_worst_ofs(desk):
     tids = []
     for sheet, rate in (
@@ -187,6 +190,7 @@ def test_a_book_trade_on_a_name_without_a_market_says_which(desk):
         desk.price_book({"options": options()})  # nothing live is left
 
 
+@pytest.mark.slow
 def test_name_markets_keep_one_context_per_name_and_date(tmp_path):
     lake = Lake(tmp_path / "lake")
     fill_observed(lake, pd.bdate_range("2019-01-01", "2020-12-31"))

@@ -83,6 +83,7 @@ def brc_2026():
     return Trade.from_term_sheet("BRC-2026", struck_sheet(sheet, strike), -1.0, strike, strike)
 
 
+@pytest.mark.lake
 def test_the_cascade_adds_up_to_the_total_pnl_to_the_cent_on_the_crash_day(lake, tmp_path):
     store = RiskStore(tmp_path / "risk.sqlite")
     t = brc_2020()
@@ -100,6 +101,7 @@ def test_the_cascade_adds_up_to_the_total_pnl_to_the_cent_on_the_crash_day(lake,
     assert out["unexplained_share"] > 0.05
 
 
+@pytest.mark.lake
 def test_eod_is_stored_replayed_bit_for_bit_and_the_backfill_is_idempotent(lake, tmp_path):
     store = RiskStore(tmp_path / "risk.sqlite")
     trades = [brc_2026(), phoenix_2026()]
@@ -119,6 +121,7 @@ def test_eod_is_stored_replayed_bit_for_bit_and_the_backfill_is_idempotent(lake,
     assert len(cum["curve"]) == 2
 
 
+@pytest.mark.lake
 def test_on_a_quiet_day_the_greeks_explain_most_of_the_pnl(lake, tmp_path):
     store = RiskStore(tmp_path / "risk.sqlite")
     out = P.explain_day(lake, [brc_2026()], "2026-11-03", "2026-11-04", store, SETTINGS)

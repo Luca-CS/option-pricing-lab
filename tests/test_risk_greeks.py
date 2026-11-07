@@ -43,6 +43,7 @@ def vanillas():
     return compute([RiskGroup("SPX", b, ctx, 1)], options=GreekOptions(kxt="single"))
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("i, K, kind, q", [(0, 100.0, "call", 1.0), (1, 95.0, "put", -2.0)])
 def test_vanilla_greeks_match_black_scholes(vanillas, i, K, kind, q):
     T = 1.0
@@ -120,6 +121,7 @@ def test_sticky_strike_and_moneyness_deltas_on_a_smile():
     )  # a put on a downward skew: the smile moving with the spot lifts its vol as it rises
 
 
+@pytest.mark.slow
 def test_smoothed_digital_greeks_under_monte_carlo_match_its_call_spread():
     """The digital is smoothed as a call spread over K (1 +- 0.25 %) (the evaluator's centred ramp): its Monte Carlo Greeks match
     that spread's closed forms within 4 SE, and the smoothing bias on the price is reported."""
@@ -155,6 +157,7 @@ def test_smoothed_digital_greeks_under_monte_carlo_match_its_call_spread():
     within(bias, spread(S0, VOL) - exact, bias_se, floor=1e-3)
 
 
+@pytest.mark.slow
 def test_an_autocall_the_day_before_its_observation_drops_the_event_in_the_roll():
     """Observed tomorrow at 100 % and paid tomorrow: at a frozen spot of 100 the roll calls it, its value becomes cash."""
     ctx = flat_ctx()
@@ -220,6 +223,7 @@ def test_worst_of_cross_gamma_and_correlation_match_the_bivariate_reference():
     np.testing.assert_allclose(g["delta|*|"][0], g["delta|SPX|"][0] + g["delta|SX5E|"][0], rtol=1e-12)
 
 
+@pytest.mark.slow
 def test_noise_flags_and_units():
     ctx = flat_ctx()
     b = book(vanilla(100.0, 365))

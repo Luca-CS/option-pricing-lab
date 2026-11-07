@@ -14,9 +14,26 @@ from optlab.structured import PricingContext, compile_sheet, engine, preset, pri
 from optlab.structured.localcorr import LocalCorrelation, StochasticMix
 from optlab.structured.multiasset import Basket, simulate_basket
 
-needs_engine = pytest.mark.skipif(not native.available(), reason="path engine not built (cuda/)")
-needs_gpu = pytest.mark.skipif(not native.gpu_available(), reason="no CUDA device")
-BACKENDS = [pytest.param("cpu", marks=needs_engine), pytest.param("gpu", marks=needs_gpu)]
+ENGINE_MARKS = [pytest.mark.native, pytest.mark.skipif(not native.available(), reason="path engine not built (cuda/)")]
+GPU_MARKS = [
+    pytest.mark.native,
+    pytest.mark.gpu,
+    pytest.mark.skipif(not native.gpu_available(), reason="no CUDA device"),
+]
+
+
+def _marked(marks):
+    def apply(f):
+        for m in marks:
+            f = m(f)
+        return f
+
+    return apply
+
+
+needs_engine = _marked(ENGINE_MARKS)
+needs_gpu = _marked(GPU_MARKS)
+BACKENDS = [pytest.param("cpu", marks=ENGINE_MARKS), pytest.param("gpu", marks=GPU_MARKS)]
 CTX = PricingContext.from_calibration()
 K = np.array([80.0, 90.0, 100.0, 110.0, 120.0])
 

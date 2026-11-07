@@ -279,6 +279,7 @@ def test_the_form_loads_the_defaults_of_a_sheet(desk):
     assert next(sec for sec in f["form"]["sections"] if sec["name"] == "costs")
 
 
+@pytest.mark.slow
 def test_a_quote_shows_its_lines_and_the_report_too(desk):
     q = wait(
         desk,
@@ -306,6 +307,7 @@ def test_a_quote_shows_its_lines_and_the_report_too(desk):
     assert q["sheet"]["costs"]["vol"] == -0.01  # the override stays with the sheet
 
 
+@pytest.mark.slow
 def test_starting_values_are_against_the_seller_of_a_phoenix(desk):
     q = wait(
         desk,

@@ -251,6 +251,7 @@ def test_upside_products_match_closed_forms(name, changes):
     assert q.upfront == pytest.approx(ref, abs=1e-8)
 
 
+@pytest.mark.slow
 def test_airbag_quote_on_spx_in_swap_format():
     sheet = preset("airbag", **{"wrapper.format": "swap"})
     q = quote(sheet, SPX, n_paths=N_MC)
@@ -269,6 +270,7 @@ def mc_bs(sheet, n_paths=N_MC, seed=61, batch=25_000):
     )
 
 
+@pytest.mark.slow
 def test_quadrature_reference_reproduces_the_rc_closed_form():
     from _structured_refs import autocall_reference
 
@@ -304,6 +306,7 @@ def test_single_date_autocall_is_a_digital_plus_a_put():
     assert compile_sheet(sheet, BS_CTX.valuation).script.count("terminate") == 0
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "name, changes",
     [
@@ -323,6 +326,7 @@ def test_autocall_matches_backward_quadrature(name, changes):
     assert within(mc, ref), (mc.price, mc.stderr, ref)
 
 
+@pytest.mark.slow
 def test_autocall_with_daily_knock_in_matches_backward_quadrature():
     from _structured_refs import autocall_reference
 
@@ -410,6 +414,7 @@ def test_shifted_surface_shifts_implied_vols_and_keeps_local_vol_consistent():
     np.testing.assert_allclose(wkk, (s.w(k + h, T) - 2 * w + s.w(k - h, T)) / h**2, rtol=1e-4)
 
 
+@pytest.mark.slow
 def test_quote_with_greeks_uses_the_policy_model():
     q = quote(preset("reverse_convertible", **{"downside.barrier": 0.7}), BS_CTX, control=None, with_greeks=True)
     assert q.greeks.method == "replication" and q.greeks.vega < 0 < q.greeks.delta
@@ -445,6 +450,7 @@ def test_quote_script_carries_the_solved_coupon():
     assert np.isfinite(again.price)
 
 
+@pytest.mark.slow
 def test_slv_vega_by_recalibration_matches_the_smile_vega_of_a_european_product():
     # a calibrated SLV reprices vanillas, so on a European payoff its vega is the vega of the smile
     from optlab.structured.greeks import greeks

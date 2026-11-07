@@ -107,6 +107,7 @@ def test_worst_put_reference_reduces_to_black_scholes():
 # --- autocalls ---
 
 
+@pytest.mark.slow
 def test_identical_names_with_correlation_one_give_the_single_name_autocall():
     ctx = context(1.0, vol2=VOL, q2=0.01)
     sheet = worst("phoenix", **{"coupon.rate": 0.08, "coupon.memory": True})
@@ -116,6 +117,7 @@ def test_identical_names_with_correlation_one_give_the_single_name_autocall():
     assert abs(res.price - ref) <= 4 * res.stderr, (res.price, res.stderr, ref)
 
 
+@pytest.mark.slow
 def test_identical_names_daily_knock_in_gives_the_single_name_autocall():
     ctx = context(1.0, vol2=VOL, q2=0.01)
     changes = {
@@ -152,6 +154,7 @@ def test_worst_of_fields_and_script():
         worst("phoenix", **{"general.underlyings": ("SPX", "S&P")})
 
 
+@pytest.mark.slow
 def test_worst_of_quote_uses_the_basket_policy():
     spx = BasketContext.with_spx({"SX5E": (100.0, 0.03, 0.03, 0.22)}, [[1, 0.7], [0.7, 1]])
     q = quote(worst("phoenix", **{"wrapper.solve": "coupon"}), spx, n_paths=20_000, batch=10_000)

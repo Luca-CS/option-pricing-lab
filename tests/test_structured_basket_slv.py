@@ -42,6 +42,7 @@ def black_call(market, surface, K, T):
     return float(black_price(F, K, T, vol, 1.0, "call"))
 
 
+@pytest.mark.slow
 def test_each_name_reprices_its_vanillas_within_four_standard_errors(ctx):
     paths = simulate_basket(ctx.model("slv", 1.0), TIMES, 400_000, 7)
     for name, surface in (("SPX", SPX.surface), ("AAA", ctx.vols["AAA"])):
@@ -106,6 +107,7 @@ def test_one_name_as_a_basket_is_the_same_law_as_the_single_name():
     assert abs(together[:, -1].std() - alone[:, -1].std()) < 0.5
 
 
+@pytest.mark.slow
 def test_the_spot_draws_are_those_of_local_vol(ctx):
     lv = simulate_basket(ctx.model("lv", 1.0), TIMES, 40_000, 9)
     driven = simulate_basket(ctx.model("slv", 1.0, spot_driven=True), TIMES, 40_000, 9)
@@ -116,6 +118,7 @@ def test_the_spot_draws_are_those_of_local_vol(ctx):
     assert np.array_equal(lv["SPX"], again["SPX"])  # local vol takes no other draw
 
 
+@pytest.mark.slow
 def test_the_worst_of_has_its_slv_provision_on_common_numbers(ctx):
     s = preset(
         "phoenix",

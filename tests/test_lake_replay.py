@@ -78,6 +78,7 @@ def phoenix(lake):
     return trade, info, replay(lake, trade, cfg=CFG, inception=info)
 
 
+@pytest.mark.slow
 def test_strike_solves_on_that_dates_market_then_fixes_the_coupon(brc):
     trade, info, _ = brc
     sheet = trade.term_sheet()
@@ -112,6 +113,7 @@ def sheet_final(sheet):
     return compile_sheet(sheet, sheet.get("general.strike_date")).maturity
 
 
+@pytest.mark.slow
 def test_phoenix_is_called_on_the_first_observation_at_or_above_its_trigger(lake, phoenix):
     trade, info, result = phoenix
     sheet = trade.term_sheet()
@@ -168,6 +170,7 @@ def test_explained_pnl_is_published_with_its_residual(brc):
     assert g["delta"] > 0  # a note holder is long the index
 
 
+@pytest.mark.slow
 def test_valuation_dates_use_only_past_fixings(lake):
     """A value before the knock-in does not change when the fixings after it are different."""
     sheet = preset("barrier_reverse_convertible", **{"general.maturity_months": 12, "downside.barrier": 0.7})
@@ -180,6 +183,7 @@ def test_valuation_dates_use_only_past_fixings(lake):
     assert (both["value_e"] == both["value_f"]).all()
 
 
+@pytest.mark.slow
 def test_book_adds_positions_by_date(lake):
     a, _ = strike_trade(
         lake,
@@ -207,6 +211,7 @@ def test_book_adds_positions_by_date(lake):
     assert len(out["results"]) == 2
 
 
+@pytest.mark.slow
 def test_worst_of_replay_on_two_names(lake):
     sheet = preset(
         "phoenix",
@@ -238,6 +243,7 @@ def test_struck_sheet_uses_the_place_of_the_underlying():
     assert struck_sheet(worst, STRIKE).get("general.calendar") == "weekend"
 
 
+@pytest.mark.slow
 def test_cost_table_is_measured(lake, brc):
     trade, _, _ = brc
     out = cost_table(lake, "SPX", dt.date(2020, 3, 2), trade, n_paths=(1000,), particles=(5000,))

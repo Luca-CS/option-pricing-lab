@@ -251,6 +251,7 @@ def fake_fetch(url, headers=None):
     return ECB.encode()
 
 
+@pytest.mark.slow
 def test_loads_are_idempotent_end_to_end(lake):
     def run():
         out = load_cboe(lake, fake_fetch) + load_stoxx(lake, fake_fetch) + load_fred(lake, fake_fetch, lambda: None)
@@ -335,6 +336,7 @@ def test_rule_calendars_know_the_special_closures_and_eurex():
     assert eurex.is_business_day(dt.date(2020, 7, 3))  # a US holiday
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("script", ["lake_update", "lake_derive", "lake_surface_test", "lake_replay"])
 def test_lake_scripts_start_from_their_path_alone(script):
     import os

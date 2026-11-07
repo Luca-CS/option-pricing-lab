@@ -13,7 +13,7 @@ from optlab import barrier_price, barrier_shift_discrete, binomial_price, bs_pri
 
 JS = Path(__file__).resolve().parent.parent / "docs" / "lab.js"
 NODE = shutil.which("node")
-pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
+pytestmark = [pytest.mark.node, pytest.mark.skipif(NODE is None, reason="node is not installed")]
 
 CASES = [  # S, K, T, r, q, vol, call
     (100, 100, 1.0, 0.04, 0.01, 0.20, True),

@@ -36,6 +36,7 @@ def closes(name):
     return pd.Series(rows["close"].to_numpy(), index=pd.to_datetime(rows["obs_date"]))
 
 
+@pytest.mark.lake
 def test_splits_are_continuous_in_the_real_closes():
     actions = LAKE.read("corporate_actions", where="kind = 'split'")
     assert {"AAPL", "AMZN", "GOOGL"} <= set(actions["instrument"])
@@ -43,6 +44,7 @@ def test_splits_are_continuous_in_the_real_closes():
     assert check_splits(prices, actions) == []
 
 
+@pytest.mark.lake
 def test_a_worst_of_spx_sx5e_on_the_real_lake_is_quanto_with_its_labels():
     if not LAKE.has("fx_vols"):
         pytest.skip("no FX in this lake: scripts/lake_update.py --only fx, then scripts/lake_derive.py --only fx")
@@ -57,6 +59,7 @@ def test_a_worst_of_spx_sx5e_on_the_real_lake_is_quanto_with_its_labels():
     assert float(ctx.markets["SX5E"].D(1.0)) == pytest.approx(float(ctx.markets["SPX"].D(1.0)), rel=1e-4)
 
 
+@pytest.mark.lake
 @pytest.mark.parametrize(
     "pair, base, quote", [("EURUSD", "EUR", "USD"), ("USDJPY", "USD", "JPY"), ("GBPUSD", "GBP", "USD")]
 )
@@ -83,6 +86,7 @@ def test_every_pair_has_forwards_at_covered_parity_on_the_real_lake(pair, base, 
     assert open_issues(LAKE, "check_name = 'no_curve'").empty
 
 
+@pytest.mark.lake
 def test_every_nyse_trading_day_has_a_close_and_no_other_day_does():
     days = closes("SPX")
     cal = CALENDARS["nyse"]
@@ -90,6 +94,7 @@ def test_every_nyse_trading_day_has_a_close_and_no_other_day_does():
     assert [d.date() for d in days.index] == expected
 
 
+@pytest.mark.lake
 def test_all_enabled_names_have_prices_and_a_surface_on_a_stress_date():
     day = dt.date(2020, 3, 23)
     for name in enabled_names():
@@ -98,6 +103,7 @@ def test_all_enabled_names_have_prices_and_a_surface_on_a_stress_date():
         assert snap.provenance["surface"]["layer"] == "reconstructed"
 
 
+@pytest.mark.lake
 @pytest.mark.parametrize("day", [dt.date(2020, 3, 23), dt.date(2022, 7, 1)])
 def test_erasing_the_future_changes_no_past_price_on_real_data(tmp_path, day):
     cut = truncated_copy(
@@ -123,12 +129,14 @@ def test_erasing_the_future_changes_no_past_price_on_real_data(tmp_path, day):
     assert (corr_a == corr_b).all()
 
 
+@pytest.mark.lake
 def test_the_market_at_a_date_uses_that_dates_close():
     px = closes("SPX")
     assert real_close(LAKE, "SPX", dt.date(2020, 3, 23)) == (px.loc["2020-03-23"], dt.date(2020, 3, 23))
     assert real_close(LAKE, "SPX", dt.date(2020, 3, 22))[1] == dt.date(2020, 3, 20)  # a Sunday: never the Monday after
 
 
+@pytest.mark.lake
 def test_a_2022_archive_day_and_a_yahoo_day_go_through_the_same_chain():
     archive = clean_day(LAKE, "SPX", quote_days(LAKE, "SPX", "historicaldata")[-1], "historicaldata")
     assert len(archive.slices) > 20 and archive.maturities.max() > 4.0
@@ -149,6 +157,7 @@ def replayed(name):
     return json.loads(path.read_text(encoding="utf-8"))[name]
 
 
+@pytest.mark.lake
 def test_the_brc_struck_in_early_2020_knocked_in_in_march_2020():
     r = replayed("BRC-2020")
     knocked = [e for e in r["events"] if e["kind"] == "knocked_in"]
@@ -158,6 +167,7 @@ def test_the_brc_struck_in_early_2020_knocked_in_in_march_2020():
     assert knocked[0]["date"].startswith("2020-03")
 
 
+@pytest.mark.lake
 def test_the_phoenix_was_called_on_the_right_date():
     r = replayed("PHX-2022")
     px = closes("SPX")
@@ -173,6 +183,7 @@ def test_the_phoenix_was_called_on_the_right_date():
     assert called[0]["date"] == str(obs)
 
 
+@pytest.mark.lake
 @pytest.mark.parametrize("name", list(REPLAYS))
 def test_flows_reconcile_with_the_lifecycle_events(name):
     r = replayed(name)
@@ -184,6 +195,7 @@ def test_flows_reconcile_with_the_lifecycle_events(name):
     assert r["explain"]["steps"] == len(r["daily"]) - 1
 
 
+@pytest.mark.lake
 def test_the_crash_keeps_its_at_the_money_level():
     """23/03/2020, against real SPY chains: at about a month the reconstruction was 5.6 points low before the slope fell with the level."""
     from optlab.marketdata.derive.surfaces import surface_at
@@ -200,6 +212,7 @@ def test_the_crash_keeps_its_at_the_money_level():
             assert abs(model - atm) < 0.04
 
 
+@pytest.mark.lake
 def test_dividends_give_the_forward_its_steps():
     from optlab.marketdata.pit import market_curves
 
@@ -211,6 +224,7 @@ def test_dividends_give_the_forward_its_steps():
     assert (jumps < -0.005).sum() >= 3  # IBM pays four times a year, each over one percent of spot
 
 
+@pytest.mark.lake
 def test_the_desk_prices_a_share_and_a_worst_of_on_their_real_surfaces(tmp_path):
     from optlab.app.api import Desk
 
@@ -233,6 +247,7 @@ def test_the_desk_prices_a_share_and_a_worst_of_on_their_real_surfaces(tmp_path)
         desk.jobs.shutdown()
 
 
+@pytest.mark.lake
 def test_the_desk_puts_a_name_paid_in_another_currency_on_its_quanto_market(tmp_path):
     if not LAKE.has("fx_vols"):
         pytest.skip("no FX in this lake")
@@ -259,6 +274,7 @@ def test_the_desk_puts_a_name_paid_in_another_currency_on_its_quanto_market(tmp_
         desk.jobs.shutdown()
 
 
+@pytest.mark.lake
 def test_slv_on_a_real_basket_reprices_each_name_once_the_noise_of_the_forward_is_out():
     from optlab.blackscholes import black_price
     from optlab.structured.multiasset import simulate_basket

@@ -75,6 +75,7 @@ def test_short_dated_out_of_the_money_calls_are_not_negative():
 # --- B4: local-linear regression of the leverage (opt-in) ---
 
 
+@pytest.mark.slow
 def test_local_linear_leverage_removes_the_atm_bias_on_spx():
     # SPX, 1e6 paths: Nadaraya-Watson leaves +0.054 / +0.048 vol point at the money at 1 and 2 years, the local
     # linear regression of max(v, 0) +0.008 / +0.009 (standard error about 0.015)
@@ -88,6 +89,7 @@ def test_local_linear_leverage_removes_the_atm_bias_on_spx():
         assert abs(iv[0] - float(ctx.surface.iv(0.0, T))) * 100 < 0.03
 
 
+@pytest.mark.slow
 def test_local_linear_leverage_stays_within_tolerance_on_the_synthetic_surface():
     # on this surface both regressions are within the Monte Carlo error (a few bp per strike): no ranking claimed
     from test_calibration import MARKET, TRUE_SSVI
@@ -184,6 +186,7 @@ def test_sticky_strike_delta_matches_black_prices_at_fixed_strike_vols():
     assert strike.delta == pytest.approx(0.1879, abs=0.001) and moneyness.delta == pytest.approx(0.0869, abs=0.001)
 
 
+@pytest.mark.slow
 def test_local_vol_model_delta_is_far_from_the_sticky_moneyness_delta():
     from optlab.structured import PricingContext, compile_sheet, preset
     from optlab.structured.greeks import greeks
@@ -198,6 +201,7 @@ def test_local_vol_model_delta_is_far_from_the_sticky_moneyness_delta():
 # --- B6: SLV mix band in quotes ---
 
 
+@pytest.mark.slow
 def test_mix_band_moves_the_autocall_coupon_and_starts_at_local_vol():
     from optlab.structured import PricingContext, preset, quote
 

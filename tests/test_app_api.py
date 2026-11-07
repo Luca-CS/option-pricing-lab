@@ -76,6 +76,7 @@ def test_form_reports_the_field_in_error(desk):
     assert exc.value.status == 422
 
 
+@pytest.mark.slow
 def test_quote_job_end_to_end(desk):
     job = desk.quote({"sheet": sheet_of(desk, "phoenix"), "options": {"precision": "quick", "greeks": False}})["job"]
     q = wait(desk, job)
@@ -89,6 +90,7 @@ def test_quote_job_end_to_end(desk):
     assert html.startswith("<!doctype html>") and "<svg" in html and q["snapshot_id"] in html
 
 
+@pytest.mark.slow
 def test_quote_with_slv_vega(desk):
     """SLV has a vega only when the leverage is recalibrated on the bumped surface: the option reaches the library."""
     job = desk.quote(
@@ -226,6 +228,7 @@ def test_basket_settings_are_validated(desk):
     assert s["names"]["SX5E"]["vol"] == 0.18 and s["corr"] == {"SPX|SX5E": 0.75}
 
 
+@pytest.mark.slow
 def test_worst_of_quote_book_and_trade_page(desk):
     desk.put_basket({"names": {"SX5E": {"vol": 0.18, "q": 0.03}}, "corr": {"SPX|SX5E": 0.75}})
     q = wait(

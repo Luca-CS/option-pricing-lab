@@ -37,6 +37,7 @@ def test_var_and_es_statistics():
     assert V.kupiec(0, 500)["lr"] > 0
 
 
+@pytest.mark.lake
 def test_full_reval_var_of_a_forward_is_the_quantile_of_the_returns_times_the_position(lake):
     ctx = flat_ctx()
     b = book(forward_contract(365))
@@ -58,6 +59,7 @@ def test_full_reval_var_of_a_forward_is_the_quantile_of_the_returns_times_the_po
     )
 
 
+@pytest.mark.lake
 def test_full_reval_of_a_vanilla_stays_close_to_delta_gamma_vega(lake):
     ctx = flat_ctx()
     b = book(vanilla(100.0, 365))

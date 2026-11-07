@@ -187,6 +187,7 @@ def world(tmp_path_factory):
     return root, lake, days, first, (ecb, fred), (eurusd, sx5e)
 
 
+@pytest.mark.slow
 def test_the_load_labels_its_origins_and_is_idempotent(world):
     _, lake, days, first, (ecb, fred), _ = world
     assert sum(r["n_new"] for r in first) == 6 * len(days)
@@ -233,6 +234,7 @@ def test_pairs_without_a_curve_have_no_forward_and_say_so(world):
     assert set(issues["item"]) == {"USDJPY", "GBPUSD"} and all("JPY" in d or "GBP" in d for d in issues["detail"])
 
 
+@pytest.mark.slow
 def test_the_volatility_carries_its_origin_and_is_the_realised_one(world):
     _, lake, _, _, _, (eurusd, _) = world
     vol, origin, method = fx_vol_at(lake, "EURUSD", DAY, 120)
@@ -342,6 +344,7 @@ def test_a_worst_of_on_the_lake_is_adjusted_on_the_foreign_name_only(world):
         quote(sheet, in_euros, model="lv", control=None, n_paths=4000, batch=4000, seed=5)
 
 
+@pytest.mark.slow
 def test_erasing_the_future_changes_no_quanto_market(world, tmp_path):
     _, lake, _, _, _, _ = world
     cut = truncated_copy(lake, tmp_path / "cut", DAY)

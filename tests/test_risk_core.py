@@ -200,6 +200,7 @@ def test_forward_ratio_reproduces_the_bumped_forward():
     )
 
 
+@pytest.mark.slow
 def test_vanilla_greeks_under_monte_carlo_on_the_engine_match_black_scholes():
     """Local vol on a flat surface is Black-Scholes: delta, vega and rho of a call within 4 SE of the closed forms."""
     eng = engine_name()

@@ -91,6 +91,7 @@ def test_heston_calibration_recovers_parameters():
     assert np.max(np.abs(sol.fun)) < 1e-5
 
 
+@pytest.mark.slow
 def test_dupire_local_vol_reproduces_the_surface():
     lv = LocalVolModel(TRUE_SSVI)
     for T in (0.25, 1.0):
@@ -107,6 +108,7 @@ def slv_model():
     return calibrate_leverage(heston, TRUE_SSVI, MARKET, 1.0, mix=0.7, n_particles=200_000, rng=2)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("T", [0.25, 1.0])
 def test_slv_reproduces_vanillas(slv_model, T):
     F = MARKET.F(T)

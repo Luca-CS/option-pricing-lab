@@ -31,6 +31,7 @@ def price_on(lake, day, seed=5):
     return q.coupon_rate, q.result.price, snap
 
 
+@pytest.mark.slow
 def test_erasing_the_future_changes_no_past_price(world, tmp_path):
     root, lake, days, paths = world
     cut = truncated_copy(lake, tmp_path / "cut", DAY)
@@ -41,6 +42,7 @@ def test_erasing_the_future_changes_no_past_price(world, tmp_path):
     assert price_on(lake, DAY)[:2] == price_on(cut, DAY)[:2]
 
 
+@pytest.mark.slow
 def test_rederiving_after_erasing_the_future_gives_the_same_market(world, tmp_path):
     """Stronger: the derived tables recomputed from the observed rows of the past alone are the same as those computed on
     the whole history, so no derivation uses a later date."""
@@ -56,6 +58,7 @@ def test_rederiving_after_erasing_the_future_gives_the_same_market(world, tmp_pa
     assert (ctx_a.corr == ctx_b.corr).all()
 
 
+@pytest.mark.slow
 def test_changing_a_future_price_changes_nothing_but_a_past_one_does(world, tmp_path):
     root, lake, days, paths = world
     twisted = {n: p.copy() for n, p in paths.items()}
@@ -105,6 +108,7 @@ def test_snapshot_is_in_the_model_scale_and_says_where_each_part_comes_from(worl
     assert restored.snapshot_id == snap.snapshot_id
 
 
+@pytest.mark.slow
 def test_forward_and_discount_follow_the_curves(world):
     root, lake, days, paths = world
     ctx, snap = context_at(lake, "SPX", DAY)

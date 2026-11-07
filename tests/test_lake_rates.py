@@ -326,6 +326,7 @@ def world(tmp_path_factory):
     return lake, days, before, stamp, loads, fetch
 
 
+@pytest.mark.slow
 def test_before_the_loads_a_pair_says_which_curve_it_lacks(world):
     _, _, before, _, _, _ = world
     detail = dict(zip(before["item"], before["detail"]))
@@ -389,6 +390,7 @@ def test_the_forwards_of_both_pairs_match_covered_parity_on_the_lakes_curves(wor
     np.testing.assert_allclose(rows["forward"] - rows["points"], S, rtol=1e-12)
 
 
+@pytest.mark.slow
 def test_the_forward_goes_the_way_of_the_rate_differential(world):
     lake, _, _, _, _, _ = world
     jpy = lake.read("fx_forwards", where=f"pair = 'USDJPY' AND obs_date = DATE '{DAY}'", order="tenor")

@@ -155,6 +155,7 @@ def test_the_delta_of_the_payoff_stays_under_the_limit():
             assert slope(pv({(k, found[0].line): r})) == pytest.approx(delta_max, rel=1e-2)
 
 
+@pytest.mark.slow
 def test_a_european_barrier_is_the_same_by_replication_and_monte_carlo():
     sheet = preset("reverse_convertible", **{"downside.barrier": 0.8, "wrapper.solve": "upfront", "coupon.rate": 0.05})
     rep = quote(sheet, SPX, control=None, costs=inputs())
@@ -167,6 +168,7 @@ def test_a_european_barrier_is_the_same_by_replication_and_monte_carlo():
 
 
 # --- on an autocall ---
+@pytest.mark.slow
 def test_each_digital_of_an_autocall_has_its_width_side_and_cost_and_the_price_is_on_target():
     q = quote(preset("phoenix"), SPX, model="lv", control=None, n_paths=PATHS, batch=10_000, costs=inputs())
     d = q.desk
@@ -210,6 +212,7 @@ def test_a_daily_barrier_moved_is_the_sheet_with_the_barrier_moved_bit_for_bit()
     assert again.price == pytest.approx(q.desk.final_price, abs=1e-9)
 
 
+@pytest.mark.slow
 def test_a_worst_of_and_workers_take_the_digitals_too():
     from optlab.market import Market
     from optlab.structured.multiasset import BasketContext

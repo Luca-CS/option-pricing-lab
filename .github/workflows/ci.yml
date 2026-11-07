@@ -58,8 +58,6 @@ jobs:
         os: [ubuntu-24.04, windows-2025]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
-    env:
-      OPTLAB_DATA: ${{ github.workspace }}/../optlab-data-ci  # empty: no real lake, no showcase (ADR-0017)
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -75,7 +73,8 @@ jobs:
       - name: Install
         run: uv sync --locked --all-extras
       - name: Offline tests
-        run: uv run --no-sync pytest -m "not slow and not gpu and not lake and not native" -n auto -q -rs --durations=15
+        # no real lake, no showcase, no CUDA library on a hosted runner: those tests are marked and run on the machine
+        run: uv run --no-sync pytest -m "not slow and not gpu and not lake and not native" -n auto --dist loadfile -q -rs --durations=15
       - name: Golden numbers (versioned groups)
         shell: bash
         run: |
@@ -115,4 +114,4 @@ jobs:
         run: |
           lib=$(find build -name 'optlab_cuda_c.dll' -o -name 'liboptlab_cuda_c.so' | head -1)
           echo "engine library: $lib"
-          OPTLAB_CUDA_LIB="$PWD/$lib" uv run --no-sync pytest -m "native and not gpu and not slow" -n auto -q -rs
+          OPTLAB_CUDA_LIB="$PWD/$lib" uv run --no-sync pytest -m "native and not gpu and not slow" -n auto --dist loadfile -q -rs

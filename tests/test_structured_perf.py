@@ -44,6 +44,7 @@ def test_local_vol_prices_do_not_move_with_the_fast_surface():
 # --- batches on a process pool, Greeks on one simulation ---
 
 
+@pytest.mark.slow
 def test_process_pool_gives_the_same_numbers_bit_for_bit():
     from optlab.structured import engine
     from optlab.structured.portfolio import Book, Position
@@ -121,6 +122,7 @@ def test_daily_knock_in_prices_do_not_move_with_the_window_shortcut(monkeypatch)
 # --- forward control variates (opt-in) ---
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("model", ["lv", "slv"])
 def test_forward_controls_reduce_the_variance_without_moving_the_price(model):
     from optlab.structured.pricer import price_many

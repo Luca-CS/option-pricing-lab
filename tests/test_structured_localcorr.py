@@ -60,6 +60,7 @@ def ctx():
 STEEP = LocalCorrelation(0.2, 0.2, 0.5, 0.3)
 
 
+@pytest.mark.slow
 def test_every_name_keeps_its_law_whatever_the_weight():
     times = np.array([0.5, 1.0])
     for mixer in (STEEP, StochasticMix(0.5, 1.0, -0.8)):
@@ -109,6 +110,7 @@ def test_the_weight_rises_when_the_basket_falls_and_stays_in_its_bounds():
     assert m.bumped(0.1).down == 0.6 and m.bumped(0.1).up == 0.4 and m.bumped(-1.0).up == 0.0
 
 
+@pytest.mark.slow
 def test_a_flat_weight_is_the_constant_correlation_against_the_bivariate_normal():
     """A weight of W0 everywhere is the measured matrix, on the digital that reads the correlation directly."""
     basket = _with_grid(flat_basket(LocalCorrelation(0.2)))
@@ -130,6 +132,7 @@ def test_a_cvc_and_a_pvp_on_one_strike_are_one_instrument_with_the_model():
         assert np.allclose(spread_payoff("cvc", strike, x), spread_payoff("pvp", strike, x), atol=1e-12)
 
 
+@pytest.mark.slow
 def test_the_pseudo_quotes_are_refitted_and_the_correlation_is_higher_below(ctx):
     got = calibrate(ctx, ("SPX", "AAA"), n_paths=40_000)
     assert got["origin"] == "synthetic" and "assumption" in got["note"]
@@ -158,6 +161,7 @@ def calibrate_flat(ctx):
     )[0]
 
 
+@pytest.mark.slow
 def test_the_stochastic_alternative_also_fits_and_is_kept_for_comparison(ctx):
     got = calibrate(ctx, ("SPX", "AAA"), n_paths=20_000, form="stochastic")
     assert isinstance(got["mixer"], StochasticMix) and got["mixer"].rho < 0
@@ -165,6 +169,7 @@ def test_the_stochastic_alternative_also_fits_and_is_kept_for_comparison(ctx):
         calibrate(ctx, ("SPX", "AAA"), form="guess")
 
 
+@pytest.mark.slow
 def test_a_worst_of_has_both_provisions_and_says_what_the_skew_rests_on(ctx):
     s = preset(
         "phoenix",

@@ -271,6 +271,7 @@ def test_rows_on_a_smile_have_one_correlation_per_strike_and_cvc_equal_to_pvp():
     assert (rows["basket_price"] > 0).all() and rows["implied_rho"].notna().all()
 
 
+@pytest.mark.slow
 def test_quotes_in_the_lake_are_synthetic_and_reload_to_nothing(tmp_path):
     lake, days, _ = synthetic_lake(tmp_path, "2019-01-01", "2019-12-31")
     day = days[-1]

@@ -93,6 +93,7 @@ def body(sheet):
     return {"type": t, "values": d}
 
 
+@pytest.mark.slow
 def test_a_booked_quote_freezes_its_lines_and_the_book_shows_what_is_left(desk):
     sheet = preset("phoenix", **{"general.notional": 1e6})
     q = wait(desk, desk.quote({"sheet": body(sheet), "options": {"precision": "quick"}})["job"])
@@ -154,6 +155,7 @@ def lake(tmp_path_factory):
     return synthetic_lake(tmp_path_factory.mktemp("lake"))[0]
 
 
+@pytest.mark.slow
 def test_a_reserve_follows_a_trade_to_its_call_and_the_pnl_adds_up(lake):
     sheet = preset(
         "phoenix",

@@ -43,6 +43,7 @@ def wait(desk, job_id, timeout=300):
     return j["result"]
 
 
+@pytest.mark.slow
 def test_overview_gives_coverage_with_origins_and_the_universe(desk):
     d = desk.data_overview()
     assert d["available"] is True and d["lake"]
@@ -144,6 +145,7 @@ def test_the_lab_fit_result_never_carries_raw_quotes(desk):
     )
 
 
+@pytest.mark.slow
 def test_replay_runs_as_a_job_and_is_kept_without_real_levels(desk):
     body = {
         "preset": "barrier_reverse_convertible",
@@ -186,6 +188,7 @@ def test_routes_and_screens_are_wired(desk):
         assert "originBadge" in (STATIC / "js" / "views" / f"{view}.js").read_text(encoding="utf-8")
 
 
+@pytest.mark.slow
 def test_showcase_seed_fills_a_store_with_trades_struck_on_their_own_markets(tmp_path):
     import importlib.util
     from pathlib import Path

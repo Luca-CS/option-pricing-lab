@@ -14,6 +14,7 @@ from optlab.structured.context import PricingContext
 BETAS = [-0.9, -0.8, -0.7, -0.5, -0.45, -0.4, -0.35, -0.3]  # vol per unit log return, 1m to 5y
 
 
+@pytest.mark.slow
 def test_every_point_of_a_replicated_vanilla_is_the_closed_form_at_the_shocked_market():
     ctx = flat_ctx()
     b = book(vanilla(100.0, 365))
@@ -67,6 +68,7 @@ def test_sticky_strike_ladder_keeps_the_implied_vol_at_the_strike_on_a_smile():
             assert sm < ss  # the smile follows the spot down: the put's strike moves up the moneyness, to a lower vol
 
 
+@pytest.mark.slow
 def test_monte_carlo_ladder_point_zero_is_the_base_and_deltas_match_black_scholes():
     eng = engine_name()
     n = 200_000 if eng != "numpy" else 40_000
@@ -123,6 +125,7 @@ def lake():
     return lk
 
 
+@pytest.mark.lake
 def test_spot_vol_betas_of_spx_on_the_lake(lake, tmp_path):
     from optlab.risk.ladder import estimate_betas, stored_betas
 

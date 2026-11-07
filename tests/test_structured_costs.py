@@ -112,6 +112,7 @@ def test_no_bump_is_the_plain_quote_bit_for_bit():
     )
 
 
+@pytest.mark.slow
 def test_every_bump_has_a_small_error_and_the_client_price_is_the_target():
     bumps = {"vol": 0.005, "skew": SKEW, "dividend": 0.1, "repo": 0.001, "spot": 0.0005}
     q = lv_quote(sheet(), CostInputs(bumps))
@@ -152,6 +153,7 @@ def test_every_bump_has_a_small_error_and_the_client_price_is_the_target():
     assert again.price == pytest.approx(d.final_price, abs=1e-9)
 
 
+@pytest.mark.slow
 def test_a_vanilla_put_costs_what_black_scholes_says():
     """European put at 90 %: the cost of each bump against the closed form on the bumped smile."""
     T, K = 1.0, 90.0
@@ -215,6 +217,7 @@ def test_a_european_sheet_has_no_noise_on_its_lines():
     assert q.desk.line("vol").cost < 0 and abs(q.desk.line("interaction").cost) < 0.05
 
 
+@pytest.mark.slow
 def test_the_buyers_cost_has_the_other_sign_and_the_same_price():
     bumps = {"vol": 0.005}
     sold, bought = lv_quote(sheet(), CostInputs(bumps, "sell")), lv_quote(sheet(), CostInputs(bumps, "buy"))
@@ -226,6 +229,7 @@ def test_the_buyers_cost_has_the_other_sign_and_the_same_price():
         CostInputs({"gamma": 0.1})
 
 
+@pytest.mark.slow
 def test_upfront_mode_is_the_client_price():
     s = sheet(**{"wrapper.solve": "upfront", "coupon.rate": 0.06})
     plain = lv_quote(s)
@@ -234,6 +238,7 @@ def test_upfront_mode_is_the_client_price():
     assert q.desk.final_price < plain.result.price and q.desk.line("vol").coupon_bp is None and q.coupon_rate is None
 
 
+@pytest.mark.slow
 def test_a_swap_and_a_running_product_take_their_lines_too():
     swap = sheet(**{"wrapper.format": "swap"})
     q = lv_quote(swap, CostInputs({"vol": 0.005}))
@@ -255,6 +260,7 @@ def test_a_swap_and_a_running_product_take_their_lines_too():
     )  # the fixing stays: a higher spot is worth more
 
 
+@pytest.mark.slow
 def test_workers_give_the_same_lines(tmp_path):
     bumps = {"vol": 0.005, "repo": 0.001}
     a = lv_quote(sheet(), CostInputs(bumps), n_paths=20_000)
@@ -282,6 +288,7 @@ def policy_quote(s, costs=None, n_paths=PATHS, **kw):
     )
 
 
+@pytest.mark.slow
 def test_an_autocall_is_local_vol_plus_the_slv_gap_when_it_goes_against_the_desk():
     from dataclasses import replace
 
@@ -317,6 +324,7 @@ def test_an_autocall_is_local_vol_plus_the_slv_gap_when_it_goes_against_the_desk
     )  # no second simulation for the control
 
 
+@pytest.mark.slow
 def test_a_gap_in_the_desks_favour_gives_no_provision_and_the_buyer_takes_the_other_side():
     s = sheet()
     sold, bought = policy_quote(s, CostInputs(side="sell")), policy_quote(s, CostInputs(side="buy"))
@@ -341,6 +349,7 @@ def test_a_european_product_has_no_provision_and_a_forced_model_neither():
     assert q.decision.forced and q.decision.provisions == () and q.desk.lines == []
 
 
+@pytest.mark.slow
 def test_a_mix_of_zero_is_local_vol_within_the_error_of_the_leverage():
     q = policy_quote(sheet(), CostInputs(mix=0.0), n_paths=20_000)
     assert abs(q.desk.line("slv").gap) < 0.25 and q.desk.line("slv").used == 0.0

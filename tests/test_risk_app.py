@@ -40,6 +40,7 @@ def wait(desk, job_id, timeout=900):
     return j["result"]
 
 
+@pytest.mark.slow
 def test_greeks_run_is_stored_and_read_back(desk):
     res = wait(
         desk,
@@ -55,6 +56,7 @@ def test_greeks_run_is_stored_and_read_back(desk):
     json.dumps(back)
 
 
+@pytest.mark.slow
 def test_ladder_and_scenarios_routes(desk):
     lad = wait(
         desk,
@@ -82,7 +84,8 @@ def test_http_routes(desk):
     httpd, base = serve_in_thread(desk)
     try:
         with urllib.request.urlopen(base + "/api/risk/scenarios") as r:
-            assert json.loads(r.read())["version"] == 1
+            # what the store holds, whatever ran before in this module (the editing test is slow, not always run)
+            assert json.loads(r.read())["version"] == desk.risk.scenarios()["version"]
         with urllib.request.urlopen(base + "/api/pnl") as r:
             assert "note" in json.loads(r.read())
         with urllib.request.urlopen(base + "/report/risk") as r:
