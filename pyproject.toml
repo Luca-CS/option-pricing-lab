@@ -52,6 +52,7 @@ select = ["E4", "E7", "E9", "F", "I"]
 [tool.pyright]
 include = ["optlab", "scripts", "tests", "cuda/bench"]
 pythonVersion = "3.14"
+pythonPlatform = "All"  # the same counts on the Windows and Linux runners
 typeCheckingMode = "standard"
 venvPath = "."
 venv = ".venv"
