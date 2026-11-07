@@ -41,6 +41,17 @@ nanobind) on Python 3.14.7 and uv 0.13.1:
 One trap: MSBuild's file tracker fails on paths above 260 characters (the worktree path alone is 95 characters), so
 scikit-build-core's `build-dir` stays short on Windows (its temporary default, or a short absolute folder).
 
+## Implementation (A2)
+
+- Six members under `packages/`, built by hatchling pinned to 1.32.4 (`packages = ["src/optlab"]`), installed editable by
+  `uv sync` as `.pth` path entries, which pyright and import-linter read. The lock gained the six members and changed no
+  third-party version (938 hashes before and after).
+- Tests sit in `packages/<name>/tests`, placed by the highest package they import (a test of the desk that reads the
+  lake lives with the server). Their basenames are unique, so pytest keeps its default import mode; the fixtures shared
+  by several packages are in `tests/helpers`, on pytest's `pythonpath` and pyright's `extraPaths`, and no test imports
+  another test module. The golden recorder stays in `tests/golden`.
+- The native member is still the `ctypes` bridge in A2; scikit-build-core and nanobind replace it in A3.
+
 ## Consequences
 
 - Package boundaries become real (separate dependency lists, import-linter contracts in CI).

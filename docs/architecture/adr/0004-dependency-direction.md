@@ -66,6 +66,22 @@ Checks: `import-linter` in CI with a layers contract (`server`, `risk`, `marketd
 forbidden contract (no package but `server` imports `optlab.native`), plus a test that imports `optlab.core` in a
 fresh interpreter and asserts that no other `optlab` module, nor pandas, duckdb, pyarrow or FastAPI, got imported.
 
+## Implementation (A2)
+
+- The moves above are done, with these choices of place: the pseudo-quote formulas join `structured.localcorr`;
+  `quick_heston`, its prior dynamics and the mix `MIX` join `structured.context`; `nearest_correlation` is
+  `optlab.core.correlation`; the registry's table for the lake (`as_rows`) stays in `marketdata.ingest`; `optlab.data`
+  is `optlab.marketdata.chains`.
+- The snapshot's git probe is gone rather than moved: no caller recorded a code version (the desk and the contexts load
+  with `provenance=False`), so `from_calibration_file` takes `code_version=` from whoever wants one.
+- **Paths wait for `Settings` (A4).** `optlab.core.config` keeps `DEFAULT_SEED` for good and, until A4, the v0 `paths()`
+  and `REPO_ROOT`: they read the environment on call (no I/O at import), and moving them now would have meant passing
+  paths through every caller twice. A4 replaces them with arguments from `optlab.server.settings`.
+- Checked: `lint-imports` keeps the three contracts (layers; `optlab.native` only from `server`; `native` sees nothing
+  above `structured`), and a probe that adds a lazy cross-layer import breaks them; `test_core_alone.py` imports every
+  module of `optlab.core` in a fresh interpreter and finds no other optlab package, no pandas, duckdb, pyarrow, requests,
+  matplotlib or web framework, and no new thread.
+
 ## Consequences
 
 - `optlab.structured` installs without pandas, duckdb or pyarrow. It loses nothing: the contexts it prices on are

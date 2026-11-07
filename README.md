@@ -85,7 +85,7 @@ Prices agree with NumPy within the Monte Carlo error; the machine, the method an
 
 ## Structured products
 
-[`optlab/structured/`](optlab/structured) prices equity structured products (autocalls Athena and Phoenix,
+[`optlab.structured`](packages/structured/src/optlab/structured) prices equity structured products (autocalls Athena and Phoenix,
 reverse convertibles and barrier reverse convertibles, airbags, capital-protected notes) as a note or as a swap,
 on top of a small payoff scripting language:
 
@@ -162,7 +162,7 @@ against the correlation and a book (about five minutes at 200,000 paths).
 
 ## Desk
 
-`python -m optlab.app --open` starts a local web desk over the library at `http://localhost:8765`, with nothing to
+`python -m optlab.server --open` starts a local web desk over the library at `http://localhost:8765`, with nothing to
 install beyond the requirements: a standard-library HTTP server, SQLite, and plain JavaScript modules with no build
 step and no CDN.
 
@@ -203,8 +203,8 @@ Every table sorts by its headers. Sharing while the engine stays on this PC:
 
 | How | Start with | Notes |
 |---|---|---|
-| Your network | `python -m optlab.app --host 0.0.0.0` | prints an address with a generated token (kept in a cookie after the first visit); on Windows the firewall must let Python in, which needs the connection in the Private profile: the desk checks this at start and says what blocks other machines |
-| A public link | `python -m optlab.app --tunnel` | https through an SSH tunnel to localhost.run: no install (`ssh` ships with Windows 10 and later), the address changes at each start; a third party relays the traffic, so the token is always on |
+| Your network | `python -m optlab.server --host 0.0.0.0` | prints an address with a generated token (kept in a cookie after the first visit); on Windows the firewall must let Python in, which needs the connection in the Private profile: the desk checks this at start and says what blocks other machines |
+| A public link | `python -m optlab.server --tunnel` | https through an SSH tunnel to localhost.run: no install (`ssh` ships with Windows 10 and later), the address changes at each start; a third party relays the traffic, so the token is always on |
 | A fixed result | Desk snapshot (Overview), or the report of a quote or of the book | one standalone HTML file that opens anywhere without the desk: the market in use, the book with its risk by underlying, the trades, the next observations and the recent quotes; send the file or publish it as a page |
 
 The page is served by the desk itself, not by GitHub Pages, because browsers block a public https page from calling
@@ -275,7 +275,7 @@ that the calibration finds the parameters back.
 
 ### The historical lake
 
-`optlab/marketdata/` keeps ten years of free data in Parquet files read by DuckDB: index and share prices, dividends and
+`optlab.marketdata` keeps ten years of free data in Parquet files read by DuckDB: index and share prices, dividends and
 splits (Yahoo), volatility, skew and correlation indices (Cboe, STOXX), Treasury, AAA and overnight rates (US Treasury, ECB, FRED),
 and option chains (a free 2022 sample with SPX maturities up to five years, DoltHub for two-month chains). It lives outside the
 repository: only parameters and statistics are versioned, and the data stays local.
@@ -311,33 +311,29 @@ price, stderr = barrier_mc(model, market, K=100, H=80, T=1.0, kind="down-out", c
 `docs/` is the demo page (GitHub Pages): dependency-free JavaScript (`docs/lab.js`) for the closed forms, an
 American PDE (Crank-Nicolson with projected SOR on a strike-centred grid, so that the Greeks are smooth in the
 spot), the tree, Lévy's Asian approximation, Heston by Fourier, Monte Carlo (Andersen's QE scheme for Heston)
-and Longstaff-Schwartz, checked against the Python library by `tests/test_widget_js.py` (needs node), plus the
+and Longstaff-Schwartz, checked against the Python library by `packages/core/tests/test_widget_js.py` (needs node), plus the
 SPX results written by `scripts/build_widget_data.py`. Deep links open a given case, for instance
 `?product=barrier&K=119&model=heston`. The full library, with live SLV recalibration, also has a Gradio app that
 runs locally: `pip install gradio`, then `python space/app.py`.
 
 ## Layout
 
+A uv workspace: six distributions share the namespace `optlab`, each in `packages/<name>` with its sources under
+`src/optlab/<name>` and its tests under `tests/` (layers and the reasons in `docs/architecture`).
+
 | Path | Content |
 |---|---|
-| `optlab/market.py` | discount and forward curves |
-| `optlab/blackscholes.py` | closed forms, Greeks, implied vol, geometric Asian, barriers |
-| `optlab/tree.py` | CRR binomial tree |
-| `optlab/heston.py` | characteristic function, Lewis pricing, calibration |
-| `optlab/ssvi.py`, `optlab/svi.py` | implied surfaces, arbitrage checks, Dupire local variance |
-| `optlab/models.py` | path simulation for the four models |
-| `optlab/products.py` | Monte Carlo pricers, Longstaff-Schwartz |
-| `optlab/slv.py` | leverage function by the particle method |
-| `optlab/gpu.py` | Python bridge to the CUDA engine, NumPy fallback |
-| `optlab/data.py` | SPX chain download and cleaning |
-| `optlab/structured/` | structured products: script language, term-sheet builder, policy, pricers |
-| `optlab/risk/` | risk engine: shocks and one revaluation engine, Greeks, ladder, scenarios, VaR, EOD runs and explained P&L |
-| `optlab/app/` | local web desk: HTTP server, JSON API, jobs, SQLite store, reports, the page in `static/` |
-| `optlab/pipeline.py`, `scripts/` | calibration runs, report and charts |
+| `packages/core` | `optlab.core`: curves (`market`), closed forms, Greeks and implied vol (`blackscholes`), the CRR tree, Heston (`heston`), implied surfaces and Dupire local variance (`ssvi`, `svi`), path simulation (`models`), Monte Carlo pricers and Longstaff-Schwartz (`products`), the SLV leverage (`slv`), the calibration chain (`pipeline`), the instrument registry and snapshot type, the engine registry; numpy and scipy only |
+| `packages/native` | `optlab.native`: the Python bridge to the CUDA engine, NumPy fallback |
+| `packages/structured` | `optlab.structured`: script language, term-sheet builder, policy, pricers, desk costs, books |
+| `packages/marketdata` | `optlab.marketdata`: the historical lake, its sources and derivations, point-in-time markets, replays, the SPX chain download and cleaning |
+| `packages/risk` | `optlab.risk`: shocks and one revaluation engine, Greeks, ladder, scenarios, VaR, EOD runs and explained P&L |
+| `packages/server` | `optlab.server`: the local web desk: HTTP server, JSON API, jobs, SQLite store, reports, the page in `static/` |
+| `scripts/` | calibration runs, lake updates, report and charts |
 | `cuda/` | C++/CUDA Monte Carlo engine, benchmarks and optimisation study |
-| `docs/` | demo page (GitHub Pages) |
+| `docs/` | demo page (GitHub Pages); `docs/architecture/` the target architecture and its decisions |
 | `space/` | Gradio app, run locally |
-| `tests/` | pytest suite |
+| `tests/` | the golden numbers and the fixtures shared across packages |
 
 ## Limitations
 

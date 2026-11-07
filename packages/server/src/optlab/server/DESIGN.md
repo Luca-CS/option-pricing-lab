@@ -8,7 +8,7 @@ its life, look at the market behind every number, and share a result. This docum
 | Constraint | Consequence |
 |---|---|
 | The engine runs on Luca's PC (NumPy, SciPy, optional GPU), calibrations and Yahoo data are local | The browser talks to a **local Python server**; nothing is computed in the browser except formatting and charts |
-| A public https page cannot call `localhost` (Chrome Private Network Access) | The **server serves the UI itself** (same origin): `python -m optlab.app` then open the printed address |
+| A public https page cannot call `localhost` (Chrome Private Network Access) | The **server serves the UI itself** (same origin): `python -m optlab.server` then open the printed address |
 | Portable, easy to set up, no installation without approval | **Zero new dependency**: standard-library HTTP server and SQLite; the front is plain HTML, CSS and JavaScript modules, no build step, no CDN (works offline) |
 | Shareable while the back stays on the PC | (1) LAN: `--host 0.0.0.0` with an access token; (2) any tunnel Luca chooses (Tailscale, Cloudflare Tunnel) pointed at the port, same token; (3) **standalone HTML reports** of a quote or a book, one file that opens anywhere without the server |
 | Honest numbers | Every price shows its standard error and method, every time is measured, every result names its market snapshot |
@@ -90,8 +90,8 @@ preset, workers, fast models, control variates, theme), keyboard shortcuts (`g o
 ## 6. Architecture
 
 ```
-optlab/app/
-  __main__.py      python -m optlab.app [--host 127.0.0.1] [--port 8765] [--token ...] [--workers N]
+packages/server/src/optlab/server/   (optlab.server; optlab/app/ before the split of A2)
+  __main__.py      python -m optlab.server [--host 127.0.0.1] [--port 8765] [--token ...] [--workers N]
   server.py        ThreadingHTTPServer: static files + JSON API, token check, gzip off, CORS off (same origin)
   api.py           routes -> library calls, JSON in and out (no HTTP inside)
   jobs.py          background jobs (thread pool): status, progress, elapsed, result, cancel flag
@@ -123,7 +123,7 @@ API (JSON):
 
 ## 7. Data lake
 
-The historical layer under the desk, in `optlab/marketdata/`. SQLite stays the desk's operational store (short concurrent
+The historical layer under the desk, in `optlab.marketdata` (packages/marketdata). SQLite stays the desk's operational store (short concurrent
 writes from the server); the lake is read-mostly history. Portable and serverless, as the rest of the desk.
 
 | Layer | Technology | Content |
