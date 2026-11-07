@@ -85,8 +85,9 @@ jobs:
           print(platform.platform(), '|', cpu); numpy.show_runtime()"
       - name: Golden numbers, across machines (ADR-0017)
         run: uv run --no-sync python tests/golden/golden.py check --across --group closed_forms mc_products labjs presets_simulated
-      - name: Golden numbers whose SLV leverage is recalibrated (reported, not blocking, pending ADR-0017)
-        # one SLV price each moves past 0.1 SE on Linux (0.32 and 0.13 SE): the rule for them waits for Luca
+      - name: Golden numbers whose SLV leverage is recalibrated (reported, not blocking, ADR-0017)
+        # one SLV price each moves past 0.1 SE on Linux (0.32 and 0.13 SE); the rule stays at 0.1 SE (Luca, 8 November)
+        # and these two groups are guarded bit for bit on the machine
         continue-on-error: true
         run: uv run --no-sync python tests/golden/golden.py check --across --group calibration_simulated structured_extra
 

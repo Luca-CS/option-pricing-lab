@@ -1,7 +1,6 @@
 # ADR-0017: Golden numbers, a fast CI, the full suite on the machine
 
-- Status: Accepted (A0 checkpoint, 7 November 2026); tolerance across machines agreed on 7 November 2026, except for
-  two SLV numbers (below)
+- Status: Accepted (A0 checkpoint, 7 November 2026); tolerance across machines agreed on 7 and 8 November 2026
 - Handoff §1: Tests; §5
 
 ## Context
@@ -52,8 +51,10 @@ within 4 standard errors. The refactor moves every file: something must prove th
   code of A2 under Linux: every number of `closed_forms`, `mc_products`, `labjs` and `presets_simulated` holds (the
   presets within 0.007 SE), and so do all the others but two, both SLV prices on a leverage the run recalibrated: the
   American put of the exotics table at 0.32 SE and the Phoenix's SLV provision at 0.13 SE. A0's "up to 0.07 SE" had
-  looked at the presets only. Until Luca decides for those two groups, the CI blocks on the four others and runs
-  `calibration_simulated` and `structured_extra` without blocking.
+  looked at the presets only. **Luca's decision (8 November 2026): the rule stays at 0.1 SE**, not widened for them;
+  the CI blocks on the four groups that hold and runs `calibration_simulated` and `structured_extra` with the same
+  rule without blocking, their gaps printed. The guard of these two groups is the bit-for-bit check on this machine at
+  every step.
 - **CI under 5 minutes**, measured: `pytest -m "not slow and not gpu and not lake"` with xdist on a synthetic
   mini-lake generated deterministically by the tests (no binary fixture), plus the CI golden groups.
 - **The full suite and the GPU on the machine**: `optlab check full` (the real lake, about 30 minutes) and `optlab check
