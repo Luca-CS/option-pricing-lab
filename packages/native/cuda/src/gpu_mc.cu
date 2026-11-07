@@ -17,7 +17,7 @@
 
 #include "optlab_cuda/schemes.hpp"
 
-// Throws rather than exits: the engine also runs inside the Python process, through the C API (capi.cpp).
+// Throws rather than exits: the engine also runs inside the Python process, through optlab.native._ext (requests.cpp).
 #define CUDA_CHECK(call)                                                                                    \
     do {                                                                                                    \
         const cudaError_t err_ = (call);                                                                    \

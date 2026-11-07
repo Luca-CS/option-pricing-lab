@@ -428,13 +428,16 @@ def _native_case(backend: str) -> dict:
     mixer = LocalCorrelation(sigma=0.15, level=0.0, down=0.3, up=0.1)
     b = Basket(names, {n: lv for n in names}, {n: ctx.market for n in names}, corr, mixer=mixer)
     paths = native.simulate(b, None, [0.5, 1.0], 20_000, seed=9, backend=backend)
+    assert isinstance(paths, dict)  # a basket: one array per name
     out["paths"]["basket_localcorr"] = {n: np.asarray(paths[n]) for n in names}
     bs, hes = BlackScholesModel(0.2), HestonModel(ctx.heston)
-    run = dict(n_paths=200_000, seed=11, backend=backend)
-    out["fixed"]["bs_european"] = gpu.european(bs, ctx.market, 100.0, 1.0, "call", **run)
-    out["fixed"]["heston_european"] = gpu.european(hes, ctx.market, 100.0, 1.0, "put", **run)
-    out["fixed"]["bs_asian"] = gpu.asian(bs, ctx.market, 100.0, 1.0, 12, "call", **run)
-    out["fixed"]["heston_barrier"] = gpu.barrier(hes, ctx.market, 100.0, 80.0, 1.0, n_monitor=52, **run)
+    m, n = ctx.market, 200_000
+    out["fixed"]["bs_european"] = gpu.european(bs, m, 100.0, 1.0, "call", n_paths=n, seed=11, backend=backend)
+    out["fixed"]["heston_european"] = gpu.european(hes, m, 100.0, 1.0, "put", n_paths=n, seed=11, backend=backend)
+    out["fixed"]["bs_asian"] = gpu.asian(bs, m, 100.0, 1.0, 12, "call", n_paths=n, seed=11, backend=backend)
+    out["fixed"]["heston_barrier"] = gpu.barrier(
+        hes, m, 100.0, 80.0, 1.0, n_monitor=52, n_paths=n, seed=11, backend=backend
+    )
     lev = native.calibrate_leverage(ctx.heston, ctx.surface, ctx.market, 1.0, 0.5, 20_000, rng=5, backend=backend)
     out["leverage"] = {"times": lev.leverage.times, "x_grids": lev.leverage.x_grids, "values": lev.leverage.values}
     engines.set_default(backend)  # a quote takes the process default, as on the desk
@@ -442,7 +445,9 @@ def _native_case(backend: str) -> dict:
         out["phoenix"] = _quote_numbers(quote(preset("phoenix"), ctx, n_paths=20_000, batch=10_000))
     finally:
         engines.set_default("numpy")
-    return numbers_only(plain(out))
+    values = numbers_only(plain(out))
+    assert isinstance(values, dict)
+    return values
 
 
 def native_cpu() -> dict:

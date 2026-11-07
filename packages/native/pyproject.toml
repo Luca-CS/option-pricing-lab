@@ -1,7 +1,7 @@
 [project]
 name = "optlab-native"
 version = "0.1.0"
-description = "optlab's compiled engine (C++/CUDA, cuda/) seen from Python; optional, found through the optlab.engines entry point"
+description = "optlab's compiled engine (C++, CUDA when a toolkit is found) as a Python module, found through the optlab.engines entry point"
 requires-python = ">=3.14"
 license = "MIT"
 dependencies = [
@@ -13,11 +13,34 @@ dependencies = [
 native = "optlab.native"  # the engine protocol of optlab.core.engines
 
 [build-system]
-requires = ["hatchling==1.32.4"]
-build-backend = "hatchling.build"
+# ADR-0008: the engine of cuda/ and its nanobind binding, built by CMake; versions pinned, each over two weeks old
+requires = ["scikit-build-core==1.1.1", "nanobind==3.1.0"]
+build-backend = "scikit_build_core.build"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/optlab"]  # a portion of the PEP 420 namespace `optlab`: no optlab/__init__.py (ADR-0003)
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+cmake.version = ">=3.24"
+cmake.build-type = "Release"
+wheel.packages = ["src/optlab"]  # a portion of the PEP 420 namespace `optlab`: no optlab/__init__.py (ADR-0003)
+# build-dir stays scikit-build-core's temporary default: MSBuild fails on paths above 260 characters (ADR-0003)
+
+[tool.scikit-build.cmake.define]
+# OPTLAB_WITH_CUDA=OFF builds the CPU engines only; OPTLAB_CUDA_ARCHS=portable targets sm_61 to sm_120 (images)
+OPTLAB_WITH_CUDA = { env = "OPTLAB_WITH_CUDA", default = "ON" }
+OPTLAB_CUDA_ARCHS = { env = "OPTLAB_CUDA_ARCHS", default = "native" }
+
+[tool.uv]
+# rebuild the module when the engine or its binding changes, not only when this file does
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "CMakeLists.txt" },
+    { file = "bindings/**" },
+    { file = "cuda/CMakeLists.txt" },
+    { file = "cuda/include/**" },
+    { file = "cuda/src/**" },
+    { env = "OPTLAB_WITH_CUDA" },
+    { env = "OPTLAB_CUDA_ARCHS" },
+]
 
 [tool.uv.sources]
 optlab-core = { workspace = true }

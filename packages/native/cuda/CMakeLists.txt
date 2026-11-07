@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD 17)
 option(OPTLAB_WITH_CUDA "Build the CUDA backend when a CUDA toolkit is found" ON)
 option(OPTLAB_CPU_AVX2 "Compile the CPU engines for AVX2 (every x86-64 CPU since 2013)" ON)
 set(OPTLAB_CUDA_ARCHS "native" CACHE STRING "CUDA architectures: native, portable, or a CMake list such as 75;86")
+option(OPTLAB_BUILD_TOOLS "Build the C++ tests, benchmarks and the ablation study (off inside the Python wheel)" ON)
 
 include(CheckLanguage)
 if(OPTLAB_WITH_CUDA)
@@ -61,18 +62,24 @@ if(OPTLAB_HAVE_CUDA)
   set_target_properties(optlab_cuda PROPERTIES POSITION_INDEPENDENT_CODE ON)  # linked into the shared library
 endif()
 
-# C interface for Python (optlab/gpu.py, optlab/native.py, ctypes): a self-contained DLL / .so, the CUDA runtime
-# linked statically when present.
-add_library(optlab_cuda_c SHARED src/capi.cpp)
-target_include_directories(optlab_cuda_c PUBLIC include)
+# The checked requests (requests.hpp) over the engines: what the Python module (optlab.native._ext, built by
+# packages/native/CMakeLists.txt with nanobind) and the C++ tests call. Static, with the CUDA runtime linked
+# statically when present, so the module is self-contained.
+add_library(optlab_engine STATIC src/requests.cpp)
+target_include_directories(optlab_engine PUBLIC include)
+set_target_properties(optlab_engine PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(OPTLAB_HAVE_CUDA)
-  target_link_libraries(optlab_cuda_c PRIVATE optlab_cuda)
+  target_link_libraries(optlab_engine PUBLIC optlab_cuda)
 else()
-  target_link_libraries(optlab_cuda_c PRIVATE optlab_cpu)
+  target_link_libraries(optlab_engine PUBLIC optlab_cpu)
+endif()
+
+if(NOT OPTLAB_BUILD_TOOLS)
+  return()
 endif()
 
 add_executable(test_paths tests/test_paths.cpp)
-target_link_libraries(test_paths PRIVATE optlab_cuda_c)  # through the C API, as Python calls it
+target_link_libraries(test_paths PRIVATE optlab_engine)  # through the checked requests, as Python calls them
 enable_testing()
 add_test(NAME paths COMMAND test_paths)
 

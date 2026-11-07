@@ -813,6 +813,15 @@ wheels = [
 ]
 
 [[package]]
+name = "nanobind"
+version = "3.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c7/1f/e28fae715401e8f57400e72aeaff4fde12046d31828164f34f61f0816da8/nanobind-3.1.0.tar.gz", hash = "sha256:6661e3dc1434d78781ccf7913442d90361dab395c3424efadb63bbb6ddea7ea3", size = 1145390, upload-time = "2026-09-18T15:59:42.726Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/36/c1/6fd56f7a02a478d54a1a3e6000eccd34b446b1c45cbf0d002fe5d2937126/nanobind-3.1.0-py3-none-any.whl", hash = "sha256:96984dbe8154ffb86e653b1b60aaeed6985c710c5e75ad0279eb87943c66292d", size = 316917, upload-time = "2026-09-18T15:59:37.796Z" },
+]
+
+[[package]]
 name = "nodeenv"
 version = "1.12.0"
 source = { registry = "https://pypi.org/simple" }
@@ -896,6 +905,7 @@ yahoo = [
 [package.dev-dependencies]
 dev = [
     { name = "import-linter" },
+    { name = "nanobind" },
     { name = "pre-commit" },
     { name = "pyright" },
     { name = "pytest" },
@@ -920,6 +930,7 @@ provides-extras = ["yahoo", "reports"]
 [package.metadata.requires-dev]
 dev = [
     { name = "import-linter", specifier = "==2.15" },
+    { name = "nanobind", specifier = "==3.1.0" },
     { name = "pre-commit", specifier = ">=4.7" },
     { name = "pyright", specifier = "==1.1.414" },
     { name = "pytest", specifier = ">=9.2" },

@@ -1,6 +1,6 @@
 // Target for Nsight Compute: one launch of each production kernel studied in the ablation, nothing else.
 //
-//   ncu --set full -k regex:mc_kernel -o cuda/bench/ncu_profile build\Release\profile.exe
+//   ncu --set full -k regex:mc_kernel -o packages/native/cuda/bench/ncu_profile build\Release\profile.exe
 #include <cstdio>
 
 #include "optlab_cuda/gpu_mc.cuh"

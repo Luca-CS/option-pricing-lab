@@ -1,6 +1,6 @@
-// Benchmark protocol of the handoff (section 6). Run from the repository root, after cuda/bench/bench_numpy.py:
+// Benchmark protocol of the handoff (section 6). Run from the repository root, after packages/native/cuda/bench/bench_numpy.py:
 //
-//   build\Release\bench.exe            writes cuda/bench/results.csv and prints the Markdown table
+//   build\Release\bench.exe            writes packages/native/cuda/bench/results.csv and prints the Markdown table
 //
 // GPU: one untimed warm-up call per row (module loading, caches), then 5 repetitions; kernel time from CUDA
 // events (sum over the launches of one call), end-to-end time from steady_clock (allocation, launches, copy).
@@ -169,9 +169,9 @@ int main() {
         {"Heston European", Model::Heston, Product::European, 252, {100'000, 1'000'000, 10'000'000}},
         {"Heston barrier", Model::Heston, Product::Barrier, 252, {100'000, 1'000'000, 10'000'000}},
     };
-    const auto numpy = read_numpy("cuda/bench/numpy_results.csv");
+    const auto numpy = read_numpy("packages/native/cuda/bench/numpy_results.csv");
 
-    std::ofstream csv("cuda/bench/results.csv");
+    std::ofstream csv("packages/native/cuda/bench/results.csv");
     csv << "product,n,steps,gpu_kernel_ms_median,gpu_kernel_ms_min,gpu_kernel_ms_max,gpu_total_ms_median,"
            "gpu_launches,gpu_grid,gpu_block,gpu_price,gpu_se,cpu1_n_measured,cpu1_s_median,cpu1_s_min,cpu1_s_max,"
            "cpu1_s_for_n,cpu12_n_measured,cpu12_s_median,cpu12_s_min,cpu12_s_max,cpu12_s_for_n,numpy_s_for_n,"
