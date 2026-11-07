@@ -42,8 +42,10 @@ def bank_spreads(credit_index: pd.Series, params: BankParams = BankParams()) -> 
         level = params.phi * level + params.sigma * z
         ar[i] = level
     common = params.beta * (index.loc[days].to_numpy() - params.credit_reference) + ar
-    rows = [pd.DataFrame({"obs_date": days, "tenor": t, "spread": np.maximum(p + common, params.floor)})
-            for t, p in params.premium.items()]
+    rows = [
+        pd.DataFrame({"obs_date": days, "tenor": t, "spread": np.maximum(p + common, params.floor)})
+        for t, p in params.premium.items()
+    ]
     return pd.concat(rows, ignore_index=True).assign(entity=ENTITY)
 
 
@@ -56,15 +58,23 @@ def credit_index(lake: Lake) -> pd.Series:
 
 
 def build_bank(lake: Lake, params: BankParams = BankParams()) -> dict:
-    return lake.ingest("credit_spreads", bank_spreads(credit_index(lake), params), "fictive_bank", "synthetic",
-                       new_run_id("derive_bank"))
+    return lake.ingest(
+        "credit_spreads",
+        bank_spreads(credit_index(lake), params),
+        "fictive_bank",
+        "synthetic",
+        new_run_id("derive_bank"),
+    )
 
 
 def spread_at(lake: Lake, day, tenor: float, entity: str = ENTITY) -> float:
     """The curve's spread at `day` or the day before, interpolated in tenor (flat outside)."""
     day = pd.Timestamp(day).date()
-    rows = lake.read("credit_spreads", where=f"entity = '{entity}' AND obs_date <= DATE '{day}' AND obs_date >= "
-                     f"DATE '{day}' - INTERVAL 10 DAY", order="obs_date")
+    rows = lake.read(
+        "credit_spreads",
+        where=f"entity = '{entity}' AND obs_date <= DATE '{day}' AND obs_date >= DATE '{day}' - INTERVAL 10 DAY",
+        order="obs_date",
+    )
     if rows.empty:
         raise KeyError(f"no spread of {entity} around {day}")
     last = rows[rows["obs_date"] == rows["obs_date"].max()].sort_values("tenor")

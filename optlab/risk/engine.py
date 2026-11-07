@@ -38,13 +38,25 @@ from ..structured.portfolio import Book
 from ..structured.pricer import check_fixing_scale
 from ..structured.replication import replication_result
 from .curves import bumped_market, forward_ratio
-from .shocks import (BASE, RiskEnv, Shock, apply, context_currency, discount_move, fx_factor, name_moves, shocked_market,
-                     sim_key, simulation_part)
+from .shocks import (
+    BASE,
+    RiskEnv,
+    Shock,
+    apply,
+    context_currency,
+    discount_move,
+    fx_factor,
+    name_moves,
+    shocked_market,
+    sim_key,
+    simulation_part,
+)
 
 
 @dataclass
 class RiskGroup:
     """Positions valued together on one context and one seed."""
+
     label: str
     book: Book
     ctx: object  # PricingContext or BasketContext
@@ -55,12 +67,16 @@ class RiskGroup:
 class RiskSettings:
     n_paths: int = 100_000
     batch: int = 25_000
-    model: str | None = None  # None: the pricing policy (local vol, replication for a European book); "slv" as an option
+    model: str | None = (
+        None  # None: the pricing policy (local vol, replication for a European book); "slv" as an option
+    )
     smoothing: float = 0.0  # digitals as ramps of this relative width (Greeks); 0 for values
     engine: str | None = None  # numpy, cpu, gpu, auto (structured.engine)
     workers: int | None = None
     slv_particles: int = 100_000
-    eval_threads: int | None = None  # threads evaluating the engine's batches (None: the engine's choice; 1 in VaR processes)
+    eval_threads: int | None = (
+        None  # threads evaluating the engine's batches (None: the engine's choice; 1 in VaR processes)
+    )
     engine_threads: int = 0  # CPU engine threads (0: every hardware thread)
 
     def to_dict(self) -> dict:
@@ -70,6 +86,7 @@ class RiskSettings:
 @dataclass
 class Measure:
     """scale * sum_s weight_s V(s): a Greek, a P&L or any combination of revaluations ("base" is the base)."""
+
     name: str
     weights: dict
     scale: float = 1.0
@@ -144,6 +161,7 @@ def _merged_history(items, basket: bool, ctx):
 @dataclass
 class GroupRun:
     """Raw output of one group: per shock and position the pair values (None under replication) or values."""
+
     label: str
     method: str
     model: str
@@ -169,15 +187,32 @@ class GroupRun:
     def to_dict(self) -> dict:
         def block(t):
             return {"positions": t[0], "positions_se": t[1], "total": t[2], "total_se": t[3]}
-        return {"label": self.label, "method": self.method, "model": self.model, "currency": self.currency, "names": self.names,
-                "quantities": self.quantities, "notionals": self.notionals, "n_paths": self.n_paths, "seed": self.seed,
-                "base": {"positions": self.values["base"], "positions_se": self.base_se, "total": float(sum(self.values["base"])),
-                         "total_se": self.base_total_se},
-                "values": self.values, "pnl": {k: block(v) for k, v in self.pnl.items()},
-                "measures": {k: block(v) for k, v in self.measures.items()}, "simulations": self.simulations,
-                "seconds": self.seconds, "warnings": self.warnings,
-                "cash": {k: [{str(t): a for t, a in c.items()} for c in v] for k, v in self.cash.items()},
-                "smoothing_bias": block(self.smoothing_bias) if self.smoothing_bias else None}
+
+        return {
+            "label": self.label,
+            "method": self.method,
+            "model": self.model,
+            "currency": self.currency,
+            "names": self.names,
+            "quantities": self.quantities,
+            "notionals": self.notionals,
+            "n_paths": self.n_paths,
+            "seed": self.seed,
+            "base": {
+                "positions": self.values["base"],
+                "positions_se": self.base_se,
+                "total": float(sum(self.values["base"])),
+                "total_se": self.base_total_se,
+            },
+            "values": self.values,
+            "pnl": {k: block(v) for k, v in self.pnl.items()},
+            "measures": {k: block(v) for k, v in self.measures.items()},
+            "simulations": self.simulations,
+            "seconds": self.seconds,
+            "warnings": self.warnings,
+            "cash": {k: [{str(t): a for t, a in c.items()} for c in v] for k, v in self.cash.items()},
+            "smoothing_bias": block(self.smoothing_bias) if self.smoothing_bias else None,
+        }
 
 
 def _expected_cash(fmt, flows: dict, redemption: dict, notional: float, n: float, scale: float) -> dict:
@@ -193,6 +228,7 @@ def _expected_cash(fmt, flows: dict, redemption: dict, notional: float, n: float
 
 def _sim_model(d_model: str, ctx, sim_ctx, horizon: float, settings: RiskSettings, seed: int, cache: dict, names):
     from ..models import BlackScholesModel, LocalVolModel
+
     if isinstance(sim_ctx, BasketContext):
         return sim_ctx.model(d_model, horizon, tuple(names))
     if d_model == "bs":
@@ -205,7 +241,11 @@ def _sim_model(d_model: str, ctx, sim_ctx, horizon: float, settings: RiskSetting
         key = id(sim_ctx.surface)
         if key not in cache:
             from ..structured.greeks import _recalibrated_slv
-            cache[key] = (sim_ctx.surface, _recalibrated_slv(ctx, sim_ctx.surface, horizon, settings.slv_particles, seed))
+
+            cache[key] = (
+                sim_ctx.surface,
+                _recalibrated_slv(ctx, sim_ctx.surface, horizon, settings.slv_particles, seed),
+            )
         return cache[key][1]
     return sim_ctx.model(d_model, horizon)
 
@@ -217,12 +257,21 @@ def _basket_simulation(ctx: BasketContext, sim_ctx: BasketContext, d_model: str)
     contexts = dict(ctx.contexts)
     for n in ctx.names:
         if sim_ctx.vols[n] is not ctx.vols[n] and not np.isscalar(sim_ctx.vols[n]):
-            contexts[n] = dataclasses.replace(ctx.name_context(n), surface=sim_ctx.vols[n], slv_cache={}, leverage_flat=True)
+            contexts[n] = dataclasses.replace(
+                ctx.name_context(n), surface=sim_ctx.vols[n], slv_cache={}, leverage_flat=True
+            )
     return dataclasses.replace(sim_ctx, contexts=contexts)
 
 
-def run_group(group: RiskGroup, shocks: dict, measures: list | None = None, settings: RiskSettings | None = None,
-              env: RiskEnv | None = None, cash_since: float | None = None, keep_pairs: bool = False) -> GroupRun:
+def run_group(
+    group: RiskGroup,
+    shocks: dict,
+    measures: list | None = None,
+    settings: RiskSettings | None = None,
+    env: RiskEnv | None = None,
+    cash_since: float | None = None,
+    keep_pairs: bool = False,
+) -> GroupRun:
     """Every shock of `shocks` ({name: Shock}; "base" is added) on one group. `cash_since` (< 0, years) counts what is paid in
     (cash_since, 0] as cash in every value, as after a roll (the P&L cascade moves the valuation date itself); `keep_pairs`
     keeps the base's pair values per position in `GroupRun.pairs`."""
@@ -245,8 +294,18 @@ def run_group(group: RiskGroup, shocks: dict, measures: list | None = None, sett
     spot0 = {n: float(ctx.markets[n].spot) for n in names} if basket else float(ctx.market.spot)
     notionals = [float({**it["program"].param_values, **it["pos"].params}.get("N", 1.0)) for it in base_items]
     quantities = [float(it["pos"].quantity) for it in base_items]
-    run = GroupRun(group.label, d.method, d.model, cur, [it["pos"].name for it in base_items], quantities, notionals,
-                   settings.n_paths if d.method != "replication" else 0, group.seed, warnings=list(d.warnings))
+    run = GroupRun(
+        group.label,
+        d.method,
+        d.model,
+        cur,
+        [it["pos"].name for it in base_items],
+        quantities,
+        notionals,
+        settings.n_paths if d.method != "replication" else 0,
+        group.seed,
+        warnings=list(d.warnings),
+    )
     buckets: OrderedDict = OrderedDict()
     for k, s in shocks.items():
         buckets.setdefault(sim_key(ctx, s, env), []).append(k)
@@ -277,8 +336,10 @@ def run_group(group: RiskGroup, shocks: dict, measures: list | None = None, sett
         for m in measures:
             if m.name in done_measures or not all(s in kept or s == "base" for s in m.weights):
                 continue
-            combo = [m.scale * sum(w * np.asarray((kept[s] if s != "base" else base_pairs)[i]) for s, w in m.weights.items())
-                     for i in range(len(per_position))]
+            combo = [
+                m.scale * sum(w * np.asarray((kept[s] if s != "base" else base_pairs)[i]) for s, w in m.weights.items())
+                for i in range(len(per_position))
+            ]
             st = [_stat(x) if np.ndim(x) else (float(x), 0.0) for x in combo]
             tot = np.sum(combo, axis=0)
             ts = _stat(tot) if np.ndim(tot) else (float(tot), 0.0)
@@ -310,13 +371,23 @@ def run_group(group: RiskGroup, shocks: dict, measures: list | None = None, sett
                     tl = it["timeline"]
                     T_obs = it["profile"].observation_times[-1] if it["profile"].observation_times else tl.horizon
                     fmt = RiskFormat(it["fmt"], None, since) if since is not None else it["fmt"]
-                    r = replication_result(it["program"], tl, full.surface, full.market, T_obs, fmt, it["pos"].params,
-                                           initial_fixing=spot0, history=it["history"].get(name, {}))
+                    r = replication_result(
+                        it["program"],
+                        tl,
+                        full.surface,
+                        full.market,
+                        T_obs,
+                        fmt,
+                        it["pos"].params,
+                        initial_fixing=spot0,
+                        history=it["history"].get(name, {}),
+                    )
                     vals.append(q * r.value.price * fx[m])
                     if m == "base" or shocks[m].roll_days:
                         N = float(r.notional)
                         run.cash.setdefault(m, []).append(
-                            _expected_cash(it["fmt"], r.expected_flows, r.redemption_probabilities, N, 1.0, q * fx[m]))
+                            _expected_cash(it["fmt"], r.expected_flows, r.redemption_probabilities, N, 1.0, q * fx[m])
+                        )
                 if m == "base" and keep_pairs:
                     run.pairs = list(vals)
                 finish(m, vals)
@@ -325,8 +396,15 @@ def run_group(group: RiskGroup, shocks: dict, measures: list | None = None, sett
         times = np.unique(np.concatenate([it["timeline"].sim_times for it in items]))
         base_markets = dict(ctx.markets) if basket else {names[0]: ctx.market}
         surfaces = ctx.vols if basket else {names[0]: ctx.surface}
-        moved_markets = {m: {n: shocked_market(base_markets[n], surfaces[n], name_moves(shocks[m], n, cur, env), None,
-                                               with_spot=False) for n in names} for m in members}
+        moved_markets = {
+            m: {
+                n: shocked_market(
+                    base_markets[n], surfaces[n], name_moves(shocks[m], n, cur, env), None, with_spot=False
+                )
+                for n in names
+            }
+            for m in members
+        }
         sim_markets = dict(base_markets)
         if len(members) == 1 and members[0] != "base":  # a shock alone on its simulation: simulate on its forwards (no
             sim_markets.update(moved_markets[members[0]])  # factor per date, so daily windows can still be reduced)
@@ -352,23 +430,39 @@ def run_group(group: RiskGroup, shocks: dict, measures: list | None = None, sett
                 factor = factor[names[0]]
             for it, N in zip(items, notionals):
                 fmt = it["fmt"] if pv_market is None and since is None else RiskFormat(it["fmt"], pv_market, since)
-                evaluations.append(Evaluation(it["program"], it["timeline"], it["pos"].params, fmt, N, smooth, True, factor))
+                evaluations.append(
+                    Evaluation(it["program"], it["timeline"], it["pos"].params, fmt, N, smooth, True, factor)
+                )
             layout.append(m)
             if m == "base" and smooth:
                 for it, N in zip(items, notionals):
-                    evaluations.append(Evaluation(it["program"], it["timeline"], it["pos"].params, it["fmt"], N, 0.0, True, 1.0))
+                    evaluations.append(
+                        Evaluation(it["program"], it["timeline"], it["pos"].params, it["fmt"], N, 0.0, True, 1.0)
+                    )
                 layout.append("base@exact")
-        totals, timings = batch_engine.run(model, market, names[0], times, settings.n_paths, group.seed, settings.batch,
-                                           spot0, hist, evaluations, settings.workers, engine=settings.engine,
-                                           threads=settings.engine_threads,
-                                           **({"eval_threads": settings.eval_threads} if settings.eval_threads else {}))
+        totals, timings = batch_engine.run(
+            model,
+            market,
+            names[0],
+            times,
+            settings.n_paths,
+            group.seed,
+            settings.batch,
+            spot0,
+            hist,
+            evaluations,
+            settings.workers,
+            engine=settings.engine,
+            threads=settings.engine_threads,
+            **({"eval_threads": settings.eval_threads} if settings.eval_threads else {}),
+        )
         run.simulations += 1
         run.timings.append({k: v for k, v in timings.items() if isinstance(v, (int, float, str))})
         if timings.get("engine_note") and timings["engine_note"] not in run.warnings:
             run.warnings.append(timings["engine_note"])
         n_pos = len(items)
         for b, m in enumerate(layout):
-            chunk = totals[b * n_pos:(b + 1) * n_pos]
+            chunk = totals[b * n_pos : (b + 1) * n_pos]
             mult = fx.get(m, 1.0)
             per = [q * mult * np.concatenate(t.pairs) for q, t in zip(quantities, chunk)]
             if m == "base@exact":
@@ -377,8 +471,10 @@ def run_group(group: RiskGroup, shocks: dict, measures: list | None = None, sett
             if m == "base" and keep_pairs:
                 run.pairs = per
             if m == "base" or shocks[m].roll_days:
-                run.cash[m] = [_expected_cash(it["fmt"], t.flows, t.redemption, N, settings.n_paths, q * mult)
-                               for it, t, N, q in zip(items, chunk, notionals, quantities)]
+                run.cash[m] = [
+                    _expected_cash(it["fmt"], t.flows, t.redemption, N, settings.n_paths, q * mult)
+                    for it, t, N, q in zip(items, chunk, notionals, quantities)
+                ]
             finish(m, per)
         if smooth and "base" in members:
             bias = [run.values["base"][i] - float(np.mean(exact[i])) for i in range(n_pos)]
@@ -392,8 +488,13 @@ def run_group(group: RiskGroup, shocks: dict, measures: list | None = None, sett
     return run
 
 
-def run_group_safe(group: RiskGroup, shocks: dict, measures: list | None = None, settings: RiskSettings | None = None,
-                   env: RiskEnv | None = None) -> GroupRun:
+def run_group_safe(
+    group: RiskGroup,
+    shocks: dict,
+    measures: list | None = None,
+    settings: RiskSettings | None = None,
+    env: RiskEnv | None = None,
+) -> GroupRun:
     """`run_group`, except that a replicated group whose shocked surface is in butterfly arbitrage (replication refuses it) is
     valued by local vol Monte Carlo instead, with a warning."""
     settings = settings or RiskSettings()
@@ -403,13 +504,16 @@ def run_group_safe(group: RiskGroup, shocks: dict, measures: list | None = None,
         if "arbitrage" not in str(exc) or settings.model is not None:
             raise
         run = run_group(group, shocks, measures, dataclasses.replace(settings, model="lv"), env)
-        run.warnings.append(f"replication refused a shocked surface ({exc}): the group is valued by local vol Monte Carlo")
+        run.warnings.append(
+            f"replication refused a shocked surface ({exc}): the group is valued by local vol Monte Carlo"
+        )
         return run
 
 
 @dataclass
 class RiskRun:
     """Every group of a book under the same shocks and measures, and the book totals (groups independent)."""
+
     groups: list
     shocks: dict
     settings: RiskSettings
@@ -443,15 +547,26 @@ class RiskRun:
 
     def to_dict(self) -> dict:
         names = sorted({k for g in self.groups for k in g.measures})
-        return {"groups": [g.to_dict() for g in self.groups], "shocks": {k: v.to_dict() for k, v in self.shocks.items()},
-                "settings": self.settings.to_dict(), "seconds": self.seconds,
-                "book": {"base": self.total("base", "base"),
-                         "pnl": {k: self.total("pnl", k) for k in self.shocks},
-                         "measures": {k: self.total("measures", k) for k in names}}}
+        return {
+            "groups": [g.to_dict() for g in self.groups],
+            "shocks": {k: v.to_dict() for k, v in self.shocks.items()},
+            "settings": self.settings.to_dict(),
+            "seconds": self.seconds,
+            "book": {
+                "base": self.total("base", "base"),
+                "pnl": {k: self.total("pnl", k) for k in self.shocks},
+                "measures": {k: self.total("measures", k) for k in names},
+            },
+        }
 
 
-def revalue(groups: list, shocks: dict, measures: list | None = None, settings: RiskSettings | None = None,
-            env: RiskEnv | None = None) -> RiskRun:
+def revalue(
+    groups: list,
+    shocks: dict,
+    measures: list | None = None,
+    settings: RiskSettings | None = None,
+    env: RiskEnv | None = None,
+) -> RiskRun:
     t0 = time.perf_counter()
     settings = settings or RiskSettings()
     out = [run_group(g, shocks, measures, settings, env) for g in groups]
@@ -462,5 +577,16 @@ def single_group(book: Book, ctx, seed: int = DEFAULT_SEED, label: str | None = 
     return [RiskGroup(label or (ctx.underlying if not isinstance(ctx, BasketContext) else "basket"), book, ctx, seed)]
 
 
-__all__ = ["RiskGroup", "RiskSettings", "Measure", "RiskRun", "GroupRun", "RiskFormat", "revalue", "run_group", "rolled_book",
-           "single_group", "Shock"]
+__all__ = [
+    "RiskGroup",
+    "RiskSettings",
+    "Measure",
+    "RiskRun",
+    "GroupRun",
+    "RiskFormat",
+    "revalue",
+    "run_group",
+    "rolled_book",
+    "single_group",
+    "Shock",
+]

@@ -12,9 +12,15 @@ from optlab.risk.greeks import GreekOptions, compute
 @pytest.fixture(scope="module")
 def lake():
     from optlab.marketdata.lake import Lake
+
     lk = Lake()
     try:
-        if lk.read("vol_surfaces", where="underlying = 'SPX' AND layer = 'reconstructed'", columns="count(*) AS n")["n"].iloc[0] < 600:
+        if (
+            lk.read("vol_surfaces", where="underlying = 'SPX' AND layer = 'reconstructed'", columns="count(*) AS n")[
+                "n"
+            ].iloc[0]
+            < 600
+        ):
             pytest.skip("no reconstructed SPX surfaces in the lake")
     except Exception:  # noqa: BLE001
         pytest.skip("no lake")
@@ -41,11 +47,15 @@ def test_full_reval_var_of_a_forward_is_the_quantile_of_the_returns_times_the_po
     F, D = float(ctx.market.F(1.0)), float(ctx.market.D(1.0))
     c = 100 * D * F / 100.0
     ch = V.changes(levels, 1)
-    rets = np.expm1(ch.loc[[__import__("datetime").date.fromisoformat(d) for d in out["one_day"]["dates"]], "spot:SPX"].to_numpy())
+    rets = np.expm1(
+        ch.loc[[__import__("datetime").date.fromisoformat(d) for d in out["one_day"]["dates"]], "spot:SPX"].to_numpy()
+    )
     np.testing.assert_allclose(r, c * rets, rtol=1e-10, atol=1e-12)
     np.testing.assert_allclose(out["one_day"]["var"], -c * np.quantile(rets, 0.01, method="lower"), rtol=1e-12)
     assert out["one_day"]["var_se"] == 0.0
-    assert out["one_day"]["factors"]["spot"][0] == pytest.approx(r[out["one_day"]["dates"].index(out["one_day"]["var_date"])])
+    assert out["one_day"]["factors"]["spot"][0] == pytest.approx(
+        r[out["one_day"]["dates"].index(out["one_day"]["var_date"])]
+    )
 
 
 def test_full_reval_of_a_vanilla_stays_close_to_delta_gamma_vega(lake):
@@ -68,6 +78,7 @@ def test_full_reval_of_a_vanilla_stays_close_to_delta_gamma_vega(lake):
 def test_processes_get_the_engine_of_the_parent():
     """native.set_default lives in the parent process (the desk sets it): the workers are told the engine explicitly."""
     from optlab import native
+
     native.set_default("gpu")
     try:
         st = V.worker_settings(V.RiskSettings(), 5)

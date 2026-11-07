@@ -47,92 +47,316 @@ def _v(path: str, *values) -> tuple:
     return ((path, values),)
 
 
-SECTIONS = {s.name: s for s in [
-    Section("general", "General", (
-        Field("basket", "choice", "single", "Underlying type", choices=("single", "worst_of")),
-        Field("underlying", "choice", "SPX", "Underlying", choices=enabled_names(),
-              visible_if=_v("general.basket", "single")),
-        Field("underlyings", "names", ("SPX", "SX5E"), "Basket (worst-of)",
-              visible_if=_v("general.basket", "worst_of")),
-        Field("notional", "number", 100.0, "Notional", minimum=0.0),
-        Field("payment_currency", "choice", "native", "Payment currency (native: of the first name)",
-              choices=("native", "USD", "EUR", "JPY", "GBP")),
-        Field("strike_date", "date", None, "Strike date (default: valuation date)"),
-        Field("maturity_months", "int", 24, "Maturity", "months", minimum=1),
-        Field("pay_lag", "int", 5, "Payment lag", "business days", minimum=0),
-        Field("calendar", "choice", "weekend", "Business-day calendar", choices=("weekend", "nyse", "eurex")),
-        Field("convention", "choice", "modified_following", "Roll convention",
-              choices=("modified_following", "following", "preceding", "unadjusted")),
-    )),
-    Section("wrapper", "Wrapper", (
-        Field("format", "choice", "note", "Format", choices=("note", "swap")),
-        Field("issuer_spread", "number", 0.0, "Issuer funding spread", "per annum", minimum=-0.05, maximum=0.2,
-              visible_if=_v("wrapper.format", "note")),
-        Field("funding", "choice", "none", "Funding leg", choices=("none", "floating"),
-              visible_if=_v("wrapper.format", "swap")),
-        Field("funding_spread", "number", 0.0, "Funding spread", "per annum", minimum=-0.05, maximum=0.2,
-              visible_if=(("wrapper.format", ("swap",)), ("wrapper.funding", ("floating",)))),
-        Field("funding_frequency_months", "int", 3, "Funding frequency", "months", minimum=1,
-              visible_if=(("wrapper.format", ("swap",)), ("wrapper.funding", ("floating",)))),
-        Field("solve", "choice", "coupon", "Solve for", choices=("coupon", "upfront")),
-        Field("margin", "number", 0.02, "Margin", "of notional", minimum=-0.5, maximum=0.5),
-    )),
-    Section("autocall", "Autocall", (
-        Field("frequency_months", "int", 3, "Call frequency", "months", minimum=1),
-        Field("trigger", "number", 1.0, "Autocall trigger", "of initial", minimum=0.0, maximum=LEVEL_MAX),
-        Field("step_down", "number", 0.0, "Step-down per call date", "of initial", minimum=0.0, maximum=1.0),
-        Field("first_call", "int", 1, "First call date (non-call periods + 1)", minimum=1),
-    )),
-    Section("coupon", "Coupon", (
-        Field("type", "choice", "fixed", "Coupon type", choices=("none", "fixed", "conditional", "snowball")),
-        Field("rate", "number", 0.08, "Coupon rate", "per annum", minimum=0.0, maximum=1.0,
-              visible_if=_v("coupon.type", "fixed", "conditional", "snowball")),
-        Field("frequency_months", "int", 3, "Coupon frequency", "months", minimum=1,
-              visible_if=_v("coupon.type", "fixed", "conditional")),
-        Field("barrier", "number", 0.7, "Coupon barrier", "of initial", minimum=0.0, maximum=LEVEL_MAX,
-              visible_if=_v("coupon.type", "conditional")),
-        Field("memory", "bool", True, "Memory", visible_if=_v("coupon.type", "conditional")),
-    )),
-    Section("upside", "Upside", (
-        Field("type", "choice", "none", "Upside", choices=("none", "call", "call_spread", "digital")),
-        Field("strike", "number", 1.0, "Strike", "of initial", minimum=0.0, maximum=LEVEL_MAX,
-              visible_if=_v("upside.type", "call", "call_spread", "digital")),
-        Field("participation", "number", 1.0, "Participation", minimum=0.0, maximum=10.0,
-              visible_if=_v("upside.type", "call", "call_spread")),
-        Field("cap", "number", 1.3, "Cap", "of initial", minimum=0.0, maximum=LEVEL_MAX,
-              visible_if=_v("upside.type", "call_spread")),
-        Field("digital_amount", "number", 0.1, "Digital amount", "of notional", minimum=0.0, maximum=1.0,
-              visible_if=_v("upside.type", "digital")),
-    )),
-    Section("downside", "Downside", (
-        Field("type", "choice", "pdi", "Downside", choices=("none", "pdi", "geared_put")),
-        Field("strike", "number", 1.0, "Put strike", "of initial", minimum=0.0, maximum=2.0,
-              visible_if=_v("downside.type", "pdi", "geared_put")),
-        Field("barrier", "number", 0.6, "Knock-in barrier", "of initial", minimum=0.0, maximum=LEVEL_MAX,
-              visible_if=_v("downside.type", "pdi")),
-        Field("observation", "choice", "european", "Barrier observation", choices=("european", "daily"),
-              visible_if=_v("downside.type", "pdi")),
-        Field("gearing", "number", None, "Gearing (1 / strike)", derived=True,
-              visible_if=_v("downside.type", "geared_put")),
-    )),
-    # Empty takes the default of the groups and the size (defaults.py); a value overrides it, with its sign.
-    Section("costs", "Hedging costs", (
-        Field("side", "choice", "sell", "The desk", choices=("sell", "buy")),
-        Field("vol", "number", None, "Volatility, parallel", "vol points", minimum=-0.2, maximum=0.2),
-        Field("skew", "number", None, "Volatility skew, 90-110 % at 1 year", "vol points", minimum=-0.2, maximum=0.2),
-        Field("corr", "number", None, "Correlation", "points", minimum=-0.5, maximum=0.5, visible_if=_v("general.basket", "worst_of")),
-        Field("corr_skew", "number", None, "Correlation skew: slope per standard deviation", "points", minimum=-0.5, maximum=0.5, visible_if=_v("general.basket", "worst_of")),
-        Field("dividend", "number", None, "Dividends", "of dividends", minimum=-1.0, maximum=1.0),
-        Field("repo", "number", None, "Repo", "bp", minimum=-0.05, maximum=0.05),
-        Field("spot", "number", None, "Spot, delta bid-ask", "bp", minimum=-0.02, maximum=0.02),
-        Field("slv_mix", "number", None, "SLV mix (not calibrated)", "", minimum=0.0, maximum=1.0),
-        Field("min_spread", "number", None, "Digitals: minimum spread", "of initial", minimum=0.0, maximum=0.5),
-        Field("delta_max_coupon", "number", None, "Delta max, coupon barrier", "% per 1 %", minimum=0.01, maximum=100.0, visible_if=_v("coupon.type", "conditional")),
-        Field("delta_max_autocall", "number", None, "Delta max, autocall trigger", "% per 1 %", minimum=0.01, maximum=100.0),
-        Field("delta_max_barrier", "number", None, "Delta max, final barrier", "% per 1 %", minimum=0.01, maximum=100.0, visible_if=_v("downside.type", "pdi")),
-        Field("delta_max_upside", "number", None, "Delta max, upside digital", "% per 1 %", minimum=0.01, maximum=100.0, visible_if=_v("upside.type", "digital")),
-    )),
-]}
+SECTIONS = {
+    s.name: s
+    for s in [
+        Section(
+            "general",
+            "General",
+            (
+                Field("basket", "choice", "single", "Underlying type", choices=("single", "worst_of")),
+                Field(
+                    "underlying",
+                    "choice",
+                    "SPX",
+                    "Underlying",
+                    choices=enabled_names(),
+                    visible_if=_v("general.basket", "single"),
+                ),
+                Field(
+                    "underlyings",
+                    "names",
+                    ("SPX", "SX5E"),
+                    "Basket (worst-of)",
+                    visible_if=_v("general.basket", "worst_of"),
+                ),
+                Field("notional", "number", 100.0, "Notional", minimum=0.0),
+                Field(
+                    "payment_currency",
+                    "choice",
+                    "native",
+                    "Payment currency (native: of the first name)",
+                    choices=("native", "USD", "EUR", "JPY", "GBP"),
+                ),
+                Field("strike_date", "date", None, "Strike date (default: valuation date)"),
+                Field("maturity_months", "int", 24, "Maturity", "months", minimum=1),
+                Field("pay_lag", "int", 5, "Payment lag", "business days", minimum=0),
+                Field("calendar", "choice", "weekend", "Business-day calendar", choices=("weekend", "nyse", "eurex")),
+                Field(
+                    "convention",
+                    "choice",
+                    "modified_following",
+                    "Roll convention",
+                    choices=("modified_following", "following", "preceding", "unadjusted"),
+                ),
+            ),
+        ),
+        Section(
+            "wrapper",
+            "Wrapper",
+            (
+                Field("format", "choice", "note", "Format", choices=("note", "swap")),
+                Field(
+                    "issuer_spread",
+                    "number",
+                    0.0,
+                    "Issuer funding spread",
+                    "per annum",
+                    minimum=-0.05,
+                    maximum=0.2,
+                    visible_if=_v("wrapper.format", "note"),
+                ),
+                Field(
+                    "funding",
+                    "choice",
+                    "none",
+                    "Funding leg",
+                    choices=("none", "floating"),
+                    visible_if=_v("wrapper.format", "swap"),
+                ),
+                Field(
+                    "funding_spread",
+                    "number",
+                    0.0,
+                    "Funding spread",
+                    "per annum",
+                    minimum=-0.05,
+                    maximum=0.2,
+                    visible_if=(("wrapper.format", ("swap",)), ("wrapper.funding", ("floating",))),
+                ),
+                Field(
+                    "funding_frequency_months",
+                    "int",
+                    3,
+                    "Funding frequency",
+                    "months",
+                    minimum=1,
+                    visible_if=(("wrapper.format", ("swap",)), ("wrapper.funding", ("floating",))),
+                ),
+                Field("solve", "choice", "coupon", "Solve for", choices=("coupon", "upfront")),
+                Field("margin", "number", 0.02, "Margin", "of notional", minimum=-0.5, maximum=0.5),
+            ),
+        ),
+        Section(
+            "autocall",
+            "Autocall",
+            (
+                Field("frequency_months", "int", 3, "Call frequency", "months", minimum=1),
+                Field("trigger", "number", 1.0, "Autocall trigger", "of initial", minimum=0.0, maximum=LEVEL_MAX),
+                Field("step_down", "number", 0.0, "Step-down per call date", "of initial", minimum=0.0, maximum=1.0),
+                Field("first_call", "int", 1, "First call date (non-call periods + 1)", minimum=1),
+            ),
+        ),
+        Section(
+            "coupon",
+            "Coupon",
+            (
+                Field("type", "choice", "fixed", "Coupon type", choices=("none", "fixed", "conditional", "snowball")),
+                Field(
+                    "rate",
+                    "number",
+                    0.08,
+                    "Coupon rate",
+                    "per annum",
+                    minimum=0.0,
+                    maximum=1.0,
+                    visible_if=_v("coupon.type", "fixed", "conditional", "snowball"),
+                ),
+                Field(
+                    "frequency_months",
+                    "int",
+                    3,
+                    "Coupon frequency",
+                    "months",
+                    minimum=1,
+                    visible_if=_v("coupon.type", "fixed", "conditional"),
+                ),
+                Field(
+                    "barrier",
+                    "number",
+                    0.7,
+                    "Coupon barrier",
+                    "of initial",
+                    minimum=0.0,
+                    maximum=LEVEL_MAX,
+                    visible_if=_v("coupon.type", "conditional"),
+                ),
+                Field("memory", "bool", True, "Memory", visible_if=_v("coupon.type", "conditional")),
+            ),
+        ),
+        Section(
+            "upside",
+            "Upside",
+            (
+                Field("type", "choice", "none", "Upside", choices=("none", "call", "call_spread", "digital")),
+                Field(
+                    "strike",
+                    "number",
+                    1.0,
+                    "Strike",
+                    "of initial",
+                    minimum=0.0,
+                    maximum=LEVEL_MAX,
+                    visible_if=_v("upside.type", "call", "call_spread", "digital"),
+                ),
+                Field(
+                    "participation",
+                    "number",
+                    1.0,
+                    "Participation",
+                    minimum=0.0,
+                    maximum=10.0,
+                    visible_if=_v("upside.type", "call", "call_spread"),
+                ),
+                Field(
+                    "cap",
+                    "number",
+                    1.3,
+                    "Cap",
+                    "of initial",
+                    minimum=0.0,
+                    maximum=LEVEL_MAX,
+                    visible_if=_v("upside.type", "call_spread"),
+                ),
+                Field(
+                    "digital_amount",
+                    "number",
+                    0.1,
+                    "Digital amount",
+                    "of notional",
+                    minimum=0.0,
+                    maximum=1.0,
+                    visible_if=_v("upside.type", "digital"),
+                ),
+            ),
+        ),
+        Section(
+            "downside",
+            "Downside",
+            (
+                Field("type", "choice", "pdi", "Downside", choices=("none", "pdi", "geared_put")),
+                Field(
+                    "strike",
+                    "number",
+                    1.0,
+                    "Put strike",
+                    "of initial",
+                    minimum=0.0,
+                    maximum=2.0,
+                    visible_if=_v("downside.type", "pdi", "geared_put"),
+                ),
+                Field(
+                    "barrier",
+                    "number",
+                    0.6,
+                    "Knock-in barrier",
+                    "of initial",
+                    minimum=0.0,
+                    maximum=LEVEL_MAX,
+                    visible_if=_v("downside.type", "pdi"),
+                ),
+                Field(
+                    "observation",
+                    "choice",
+                    "european",
+                    "Barrier observation",
+                    choices=("european", "daily"),
+                    visible_if=_v("downside.type", "pdi"),
+                ),
+                Field(
+                    "gearing",
+                    "number",
+                    None,
+                    "Gearing (1 / strike)",
+                    derived=True,
+                    visible_if=_v("downside.type", "geared_put"),
+                ),
+            ),
+        ),
+        # Empty takes the default of the groups and the size (defaults.py); a value overrides it, with its sign.
+        Section(
+            "costs",
+            "Hedging costs",
+            (
+                Field("side", "choice", "sell", "The desk", choices=("sell", "buy")),
+                Field("vol", "number", None, "Volatility, parallel", "vol points", minimum=-0.2, maximum=0.2),
+                Field(
+                    "skew",
+                    "number",
+                    None,
+                    "Volatility skew, 90-110 % at 1 year",
+                    "vol points",
+                    minimum=-0.2,
+                    maximum=0.2,
+                ),
+                Field(
+                    "corr",
+                    "number",
+                    None,
+                    "Correlation",
+                    "points",
+                    minimum=-0.5,
+                    maximum=0.5,
+                    visible_if=_v("general.basket", "worst_of"),
+                ),
+                Field(
+                    "corr_skew",
+                    "number",
+                    None,
+                    "Correlation skew: slope per standard deviation",
+                    "points",
+                    minimum=-0.5,
+                    maximum=0.5,
+                    visible_if=_v("general.basket", "worst_of"),
+                ),
+                Field("dividend", "number", None, "Dividends", "of dividends", minimum=-1.0, maximum=1.0),
+                Field("repo", "number", None, "Repo", "bp", minimum=-0.05, maximum=0.05),
+                Field("spot", "number", None, "Spot, delta bid-ask", "bp", minimum=-0.02, maximum=0.02),
+                Field("slv_mix", "number", None, "SLV mix (not calibrated)", "", minimum=0.0, maximum=1.0),
+                Field("min_spread", "number", None, "Digitals: minimum spread", "of initial", minimum=0.0, maximum=0.5),
+                Field(
+                    "delta_max_coupon",
+                    "number",
+                    None,
+                    "Delta max, coupon barrier",
+                    "% per 1 %",
+                    minimum=0.01,
+                    maximum=100.0,
+                    visible_if=_v("coupon.type", "conditional"),
+                ),
+                Field(
+                    "delta_max_autocall",
+                    "number",
+                    None,
+                    "Delta max, autocall trigger",
+                    "% per 1 %",
+                    minimum=0.01,
+                    maximum=100.0,
+                ),
+                Field(
+                    "delta_max_barrier",
+                    "number",
+                    None,
+                    "Delta max, final barrier",
+                    "% per 1 %",
+                    minimum=0.01,
+                    maximum=100.0,
+                    visible_if=_v("downside.type", "pdi"),
+                ),
+                Field(
+                    "delta_max_upside",
+                    "number",
+                    None,
+                    "Delta max, upside digital",
+                    "% per 1 %",
+                    minimum=0.01,
+                    maximum=100.0,
+                    visible_if=_v("upside.type", "digital"),
+                ),
+            ),
+        ),
+    ]
+}
 
 
 @dataclass(frozen=True)
@@ -145,10 +369,19 @@ class Mask:
 
 
 MASKS = {
-    "autocall": Mask("autocall", "Autocallable", ("general", "wrapper", "autocall", "coupon", "downside", "costs"),
-                     {"coupon.type": ("fixed", "conditional", "snowball")}),
-    "bullet": Mask("bullet", "Bullet (non-callable)", ("general", "wrapper", "coupon", "upside", "downside", "costs"),
-                   {"coupon.type": ("none", "fixed", "conditional")}, ("costs.delta_max_autocall",)),
+    "autocall": Mask(
+        "autocall",
+        "Autocallable",
+        ("general", "wrapper", "autocall", "coupon", "downside", "costs"),
+        {"coupon.type": ("fixed", "conditional", "snowball")},
+    ),
+    "bullet": Mask(
+        "bullet",
+        "Bullet (non-callable)",
+        ("general", "wrapper", "coupon", "upside", "downside", "costs"),
+        {"coupon.type": ("none", "fixed", "conditional")},
+        ("costs.delta_max_autocall",),
+    ),
 }
 
 
@@ -207,8 +440,9 @@ class TermSheet:
         given = {s: dict(v) for s, v in (values or {}).items()}
         for s in given:
             if s not in self.mask.sections:
-                raise TermSheetError(f"section {s!r} is not part of the {mask} mask "
-                                     f"(sections: {', '.join(self.mask.sections)})")
+                raise TermSheetError(
+                    f"section {s!r} is not part of the {mask} mask (sections: {', '.join(self.mask.sections)})"
+                )
         self.values: dict = {}
         # defaults first, so that visibility can be evaluated on the merged values
         for s in self.mask.sections:
@@ -234,8 +468,9 @@ class TermSheet:
                 v = _coerce(f, self.values[s][f.name], path)
                 allowed = self.mask.choices.get(path, f.choices)
                 if f.kind == "choice" and v not in allowed:
-                    raise TermSheetError(f"{path} = {v!r} is not allowed for the {self.mask.name} mask "
-                                         f"(choices: {', '.join(allowed)})")
+                    raise TermSheetError(
+                        f"{path} = {v!r} is not allowed for the {self.mask.name} mask (choices: {', '.join(allowed)})"
+                    )
                 self.values[s][f.name] = v
         if self.visible("downside.gearing"):
             self.values["downside"]["gearing"] = 1.0 / self.values["downside"]["strike"]
@@ -275,8 +510,9 @@ class TermSheet:
         if self.mask.name == "autocall":
             n_calls = m // self.get("autocall.frequency_months")
             if self.get("autocall.first_call") > n_calls:
-                raise TermSheetError(f"first_call = {self.get('autocall.first_call')} is after the last "
-                                     f"observation ({n_calls})")
+                raise TermSheetError(
+                    f"first_call = {self.get('autocall.first_call')} is after the last observation ({n_calls})"
+                )
 
     def replace(self, **changes) -> "TermSheet":
         """Copy with dotted-path changes, e.g. replace(**{"coupon.rate": 0.1}). Fields that the changes hide are
@@ -350,8 +586,14 @@ def _json(v):
 def json_schema() -> dict:
     """JSON Schema (2020-12) of a term-sheet dict: one branch per mask, enums and bounds from the field list.
     The visibility rules are listed per field under "x-visible-if"; the TermSheet constructor enforces them."""
-    kinds = {"number": "number", "int": "integer", "bool": "boolean", "choice": "string", "date": "string",
-             "names": "array"}
+    kinds = {
+        "number": "number",
+        "int": "integer",
+        "bool": "boolean",
+        "choice": "string",
+        "date": "string",
+        "names": "array",
+    }
     branches = []
     for mask in MASKS.values():
         props: dict = {"type": {"const": mask.name}}
@@ -362,7 +604,10 @@ def json_schema() -> dict:
                     continue
                 path = f"{sname}.{f.name}"
                 optional = f.kind == "number" and f.default is None
-                spec: dict = {"type": [kinds[f.kind], "null"] if optional else kinds[f.kind], "description": f.label + (f" ({f.unit})" if f.unit else "")}
+                spec: dict = {
+                    "type": [kinds[f.kind], "null"] if optional else kinds[f.kind],
+                    "description": f.label + (f" ({f.unit})" if f.unit else ""),
+                }
                 if f.kind == "choice":
                     spec["enum"] = list(mask.choices.get(path, f.choices))
                 if f.kind == "date":
@@ -380,8 +625,11 @@ def json_schema() -> dict:
                 fields[f.name] = spec
             props[sname] = {"type": "object", "properties": fields, "additionalProperties": False}
         branches.append({"type": "object", "properties": props, "required": ["type"], "additionalProperties": False})
-    return {"$schema": "https://json-schema.org/draft/2020-12/schema", "title": "optlab structured term sheet",
-            "oneOf": branches}
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "optlab structured term sheet",
+        "oneOf": branches,
+    }
 
 
 def describe(mask: str, sheet: TermSheet | None = None) -> dict:
@@ -394,8 +642,18 @@ def describe(mask: str, sheet: TermSheet | None = None) -> dict:
             path = f"{s}.{f.name}"
             if not sheet.visible(path):
                 continue
-            fields.append({"name": f.name, "path": path, "label": f.label, "kind": f.kind, "unit": f.unit,
-                           "choices": list(MASKS[mask].choices.get(path, f.choices)), "value": _json(sheet.get(path)),
-                           "read_only": f.derived, "optional": f.kind == "number" and f.default is None and not f.derived})
+            fields.append(
+                {
+                    "name": f.name,
+                    "path": path,
+                    "label": f.label,
+                    "kind": f.kind,
+                    "unit": f.unit,
+                    "choices": list(MASKS[mask].choices.get(path, f.choices)),
+                    "value": _json(sheet.get(path)),
+                    "read_only": f.derived,
+                    "optional": f.kind == "number" and f.default is None and not f.derived,
+                }
+            )
         out["sections"].append({"name": s, "label": SECTIONS[s].label, "fields": fields})
     return out

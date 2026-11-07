@@ -36,8 +36,11 @@ class CompiledProduct:
 
 def _observations(sheet: TermSheet, strike: dt.date, cal):
     """Observation dates with their roles: coupon date, call index (0 for the first call date) and payment."""
-    months, conv, lag = sheet.get("general.maturity_months"), sheet.get("general.convention"), sheet.get(
-        "general.pay_lag")
+    months, conv, lag = (
+        sheet.get("general.maturity_months"),
+        sheet.get("general.convention"),
+        sheet.get("general.pay_lag"),
+    )
     obs: dict = {}
     if sheet.get("coupon.type") in ("fixed", "conditional"):
         for o, p in schedule(strike, months, sheet.get("coupon.frequency_months"), conv, lag, cal):
@@ -45,7 +48,7 @@ def _observations(sheet: TermSheet, strike: dt.date, cal):
     if sheet.mask.name == "autocall":
         calls = schedule(strike, months, sheet.get("autocall.frequency_months"), conv, lag, cal)
         first = sheet.get("autocall.first_call")
-        for j, (o, p) in enumerate(calls[first - 1:-1]):
+        for j, (o, p) in enumerate(calls[first - 1 : -1]):
             obs.setdefault(o, {"pay": p})["call"] = j
             obs[o]["period"] = first + j
     maturity = cal.adjust(add_months(strike, months), conv)
@@ -113,8 +116,14 @@ def compile_sheet(sheet: TermSheet, valuation, calendar=None) -> CompiledProduct
             if coupon == "fixed":
                 body.append("pay N * cpn as coupon")
             elif memory:
-                body += ["if perf >= coupon_barrier then", "  pay N * cpn * (1 + missed) as coupon",
-                         "  missed = 0", "else", "  missed = missed + 1", "end"]
+                body += [
+                    "if perf >= coupon_barrier then",
+                    "  pay N * cpn * (1 + missed) as coupon",
+                    "  missed = 0",
+                    "else",
+                    "  missed = missed + 1",
+                    "end",
+                ]
             else:
                 body += ["if perf >= coupon_barrier then", "  pay N * cpn as coupon", "end"]
         if call is not None:
@@ -144,10 +153,16 @@ def compile_sheet(sheet: TermSheet, valuation, calendar=None) -> CompiledProduct
                     body.append(f"knocked_in = lowest({names[0]}, {strike}, {o}) < ki_barrier * S0")
                 else:
                     body.append("knocked_in = perf < ki_barrier")
-                body += ["if knocked_in then", "  pay N - N * max(put_strike - perf, 0) as redemption", "else",
-                         "  pay N as redemption", "end"]
+                body += [
+                    "if knocked_in then",
+                    "  pay N - N * max(put_strike - perf, 0) as redemption",
+                    "else",
+                    "  pay N as redemption",
+                    "end",
+                ]
         lines += ["", f"event {o} pay {role['pay']}", *("  " + b for b in body), "end"]
     script = "\n".join(lines) + "\n"
     program = validate(parse(script))
-    return CompiledProduct(sheet, script, program, valuation, strike, maturity,
-                           "cpn" if coupon != "none" else None, coupon_scale, cal)
+    return CompiledProduct(
+        sheet, script, program, valuation, strike, maturity, "cpn" if coupon != "none" else None, coupon_scale, cal
+    )

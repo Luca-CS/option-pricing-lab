@@ -24,10 +24,25 @@ from optlab.structured.defaults import resolve
 
 # A daily BRC struck before the fall of March 2020, and a Phoenix struck at the top of January 2022.
 PRODUCTS = {
-    "BRC-2020": (preset("barrier_reverse_convertible", **{"general.maturity_months": 12, "downside.barrier": 0.7,
-                                                          "general.underlying": "SPX"}), dt.date(2020, 1, 15)),
-    "PHX-2022": (preset("phoenix", **{"general.maturity_months": 36, "coupon.barrier": 0.7, "downside.barrier": 0.6,
-                                      "general.underlying": "SPX"}), dt.date(2022, 1, 14)),
+    "BRC-2020": (
+        preset(
+            "barrier_reverse_convertible",
+            **{"general.maturity_months": 12, "downside.barrier": 0.7, "general.underlying": "SPX"},
+        ),
+        dt.date(2020, 1, 15),
+    ),
+    "PHX-2022": (
+        preset(
+            "phoenix",
+            **{
+                "general.maturity_months": 36,
+                "coupon.barrier": 0.7,
+                "downside.barrier": 0.6,
+                "general.underlying": "SPX",
+            },
+        ),
+        dt.date(2022, 1, 14),
+    ),
 }
 
 
@@ -40,11 +55,16 @@ def main():
     ap.add_argument("--only", default=None)
     ap.add_argument("--leverage-every", type=int, default=1)
     ap.add_argument("--out", default=None)
-    ap.add_argument("--costs", action="store_true", help="deal at the desk's client price: the lines of the quote become the trade's reserves")
+    ap.add_argument(
+        "--costs",
+        action="store_true",
+        help="deal at the desk's client price: the lines of the quote become the trade's reserves",
+    )
     args = ap.parse_args()
     lake = Lake()
-    cfg = ReplayConfig(model=args.model, n_paths=args.paths, batch=10_000, reval_every=args.every,
-                       leverage_every=args.leverage_every)
+    cfg = ReplayConfig(
+        model=args.model, n_paths=args.paths, batch=10_000, reval_every=args.every, leverage_every=args.leverage_every
+    )
     if args.action == "cost":
         sheet, strike = PRODUCTS["BRC-2020"]
         trade, info = strike_trade(lake, "COST", sheet, strike, 1.0, cfg)

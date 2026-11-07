@@ -27,7 +27,9 @@ def desk(tmp_path_factory):
     fill_observed(lake, pd.bdate_range("2019-01-01", "2020-12-31"))
     derive_all(lake, "2019-01-01", names=("SPX", "NDX", "AAPL"))
     d = Desk(store=root / "desk.sqlite", lake=root / "lake")
-    d.use_snapshot({"snapshot_id": d.market_store.put(market_at(lake, "SPX", DAY, leverage="calibrate", n_particles=20_000))})
+    d.use_snapshot(
+        {"snapshot_id": d.market_store.put(market_at(lake, "SPX", DAY, leverage="calibrate", n_particles=20_000))}
+    )
     yield d
     d.jobs.shutdown()
 
@@ -56,12 +58,16 @@ def options(**kw):
 def test_a_sheet_on_another_name_is_priced_on_that_names_market(desk):
     q = wait(desk, desk.quote({"sheet": body(underlying="AAPL"), "options": options(model="lv")})["job"])
     ctx, _ = context_at(desk.lake, "AAPL", DAY, layer="reconstructed")
-    direct = quote(preset("phoenix", **{"general.underlying": "AAPL"}), ctx, model="lv", control=None, n_paths=PATHS, batch=10_000)
+    direct = quote(
+        preset("phoenix", **{"general.underlying": "AAPL"}), ctx, model="lv", control=None, n_paths=PATHS, batch=10_000
+    )
     assert q["coupon_rate"] == pytest.approx(direct.coupon_rate, abs=1e-12)
     row = q["basket"]["names"]["AAPL"]
     assert q["basket"]["kind"] == "single" and row["source"] == "lake" and row["origin"] == "reconstructed"
     spx = wait(desk, desk.quote({"sheet": body(), "options": options(model="lv")})["job"])
-    assert spx["basket"] is None and abs(spx["coupon_rate"] - q["coupon_rate"]) > 0.01  # another surface, another coupon
+    assert (
+        spx["basket"] is None and abs(spx["coupon_rate"] - q["coupon_rate"]) > 0.01
+    )  # another surface, another coupon
 
 
 def test_a_market_without_a_leverage_calibrates_on_first_slv_use(desk):
@@ -74,7 +80,9 @@ def test_a_market_without_a_leverage_calibrates_on_first_slv_use(desk):
 
 
 def test_a_name_the_lake_does_not_hold_is_refused_as_before(desk):
-    job = desk.quote({"sheet": body(underlying="GS"), "options": options()})["job"]  # GS has prices but no surface in this lake
+    job = desk.quote({"sheet": body(underlying="GS"), "options": options()})[
+        "job"
+    ]  # GS has prices but no surface in this lake
     deadline = time.perf_counter() + 60
     while (j := desk.job(job))["state"] in ("queued", "running"):
         assert time.perf_counter() < deadline
@@ -83,41 +91,68 @@ def test_a_name_the_lake_does_not_hold_is_refused_as_before(desk):
 
 
 def test_a_worst_of_has_every_name_on_its_own_surface_and_a_measured_correlation(desk):
-    q = wait(desk, desk.quote({"sheet": body(basket="worst_of", underlyings=["SPX", "NDX", "AAPL"]), "options": options()})["job"])
+    q = wait(
+        desk,
+        desk.quote({"sheet": body(basket="worst_of", underlyings=["SPX", "NDX", "AAPL"]), "options": options()})["job"],
+    )
     names = q["basket"]["names"]
     assert names["SPX"]["source"] == "active" and names["NDX"]["source"] == names["AAPL"]["source"] == "lake"
     assert all(names[n]["origin"] == "reconstructed" and names[n]["layer"] == "reconstructed" for n in ("NDX", "AAPL"))
     measured, meta = correlation_at(desk.lake, ["SPX", "NDX", "AAPL"], DAY)
-    assert q["basket"]["corr"]["NDX|SPX"] == pytest.approx(measured[0, 1]) and q["basket"]["corr_source"]["NDX|SPX"] == "lake"
+    assert (
+        q["basket"]["corr"]["NDX|SPX"] == pytest.approx(measured[0, 1])
+        and q["basket"]["corr_source"]["NDX|SPX"] == "lake"
+    )
     assert q["basket"]["correlation"] == meta
     bctx, _ = desk._basket_ctx(("SPX", "NDX", "AAPL"))
     assert isinstance(bctx, BasketContext) and bctx.has_surfaces and bctx.names == ("SPX", "NDX", "AAPL")
     smile = [float(bctx.vols[n].iv(-0.2, 1.0) - bctx.vols[n].iv(0.0, 1.0)) for n in bctx.names]
     assert min(smile) > 0.005  # each name has a skew, not a flat vol
-    direct = quote(preset("phoenix", **{"general.basket": "worst_of", "general.underlyings": ["SPX", "NDX", "AAPL"]}), bctx, control=None,
-                   n_paths=PATHS, batch=10_000)
+    direct = quote(
+        preset("phoenix", **{"general.basket": "worst_of", "general.underlyings": ["SPX", "NDX", "AAPL"]}),
+        bctx,
+        control=None,
+        n_paths=PATHS,
+        batch=10_000,
+    )
     assert q["coupon_rate"] == pytest.approx(direct.coupon_rate, abs=1e-12)
 
 
 def test_what_is_typed_wins_over_the_lake_and_what_is_missing_is_said(desk):
     typed = {"names": {"NDX": {"vol": 0.31, "q": 0.01, "r": 0.02}}, "corr": {"NDX|SPX": 0.5}}
     bctx, shown = desk._basket_ctx(("SPX", "NDX", "AAPL"), typed)
-    assert bctx.vols["NDX"] == 0.31 and shown["names"]["NDX"]["source"] == "input" and shown["names"]["NDX"]["origin"] == "synthetic"
+    assert (
+        bctx.vols["NDX"] == 0.31
+        and shown["names"]["NDX"]["source"] == "input"
+        and shown["names"]["NDX"]["origin"] == "synthetic"
+    )
     assert shown["corr"]["NDX|SPX"] == 0.5 and shown["corr_source"]["NDX|SPX"] == "input"
     assert shown["names"]["AAPL"]["source"] == "lake" and shown["corr_source"]["AAPL|SPX"] == "lake"
     assert shown["corr_source"]["AAPL|NDX"] == "default"  # NDX is typed: no measure applies to it
     bctx, shown = desk._basket_ctx(("SPX", "NKY"), {})  # declared, not loaded
-    assert np.isscalar(bctx.vols["NKY"]) and shown["names"]["NKY"]["source"] == "default" and shown["corr_source"]["NKY|SPX"] == "default"
+    assert (
+        np.isscalar(bctx.vols["NKY"])
+        and shown["names"]["NKY"]["source"] == "default"
+        and shown["corr_source"]["NKY|SPX"] == "default"
+    )
 
 
 def test_a_basket_without_the_active_name_discounts_on_its_first_name(desk):
     bctx, shown = desk._basket_ctx(("NDX", "AAPL"))
-    assert bctx.names == ("NDX", "AAPL") and bctx.market is bctx.markets["NDX"] and shown["corr_source"]["AAPL|NDX"] == "lake"
+    assert (
+        bctx.names == ("NDX", "AAPL")
+        and bctx.market is bctx.markets["NDX"]
+        and shown["corr_source"]["AAPL|NDX"] == "lake"
+    )
 
 
 def test_the_book_prices_one_group_per_name_and_the_worst_ofs(desk):
     tids = []
-    for sheet, rate in ((body(), 0.05), (body(underlying="AAPL"), 0.09), (body(basket="worst_of", underlyings=["SPX", "AAPL"]), 0.1)):
+    for sheet, rate in (
+        (body(), 0.05),
+        (body(underlying="AAPL"), 0.09),
+        (body(basket="worst_of", underlyings=["SPX", "AAPL"]), 0.1),
+    ):
         tids.append(desk.create_trade({"sheet": sheet, "coupon_rate": rate, "quantity": -1.0})["trade_id"])
     try:
         book = wait(desk, desk.price_book({"options": options(greeks=True, model="lv")})["job"])

@@ -6,8 +6,23 @@ import json
 import numpy as np
 import pytest
 
-from _risk_refs import (FLAT, Q, R, S0, VALUATION, VOL, bs_cross, book, day, digital, engine_name, flat_ctx, vanilla, within,
-                        worst_put_shifted)
+from _risk_refs import (
+    FLAT,
+    Q,
+    R,
+    S0,
+    VALUATION,
+    VOL,
+    bs_cross,
+    book,
+    day,
+    digital,
+    engine_name,
+    flat_ctx,
+    vanilla,
+    within,
+    worst_put_shifted,
+)
 from optlab import Market
 from optlab.blackscholes import bs_greeks, bs_price
 from optlab.risk import RiskGroup, RiskSettings
@@ -44,10 +59,13 @@ def test_vanilla_greeks_match_black_scholes(vanillas, i, K, kind, q):
     np.testing.assert_allclose(g["rho|USD|"][0], c * ref["rho"] * 1e-4, rtol=2e-3)
     # epsilon: dV/dq = -S T e^{-qT} N(phi d1) phi
     from scipy.stats import norm
+
     sd = VOL * np.sqrt(T)
     d1 = (np.log(S0 / K) + (R - Q + 0.5 * VOL**2) * T) / sd
     phi = 1.0 if kind == "call" else -1.0
-    np.testing.assert_allclose(g["epsilon|SPX|"][0], c * -phi * S0 * T * np.exp(-Q * T) * norm.cdf(phi * d1) * 1e-4, rtol=2e-3)
+    np.testing.assert_allclose(
+        g["epsilon|SPX|"][0], c * -phi * S0 * T * np.exp(-Q * T) * norm.cdf(phi * d1) * 1e-4, rtol=2e-3
+    )
     # theta: one business day (Tuesday to Wednesday, 1/365), market frozen
     th = vanillas.positions[i]["theta"]
     np.testing.assert_allclose(th["theta"], c * ref["theta"] / 365, rtol=1e-2)
@@ -77,7 +95,9 @@ def test_sticky_strike_and_moneyness_deltas_on_a_smile():
     days, K = 365, 95.0
     T = days / 365
     b = book(vanilla(K, days, "put", valuation=spx.valuation))
-    rep = compute([RiskGroup("SPX", b, spx, 1)], options=GreekOptions(kxt="none", curves=False, cross=False, theta=False))
+    rep = compute(
+        [RiskGroup("SPX", b, spx, 1)], options=GreekOptions(kxt="none", curves=False, cross=False, theta=False)
+    )
     g = rep.positions[0]["greeks"]
     F, D = float(spx.market.F(T)), float(spx.market.D(T))
     r, qy = -np.log(D) / T, -np.log(F * D / spx.market.spot) / T
@@ -89,10 +109,15 @@ def test_sticky_strike_and_moneyness_deltas_on_a_smile():
     iv_fixed = float(spx.surface.iv(np.log(K / F), T))
     up, dn = S * 1.01, S * 0.99
     ss = (bs(up, iv_fixed) - bs(dn, iv_fixed)) / 2
-    sm = (bs(up, float(spx.surface.iv(np.log(K / (F * 1.01)), T))) - bs(dn, float(spx.surface.iv(np.log(K / (F * 0.99)), T)))) / 2
+    sm = (
+        bs(up, float(spx.surface.iv(np.log(K / (F * 1.01)), T)))
+        - bs(dn, float(spx.surface.iv(np.log(K / (F * 0.99)), T)))
+    ) / 2
     np.testing.assert_allclose(g["delta_sticky_strike|SPX|"][0], ss, rtol=1e-4)
     np.testing.assert_allclose(g["delta|SPX|"][0], sm, rtol=1e-4)
-    assert g["delta|SPX|"][0] > g["delta_sticky_strike|SPX|"][0]  # a put on a downward skew: the smile moving with the spot lifts its vol as it rises
+    assert (
+        g["delta|SPX|"][0] > g["delta_sticky_strike|SPX|"][0]
+    )  # a put on a downward skew: the smile moving with the spot lifts its vol as it rises
 
 
 def test_smoothed_digital_greeks_under_monte_carlo_match_its_call_spread():
@@ -102,8 +127,11 @@ def test_smoothed_digital_greeks_under_monte_carlo_match_its_call_spread():
     eps, K, T = 0.005, 100.0, 1.0
     ctx = flat_ctx()
     b = book(digital(K, 365))
-    rep = compute([RiskGroup("SPX", b, ctx, 3)], options=FAST,
-                  settings=RiskSettings(model="lv", n_paths=n, smoothing=eps, engine=ENGINE))
+    rep = compute(
+        [RiskGroup("SPX", b, ctx, 3)],
+        options=FAST,
+        settings=RiskSettings(model="lv", n_paths=n, smoothing=eps, engine=ENGINE),
+    )
     g = rep.positions[0]["greeks"]
     w = K * eps
 
@@ -117,8 +145,13 @@ def test_smoothed_digital_greeks_under_monte_carlo_match_its_call_spread():
     within(g["vega|SPX|"][0], vega, g["vega|SPX|"][1], floor=0.003 * abs(vega))
     within(g["gamma|SPX|"][0], gamma, g["gamma|SPX|"][1], floor=0.01 * abs(gamma))
     bias, bias_se = rep.positions[0]["smoothing_bias"]
-    exact = 100 * np.exp(-R * T) * float(__import__("scipy.stats").stats.norm.cdf(
-        (np.log(S0 / K) + (R - Q - 0.5 * VOL**2) * T) / (VOL * np.sqrt(T))))
+    exact = (
+        100
+        * np.exp(-R * T)
+        * float(
+            __import__("scipy.stats").stats.norm.cdf((np.log(S0 / K) + (R - Q - 0.5 * VOL**2) * T) / (VOL * np.sqrt(T)))
+        )
+    )
     within(bias, spread(S0, VOL) - exact, bias_se, floor=1e-3)
 
 
@@ -126,11 +159,16 @@ def test_an_autocall_the_day_before_its_observation_drops_the_event_in_the_roll(
     """Observed tomorrow at 100 % and paid tomorrow: at a frozen spot of 100 the roll calls it, its value becomes cash."""
     ctx = flat_ctx()
     tomorrow, end = day(VALUATION, 1), day(VALUATION, 365)
-    script = (f"underlying SPX\nparam N = 100\nevent {tomorrow} pay {tomorrow}\n  if SPX >= 100 then\n    pay N as redemption\n"
-              f"    terminate\n  end\nend\nevent {end} pay {end}\n  pay N * SPX / 100 as redemption\nend\n")
+    script = (
+        f"underlying SPX\nparam N = 100\nevent {tomorrow} pay {tomorrow}\n  if SPX >= 100 then\n    pay N as redemption\n"
+        f"    terminate\n  end\nend\nevent {end} pay {end}\n  pay N * SPX / 100 as redemption\nend\n"
+    )
     b = Book([Position("ac", script, -1.0)])
-    rep = compute([RiskGroup("SPX", b, ctx, 2)], options=GreekOptions(kxt="none", curves=False, cross=False, sticky_strike=False),
-                  settings=RiskSettings(model="lv", n_paths=20_000, engine="numpy"))
+    rep = compute(
+        [RiskGroup("SPX", b, ctx, 2)],
+        options=GreekOptions(kxt="none", curves=False, cross=False, sticky_strike=False),
+        settings=RiskSettings(model="lv", n_paths=20_000, engine="numpy"),
+    )
     th = rep.positions[0]["theta"]
     assert th["events_cash"] == pytest.approx(-100.0, abs=1e-9)  # the desk pays the redemption tomorrow
     value = rep.positions[0]["value"]
@@ -141,19 +179,28 @@ def test_an_autocall_the_day_before_its_observation_drops_the_event_in_the_roll(
 def _two_names(rho):
     q2, v2 = 0.03, 0.25
     markets = {"SPX": FLAT, "SX5E": Market.flat(100.0, R, q2)}
-    return BasketContext(("SPX", "SX5E"), markets, {"SPX": VOL, "SX5E": v2}, np.array([[1, rho], [rho, 1]]), VALUATION), (VOL, v2), (Q, q2)
+    return (
+        BasketContext(("SPX", "SX5E"), markets, {"SPX": VOL, "SX5E": v2}, np.array([[1, rho], [rho, 1]]), VALUATION),
+        (VOL, v2),
+        (Q, q2),
+    )
 
 
 def test_worst_of_cross_gamma_and_correlation_match_the_bivariate_reference():
     rho, K, T = 0.6, 1.0, 1.0
     ctx, vols, qs = _two_names(rho)
     end = day(VALUATION, 365)
-    script = (f"underlying SPX\nunderlying SX5E\nparam N = 100\nevent {end} pay {end}\n"
-              f"  pay N * max({K} - min(SPX / 100, SX5E / 100), 0) as redemption\nend\n")
+    script = (
+        f"underlying SPX\nunderlying SX5E\nparam N = 100\nevent {end} pay {end}\n"
+        f"  pay N * max({K} - min(SPX / 100, SX5E / 100), 0) as redemption\nend\n"
+    )
     b = Book([Position("wop", script, -1.0)])
     n = 400_000 if ENGINE != "numpy" else 60_000
-    rep = compute([RiskGroup("worst-of", b, ctx, 9)], options=GreekOptions(kxt="none", curves=False, sticky_strike=False, theta=False),
-                  settings=RiskSettings(n_paths=n, engine=ENGINE))
+    rep = compute(
+        [RiskGroup("worst-of", b, ctx, 9)],
+        options=GreekOptions(kxt="none", curves=False, sticky_strike=False, theta=False),
+        settings=RiskSettings(n_paths=n, engine=ENGINE),
+    )
     g = rep.positions[0]["greeks"]
     D = np.exp(-R * T)
 
@@ -176,18 +223,23 @@ def test_worst_of_cross_gamma_and_correlation_match_the_bivariate_reference():
 def test_noise_flags_and_units():
     ctx = flat_ctx()
     b = book(vanilla(100.0, 365))
-    rep = compute([RiskGroup("SPX", b, ctx, 3)], options=FAST, settings=RiskSettings(model="lv", n_paths=4_000, engine="numpy"))
+    rep = compute(
+        [RiskGroup("SPX", b, ctx, 3)], options=FAST, settings=RiskSettings(model="lv", n_paths=4_000, engine="numpy")
+    )
     p = rep.positions[0]
     for k in p["noise"]:
         v, se = p["greeks"][k]
         assert abs(v) < 2 * se
-    assert "skew_vega|SPX|" in p["noise"] or abs(p["greeks"]["skew_vega|SPX|"][0]) >= 2 * p["greeks"]["skew_vega|SPX|"][1]
+    assert (
+        "skew_vega|SPX|" in p["noise"] or abs(p["greeks"]["skew_vega|SPX|"][0]) >= 2 * p["greeks"]["skew_vega|SPX|"][1]
+    )
     assert Bumps.from_dict({"spot": 0.02, "junk": 1}).spot == 0.02
     assert dt.date(2026, 10, 27).weekday() == 1  # the roll of the tests is Tuesday to Wednesday
 
 
 def test_aggregate_views(vanillas):
     from optlab.risk import aggregate
+
     assert aggregate.names(vanillas) == ["SPX"]
     vals, ses = aggregate.vega_matrix(vanillas, "SPX")
     assert vals.shape == (10, 8) and np.all(ses == 0)

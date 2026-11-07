@@ -59,16 +59,20 @@ class NYSECalendar(WeekendCalendar):
         new_year = dt.date(year, 1, 1)
         if new_year.weekday() != 5:  # a Saturday New Year's Day is not observed on Friday 31 December
             days.append(_observed(new_year))
-        days += [_nth_weekday(year, 1, 0, 3),  # Martin Luther King Jr. Day
-                 _nth_weekday(year, 2, 0, 3),  # Washington's Birthday
-                 easter(year) - dt.timedelta(days=2),  # Good Friday
-                 _nth_weekday(year, 5, 0, -1)]  # Memorial Day
+        days += [
+            _nth_weekday(year, 1, 0, 3),  # Martin Luther King Jr. Day
+            _nth_weekday(year, 2, 0, 3),  # Washington's Birthday
+            easter(year) - dt.timedelta(days=2),  # Good Friday
+            _nth_weekday(year, 5, 0, -1),
+        ]  # Memorial Day
         if year >= 2022:
             days.append(_observed(dt.date(year, 6, 19)))  # Juneteenth
-        days += [_observed(dt.date(year, 7, 4)),
-                 _nth_weekday(year, 9, 0, 1),  # Labor Day
-                 _nth_weekday(year, 11, 3, 4),  # Thanksgiving
-                 _observed(dt.date(year, 12, 25))]
+        days += [
+            _observed(dt.date(year, 7, 4)),
+            _nth_weekday(year, 9, 0, 1),  # Labor Day
+            _nth_weekday(year, 11, 3, 4),  # Thanksgiving
+            _observed(dt.date(year, 12, 25)),
+        ]
         return tuple(sorted({*days, *NYSE_SPECIAL_CLOSURES.get(year, ())}))
 
     def is_business_day(self, d) -> bool:
@@ -113,9 +117,16 @@ class EurexCalendar(NYSECalendar):
     @lru_cache(maxsize=None)
     def holidays(year: int) -> tuple:
         e = easter(year)
-        return (dt.date(year, 1, 1), e - dt.timedelta(days=2), e + dt.timedelta(days=1), dt.date(year, 5, 1),
-                dt.date(year, 12, 24), dt.date(year, 12, 31),
-                dt.date(year, 12, 25), dt.date(year, 12, 26))
+        return (
+            dt.date(year, 1, 1),
+            e - dt.timedelta(days=2),
+            e + dt.timedelta(days=1),
+            dt.date(year, 5, 1),
+            dt.date(year, 12, 24),
+            dt.date(year, 12, 31),
+            dt.date(year, 12, 25),
+            dt.date(year, 12, 26),
+        )
 
 
 CALENDARS = {"weekend": WeekendCalendar(), "nyse": NYSECalendar(), "eurex": EurexCalendar()}

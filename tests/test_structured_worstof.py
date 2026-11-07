@@ -42,6 +42,7 @@ def times(p):
 
 # --- simulation ---
 
+
 def test_one_name_basket_reproduces_simulate_bit_for_bit():
     script = "underlying SPX\nparam K = 100\nevent t=1 pay t=1\n  pay max(SPX - K, 0) as redemption\nend\n"
     bs = BlackScholesModel(VOL)
@@ -72,10 +73,10 @@ def test_correlation_root_handles_singular_matrices_and_rejects_bad_ones():
 
 # --- European worst-of against closed forms ---
 
+
 @pytest.mark.parametrize("rho", [0.0, 0.6, 0.95])
 def test_worst_of_digital_matches_the_bivariate_normal(rho):
-    sheet = worst("capital_protected", **{"upside.type": "digital", "upside.strike": 1.0,
-                                          "upside.digital_amount": 0.1})
+    sheet = worst("capital_protected", **{"upside.type": "digital", "upside.strike": 1.0, "upside.digital_amount": 0.1})
     res, p = mc(sheet, context(rho))
     T, pays = times(p)
     ref = 100 * float(FLAT.D(pays[-1])) * (1 + 0.1 * worst_digital(1.0, T, (VOL, VOL2), rho, R, (0.01, Q2)))
@@ -96,12 +97,15 @@ def test_worst_of_reverse_convertible_matches_the_conditional_integral(rho):
 
 def test_worst_put_reference_reduces_to_black_scholes():
     from _structured_refs import put_fwd
+
     # perfectly correlated identical names: the worst is either of them
-    assert worst_put(0.9, 1.0, (VOL, VOL), 1.0 - 1e-12, R, (0.01, 0.01)) == pytest.approx(put_fwd(90.0, 1.0) / 100,
-                                                                                         abs=1e-6)
+    assert worst_put(0.9, 1.0, (VOL, VOL), 1.0 - 1e-12, R, (0.01, 0.01)) == pytest.approx(
+        put_fwd(90.0, 1.0) / 100, abs=1e-6
+    )
 
 
 # --- autocalls ---
+
 
 def test_identical_names_with_correlation_one_give_the_single_name_autocall():
     ctx = context(1.0, vol2=VOL, q2=0.01)
@@ -114,8 +118,13 @@ def test_identical_names_with_correlation_one_give_the_single_name_autocall():
 
 def test_identical_names_daily_knock_in_gives_the_single_name_autocall():
     ctx = context(1.0, vol2=VOL, q2=0.01)
-    changes = {"coupon.rate": 0.08, "coupon.memory": False, "general.maturity_months": 12,
-               "downside.observation": "daily", "downside.barrier": 0.7}
+    changes = {
+        "coupon.rate": 0.08,
+        "coupon.memory": False,
+        "general.maturity_months": 12,
+        "downside.observation": "daily",
+        "downside.barrier": 0.7,
+    }
     res, p = mc(worst("phoenix", **changes), ctx, n_paths=60_000, batch=20_000)
     assert "worst(lowest(SPX" in p.script
     ref = autocall_reference(preset("phoenix", **{"wrapper.solve": "upfront", **changes}))
@@ -130,6 +139,7 @@ def test_lower_correlation_makes_the_worst_of_autocall_cheaper():
 
 
 # --- builder, policy and quote ---
+
 
 def test_worst_of_fields_and_script():
     sheet = worst("phoenix", **{"general.underlyings": ("SPX", "SX5E", "NKY")})
@@ -163,8 +173,10 @@ def test_worst_of_running_product_needs_every_fixing():
 
 # --- books mixing single names and baskets ---
 
+
 def test_basket_book_with_one_position_is_the_product_price_bit_for_bit():
     from optlab.structured.portfolio import Book, Position
+
     ctx = context(0.6)
     sheet = worst("phoenix", **{"coupon.rate": 0.08, "general.maturity_months": 12})
     book = Book([Position("wo", sheet, 1.0)]).price(ctx, model="bs", n_paths=40_000, seed=3, batch=10_000)
@@ -174,25 +186,30 @@ def test_basket_book_with_one_position_is_the_product_price_bit_for_bit():
 
 def test_book_mixes_single_name_and_worst_of_positions_on_one_basket_simulation():
     from optlab.structured.portfolio import Book, Position
+
     ctx = context(0.6)
     wo = worst("phoenix", **{"coupon.rate": 0.08, "general.maturity_months": 12})
     rc = preset("reverse_convertible", **{"wrapper.solve": "upfront", "coupon.rate": 0.06})
     res = Book([Position("wo", wo, 2.0), Position("rc", rc, -1.0), Position("wo short", wo, -2.0)]).price(
-        ctx, n_paths=40_000, seed=5, batch=10_000)
+        ctx, n_paths=40_000, seed=5, batch=10_000
+    )
     assert res.model == "lv" and any("flat volatility" in w for w in res.warnings)  # flat names stay BS
     assert res.positions[0].value == -res.positions[2].value
     assert res.value == pytest.approx(res.positions[1].value, abs=1e-9)
     from _structured_refs import rc_european
+
     p = compile_sheet(rc, VAL)
     T, pays = times(p)
     ref = rc_european(100.0, 0.015, pays, T, pays[-1], 1.0, 1.0)  # the preset knocks in at the strike
     assert abs(res.positions[1].unit_price - ref) <= 4 * res.positions[1].unit_stderr
     from optlab.structured.portfolio import Book as B2
+
     with pytest.raises(ValueError, match="BasketContext"):
         B2([Position("wo", wo, 1.0)]).price(flat_context(), model="bs", n_paths=2_000)
 
 
 # --- per-name Greeks of basket books ---
+
 
 def worst_rc_reference(T, pays, rho, qs, vols=(VOL, VOL2), K=1.0, B=0.7, cpn=0.02):
     loss = worst_put(B, T, vols, rho, R, qs) + (K - B) * (1 - worst_digital(B, T, vols, rho, R, qs))
@@ -201,6 +218,7 @@ def worst_rc_reference(T, pays, rho, qs, vols=(VOL, VOL2), K=1.0, B=0.7, cpn=0.0
 
 def test_basket_book_deltas_per_name_match_closed_form_differences():
     from optlab.structured.portfolio import Book, Position
+
     rho = 0.6
     sheet = worst("reverse_convertible", **{"downside.barrier": 0.7, "coupon.rate": 0.08})
     rc = preset("reverse_convertible", **{"wrapper.solve": "upfront", "coupon.rate": 0.06})

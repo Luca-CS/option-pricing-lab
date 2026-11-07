@@ -5,16 +5,29 @@ Engine tests are skipped when the shared library is not built, GPU tests when th
 import numpy as np
 import pytest
 
-from optlab import (BlackScholesModel, HestonModel, HestonParams, LocalVolModel, Market, asian_mc, barrier_mc,
-                    barrier_price, barrier_shift_discrete, bs_price, european_mc, geometric_asian_price,
-                    heston_price)
+from optlab import (
+    BlackScholesModel,
+    HestonModel,
+    HestonParams,
+    LocalVolModel,
+    Market,
+    asian_mc,
+    barrier_mc,
+    barrier_price,
+    barrier_shift_discrete,
+    bs_price,
+    european_mc,
+    geometric_asian_price,
+    heston_price,
+)
 from optlab import gpu
 
 S, r, q, vol = 100.0, 0.04, 0.01, 0.2
 MARKET = Market.flat(S, r, q)
 BS = BlackScholesModel(vol)
-SPX = HestonParams(0.022846642482989885, 3.0892635624407627, 0.05372458999932075, 1.307745170926575,
-                   -0.6879606734541107)
+SPX = HestonParams(
+    0.022846642482989885, 3.0892635624407627, 0.05372458999932075, 1.307745170926575, -0.6879606734541107
+)
 
 needs_engine = pytest.mark.skipif(not gpu.engine_available(), reason="cuda/ shared library not built")
 needs_gpu = pytest.mark.skipif(not gpu.gpu_available(), reason="no CUDA device")

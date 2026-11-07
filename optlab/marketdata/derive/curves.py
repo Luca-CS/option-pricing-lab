@@ -88,9 +88,17 @@ def _best_overnight(lake: Lake, primary: str, fallback: str | None = None) -> pd
 
 def build_discount_curves(lake: Lake, start: str = "2015-01-01") -> list[dict]:
     run = new_run_id("derive_curves")
-    built = ((par_curve_rows(_rates(lake, "USD.TREASURY"), _best_overnight(lake, "USD.SOFR", "USD.FF"), USD_CURVE), "treasury+sofr"),
-             (zero_curve_rows(_rates(lake, "EUR.AAA"), _best_overnight(lake, "EUR.ESTR"), EUR_CURVE), "ecb_aaa+estr"),
-             (par_curve_rows(_rates(lake, "JPY.JGB"), _best_overnight(lake, "JPY.CALL"), JPY_CURVE), "jgb+call"),
-             (zero_curve_rows(_rates(lake, "GBP.GLC"), _best_overnight(lake, "GBP.SONIA"), GBP_CURVE), "boe_glc+sonia"))
-    return [lake.ingest("discount_curves", rows[pd.to_datetime(rows["obs_date"]) >= start], source, "derived", run)
-            for rows, source in built if len(rows)]
+    built = (
+        (
+            par_curve_rows(_rates(lake, "USD.TREASURY"), _best_overnight(lake, "USD.SOFR", "USD.FF"), USD_CURVE),
+            "treasury+sofr",
+        ),
+        (zero_curve_rows(_rates(lake, "EUR.AAA"), _best_overnight(lake, "EUR.ESTR"), EUR_CURVE), "ecb_aaa+estr"),
+        (par_curve_rows(_rates(lake, "JPY.JGB"), _best_overnight(lake, "JPY.CALL"), JPY_CURVE), "jgb+call"),
+        (zero_curve_rows(_rates(lake, "GBP.GLC"), _best_overnight(lake, "GBP.SONIA"), GBP_CURVE), "boe_glc+sonia"),
+    )
+    return [
+        lake.ingest("discount_curves", rows[pd.to_datetime(rows["obs_date"]) >= start], source, "derived", run)
+        for rows, source in built
+        if len(rows)
+    ]

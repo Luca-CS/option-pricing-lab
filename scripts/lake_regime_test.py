@@ -46,14 +46,20 @@ def sample(lake: Lake, panel: pd.DataFrame, step: int) -> list:
     for day in pd.to_datetime(quote_days(lake, "SPY", "dolthub")):
         if day in panel.index:
             days.append(("SPY", "dolthub", day))
-    spy = [d for i, d in enumerate(days) if CRASH[0] <= d[2] <= CRASH[1] or panel.loc[d[2], "VIX"] > 27 or i % step == 0]
-    spx = [("SPX", "historicaldata", d) for d in pd.to_datetime(quote_days(lake, "SPX", "historicaldata"))[::3] if d in panel.index]
+    spy = [
+        d for i, d in enumerate(days) if CRASH[0] <= d[2] <= CRASH[1] or panel.loc[d[2], "VIX"] > 27 or i % step == 0
+    ]
+    spx = [
+        ("SPX", "historicaldata", d)
+        for d in pd.to_datetime(quote_days(lake, "SPX", "historicaldata"))[::3]
+        if d in panel.index
+    ]
     out = []
     for name, source, day in spy + spx:
         try:
             kw = {"spot": 0.1 * real_close(lake, "SPX", day.date())[0]} if name == "SPY" else {}
             chain = clean_day(lake, name, day.date(), source, **kw)
-        except (KeyError, ValueError):
+        except KeyError, ValueError:
             continue
         slices = slices_of(chain)
         if slices:
@@ -72,24 +78,49 @@ def errors(prior, days: list, panel: pd.DataFrame) -> list:
             sd = atm * np.sqrt(T)
             model_atm = float(np.sqrt(surface.theta(T) / T))
             skew = float(surface.iv(np.array([-sd]), T)[0]) - model_atm - (float(np.interp(-sd, k[o], iv[o])) - atm)
-            out.append({"vix": float(row["VIX"]), "err": np.asarray(surface.iv(k, T)) - iv, "atm": model_atm - atm, "skew": skew})
+            out.append(
+                {
+                    "vix": float(row["VIX"]),
+                    "err": np.asarray(surface.iv(k, T)) - iv,
+                    "atm": model_atm - atm,
+                    "skew": skew,
+                }
+            )
     return out
 
 
 def table(rows: list) -> dict:
-    e = pd.DataFrame([{"vix": r["vix"], "mse": np.mean(r["err"] ** 2), "bias": np.mean(r["err"]), "atm": r["atm"], "skew": r["skew"]} for r in rows])
+    e = pd.DataFrame(
+        [
+            {
+                "vix": r["vix"],
+                "mse": np.mean(r["err"] ** 2),
+                "bias": np.mean(r["err"]),
+                "atm": r["atm"],
+                "skew": r["skew"],
+            }
+            for r in rows
+        ]
+    )
     e["bucket"] = pd.cut(e["vix"], BUCKETS)
     out = {}
     for bucket, g in e.groupby("bucket", observed=True):
-        out[str(bucket)] = {"slices": len(g), "rmse": round(100 * float(np.sqrt(g["mse"].mean())), 2), "bias": round(100 * float(g["bias"].mean()), 2),
-                            "atm_gap": round(100 * float(g["atm"].mean()), 2), "skew_gap": round(100 * float(g["skew"].mean()), 2)}
+        out[str(bucket)] = {
+            "slices": len(g),
+            "rmse": round(100 * float(np.sqrt(g["mse"].mean())), 2),
+            "bias": round(100 * float(g["bias"].mean()), 2),
+            "atm_gap": round(100 * float(g["atm"].mean()), 2),
+            "skew_gap": round(100 * float(g["skew"].mean()), 2),
+        }
     return out
 
 
 def fit_power(prior, days: list, panel: pd.DataFrame) -> float:
     def residuals(x):
         p = dataclasses.replace(prior, level_power=float(x[0]), level_ref=LEVEL_REF)
-        return np.concatenate([r["err"] / np.sqrt(len(r["err"])) * (2.0 if r["vix"] > 30 else 1.0) for r in errors(p, days, panel)])
+        return np.concatenate(
+            [r["err"] / np.sqrt(len(r["err"])) * (2.0 if r["vix"] > 30 else 1.0) for r in errors(p, days, panel)]
+        )
 
     return float(least_squares(residuals, [0.1], bounds=([0.0], [1.0]), diff_step=0.05, max_nfev=12).x[0])
 
@@ -109,11 +140,20 @@ def main():
     flat = dataclasses.replace(current, level_power=0.0)
     power = fit_power(flat, rest, panel)
     print(f"slope power fitted away from the crash: {power:.3f}", flush=True)
-    out = {"run_at": pd.Timestamp.now(tz="UTC").isoformat(timespec="seconds"), "n_days": len(days), "n_crash_days": len(crash),
-           "power_fitted_without_crash": round(power, 3), "power_in_use": current.level_power, "level_ref": current.level_ref,
-           "constant_slope": {"all": table(errors(flat, days, panel)), "crash": table(errors(flat, crash, panel))},
-           "slope_falling_with_level": {"all": table(errors(current, days, panel)), "crash": table(errors(current, crash, panel))},
-           "seconds": round(time.perf_counter() - t0, 1)}
+    out = {
+        "run_at": pd.Timestamp.now(tz="UTC").isoformat(timespec="seconds"),
+        "n_days": len(days),
+        "n_crash_days": len(crash),
+        "power_fitted_without_crash": round(power, 3),
+        "power_in_use": current.level_power,
+        "level_ref": current.level_ref,
+        "constant_slope": {"all": table(errors(flat, days, panel)), "crash": table(errors(flat, crash, panel))},
+        "slope_falling_with_level": {
+            "all": table(errors(current, days, panel)),
+            "crash": table(errors(current, crash, panel)),
+        },
+        "seconds": round(time.perf_counter() - t0, 1),
+    }
     path = paths().results / "surface_regimes.json"
     path.write_text(json.dumps(out, indent=1), encoding="utf-8")
     print(json.dumps(out, indent=1))

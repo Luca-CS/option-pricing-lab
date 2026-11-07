@@ -18,9 +18,15 @@ SETTINGS = RiskSettings(n_paths=20_000, batch=10_000, engine="numpy")
 @pytest.fixture(scope="module")
 def lake():
     from optlab.marketdata.lake import Lake
+
     lk = Lake()
     try:
-        if lk.read("vol_surfaces", where="underlying = 'SPX' AND layer = 'reconstructed'", columns="count(*) AS n")["n"].iloc[0] < 600:
+        if (
+            lk.read("vol_surfaces", where="underlying = 'SPX' AND layer = 'reconstructed'", columns="count(*) AS n")[
+                "n"
+            ].iloc[0]
+            < 600
+        ):
             pytest.skip("no reconstructed SPX surfaces in the lake")
     except Exception:  # noqa: BLE001
         pytest.skip("no lake")
@@ -29,24 +35,50 @@ def lake():
 
 def brc_2020():
     """The replay's BRC (reports/replay.md): 12 months, daily barrier 70 %, struck 15/01/2020, coupon 2.57 % p.a., per 100."""
-    sheet = preset("barrier_reverse_convertible", **{"general.maturity_months": 12, "downside.barrier": 0.7, "general.underlying": "SPX",
-                                                     "general.notional": 100.0, "wrapper.solve": "upfront", "coupon.rate": 0.0257})
+    sheet = preset(
+        "barrier_reverse_convertible",
+        **{
+            "general.maturity_months": 12,
+            "downside.barrier": 0.7,
+            "general.underlying": "SPX",
+            "general.notional": 100.0,
+            "wrapper.solve": "upfront",
+            "coupon.rate": 0.0257,
+        },
+    )
     strike = dt.date(2020, 1, 15)
     return Trade.from_term_sheet("BRC-2020", struck_sheet(sheet, strike), 1.0, strike, strike)
 
 
 def phoenix_2026():
     """A Phoenix sold in June 2026; called at its first quarterly date after the rally, so worth nothing by November."""
-    sheet = preset("phoenix", **{"general.maturity_months": 24, "general.underlying": "SPX", "general.notional": 100.0,
-                                 "wrapper.solve": "upfront", "coupon.rate": 0.07})
+    sheet = preset(
+        "phoenix",
+        **{
+            "general.maturity_months": 24,
+            "general.underlying": "SPX",
+            "general.notional": 100.0,
+            "wrapper.solve": "upfront",
+            "coupon.rate": 0.07,
+        },
+    )
     strike = dt.date(2026, 6, 15)
     return Trade.from_term_sheet("PHX-2026", struck_sheet(sheet, strike), -1.0, strike, strike)
 
 
 def brc_2026():
     """A BRC sold in June 2026, alive in November (no call, daily barrier at 70 %)."""
-    sheet = preset("barrier_reverse_convertible", **{"general.maturity_months": 12, "downside.barrier": 0.7, "general.underlying": "SPX",
-                                                     "general.notional": 100.0, "wrapper.solve": "upfront", "coupon.rate": 0.06})
+    sheet = preset(
+        "barrier_reverse_convertible",
+        **{
+            "general.maturity_months": 12,
+            "downside.barrier": 0.7,
+            "general.underlying": "SPX",
+            "general.notional": 100.0,
+            "wrapper.solve": "upfront",
+            "coupon.rate": 0.06,
+        },
+    )
     strike = dt.date(2026, 6, 15)
     return Trade.from_term_sheet("BRC-2026", struck_sheet(sheet, strike), -1.0, strike, strike)
 

@@ -7,10 +7,24 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from optlab.marketdata.derive.surfaces import (ShapePrior, TERM_INDICES, build_reconstructed, extrapolate_thetas, fit_shape,
-                                               index_panel, model_free_skewness, model_free_variance, reconstruct,
-                                               reconstruct_on, rho_from_skew, solve_thetas, ssvi_w, static_prior,
-                                               surface_at, synthetic_surface)
+from optlab.marketdata.derive.surfaces import (
+    ShapePrior,
+    TERM_INDICES,
+    build_reconstructed,
+    extrapolate_thetas,
+    fit_shape,
+    index_panel,
+    model_free_skewness,
+    model_free_variance,
+    reconstruct,
+    reconstruct_on,
+    rho_from_skew,
+    solve_thetas,
+    ssvi_w,
+    static_prior,
+    surface_at,
+    synthetic_surface,
+)
 from optlab.marketdata.lake import Lake
 from optlab.svi import SVISurface, svi_arbitrage_report
 
@@ -99,6 +113,7 @@ def test_fit_shape_recovers_a_power_law_surface():
     k = np.linspace(-0.3, 0.2, 5)
     from optlab.svi import ssvi_slice_to_svi
     from optlab.marketdata.derive.surfaces import _phi
+
     surf = SVISurface(Ts, np.array([ssvi_slice_to_svi(t, t * _phi(t, 0.9, 0.35), -0.6) for t in th]))
     fit = fit_shape(surf)
     assert fit.rho == pytest.approx(-0.6, abs=0.01) and fit.eta == pytest.approx(0.9, abs=0.03)
@@ -113,7 +128,9 @@ def test_synthetic_surface_labels_its_inputs():
 def vol_lake(tmp_path):
     lake = Lake(tmp_path)
     days = pd.bdate_range("2020-03-02", "2020-03-13")
-    rows = [pd.DataFrame({"index_name": n, "obs_date": days, "close": lvl}) for n, lvl in {**LEVELS, "SKEW": 130.0}.items()]
+    rows = [
+        pd.DataFrame({"index_name": n, "obs_date": days, "close": lvl}) for n, lvl in {**LEVELS, "SKEW": 130.0}.items()
+    ]
     lake.ingest("vol_indices", pd.concat(rows), "cboe", "observed")
     return lake, days
 
@@ -135,19 +152,33 @@ def test_an_observed_fit_of_the_day_takes_over_only_when_it_reaches_far_enough(t
     lake, _ = vol_lake(tmp_path)
     build_reconstructed(lake, ["SPX"], "2020-03-02", "2020-03-13", PRIOR)
     rec = reconstruct(LEVELS, PRIOR)
-    base = {"underlying": "SPX", "layer": "observed", "surface": json.dumps(rec.surface.to_dict()), "inputs": "{}", "fit": "{}"}
-    rows = pd.DataFrame([{**base, "obs_date": "2020-03-05", "t_max_observed": 2.0, "extrapolated_from": 2.0},
-                         {**base, "obs_date": "2020-03-06", "t_max_observed": 0.2, "extrapolated_from": 0.2}])
+    base = {
+        "underlying": "SPX",
+        "layer": "observed",
+        "surface": json.dumps(rec.surface.to_dict()),
+        "inputs": "{}",
+        "fit": "{}",
+    }
+    rows = pd.DataFrame(
+        [
+            {**base, "obs_date": "2020-03-05", "t_max_observed": 2.0, "extrapolated_from": 2.0},
+            {**base, "obs_date": "2020-03-06", "t_max_observed": 0.2, "extrapolated_from": 0.2},
+        ]
+    )
     lake.ingest("vol_surfaces", rows, "svi_on_test", "observed")
     assert surface_at(lake, "SPX", dt.date(2020, 3, 5)).layer == "observed"
-    assert surface_at(lake, "SPX", dt.date(2020, 3, 6)).layer == "reconstructed"  # a short chain does not make a surface
+    assert (
+        surface_at(lake, "SPX", dt.date(2020, 3, 6)).layer == "reconstructed"
+    )  # a short chain does not make a surface
     assert surface_at(lake, "SPX", dt.date(2020, 3, 9)).layer == "reconstructed"  # an old fit is not reused
 
 
 def test_index_panel_fills_only_from_the_past(tmp_path):
     lake = Lake(tmp_path)
     rows = pd.DataFrame({"index_name": "VIX", "obs_date": ["2020-03-02", "2020-03-04"], "close": [10.0, 30.0]})
-    other = pd.DataFrame({"index_name": "VIX3M", "obs_date": ["2020-03-02", "2020-03-03", "2020-03-04"], "close": [1.0, 2.0, 3.0]})
+    other = pd.DataFrame(
+        {"index_name": "VIX3M", "obs_date": ["2020-03-02", "2020-03-03", "2020-03-04"], "close": [1.0, 2.0, 3.0]}
+    )
     lake.ingest("vol_indices", pd.concat([rows, other]), "cboe", "observed")
     panel = index_panel(lake)
     assert panel.loc["2020-03-03", "VIX"] == 10.0
@@ -155,6 +186,7 @@ def test_index_panel_fills_only_from_the_past(tmp_path):
 
 def test_the_slope_falls_with_the_level_and_stays_free_of_butterfly_arbitrage():
     from optlab.marketdata.derive.surfaces import ShapePrior
+
     prior = ShapePrior(-0.6, 1.2, 0.45, 0.03, level_power=0.12, level_ref=0.12)
     assert prior.eta_at(0.10) == prior.eta_at(0.12) == pytest.approx(1.2)  # below the reference, nothing changes
     assert prior.eta_at(0.60) == pytest.approx(1.2 * 5.0**-0.12)
@@ -166,22 +198,28 @@ def test_the_slope_falls_with_the_level_and_stays_free_of_butterfly_arbitrage():
 def test_at_a_high_level_the_slope_gives_back_at_the_money_level():
     """The index fixes the variance: less skew leaves more of it at the money."""
     from optlab.marketdata.derive.surfaces import ShapePrior, reconstruct
+
     levels = {"VIX9D": 79.0, "VIX": 62.0, "VIX3M": 57.0, "VIX6M": 47.0, "VIX1Y": 36.0}
     calm = ShapePrior(-0.6, 1.2, 0.45, 0.03)
     moved = ShapePrior(-0.6, 1.2, 0.45, 0.03, level_power=0.12, level_ref=0.12)
     a, b = reconstruct(levels, calm).surface, reconstruct(levels, moved).surface
     assert b.theta(1 / 12) > 1.05 * a.theta(1 / 12)
     low = {k: v / 6 for k, v in levels.items()}
-    assert reconstruct(low, moved).surface.theta(0.25) == pytest.approx(reconstruct(low, calm).surface.theta(0.25), rel=2e-3)
+    assert reconstruct(low, moved).surface.theta(0.25) == pytest.approx(
+        reconstruct(low, calm).surface.theta(0.25), rel=2e-3
+    )
 
 
 def test_the_panel_stops_at_the_last_vix(tmp_path):
     from optlab.marketdata.derive.surfaces import index_panel
     from optlab.marketdata.lake import Lake
+
     lake = Lake(tmp_path)
     days = pd.bdate_range("2026-11-02", periods=3)
-    rows = [pd.DataFrame({"index_name": "RVX", "obs_date": days, "close": [24.0, 23.0, 20.0]}),
-            pd.DataFrame({"index_name": "VIX", "obs_date": days[:2], "close": [21.0, 20.0]})]
+    rows = [
+        pd.DataFrame({"index_name": "RVX", "obs_date": days, "close": [24.0, 23.0, 20.0]}),
+        pd.DataFrame({"index_name": "VIX", "obs_date": days[:2], "close": [21.0, 20.0]}),
+    ]
     lake.ingest("vol_indices", pd.concat(rows), "cboe", "observed")
     panel = index_panel(lake)
     assert panel.index.max() == days[1]  # the RVX of the last day has no VIX to be compared with yet

@@ -33,37 +33,87 @@ MAX_NAMES = 8
 
 class _PathsRequest(ctypes.Structure):  # optlab_paths_request in cuda/include/optlab_cuda/capi.h
     _fields_ = [
-        ("n_names", ctypes.c_int), ("n_steps", ctypes.c_int), ("n_obs", ctypes.c_int), ("n_x", ctypes.c_int),
-        ("n_rows", ctypes.c_int), ("n_pairs", ctypes.c_longlong), ("first_pair", ctypes.c_longlong),
+        ("n_names", ctypes.c_int),
+        ("n_steps", ctypes.c_int),
+        ("n_obs", ctypes.c_int),
+        ("n_x", ctypes.c_int),
+        ("n_rows", ctypes.c_int),
+        ("n_pairs", ctypes.c_longlong),
+        ("first_pair", ctypes.c_longlong),
         ("seed", ctypes.c_ulonglong),
-        ("dt", ctypes.c_void_p), ("t0", ctypes.c_void_p), ("obs_step", ctypes.c_void_p), ("root", ctypes.c_void_p),
-        ("kind", ctypes.c_void_p), ("cvar", ctypes.c_void_p), ("heston", ctypes.c_void_p), ("same", ctypes.c_int),
-        ("step_row", ctypes.c_void_p), ("row_lo", ctypes.c_void_p), ("row_inv_dx", ctypes.c_void_p),
-        ("table", ctypes.c_void_p), ("fwd", ctypes.c_void_p), ("mixer", ctypes.c_int), ("mix", ctypes.c_double * 8),
-        ("low_root", ctypes.c_void_p), ("n_cols", ctypes.c_int), ("n_keep", ctypes.c_int), ("col_of", ctypes.c_void_p),
-        ("n_windows", ctypes.c_int), ("win_lo", ctypes.c_void_p), ("win_hi", ctypes.c_void_p),
-        ("out", ctypes.c_void_p), ("kernel_ms", ctypes.c_double),
+        ("dt", ctypes.c_void_p),
+        ("t0", ctypes.c_void_p),
+        ("obs_step", ctypes.c_void_p),
+        ("root", ctypes.c_void_p),
+        ("kind", ctypes.c_void_p),
+        ("cvar", ctypes.c_void_p),
+        ("heston", ctypes.c_void_p),
+        ("same", ctypes.c_int),
+        ("step_row", ctypes.c_void_p),
+        ("row_lo", ctypes.c_void_p),
+        ("row_inv_dx", ctypes.c_void_p),
+        ("table", ctypes.c_void_p),
+        ("fwd", ctypes.c_void_p),
+        ("mixer", ctypes.c_int),
+        ("mix", ctypes.c_double * 8),
+        ("low_root", ctypes.c_void_p),
+        ("n_cols", ctypes.c_int),
+        ("n_keep", ctypes.c_int),
+        ("col_of", ctypes.c_void_p),
+        ("n_windows", ctypes.c_int),
+        ("win_lo", ctypes.c_void_p),
+        ("win_hi", ctypes.c_void_p),
+        ("out", ctypes.c_void_p),
+        ("kernel_ms", ctypes.c_double),
         ("total_ms", ctypes.c_double),
     ]
 
 
 class _LeverageRequest(ctypes.Structure):  # optlab_leverage_request
     _fields_ = [
-        ("n_steps", ctypes.c_int), ("dt", ctypes.c_void_p), ("t0", ctypes.c_void_p), ("n_pairs", ctypes.c_longlong),
-        ("seed", ctypes.c_ulonglong), ("v0", ctypes.c_double), ("kappa", ctypes.c_double), ("theta", ctypes.c_double),
-        ("xi", ctypes.c_double), ("rho", ctypes.c_double), ("n_x", ctypes.c_int), ("n_bins", ctypes.c_int),
-        ("n_fine", ctypes.c_int), ("atm_vol", ctypes.c_double), ("bandwidth_scale", ctypes.c_double),
-        ("l_min", ctypes.c_double), ("l_max", ctypes.c_double), ("q_lo", ctypes.c_double), ("q_hi", ctypes.c_double),
-        ("local_linear", ctypes.c_int), ("positive_part", ctypes.c_int), ("n_lv", ctypes.c_int),
-        ("lv_lo", ctypes.c_void_p), ("lv_inv_dx", ctypes.c_void_p), ("lv_rows", ctypes.c_void_p),
-        ("x_grids", ctypes.c_void_p), ("values", ctypes.c_void_p), ("total_ms", ctypes.c_double),
+        ("n_steps", ctypes.c_int),
+        ("dt", ctypes.c_void_p),
+        ("t0", ctypes.c_void_p),
+        ("n_pairs", ctypes.c_longlong),
+        ("seed", ctypes.c_ulonglong),
+        ("v0", ctypes.c_double),
+        ("kappa", ctypes.c_double),
+        ("theta", ctypes.c_double),
+        ("xi", ctypes.c_double),
+        ("rho", ctypes.c_double),
+        ("n_x", ctypes.c_int),
+        ("n_bins", ctypes.c_int),
+        ("n_fine", ctypes.c_int),
+        ("atm_vol", ctypes.c_double),
+        ("bandwidth_scale", ctypes.c_double),
+        ("l_min", ctypes.c_double),
+        ("l_max", ctypes.c_double),
+        ("q_lo", ctypes.c_double),
+        ("q_hi", ctypes.c_double),
+        ("local_linear", ctypes.c_int),
+        ("positive_part", ctypes.c_int),
+        ("n_lv", ctypes.c_int),
+        ("lv_lo", ctypes.c_void_p),
+        ("lv_inv_dx", ctypes.c_void_p),
+        ("lv_rows", ctypes.c_void_p),
+        ("x_grids", ctypes.c_void_p),
+        ("values", ctypes.c_void_p),
+        ("total_ms", ctypes.c_double),
     ]
 
 
 class _Device(ctypes.Structure):  # optlab_device
-    _fields_ = [("name", ctypes.c_char * 256), ("major", ctypes.c_int), ("minor", ctypes.c_int),
-                ("sm_count", ctypes.c_int), ("clock_mhz", ctypes.c_int), ("total_mem", ctypes.c_longlong),
-                ("free_mem", ctypes.c_longlong), ("integrated", ctypes.c_int), ("kernel_timeout", ctypes.c_int)]
+    _fields_ = [
+        ("name", ctypes.c_char * 256),
+        ("major", ctypes.c_int),
+        ("minor", ctypes.c_int),
+        ("sm_count", ctypes.c_int),
+        ("clock_mhz", ctypes.c_int),
+        ("total_mem", ctypes.c_longlong),
+        ("free_mem", ctypes.c_longlong),
+        ("integrated", ctypes.c_int),
+        ("kernel_timeout", ctypes.c_int),
+    ]
 
 
 _ready = None
@@ -120,8 +170,18 @@ def devices() -> list[Device]:
     for i in range(lib.optlab_gpu_count()):
         d = _Device()
         if lib.optlab_device_info(i, ctypes.byref(d)):
-            out.append(Device(d.name.decode(), f"{d.major}.{d.minor}", d.sm_count, d.clock_mhz, d.total_mem / 2**30,
-                              d.free_mem / 2**30, bool(d.integrated), bool(d.kernel_timeout)))
+            out.append(
+                Device(
+                    d.name.decode(),
+                    f"{d.major}.{d.minor}",
+                    d.sm_count,
+                    d.clock_mhz,
+                    d.total_mem / 2**30,
+                    d.free_mem / 2**30,
+                    bool(d.integrated),
+                    bool(d.kernel_timeout),
+                )
+            )
     return out
 
 
@@ -149,6 +209,7 @@ def _cached(key, obj, build):
 
 def _local_var_rows(surface, t0: np.ndarray, n_x: int, sd_range=(-8.0, 6.0)):
     """(lo, inv_dx, rows) of the Dupire local variance at each step start, on x in sd_range ATM standard deviations."""
+
     def build():
         if hasattr(surface, "local_var_rows"):  # a surface that builds its own table (optlab.risk.surfaces)
             return surface.local_var_rows(t0, n_x, sd_range)
@@ -160,16 +221,20 @@ def _local_var_rows(surface, t0: np.ndarray, n_x: int, sd_range=(-8.0, 6.0)):
             lo[i], inv[i] = a, (n_x - 1) / (b - a)
             rows[i] = surface.local_var(np.linspace(a, b, n_x), T)
         return lo, inv, rows
+
     return _cached((id(surface), "lv", n_x, t0.tobytes()), surface, build)
 
 
 def _leverage_rows(leverage, t0: np.ndarray, n_x: int):
     """(lo, inv_dx, squared leverage rows) of each leverage time row, and the row of each step."""
+
     def build():
         times = np.asarray(leverage.times, dtype=float)
         if hasattr(leverage, "rows"):  # fastmodels.UniformLeverage: (x0, inv_dx, y) per row
-            src = [(x0, x0 + (len(y) - 1) / inv, np.linspace(x0, x0 + (len(y) - 1) / inv, len(y)), y)
-                   for x0, inv, y in leverage.rows]
+            src = [
+                (x0, x0 + (len(y) - 1) / inv, np.linspace(x0, x0 + (len(y) - 1) / inv, len(y)), y)
+                for x0, inv, y in leverage.rows
+            ]
         else:
             src = [(xs[0], xs[-1], xs, vs) for xs, vs in zip(leverage.x_grids, leverage.values)]
         lo, inv, rows = np.empty(len(src)), np.empty(len(src)), np.empty((len(src), n_x))
@@ -179,12 +244,14 @@ def _leverage_rows(leverage, t0: np.ndarray, n_x: int):
             rows[r] = np.interp(grid, xs, vs) ** 2
         step = np.clip(np.searchsorted(times, t0 + 1e-12, side="right") - 1, 0, len(times) - 1).astype(np.int32)
         return lo, inv, rows, step
+
     return _cached((id(leverage), "lev", n_x, t0.tobytes()), leverage, build)
 
 
 def _describe(model: Model, t0: np.ndarray, n_x: int):
     """(kind, constant variance, Heston parameters, table rows or None, step rows or None) of one name."""
     from .structured.fastmodels import TabulatedLocalVol, UniformLeverage  # noqa: F401
+
     if isinstance(model, BlackScholesModel):
         return _KIND["const"], model.vol**2, (0.0, 1.0, 1.0, 0.0, 0.0), None, None
     if isinstance(model, (LocalVolModel, TabulatedLocalVol)):
@@ -205,6 +272,7 @@ def unsupported(model) -> str | None:
     """Why the engine cannot simulate this model or basket, or None."""
     from .structured.fastmodels import TabulatedLocalVol
     from .structured.multiasset import Basket
+
     known = (BlackScholesModel, LocalVolModel, TabulatedLocalVol, SLVModel, HestonModel)
     if isinstance(model, Basket):
         if len(model.names) > MAX_NAMES:
@@ -214,6 +282,7 @@ def unsupported(model) -> str | None:
             return f"{', '.join(type(model.models[n]).__name__ for n in bad)} not in the path engine"
         if model.mixer is not None:
             from .structured.localcorr import LocalCorrelation
+
             if not isinstance(model.mixer, LocalCorrelation):
                 return f"{type(model.mixer).__name__} is not in the path engine (local correlation only)"
         return None
@@ -236,6 +305,7 @@ def seed64(seed) -> int:
 @dataclass
 class Plan:
     """Everything of a simulation but the pairs: built once, run on any range of pairs."""
+
     names: tuple
     kind: np.ndarray
     cvar: np.ndarray
@@ -263,6 +333,7 @@ class Plan:
 def plan(model, market, times, dt_max=1 / 252, dt_min=1 / 2000, n_x: int = N_X) -> Plan:
     """The simulation of `models.simulate` (one model) or `simulate_basket` (a Basket) as arrays for the engine."""
     from .structured.multiasset import Basket
+
     why = unsupported(model)
     if why:
         raise NotImplementedError(why)
@@ -292,15 +363,31 @@ def plan(model, market, times, dt_max=1 / 252, dt_min=1 / 2000, n_x: int = N_X) 
     mixer, mix, low = 0, (0.0,) * 8, None
     if isinstance(model, Basket) and model.mixer is not None:
         from .structured.localcorr import aligned_factors
+
         mx = model.mixer
         low, sign, turn = aligned_factors(model.corr, model.root, mx.w0)
         mixer, mix = 1, (mx.w0, mx.level, mx.down, mx.up, mx.sigma, sign, np.cos(turn), np.sin(turn))
         low = np.ascontiguousarray(low, dtype=float)
-    return Plan(names, kind, cvar, np.ascontiguousarray(hes), np.ascontiguousarray(root), same, dt, t0, obs,
-                np.ascontiguousarray(fwd), rows_of if tab else None,
-                np.concatenate(lo) if lo else None, np.concatenate(inv) if inv else None,
-                np.ascontiguousarray(np.concatenate(tab)) if tab else None, mixer, tuple(float(x) for x in mix), low,
-                n_x)
+    return Plan(
+        names,
+        kind,
+        cvar,
+        np.ascontiguousarray(hes),
+        np.ascontiguousarray(root),
+        same,
+        dt,
+        t0,
+        obs,
+        np.ascontiguousarray(fwd),
+        rows_of if tab else None,
+        np.concatenate(lo) if lo else None,
+        np.concatenate(inv) if inv else None,
+        np.ascontiguousarray(np.concatenate(tab)) if tab else None,
+        mixer,
+        tuple(float(x) for x in mix),
+        low,
+        n_x,
+    )
 
 
 def _ptr(a):
@@ -310,15 +397,18 @@ def _ptr(a):
 MAX_WINDOWS = 2
 
 
-def run(p: Plan, n_pairs: int, seed: int, first_pair: int = 0, backend: str = "cpu", threads: int = 0, keep=None,
-        windows=()):
+def run(
+    p: Plan, n_pairs: int, seed: int, first_pair: int = 0, backend: str = "cpu", threads: int = 0, keep=None, windows=()
+):
     """(spots, extremes, timing). spots[a] is an (2 n_pairs, len(keep)) array (Fortran order) of name a at the kept
     observations (all of them by default), pair i at row i and its antithetic at row n_pairs + i. `windows` lists
     up to two (first, last) observation indices: extremes[a][w] is then (lowest, highest) spot over that window,
     computed while simulating. timing: {"kernel_ms", "total_ms", "backend"}."""
     lib = _lib()
     if lib is None:
-        raise _gpu.EngineError(f"{_gpu._LIB_NAME} with the path engine not found: build cuda/ (README) or set OPTLAB_CUDA_LIB")
+        raise _gpu.EngineError(
+            f"{_gpu._LIB_NAME} with the path engine not found: build cuda/ (README) or set OPTLAB_CUDA_LIB"
+        )
     if backend == "auto":
         backend = "gpu" if gpu_available() else "cpu"
     if backend not in ("cpu", "gpu"):
@@ -339,8 +429,13 @@ def run(p: Plan, n_pairs: int, seed: int, first_pair: int = 0, backend: str = "c
     rq.n_pairs, rq.first_pair, rq.seed = n_pairs, first_pair, seed
     grid = [np.ascontiguousarray(a) for a in (p.dt, p.t0)]  # held until the call returns
     rq.dt, rq.t0 = _ptr(grid[0]), _ptr(grid[1])
-    rq.obs_step, rq.root, rq.kind, rq.cvar, rq.heston = (_ptr(p.obs_step), _ptr(p.root), _ptr(p.kind), _ptr(p.cvar),
-                                                         _ptr(p.heston))
+    rq.obs_step, rq.root, rq.kind, rq.cvar, rq.heston = (
+        _ptr(p.obs_step),
+        _ptr(p.root),
+        _ptr(p.kind),
+        _ptr(p.cvar),
+        _ptr(p.heston),
+    )
     rq.same, rq.step_row, rq.row_lo, rq.row_inv_dx = p.same, _ptr(p.step_row), _ptr(p.lo), _ptr(p.inv_dx)
     rq.table, rq.fwd, rq.mixer, rq.low_root, rq.out = _ptr(p.table), _ptr(p.fwd), p.mixer, _ptr(p.low_root), _ptr(out)
     rq.mix[:] = p.mix
@@ -354,10 +449,21 @@ def run(p: Plan, n_pairs: int, seed: int, first_pair: int = 0, backend: str = "c
     return spots, extremes, {"kernel_ms": rq.kernel_ms, "total_ms": rq.total_ms, "backend": backend}
 
 
-def simulate(model, market, times, n_paths: int, seed=None, dt_max=1 / 252, dt_min=1 / 2000, backend: str = "auto",
-             first_pair: int = 0, threads: int = 0):
+def simulate(
+    model,
+    market,
+    times,
+    n_paths: int,
+    seed=None,
+    dt_max=1 / 252,
+    dt_min=1 / 2000,
+    backend: str = "auto",
+    first_pair: int = 0,
+    threads: int = 0,
+):
     """`models.simulate` (or `simulate_basket` for a Basket: a {name: array} dict) on the engine."""
     from .structured.multiasset import Basket
+
     p = plan(model, market, times, dt_max, dt_min)
     spots, _, _ = run(p, n_paths // 2, seed64(seed), first_pair, backend, threads)
     if isinstance(model, Basket):
@@ -365,14 +471,30 @@ def simulate(model, market, times, n_paths: int, seed=None, dt_max=1 / 252, dt_m
     return spots[0]
 
 
-def calibrate_leverage(params, surface, market, T_max: float, mix: float = 1.0, n_particles: int = 100_000,
-                       dt_max=1 / 100, dt_min=1 / 2000, n_x=81, bandwidth_scale=1.0, rng=None, l_bounds=(0.05, 8.0),
-                       regression="nadaraya_watson", positive_part=False, backend: str = "auto", threads: int = 0):
+def calibrate_leverage(
+    params,
+    surface,
+    market,
+    T_max: float,
+    mix: float = 1.0,
+    n_particles: int = 100_000,
+    dt_max=1 / 100,
+    dt_min=1 / 2000,
+    n_x=81,
+    bandwidth_scale=1.0,
+    rng=None,
+    l_bounds=(0.05, 8.0),
+    regression="nadaraya_watson",
+    positive_part=False,
+    backend: str = "auto",
+    threads: int = 0,
+):
     """`slv.calibrate_leverage` on the engine: the same algorithm (binned kernel regression on 400 bins), with the
     quantiles that bound the grid read from a histogram of 8192 bins and the local variance from uniform rows (1e-4
     relative), on Philox draws. The leverage therefore differs from NumPy's by noise and those approximations; the
     SLV vanillas it gives are checked against the surface in tests/test_native.py."""
     from .heston import HestonParams
+
     lib = _lib()
     if lib is None:
         raise _gpu.EngineError("the compiled engine is not built")
@@ -416,11 +538,16 @@ def set_default(engine: str | None):
 def summary() -> dict:
     """What this machine offers the engine: the library, its CUDA build, the devices and the CPU threads."""
     lib = _lib()
-    return {"engine": default_engine(), "compiled": lib is not None, "cuda_build": bool(lib and lib.optlab_has_cuda()),
-            "devices": [asdict(d) for d in devices()],
-            "cpu_threads": cpu_threads(),
-            "resolved": "numpy" if lib is None or default_engine() == "numpy" else
-            ("gpu" if default_engine() in ("gpu", "auto") and gpu_available() else "cpu")}
+    return {
+        "engine": default_engine(),
+        "compiled": lib is not None,
+        "cuda_build": bool(lib and lib.optlab_has_cuda()),
+        "devices": [asdict(d) for d in devices()],
+        "cpu_threads": cpu_threads(),
+        "resolved": "numpy"
+        if lib is None or default_engine() == "numpy"
+        else ("gpu" if default_engine() in ("gpu", "auto") and gpu_available() else "cpu"),
+    }
 
 
 def default_engine() -> str:

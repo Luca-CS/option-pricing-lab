@@ -96,8 +96,17 @@ def test_a_price_depends_on_the_seed_and_the_number_of_paths_only(monkeypatch):
     model = CTX.model("lv", product.horizon)
 
     def one():
-        (r,) = price_many(product.program, model, CTX.market, [{product.coupon_param: 0.02}], n_paths=40_000, seed=6,
-                          valuation=CTX.valuation, calendar=product.calendar, engine="cpu")
+        (r,) = price_many(
+            product.program,
+            model,
+            CTX.market,
+            [{product.coupon_param: 0.02}],
+            n_paths=40_000,
+            seed=6,
+            valuation=CTX.valuation,
+            calendar=product.calendar,
+            engine="cpu",
+        )
         return r
 
     whole = one()
@@ -114,8 +123,9 @@ def test_a_phoenix_on_the_engine_matches_numpy():
         model = CTX.model(name, product.horizon)
         kw = dict(n_paths=200_000, valuation=CTX.valuation, calendar=product.calendar)
         (a,) = price_many(product.program, model, CTX.market, [{product.coupon_param: 0.02}], seed=7, **kw)
-        (b,) = price_many(product.program, model, CTX.market, [{product.coupon_param: 0.02}], seed=8, engine="cpu",
-                          **kw)
+        (b,) = price_many(
+            product.program, model, CTX.market, [{product.coupon_param: 0.02}], seed=8, engine="cpu", **kw
+        )
         assert b.timings["engine"] == "cpu" and a.timings["engine"] == "numpy"
         assert abs(a.price - b.price) < 4 * np.hypot(a.stderr, b.stderr)
 
@@ -173,6 +183,7 @@ def test_what_the_engine_does_not_cover_goes_to_numpy_or_fails_when_asked_by_nam
 @pytest.mark.parametrize("backend", BACKENDS)
 def test_the_engine_leverage_reprices_the_surface_like_numpys(backend):
     from optlab.slv import calibrate_leverage
+
     T = 1.0
     kw = dict(mix=0.5, n_particles=200_000, rng=1)
     ours = calibrate_leverage(CTX.heston, CTX.surface, CTX.market, T, engine=backend, **kw)
@@ -189,6 +200,7 @@ def test_the_engine_leverage_reprices_the_surface_like_numpys(backend):
 
 def test_numpy_stays_the_default_of_the_leverage():
     from optlab.slv import calibrate_leverage
+
     a = calibrate_leverage(CTX.heston, CTX.surface, CTX.market, 0.2, n_particles=20_000, rng=2)
     b = calibrate_leverage(CTX.heston, CTX.surface, CTX.market, 0.2, n_particles=20_000, rng=2, engine="numpy")
     assert np.array_equal(a.leverage.values, b.leverage.values)
@@ -201,9 +213,17 @@ def test_daily_windows_reduced_in_the_engine_give_the_same_numbers(name):
     product = compile_sheet(sheet, CTX.valuation)
     model = CTX.model("lv", product.horizon)
     sets = [{product.coupon_param: 0.02}] if product.coupon_param else [{}]
-    kw = dict(n_paths=40_000, seed=13, valuation=CTX.valuation, calendar=product.calendar, engine="cpu",
-              spot_factors=[1.01] * len(sets))
+    kw = dict(
+        n_paths=40_000,
+        seed=13,
+        valuation=CTX.valuation,
+        calendar=product.calendar,
+        engine="cpu",
+        spot_factors=[1.01] * len(sets),
+    )
     (full,) = price_many(product.program, model, CTX.market, sets, reduce=False, **kw)
     (red,) = price_many(product.program, model, CTX.market, sets, **kw)
     assert red.price == pytest.approx(full.price, abs=1e-12) and red.stderr == pytest.approx(full.stderr, abs=1e-12)
-    assert red.timings["windows"] == 1 and red.timings["columns"] < full.timings["columns"] / 10  # two columns, not one a day
+    assert (
+        red.timings["windows"] == 1 and red.timings["columns"] < full.timings["columns"] / 10
+    )  # two columns, not one a day

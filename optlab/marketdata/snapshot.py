@@ -20,10 +20,11 @@ from ..config import REPO_ROOT
 
 def _code_version() -> str | None:
     try:
-        out = subprocess.run(["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"], capture_output=True, text=True,
-                             timeout=5)
+        out = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=5
+        )
         return out.stdout.strip() or None
-    except (OSError, subprocess.SubprocessError):
+    except OSError, subprocess.SubprocessError:
         return None
 
 
@@ -71,8 +72,14 @@ class MarketSnapshot:
         return replace(self, spot_scale=float(real_spot) / float(self.market["spot"]))
 
     @classmethod
-    def from_calibration_file(cls, path, underlying: str = "SPX", valuation: dt.date | str | None = None,
-                              source: str | None = None, provenance: bool = True) -> "MarketSnapshot":
+    def from_calibration_file(
+        cls,
+        path,
+        underlying: str = "SPX",
+        valuation: dt.date | str | None = None,
+        source: str | None = None,
+        provenance: bool = True,
+    ) -> "MarketSnapshot":
         """A snapshot from a calibration JSON (results/*.json). Files without a snapshot time (the simulated
         market) need `valuation`."""
         path = Path(path)
@@ -82,14 +89,24 @@ class MarketSnapshot:
         stamp = meta.get("snapshot")
         if valuation is None and stamp is None:
             raise ValueError(f"{path.name} has no snapshot time: give the valuation date")
-        valuation = dt.date.fromisoformat(str(valuation)) if valuation is not None else \
-            dt.date.fromisoformat(stamp[:10])
+        valuation = (
+            dt.date.fromisoformat(str(valuation)) if valuation is not None else dt.date.fromisoformat(stamp[:10])
+        )
         slv = {"mix": cal["slv"]["mix"], "leverage": cal["slv"]["leverage"]}
         prov = {"file": path.name, "file_sha256": hashlib.sha256(raw).hexdigest(), "note": meta.get("note")}
         if provenance:
             prov.update(code_version=_code_version(), created_at=dt.datetime.now(dt.timezone.utc).isoformat())
-        return cls(underlying, stamp or valuation.isoformat(), valuation, source or meta.get("source", "manual"),
-                   cal["market"], cal["surface"], cal["heston"], slv, prov)
+        return cls(
+            underlying,
+            stamp or valuation.isoformat(),
+            valuation,
+            source or meta.get("source", "manual"),
+            cal["market"],
+            cal["surface"],
+            cal["heston"],
+            slv,
+            prov,
+        )
 
 
 def to_model_scale(fixings: dict, spot_scale: float) -> dict:

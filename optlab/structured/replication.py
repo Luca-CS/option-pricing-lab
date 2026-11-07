@@ -82,8 +82,9 @@ def quadrature(surface, market: Market, T: float, n_cells: int = 4_000):
     return mean, prob
 
 
-def nodes(f, surface, market: Market, T: float, n_cells: int = 4_000, levels: int = 4, split: int = 16,
-          tol: float = 1e-10):
+def nodes(
+    f, surface, market: Market, T: float, n_cells: int = 4_000, levels: int = 4, split: int = 16, tol: float = 1e-10
+):
     """Nodes and weights for E[f(S_T)]: cells where f is not linear in S (checked at the edges and the node) are
     split into `split` sub-cells, up to `levels` times."""
     F = float(market.F(T))
@@ -114,9 +115,21 @@ def nodes(f, surface, market: Market, T: float, n_cells: int = 4_000, levels: in
     return np.concatenate(out_s), np.concatenate(out_w)
 
 
-def replication_result(program, timeline: Timeline, surface, market: Market, T_obs: float, fmt=None, params=None,
-                       notional=None, n_cells: int = 4_000, levels: int = 6, initial_fixing: float | None = None,
-                       history: dict | None = None, ramps: dict | None = None):
+def replication_result(
+    program,
+    timeline: Timeline,
+    surface,
+    market: Market,
+    T_obs: float,
+    fmt=None,
+    params=None,
+    notional=None,
+    n_cells: int = 4_000,
+    levels: int = 6,
+    initial_fixing: float | None = None,
+    history: dict | None = None,
+    ramps: dict | None = None,
+):
     """Price on the surface. The numerical error is the change when the coarse grid is halved."""
     from .pricer import StructuredResult
 
@@ -148,8 +161,20 @@ def replication_result(program, timeline: Timeline, surface, market: Market, T_o
     red = {t: float(np.dot(w, np.broadcast_to(x, w.shape))) for t, x in out.redemption_weights.items()}
     seconds = time.perf_counter() - t0
     return StructuredResult(
-        value=MCResult(v, 0.0, 0), price=100 * v / N, stderr=0.0, fmt=fmt.name, notional=N, n_paths=0,
-        seconds=seconds, timings={"replication": seconds}, event_times=timeline.event_times,
-        termination=np.zeros(len(program.events)), expected_flows=flows,
-        expected_life=float(timeline.event_times[-1]), redemption_probabilities=red, warnings=[],
-        method="replication", numerical_error=100 * abs(v - v_half) / N)
+        value=MCResult(v, 0.0, 0),
+        price=100 * v / N,
+        stderr=0.0,
+        fmt=fmt.name,
+        notional=N,
+        n_paths=0,
+        seconds=seconds,
+        timings={"replication": seconds},
+        event_times=timeline.event_times,
+        termination=np.zeros(len(program.events)),
+        expected_flows=flows,
+        expected_life=float(timeline.event_times[-1]),
+        redemption_probabilities=red,
+        warnings=[],
+        method="replication",
+        numerical_error=100 * abs(v - v_half) / N,
+    )

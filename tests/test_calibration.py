@@ -1,8 +1,20 @@
 import numpy as np
 import pytest
 
-from optlab import (SSVI, HestonParams, LocalVolModel, Market, SVISurface, arbitrage_report, calibrate_heston,
-                    calibrate_leverage, fit_ssvi, fit_svi_surface, heston_iv, svi_arbitrage_report)
+from optlab import (
+    SSVI,
+    HestonParams,
+    LocalVolModel,
+    Market,
+    SVISurface,
+    arbitrage_report,
+    calibrate_heston,
+    calibrate_leverage,
+    fit_ssvi,
+    fit_svi_surface,
+    heston_iv,
+    svi_arbitrage_report,
+)
 from optlab.svi import ssvi_slice_to_svi
 from optlab.validation import mc_smile
 

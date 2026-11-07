@@ -69,7 +69,9 @@ def tents(nodes, x, order: int = 2):
     return (phi, dphi, d2phi)[: order + 1]
 
 
-STRIKE_SMOOTHING_ATM = 0.04  # Gaussian width of the strike tents per square root of a year at the money, in log moneyness
+STRIKE_SMOOTHING_ATM = (
+    0.04  # Gaussian width of the strike tents per square root of a year at the money, in log moneyness
+)
 STRIKE_SMOOTHING_WING = 0.12  # the same in the wings, where the base surface is closest to butterfly arbitrage
 STRIKE_SMOOTHING_SCALE = 0.15  # log moneyness over which the width passes from one to the other
 SMOOTHING_T_FLOOR = 1 / 52  # the width stops shrinking below a week
@@ -120,6 +122,7 @@ def strike_tents(k, T=1.0, rows=None):
     with dR/dl = n(z), so R_k = Phi(z) + n(z) l_k, R_kk = n(z) [(1 - z l_k)^2 / l + l_kk], R_T = n(z) l_T. `rows` computes only
     those tents (the others stay zero)."""
     from scipy.special import ndtr
+
     k = np.asarray(k, dtype=float)
     T = np.asarray(T, dtype=float)
     shape = np.broadcast(k, T).shape
@@ -188,6 +191,11 @@ def weighted_factor(T) -> np.ndarray:
 
 
 def grid_json() -> dict:
-    return {"strikes": list(STRIKES), "strike_labels": list(STRIKE_LABELS), "tenors": list(TENORS),
-            "tenor_labels": list(TENOR_LABELS), "moneyness": "forward (K / F(T))",
-            "tents": "smootherstep partition of unity, flat beyond the end nodes"}
+    return {
+        "strikes": list(STRIKES),
+        "strike_labels": list(STRIKE_LABELS),
+        "tenors": list(TENORS),
+        "tenor_labels": list(TENOR_LABELS),
+        "moneyness": "forward (K / F(T))",
+        "tents": "smootherstep partition of unity, flat beyond the end nodes",
+    }

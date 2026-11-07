@@ -16,8 +16,18 @@ from optlab.marketdata.universe import enabled_names
 from optlab.structured import CALENDARS, preset, quote
 
 LAKE = Lake()
-pytestmark = pytest.mark.skipif(not LAKE.has("prices_eod") or not LAKE.has("vol_surfaces"), reason="no data lake on this machine")
-TABLES = ("prices_eod", "corporate_actions", "vol_indices", "discount_curves", "carry_implied", "vol_surfaces", "correl_implied")
+pytestmark = pytest.mark.skipif(
+    not LAKE.has("prices_eod") or not LAKE.has("vol_surfaces"), reason="no data lake on this machine"
+)
+TABLES = (
+    "prices_eod",
+    "corporate_actions",
+    "vol_indices",
+    "discount_curves",
+    "carry_implied",
+    "vol_surfaces",
+    "correl_implied",
+)
 RESULTS = paths().results
 
 
@@ -47,19 +57,28 @@ def test_a_worst_of_spx_sx5e_on_the_real_lake_is_quanto_with_its_labels():
     assert float(ctx.markets["SX5E"].D(1.0)) == pytest.approx(float(ctx.markets["SPX"].D(1.0)), rel=1e-4)
 
 
-@pytest.mark.parametrize("pair, base, quote", [("EURUSD", "EUR", "USD"), ("USDJPY", "USD", "JPY"), ("GBPUSD", "GBP", "USD")])
+@pytest.mark.parametrize(
+    "pair, base, quote", [("EURUSD", "EUR", "USD"), ("USDJPY", "USD", "JPY"), ("GBPUSD", "GBP", "USD")]
+)
 def test_every_pair_has_forwards_at_covered_parity_on_the_real_lake(pair, base, quote):
     from optlab.marketdata.derive.carry import cip_forward
     from optlab.marketdata.derive.fx import spot_series
     from optlab.marketdata.quotes import discount_function
+
     if not LAKE.has("fx_forwards"):
         pytest.skip("no FX in this lake")
     for day in (dt.date(2019, 7, 1), dt.date(2022, 7, 1)):
         rows = LAKE.read("fx_forwards", where=f"pair = '{pair}' AND obs_date = DATE '{day}'", order="tenor")
         if rows.empty:
-            pytest.skip(f"no {pair} forward: scripts/lake_update.py --only mof boj boe, then scripts/lake_derive.py --only curves fx")
+            pytest.skip(
+                f"no {pair} forward: scripts/lake_update.py --only mof boj boe, then scripts/lake_derive.py --only curves fx"
+            )
         T = rows["tenor"].to_numpy()
-        expected = cip_forward(float(spot_series(LAKE, pair, day).iloc[-1]), discount_function(LAKE, quote, day)(T), discount_function(LAKE, base, day)(T))
+        expected = cip_forward(
+            float(spot_series(LAKE, pair, day).iloc[-1]),
+            discount_function(LAKE, quote, day)(T),
+            discount_function(LAKE, base, day)(T),
+        )
         np.testing.assert_allclose(rows["forward"], expected, rtol=1e-12)
     assert open_issues(LAKE, "check_name = 'no_curve'").empty
 
@@ -81,11 +100,18 @@ def test_all_enabled_names_have_prices_and_a_surface_on_a_stress_date():
 
 @pytest.mark.parametrize("day", [dt.date(2020, 3, 23), dt.date(2022, 7, 1)])
 def test_erasing_the_future_changes_no_past_price_on_real_data(tmp_path, day):
-    cut = truncated_copy(LAKE, tmp_path / "cut", day, tables=TABLES,
-                         where_extra={"prices_eod": "instrument IN ('SPX', 'NDX', 'SPX.TR')",
-                                      "vol_surfaces": "underlying IN ('SPX', 'NDX')",
-                                      "carry_implied": "underlying IN ('SPX', 'NDX')",
-                                      "corporate_actions": "instrument = 'SPX'"})
+    cut = truncated_copy(
+        LAKE,
+        tmp_path / "cut",
+        day,
+        tables=TABLES,
+        where_extra={
+            "prices_eod": "instrument IN ('SPX', 'NDX', 'SPX.TR')",
+            "vol_surfaces": "underlying IN ('SPX', 'NDX')",
+            "carry_implied": "underlying IN ('SPX', 'NDX')",
+            "corporate_actions": "instrument = 'SPX'",
+        },
+    )
     assert pd.to_datetime(cut.read("prices_eod")["obs_date"]).max().date() == day
     a, b = market_at(LAKE, "SPX", day), market_at(cut, "SPX", day)
     assert a.snapshot_id == b.snapshot_id and a.spot_scale == b.spot_scale
@@ -162,6 +188,7 @@ def test_the_crash_keeps_its_at_the_money_level():
     """23/03/2020, against real SPY chains: at about a month the reconstruction was 5.6 points low before the slope fell with the level."""
     from optlab.marketdata.derive.surfaces import surface_at
     from optlab.marketdata.quotes import clean_day
+
     day = dt.date(2020, 3, 23)
     surface = surface_at(LAKE, "SPX", day, layer="reconstructed").surface
     chain = clean_day(LAKE, "SPY", day, "dolthub", spot=0.1 * real_close(LAKE, "SPX", day)[0])
@@ -175,6 +202,7 @@ def test_the_crash_keeps_its_at_the_money_level():
 
 def test_dividends_give_the_forward_its_steps():
     from optlab.marketdata.pit import market_curves
+
     market, _, prov = market_curves(LAKE, "IBM", dt.date(2022, 7, 1))
     assert prov["carry"]["method"] == "dividend_dates"
     assert 0.03 < prov["carry"]["dividend_yield"] < 0.07
@@ -254,5 +282,7 @@ def test_slv_on_a_real_basket_reprices_each_name_once_the_noise_of_the_forward_i
                 se = corrected.std(ddof=1) / np.sqrt(half)
                 vol = float(surface.iv(np.log(pct), T))
                 want = float(black_price(F, pct * F, T, vol, 1.0, "call"))
-                vega = F * np.sqrt(T) * 0.3  # a lower bound of the vega near the money, for the bias of the leverage: 10 bp of vol
+                vega = (
+                    F * np.sqrt(T) * 0.3
+                )  # a lower bound of the vega near the money, for the bias of the leverage: 10 bp of vol
                 assert abs(corrected.mean() - want) <= 4 * se + 0.001 * vega, (name, T, pct, corrected.mean(), want, se)

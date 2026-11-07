@@ -12,6 +12,7 @@ class Node:
 
 # --- observation dates: a calendar date or a time in years ---
 
+
 @dataclass(frozen=True)
 class DateLit(Node):
     value: str  # ISO date, YYYY-MM-DD
@@ -30,6 +31,7 @@ When = DateLit | TimeLit
 
 
 # --- expressions ---
+
 
 @dataclass(frozen=True)
 class Num(Node):
@@ -74,6 +76,7 @@ class Call(Node):
 class Window(Node):
     """Lowest or highest fixing of an underlying between two dates (both business days included), or on n
     equally spaced times in (start, end] in time mode."""
+
     func: str  # lowest or highest
     underlying: str
     start: When
@@ -84,6 +87,7 @@ class Window(Node):
 
 
 # --- statements ---
+
 
 @dataclass(frozen=True)
 class Assign(Node):
@@ -117,6 +121,7 @@ class Terminate(Node):
 
 
 # --- program ---
+
 
 @dataclass(frozen=True)
 class Event(Node):

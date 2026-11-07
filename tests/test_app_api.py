@@ -91,8 +91,12 @@ def test_quote_job_end_to_end(desk):
 
 def test_quote_with_slv_vega(desk):
     """SLV has a vega only when the leverage is recalibrated on the bumped surface: the option reaches the library."""
-    job = desk.quote({"sheet": sheet_of(desk, "phoenix"),
-                      "options": {"precision": "quick", "greeks": True, "slv_vega": True, "model": "slv"}})["job"]
+    job = desk.quote(
+        {
+            "sheet": sheet_of(desk, "phoenix"),
+            "options": {"precision": "quick", "greeks": True, "slv_vega": True, "model": "slv"},
+        }
+    )["job"]
     g = wait(desk, job)["greeks"]
     assert g["model"] == "slv" and g["vega"] < 0 and 0 < g["vega_se"] < abs(g["vega"]) / 4
     assert 0 < g["delta"] and g["delta_se"] < g["delta"] / 4
@@ -123,8 +127,10 @@ def test_fixings_scale_and_future_dates(desk):
 
 
 def test_fixings_text_lines_columns_and_yahoo_csv(desk):
-    yahoo = ("Date,Open,High,Low,Close,Adj Close,Volume\n2026-10-20,4890,4910,4880,4902.5,4902.5,100\n"
-             "2026-10-21,4900,4930,4895,4925.0,4920.0,100\n2026-10-24,null,null,null,null,null,0\n")
+    yahoo = (
+        "Date,Open,High,Low,Close,Adj Close,Volume\n2026-10-20,4890,4910,4880,4902.5,4902.5,100\n"
+        "2026-10-21,4900,4930,4895,4925.0,4920.0,100\n2026-10-24,null,null,null,null,null,0\n"
+    )
     levels, skipped = parse_fixings(yahoo)  # the Close column, not the open nor the adjusted close
     assert levels == {"2026-10-20": 4902.5, "2026-10-21": 4925.0}
     assert skipped == ["2026-10-24,null,null,null,null,null,0"]
@@ -141,28 +147,56 @@ def test_fixings_text_lines_columns_and_yahoo_csv(desk):
 
 def test_lan_blockers_read_from_the_windows_firewall():
     python = r"C:\Program Files\Python314\python.exe"
-    data = {"profiles": {"alias": "Wi-Fi", "category": "Public"},  # one object, as ConvertTo-Json writes it
-            "rules": [{"program": r"C:\program files\python314\python.exe", "action": "Block", "profile": "Public",
-                       "enabled": "True", "direction": "Inbound"},
-                      {"program": r"C:\Other\python.exe", "action": "Block", "profile": "Public", "enabled": "True",
-                       "direction": "Inbound"}]}
+    data = {
+        "profiles": {"alias": "Wi-Fi", "category": "Public"},  # one object, as ConvertTo-Json writes it
+        "rules": [
+            {
+                "program": r"C:\program files\python314\python.exe",
+                "action": "Block",
+                "profile": "Public",
+                "enabled": "True",
+                "direction": "Inbound",
+            },
+            {
+                "program": r"C:\Other\python.exe",
+                "action": "Block",
+                "profile": "Public",
+                "enabled": "True",
+                "direction": "Inbound",
+            },
+        ],
+    }
     reasons = interpret(data, python)
     assert len(reasons) == 2 and "blocks incoming connections" in reasons[0] and "Wi-Fi" in reasons[1]
-    data = {"profiles": [{"alias": "Wi-Fi", "category": "Private"}],
-            "rules": [{"program": python, "action": "Allow", "profile": "Private", "enabled": "True",
-                       "direction": "Inbound"}]}
+    data = {
+        "profiles": [{"alias": "Wi-Fi", "category": "Private"}],
+        "rules": [
+            {"program": python, "action": "Allow", "profile": "Private", "enabled": "True", "direction": "Inbound"}
+        ],
+    }
     assert interpret(data, python) == []
 
 
 def test_seasoned_trade_events_book_and_report(desk):
-    t = desk.create_trade({"sheet": sheet_of(desk, "phoenix"), "coupon_rate": 0.06, "quantity": 1.0,
-                           "strike_date": "2026-01-27", "trade_date": "2026-01-20"})
+    t = desk.create_trade(
+        {
+            "sheet": sheet_of(desk, "phoenix"),
+            "coupon_rate": 0.06,
+            "quantity": 1.0,
+            "strike_date": "2026-01-27",
+            "trade_date": "2026-01-20",
+        }
+    )
     tid = t["trade_id"]
     ev = desk.trade_events(tid)
     assert ev["missing"] and ev["past"] == [] and ev["strike_date"] == "2026-01-27"
     assert all(u["observation"] > "2026-10-27" for u in ev["upcoming"])
-    desk.put_fixings({"underlying": "SPX", "levels": {"2026-01-27": 100.0, "2026-04-27": 95.0, "2026-07-27": 90.0,
-                                                      "2026-10-27": 92.0}})
+    desk.put_fixings(
+        {
+            "underlying": "SPX",
+            "levels": {"2026-01-27": 100.0, "2026-04-27": 95.0, "2026-07-27": 90.0, "2026-10-27": 92.0},
+        }
+    )
     ev = desk.trade_events(tid)
     assert ev["missing"] is None and "coupon_paid" in [e["kind"] for e in ev["past"]]
     up = desk.upcoming(120)["events"]
@@ -187,21 +221,24 @@ def test_basket_settings_are_validated(desk):
     with pytest.raises(ApiError, match="volatility"):
         desk.put_basket({"names": {"SX5E": {"vol": 5.0}}})
     with pytest.raises(ApiError, match="valid matrix"):  # SPX close to both, the two others opposite: not a matrix
-        desk.put_basket({"names": {"AAA": {}, "BBB": {}},
-                         "corr": {"SPX|AAA": 0.9, "SPX|BBB": 0.9, "AAA|BBB": -0.9}})
+        desk.put_basket({"names": {"AAA": {}, "BBB": {}}, "corr": {"SPX|AAA": 0.9, "SPX|BBB": 0.9, "AAA|BBB": -0.9}})
     s = desk.put_basket({"names": {"sx5e": {"vol": 0.18, "q": 0.03}}, "corr": {"SPX|SX5E": 0.75}})
     assert s["names"]["SX5E"]["vol"] == 0.18 and s["corr"] == {"SPX|SX5E": 0.75}
 
 
 def test_worst_of_quote_book_and_trade_page(desk):
     desk.put_basket({"names": {"SX5E": {"vol": 0.18, "q": 0.03}}, "corr": {"SPX|SX5E": 0.75}})
-    q = wait(desk, desk.quote({"sheet": worst_of(desk), "options": {"precision": "quick", "greeks": True, "costs": False}})["job"])
+    q = wait(
+        desk,
+        desk.quote({"sheet": worst_of(desk), "options": {"precision": "quick", "greeks": True, "costs": False}})["job"],
+    )
     single = wait(desk, desk.quote({"sheet": sheet_of(desk, "phoenix"), "options": {"precision": "quick"}})["job"])
     assert q["basket"]["names"]["SX5E"]["vol"] == 0.18 and q["basket"]["corr"] == {"SPX|SX5E": 0.75}
     assert q["policy"]["model"] == "lv" and set(q["greeks"]["per_name"]) == {"SPX", "SX5E"}
     assert q["headline"]["value"] > single["headline"]["value"] + 4 * q["headline"]["se"]  # worst-of pays more
-    t = desk.create_trade({"sheet": worst_of(desk), "coupon_rate": q["coupon_rate"], "quantity": 2.0,
-                           "tags": [f"quote:{q['quote_id']}"]})
+    t = desk.create_trade(
+        {"sheet": worst_of(desk), "coupon_rate": q["coupon_rate"], "quantity": 2.0, "tags": [f"quote:{q['quote_id']}"]}
+    )
     detail = desk.trade(t["trade_id"])
     assert detail["quote_id"] == q["quote_id"] and detail["versions"][0]["quantity"] == 2.0
     assert detail["form"]["sections"] and detail["trade"]["summary"]["underlyings"] == ["SPX", "SX5E"]
@@ -254,8 +291,10 @@ def test_tunnel_address_is_read_from_the_relay_output():
     assert public_url("** your connection id is 1f2e, please mention it if you send me a message **") is None
     # the welcome banner prints the service's own pages: they are not the tunnel (seen on the first real start)
     assert public_url("To set up and manage custom domains go to https://admin.localhost.run/") is None
-    assert public_url("More details on custom domains (and how to enable subdomains) at https://localhost.run/docs/") \
+    assert (
+        public_url("More details on custom domains (and how to enable subdomains) at https://localhost.run/docs/")
         is None
+    )
 
 
 def test_script_lab(desk):
@@ -286,8 +325,12 @@ def test_jobs_report_errors_and_cancel(desk):
 
 
 def _get(url, headers=None, data=None, method=None):
-    req = urllib.request.Request(url, data=json.dumps(data).encode() if data is not None else None,
-                                 headers={"Content-Type": "application/json", **(headers or {})}, method=method)
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(data).encode() if data is not None else None,
+        headers={"Content-Type": "application/json", **(headers or {})},
+        method=method,
+    )
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
             return r.status, dict(r.headers), r.read()

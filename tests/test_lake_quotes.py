@@ -14,8 +14,12 @@ from optlab.marketdata.derive.curves import EUR_CURVE, USD_CURVE
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.quotes import as_clean_input, clean_day, discount_function, quote_days
 from optlab.marketdata.sources import dolthub, yahoo
-from optlab.marketdata.sources.archives import (import_historicaldata, parse_historicaldata, parse_optionsdx,
-                                                snapshot_time)
+from optlab.marketdata.sources.archives import (
+    import_historicaldata,
+    parse_historicaldata,
+    parse_optionsdx,
+    snapshot_time,
+)
 
 DAY = dt.date(2022, 9, 15)
 RATE, CARRY, SPOT = 0.03, 0.015, 4000.0
@@ -38,15 +42,27 @@ def synthetic_rows(expiries=tuple(DAY + dt.timedelta(days=d) for d in (30, 60, 1
             vol = smile(np.log(K / F), T)
             for cp in ("C", "P"):
                 price = float(black_price(F, K, T, vol, D, "call" if cp == "C" else "put"))
-                rows.append({"underlying": "SPX", "root": "SPXW", "expiry": expiry, "strike": K, "cp": cp, "obs_date": DAY,
-                             "bid": price * (1 - half_spread), "ask": price * (1 + half_spread),
-                             "underlying_close": SPOT, "settlement": "PM"})
+                rows.append(
+                    {
+                        "underlying": "SPX",
+                        "root": "SPXW",
+                        "expiry": expiry,
+                        "strike": K,
+                        "cp": cp,
+                        "obs_date": DAY,
+                        "bid": price * (1 - half_spread),
+                        "ask": price * (1 + half_spread),
+                        "underlying_close": SPOT,
+                        "settlement": "PM",
+                    }
+                )
     return pd.DataFrame(rows)
 
 
 def curve_rows():
-    return pd.DataFrame({"curve": USD_CURVE, "obs_date": DAY, "tenor": [1 / 365, 1.0, 5.0], "zero_rate": RATE,
-                         "discount": np.nan})
+    return pd.DataFrame(
+        {"curve": USD_CURVE, "obs_date": DAY, "tenor": [1 / 365, 1.0, 5.0], "zero_rate": RATE, "discount": np.nan}
+    )
 
 
 @pytest.fixture
@@ -107,19 +123,61 @@ def test_discount_function_takes_the_last_curve_within_ten_days(lake):
 
 # --- each source's format, on rows from the same smile ---
 def historicaldata_csv(rows):
-    out = rows.assign(contract="X", underlying=rows["root"], expiration=rows["expiry"], type=np.where(rows["cp"] == "C", "call", "put"),
-                      quote_date=rows["obs_date"], volume=1, open_interest=2, settlement_time="PM", iv=0.2, delta=0.5,
-                      gamma=0.0, theta=0.0, vega=0.0, style="E")
-    return out[["contract", "underlying", "expiration", "type", "strike", "style", "quote_date", "bid", "ask", "volume",
-                "open_interest", "underlying_close", "settlement_time", "iv", "delta", "gamma", "theta", "vega"]].to_csv(index=False)
+    out = rows.assign(
+        contract="X",
+        underlying=rows["root"],
+        expiration=rows["expiry"],
+        type=np.where(rows["cp"] == "C", "call", "put"),
+        quote_date=rows["obs_date"],
+        volume=1,
+        open_interest=2,
+        settlement_time="PM",
+        iv=0.2,
+        delta=0.5,
+        gamma=0.0,
+        theta=0.0,
+        vega=0.0,
+        style="E",
+    )
+    return out[
+        [
+            "contract",
+            "underlying",
+            "expiration",
+            "type",
+            "strike",
+            "style",
+            "quote_date",
+            "bid",
+            "ask",
+            "volume",
+            "open_interest",
+            "underlying_close",
+            "settlement_time",
+            "iv",
+            "delta",
+            "gamma",
+            "theta",
+            "vega",
+        ]
+    ].to_csv(index=False)
 
 
 def yahoo_frame(rows):
     symbols = "SPXW" + pd.to_datetime(rows["expiry"]).dt.strftime("%y%m%d") + rows["cp"] + "0"
-    return pd.DataFrame({"contractSymbol": symbols.to_numpy(), "strike": rows["strike"].to_numpy(), "bid": rows["bid"].to_numpy(),
-                         "ask": rows["ask"].to_numpy(), "volume": 1, "openInterest": 2, "impliedVolatility": 0.2,
-                         "type": np.where(rows["cp"] == "C", "call", "put"),
-                         "expiry": pd.to_datetime(rows["expiry"]).dt.strftime("%Y-%m-%d").to_numpy()})
+    return pd.DataFrame(
+        {
+            "contractSymbol": symbols.to_numpy(),
+            "strike": rows["strike"].to_numpy(),
+            "bid": rows["bid"].to_numpy(),
+            "ask": rows["ask"].to_numpy(),
+            "volume": 1,
+            "openInterest": 2,
+            "impliedVolatility": 0.2,
+            "type": np.where(rows["cp"] == "C", "call", "put"),
+            "expiry": pd.to_datetime(rows["expiry"]).dt.strftime("%Y-%m-%d").to_numpy(),
+        }
+    )
 
 
 def test_archive_and_yahoo_days_go_through_the_same_chain_to_the_same_slices(lake):
@@ -136,7 +194,9 @@ def test_archive_and_yahoo_days_go_through_the_same_chain_to_the_same_slices(lak
 
 def test_the_file_path_of_build_iv_table_gives_the_same_vols_with_parity_rates(tmp_path):
     rows = synthetic_rows()
-    frame = yahoo_frame(rows).assign(spot=SPOT, snapshot=snapshot_time(DAY).isoformat(), lastPrice=0.0, lastTradeDate="")
+    frame = yahoo_frame(rows).assign(
+        spot=SPOT, snapshot=snapshot_time(DAY).isoformat(), lastPrice=0.0, lastTradeDate=""
+    )
     path = tmp_path / "spx.csv"
     frame.to_csv(path, index=False)
     market, slices, table, meta = build_iv_table(path)
@@ -164,17 +224,23 @@ def test_historicaldata_parser_keeps_a_missing_side_and_maps_spxw():
     rows = synthetic_rows()[:2]
     rows.loc[rows.index[0], "bid"] = np.nan
     out = parse_historicaldata(historicaldata_csv(rows))
-    assert np.isnan(out["bid"].iloc[0]) and out["underlying"].tolist() == ["SPX", "SPX"] and out["root"].iloc[0] == "SPXW"
+    assert (
+        np.isnan(out["bid"].iloc[0]) and out["underlying"].tolist() == ["SPX", "SPX"] and out["root"].iloc[0] == "SPXW"
+    )
 
 
-DOLT_CHAIN = ("date,act_symbol,expiration,strike,call_put,bid,ask,vol,delta,gamma,theta,vega,rho\n"
-              "2024-06-03,SPY,2024-06-17,470.00,Call,58.87,59.16,0.2984,0.9797,0.0015,-0.1214,0.0504,0.1757\n"
-              "2024-06-03,SPY,2024-06-17,470.00,Put,0.08,0.09,0.2589,-0.0092,0.0009,-0.0231,0.0258,-0.0019\n"
-              "2024-06-03,ZZZ,2024-06-17,470.00,Put,0.08,0.09,0.2589,-0.0092,0.0009,-0.0231,0.0258,-0.0019\n")
+DOLT_CHAIN = (
+    "date,act_symbol,expiration,strike,call_put,bid,ask,vol,delta,gamma,theta,vega,rho\n"
+    "2024-06-03,SPY,2024-06-17,470.00,Call,58.87,59.16,0.2984,0.9797,0.0015,-0.1214,0.0504,0.1757\n"
+    "2024-06-03,SPY,2024-06-17,470.00,Put,0.08,0.09,0.2589,-0.0092,0.0009,-0.0231,0.0258,-0.0019\n"
+    "2024-06-03,ZZZ,2024-06-17,470.00,Put,0.08,0.09,0.2589,-0.0092,0.0009,-0.0231,0.0258,-0.0019\n"
+)
 DOLT_VOL = "date,act_symbol,iv_current\n2024-06-03,AAPL,0.2127\n2024-06-04,AAPL,\n"
-OPTIONSDX = (" [QUOTE_DATE], [EXPIRE_DATE], [UNDERLYING_LAST], [STRIKE], [C_BID], [C_ASK], [C_IV], [C_DELTA], [C_VOLUME], "
-             "[P_BID], [P_ASK], [P_IV], [P_DELTA], [P_VOLUME]\n"
-             " 2020-03-16, 2020-04-17, 2386.13, 2400.0, 120.0, 125.0, 0.8, 0.5, 10, 130.0, 135.0, 0.82, -0.5, \n")
+OPTIONSDX = (
+    " [QUOTE_DATE], [EXPIRE_DATE], [UNDERLYING_LAST], [STRIKE], [C_BID], [C_ASK], [C_IV], [C_DELTA], [C_VOLUME], "
+    "[P_BID], [P_ASK], [P_IV], [P_DELTA], [P_VOLUME]\n"
+    " 2020-03-16, 2020-04-17, 2386.13, 2400.0, 120.0, 125.0, 0.8, 0.5, 10, 130.0, 135.0, 0.82, -0.5, \n"
+)
 
 
 def test_dolthub_parsers():
@@ -192,11 +258,15 @@ def test_optionsdx_parser_splits_the_two_sides():
 
 def test_clean_input_columns():
     out = as_clean_input(synthetic_rows()[:2])
-    assert set(out.columns) == {"root", "strike", "bid", "ask", "type", "expiry"} and out["type"].tolist() == ["call", "put"]
+    assert set(out.columns) == {"root", "strike", "bid", "ask", "type", "expiry"} and out["type"].tolist() == [
+        "call",
+        "put",
+    ]
 
 
 def test_a_yahoo_snapshot_outside_market_hours_is_flagged(tmp_path):
     from optlab.marketdata.ingest import load_yahoo_chains
+
     lake = Lake(tmp_path)
 
     def closed(ticker):
@@ -211,6 +281,7 @@ def test_a_yahoo_snapshot_outside_market_hours_is_flagged(tmp_path):
 
 def test_names_reaching_a_query_are_data_not_sql(lake):
     from optlab.marketdata.quotes import chain_rows
+
     lake.ingest("option_quotes", synthetic_rows()[:4], "archive", "observed")
     assert len(chain_rows(lake, "SPX", DAY)) == 4
     assert chain_rows(lake, "SPX' OR '1'='1", DAY).empty
@@ -219,6 +290,7 @@ def test_names_reaching_a_query_are_data_not_sql(lake):
 
 def test_parity_carry_goes_in_the_lake_without_touching_the_yield_estimates(lake):
     from optlab.marketdata.derive.carry import build_parity_carry, dividend_yield_at
+
     lake.ingest("option_quotes", synthetic_rows(), "archive", "observed")
     out = build_parity_carry(lake, "SPX", "archive")
     assert out["n_new"] == 5

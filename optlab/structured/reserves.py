@@ -16,9 +16,21 @@ METHOD = "linear over the contractual life, the rest released at a call or at ma
 
 def frozen(desk: dict, issue, end, quote_id: str | None = None) -> dict:
     """The record kept with a trade, from a desk price as a dict (`DeskPrice.to_dict`), in % of notional."""
-    lines = [{"key": x["key"], "label": x["label"], "kind": x["kind"], "cost": float(x["cost"]), "se": float(x["se"])} for x in desk["lines"]]
-    return {"issue": _iso(issue), "end": _iso(end), "side": desk["side"], "method": METHOD, "total": sum(x["cost"] for x in lines), "lines": lines,
-            "base_price": desk["base_price"], "client_price": desk["final_price"], "quote_id": quote_id}
+    lines = [
+        {"key": x["key"], "label": x["label"], "kind": x["kind"], "cost": float(x["cost"]), "se": float(x["se"])}
+        for x in desk["lines"]
+    ]
+    return {
+        "issue": _iso(issue),
+        "end": _iso(end),
+        "side": desk["side"],
+        "method": METHOD,
+        "total": sum(x["cost"] for x in lines),
+        "lines": lines,
+        "base_price": desk["base_price"],
+        "client_price": desk["final_price"],
+        "quote_id": quote_id,
+    }
 
 
 def _iso(d) -> str:
@@ -48,5 +60,10 @@ def remaining(trade, day, ended=None) -> dict | None:
     N = float(sheet.get("general.notional")) if sheet is not None else 100.0
     size = abs(trade.quantity) * N / 100.0
     left = 0.0 if trade.status in ("called", "matured", "cancelled") else fraction_left(r, day, ended)
-    return {"amount": size * r["total"] * left, "initial": size * r["total"], "fraction": left, "method": r["method"],
-            "lines": [{**x, "amount": size * x["cost"] * left, "initial": size * x["cost"]} for x in r["lines"]]}
+    return {
+        "amount": size * r["total"] * left,
+        "initial": size * r["total"],
+        "fraction": left,
+        "method": r["method"],
+        "lines": [{**x, "amount": size * x["cost"] * left, "initial": size * x["cost"]} for x in r["lines"]],
+    }

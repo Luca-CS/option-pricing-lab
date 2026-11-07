@@ -13,14 +13,28 @@ from optlab import heston_iv  # noqa: E402
 PAPER, INK, MUTED, LINE = "#fbfaf7", "#17191e", "#5d6370", "#e3e0d7"
 BLUE, ORANGE, AQUA = "#2a78d6", "#eb6834", "#1baf7a"  # validated categorical slots 1-3
 
-plt.rcParams.update({
-    "figure.facecolor": PAPER, "axes.facecolor": PAPER, "savefig.facecolor": PAPER,
-    "font.family": "serif", "font.serif": ["Georgia", "DejaVu Serif"],
-    "font.size": 9, "axes.edgecolor": LINE, "axes.labelcolor": INK, "text.color": INK,
-    "xtick.color": MUTED, "ytick.color": MUTED, "axes.grid": True, "grid.color": LINE,
-    "grid.linewidth": 0.6, "axes.spines.top": False, "axes.spines.right": False,
-    "legend.frameon": False, "lines.linewidth": 2,
-})
+plt.rcParams.update(
+    {
+        "figure.facecolor": PAPER,
+        "axes.facecolor": PAPER,
+        "savefig.facecolor": PAPER,
+        "font.family": "serif",
+        "font.serif": ["Georgia", "DejaVu Serif"],
+        "font.size": 9,
+        "axes.edgecolor": LINE,
+        "axes.labelcolor": INK,
+        "text.color": INK,
+        "xtick.color": MUTED,
+        "ytick.color": MUTED,
+        "axes.grid": True,
+        "grid.color": LINE,
+        "grid.linewidth": 0.6,
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "legend.frameon": False,
+        "lines.linewidth": 2,
+    }
+)
 
 
 def plot_smiles(slices, surface, heston, errors, path):
@@ -31,14 +45,37 @@ def plot_smiles(slices, surface, heston, errors, path):
     for ax, s, err in zip(axes.ravel(), slices, errors):
         T, k = s["T"], s["k"]
         half = 0.5 * np.nan_to_num(s.get("spread_iv", np.zeros_like(k)))
-        ax.errorbar(k, 100 * s["iv"], yerr=100 * half, fmt="o", ms=2.5, color=MUTED, ecolor=LINE, elinewidth=1,
-                    label="market (mid, bid-ask)")
+        ax.errorbar(
+            k,
+            100 * s["iv"],
+            yerr=100 * half,
+            fmt="o",
+            ms=2.5,
+            color=MUTED,
+            ecolor=LINE,
+            elinewidth=1,
+            label="market (mid, bid-ask)",
+        )
         kk = np.linspace(k.min(), k.max(), 200)
         ax.plot(kk, 100 * surface.iv(kk, T), color=BLUE, label="SVI surface")
-        ax.plot(kk, 100 * heston_iv(s["F"], s["F"] * np.exp(kk), T, heston, s["D"]), color=ORANGE, ls="--",
-                lw=1.6, label="Heston")
-        ax.plot(err["k_mc"], 100 * np.array(err["iv_slv"]), "D", ms=4.5, color=AQUA, mec=PAPER, mew=1,
-                label="SLV (Monte Carlo)")
+        ax.plot(
+            kk,
+            100 * heston_iv(s["F"], s["F"] * np.exp(kk), T, heston, s["D"]),
+            color=ORANGE,
+            ls="--",
+            lw=1.6,
+            label="Heston",
+        )
+        ax.plot(
+            err["k_mc"],
+            100 * np.array(err["iv_slv"]),
+            "D",
+            ms=4.5,
+            color=AQUA,
+            mec=PAPER,
+            mew=1,
+            label="SLV (Monte Carlo)",
+        )
         expiry = s.get("expiry", "")
         title = f"{expiry}, T = {T:.2f} y" if expiry and not expiry.endswith("y") else f"T = {T:.2f} y"
         ax.set_title(title, fontsize=9)
@@ -57,11 +94,27 @@ def plot_errors(errors, path):
     T = np.array([e["T"] for e in errors])
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(9, 3.2))
     if errors[0].get("median_spread_bp") is not None:
-        a1.plot(T, [e["median_spread_bp"] / 2 for e in errors], color=MUTED, ls=":", marker="s", ms=4,
-                label="half bid-ask (median)")
+        a1.plot(
+            T,
+            [e["median_spread_bp"] / 2 for e in errors],
+            color=MUTED,
+            ls=":",
+            marker="s",
+            ms=4,
+            label="half bid-ask (median)",
+        )
     a1.plot(T, [e["svi_rmse_bp"] for e in errors], color=BLUE, marker="o", ms=5, label="SVI (final surface)")
-    a1.plot(T, [e["ssvi_rmse_bp"] for e in errors], color=BLUE, marker="o", ms=4, ls=":", lw=1.2, mfc=PAPER,
-            label="extended SSVI (start)")
+    a1.plot(
+        T,
+        [e["ssvi_rmse_bp"] for e in errors],
+        color=BLUE,
+        marker="o",
+        ms=4,
+        ls=":",
+        lw=1.2,
+        mfc=PAPER,
+        label="extended SSVI (start)",
+    )
     a1.plot(T, [e["heston_rmse_bp"] for e in errors], color=ORANGE, marker="^", ms=5, ls="--", label="Heston")
     a1.set_xscale("log")
     a1.set_xlabel("maturity (years, log scale)")
@@ -116,8 +169,14 @@ def plot_surfaces(surface, leverage, path):
     a2.set_ylabel("time (years)")
     a2.set_title("SLV leverage function (particle method)")
     a2.grid(False)
-    fig.text(0.5, 0.01, "Blank areas lie beyond -3.5 / +2.5 ATM standard deviations, where almost no path goes.",
-             ha="center", fontsize=8, color=MUTED)
+    fig.text(
+        0.5,
+        0.01,
+        "Blank areas lie beyond -3.5 / +2.5 ATM standard deviations, where almost no path goes.",
+        ha="center",
+        fontsize=8,
+        color=MUTED,
+    )
     fig.tight_layout(rect=(0, 0.04, 1, 1))
     fig.savefig(path, dpi=150)
     plt.close(fig)

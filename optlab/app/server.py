@@ -97,7 +97,11 @@ def routes(desk: Desk):
         ("POST", r"/api/data/market", lambda m, q, b: desk.market_from_lake(b)),
         ("POST", r"/api/data/fixings", lambda m, q, b: desk.fixings_from_lake(b)),
         ("GET", r"/api/vollab/days", lambda m, q, b: desk.lab_days()),
-        ("GET", r"/api/vollab/quotes", lambda m, q, b: desk.lab_quotes(q1(q, "underlying", "SPX"), q1(q, "day", ""), q1(q, "source"))),
+        (
+            "GET",
+            r"/api/vollab/quotes",
+            lambda m, q, b: desk.lab_quotes(q1(q, "underlying", "SPX"), q1(q, "day", ""), q1(q, "source")),
+        ),
         ("POST", r"/api/vollab/fit", lambda m, q, b: desk.lab_fit(b)),
         ("GET", r"/api/vollab/runs", lambda m, q, b: desk.lab_runs(q1(q, "underlying"))),
         ("POST", r"/api/vollab/runs/([\w-]+)/reproduce", lambda m, q, b: desk.lab_reproduce(m[1])),
@@ -212,8 +216,7 @@ def make_handler(desk: Desk, token: str | None = None):
                     return self._json(404, {"error": "no such report"})
             except (ApiError, KeyError) as exc:
                 return self._json(404, {"error": str(exc)})
-            self._send(200, html.encode("utf-8"), "text/html; charset=utf-8",
-                       extra | {"Content-Disposition": "inline"})
+            self._send(200, html.encode("utf-8"), "text/html; charset=utf-8", extra | {"Content-Disposition": "inline"})
 
         def _static(self, path, extra):
             rel = "index.html" if path in ("", "/") else path.lstrip("/")
@@ -223,8 +226,7 @@ def make_handler(desk: Desk, token: str | None = None):
             ctype = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
             if target.suffix == ".js":
                 ctype = "text/javascript"
-            self._send(200, target.read_bytes(), ctype + ("; charset=utf-8" if ctype.startswith("text") else ""),
-                       extra)
+            self._send(200, target.read_bytes(), ctype + ("; charset=utf-8" if ctype.startswith("text") else ""), extra)
 
         def do_GET(self):
             self._handle("GET")

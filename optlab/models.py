@@ -118,8 +118,18 @@ def time_grid(times, dt_max, dt_min=None):
     return np.array(grid)
 
 
-def simulate(model: Model, market: Market, times, n_paths: int, rng=None, dt_max=1 / 252,
-             antithetic=True, return_variance=False, dt_min=1 / 2000, tile: int | None = 25_000):
+def simulate(
+    model: Model,
+    market: Market,
+    times,
+    n_paths: int,
+    rng=None,
+    dt_max=1 / 252,
+    antithetic=True,
+    return_variance=False,
+    dt_min=1 / 2000,
+    tile: int | None = 25_000,
+):
     """Simulate S at the observation times. Returns an array (n_paths, len(times)),
     plus the variance at the same dates if return_variance is True.
 
@@ -154,12 +164,12 @@ def simulate(model: Model, market: Market, times, n_paths: int, rng=None, dt_max
         z2 = None
         for k, (a, b, o, sign) in enumerate(segments):
             s = slice(a, b)
-            zz1 = z1[o:o + (b - a)] if sign > 0 else -z1[o:o + (b - a)]
+            zz1 = z1[o : o + (b - a)] if sign > 0 else -z1[o : o + (b - a)]
             av = model.inst_var(t0, x[s], v[s])
             if hp is not None:
                 if z2 is None:
                     z2 = residual.standard_normal(half)  # drawn after the variance of the first tile, as before
-                zz2 = z2[o:o + (b - a)] if sign > 0 else -z2[o:o + (b - a)]
+                zz2 = z2[o : o + (b - a)] if sign > 0 else -z2[o : o + (b - a)]
                 if spot_driven:
                     zx, zv = zz1, hp.rho * zz1 + rho_c * zz2
                 else:

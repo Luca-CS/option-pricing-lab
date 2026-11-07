@@ -34,12 +34,14 @@ def _now() -> str:
 def code_version() -> str:
     """The commit of the code, with "+dirty" when the working tree has changes under optlab/."""
     try:
-        head = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=REPO_ROOT, capture_output=True, text=True,
-                              timeout=10).stdout.strip()
-        dirty = subprocess.run(["git", "status", "--porcelain", "--", "optlab"], cwd=REPO_ROOT, capture_output=True, text=True,
-                               timeout=10).stdout.strip()
+        head = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"], cwd=REPO_ROOT, capture_output=True, text=True, timeout=10
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ["git", "status", "--porcelain", "--", "optlab"], cwd=REPO_ROOT, capture_output=True, text=True, timeout=10
+        ).stdout.strip()
         return (head or "unknown") + ("+dirty" if dirty else "")
-    except (OSError, subprocess.SubprocessError):
+    except OSError, subprocess.SubprocessError:
         return "unknown"
 
 
@@ -65,32 +67,44 @@ class RiskStore:
         with self._db() as db:
             row = db.execute("SELECT MAX(version) AS v FROM records WHERE kind = ? AND key = ?", (kind, key)).fetchone()
             version = (row["v"] or 0) + 1
-            db.execute("INSERT INTO records VALUES (?, ?, ?, ?, ?, ?)", (kind, key, version, json.dumps(payload),
-                                                                      json.dumps({"code": code_version(), **(meta or {})}), _now()))
+            db.execute(
+                "INSERT INTO records VALUES (?, ?, ?, ?, ?, ?)",
+                (kind, key, version, json.dumps(payload), json.dumps({"code": code_version(), **(meta or {})}), _now()),
+            )
         return version
 
     def get(self, kind: str, key: str, version: int | None = None) -> dict | None:
         """{"payload", "version", "meta", "created_at"} of the latest (or given) version, None when there is none."""
         with self._db() as db:
             if version is None:
-                row = db.execute("SELECT * FROM records WHERE kind = ? AND key = ? ORDER BY version DESC LIMIT 1",
-                                 (kind, key)).fetchone()
+                row = db.execute(
+                    "SELECT * FROM records WHERE kind = ? AND key = ? ORDER BY version DESC LIMIT 1", (kind, key)
+                ).fetchone()
             else:
-                row = db.execute("SELECT * FROM records WHERE kind = ? AND key = ? AND version = ?", (kind, key, version)).fetchone()
+                row = db.execute(
+                    "SELECT * FROM records WHERE kind = ? AND key = ? AND version = ?", (kind, key, version)
+                ).fetchone()
         if row is None:
             return None
-        return {"payload": json.loads(row["payload"]), "version": row["version"], "meta": json.loads(row["meta"]),
-                "created_at": row["created_at"]}
+        return {
+            "payload": json.loads(row["payload"]),
+            "version": row["version"],
+            "meta": json.loads(row["meta"]),
+            "created_at": row["created_at"],
+        }
 
     def versions(self, kind: str, key: str) -> list[dict]:
         with self._db() as db:
-            rows = db.execute("SELECT version, meta, created_at FROM records WHERE kind = ? AND key = ? ORDER BY version",
-                              (kind, key)).fetchall()
+            rows = db.execute(
+                "SELECT version, meta, created_at FROM records WHERE kind = ? AND key = ? ORDER BY version", (kind, key)
+            ).fetchall()
         return [{"version": r["version"], "meta": json.loads(r["meta"]), "created_at": r["created_at"]} for r in rows]
 
     def keys(self, kind: str) -> list[str]:
         with self._db() as db:
-            return [r["key"] for r in db.execute("SELECT DISTINCT key FROM records WHERE kind = ? ORDER BY key", (kind,))]
+            return [
+                r["key"] for r in db.execute("SELECT DISTINCT key FROM records WHERE kind = ? ORDER BY key", (kind,))
+            ]
 
     # --- runs ---
     def find_run(self, key: str) -> dict | None:
@@ -98,15 +112,29 @@ class RiskStore:
             row = db.execute("SELECT * FROM runs WHERE run_key = ? ORDER BY version DESC LIMIT 1", (key,)).fetchone()
         return self._run(row)
 
-    def save_run(self, kind: str, day, key: str, params: dict, payload: dict, seconds: float, code: str | None = None) -> str:
+    def save_run(
+        self, kind: str, day, key: str, params: dict, payload: dict, seconds: float, code: str | None = None
+    ) -> str:
         day = day.isoformat() if hasattr(day, "isoformat") else str(day)
         with self._db() as db:
             row = db.execute("SELECT MAX(version) AS v FROM runs WHERE kind = ? AND day = ?", (kind, day)).fetchone()
             version = (row["v"] or 0) + 1
             run_id = f"{kind}-{day}-v{version}"
-            db.execute("INSERT INTO runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                       (run_id, kind, day, key, version, code or code_version(), json.dumps(params, default=str),
-                        json.dumps(payload), _now(), float(seconds)))
+            db.execute(
+                "INSERT INTO runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    run_id,
+                    kind,
+                    day,
+                    key,
+                    version,
+                    code or code_version(),
+                    json.dumps(params, default=str),
+                    json.dumps(payload),
+                    _now(),
+                    float(seconds),
+                ),
+            )
         return run_id
 
     def run(self, run_id: str) -> dict:
@@ -118,7 +146,10 @@ class RiskStore:
 
     def runs(self, kind: str | None = None, start=None, end=None, latest: bool = True) -> list[dict]:
         """Runs without their payload, by date; with `latest`, only the last version of each date."""
-        q, args = "SELECT run_id, kind, day, run_key, version, code, params, created_at, seconds FROM runs WHERE 1 = 1", []
+        q, args = (
+            "SELECT run_id, kind, day, run_key, version, code, params, created_at, seconds FROM runs WHERE 1 = 1",
+            [],
+        )
         if kind:
             q, args = q + " AND kind = ?", args + [kind]
         if start:

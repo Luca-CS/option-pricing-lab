@@ -19,6 +19,7 @@ def flat_surface(vol=VOL, maturities=(0.1, 0.25, 0.5, 1.0, 1.5, 2.0, 3.0)):
 def flat_context(valuation="2026-10-27", vol=VOL) -> PricingContext:
     """Black-Scholes world: flat market, flat surface; Heston and SLV taken from the SPX calibration (unused)."""
     import datetime as dt
+
     spx = PricingContext.from_calibration()
     ctx = PricingContext(FLAT, flat_surface(vol), spx.heston, spx.slv, dt.date.fromisoformat(valuation))
     ctx.model = lambda name, T=1.0: BlackScholesModel(vol) if name in ("bs", "lv") else spx.model(name, T)
@@ -55,6 +56,7 @@ def rc_european(N, cpn, pay_times, T, T_pay, K, B, market=FLAT):
 
 # --- autocall reference: backward recursion on a log-spot grid with the exact Gaussian kernel ---
 
+
 def _edges(levels, lo, hi, dx):
     """Cell edges in x = ln(S/S0) containing every barrier level, about dx apart."""
     points = sorted({lo, hi, *(np.log(v) for v in levels if lo < np.log(v) < hi)})
@@ -69,6 +71,7 @@ def autocall_reference(sheet, market=FLAT, vol=VOL, valuation="2026-10-27", dx=0
     from functools import lru_cache
 
     from optlab.structured.dates import add_months, adjust, business_days, schedule, year_fraction
+
     g = sheet.get
     val = dt.date.fromisoformat(valuation)
     M, conv, lag = g("general.maturity_months"), g("general.convention"), g("general.pay_lag")
@@ -83,7 +86,7 @@ def autocall_reference(sheet, market=FLAT, vol=VOL, valuation="2026-10-27", dx=0
     if autocall:
         cf = g("autocall.frequency_months")
         first = g("autocall.first_call")
-        for j, (o, p) in enumerate(schedule(val, M, cf, conv, lag)[first - 1:-1]):
+        for j, (o, p) in enumerate(schedule(val, M, cf, conv, lag)[first - 1 : -1]):
             roles.setdefault(o, {"pay": p})["call"] = g("autocall.trigger") - j * g("autocall.step_down")
             roles[o]["period"] = first + j
         if ctype == "snowball":
@@ -181,6 +184,7 @@ def autocall_reference(sheet, market=FLAT, vol=VOL, valuation="2026-10-27", dx=0
 
 # --- quanto under Black-Scholes ---
 
+
 def quanto_forward(S, T, r_foreign, q, vol, vol_fx, rho):
     """Forward of a foreign asset under the domestic measure, written out rather than read from the library."""
     return S * np.exp((r_foreign - q - rho * vol * vol_fx) * T)
@@ -205,11 +209,12 @@ def quanto_call_by_change_of_measure(S, K, T, r_foreign, r_domestic, q, vol, vol
     s = S * np.exp((r_foreign - q - 0.5 * vol**2) * T + vol * np.sqrt(T) * z_s)
     x_ratio = np.exp((r_domestic - r_foreign + 0.5 * vol_fx**2) * T + vol_fx * np.sqrt(T) * z_x)  # X_T / X_0
     pv = np.exp(-r_foreign * T) * np.maximum(s - K, 0.0) / x_ratio
-    pairs = 0.5 * (pv[: n // 2] + pv[n // 2:])
+    pairs = 0.5 * (pv[: n // 2] + pv[n // 2 :])
     return float(pairs.mean()), float(pairs.std(ddof=1) / np.sqrt(len(pairs)))
 
 
 # --- worst-of of two names under Black-Scholes ---
+
 
 def _log_params(T, vol, r, q):
     return (r - q - 0.5 * vol**2) * T, vol * np.sqrt(T)
@@ -218,6 +223,7 @@ def _log_params(T, vol, r, q):
 def worst_digital(b, T, vols, rho, r, qs):
     """P(min(S1_T / S1_0, S2_T / S2_0) >= b): bivariate normal."""
     from scipy.stats import multivariate_normal
+
     d = [(m - np.log(b)) / s for m, s in (_log_params(T, v, r, q) for v, q in zip(vols, qs))]
     return float(multivariate_normal(mean=[0, 0], cov=[[1, rho], [rho, 1]]).cdf(d))
 
@@ -226,6 +232,7 @@ def worst_put(K, T, vols, rho, r, qs):
     """E[(K - min(X1, X2))+], X = S_T / S_0, by conditioning on the first name: given x1, X2 is lognormal and
     (K - min(x1, X2))+ is (K - x1) + (x1 - X2)+ when x1 < K, (K - X2)+ otherwise."""
     from scipy.integrate import quad
+
     (m1, s1), (m2, s2) = (_log_params(T, v, r, q) for v, q in zip(vols, qs))
     s2c = s2 * np.sqrt(1 - rho**2)
 

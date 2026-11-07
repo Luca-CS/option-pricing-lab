@@ -43,10 +43,17 @@ def spot_series(lake: Lake, pair: str, day=None, as_of=None, source: str = SPOT_
 
 
 def _curve_days(lake: Lake, currency: str, as_of=None) -> dict:
-    rows = lake.read("discount_curves", where=f"curve = {sql_str(CURVE_OF_CURRENCY[currency])}",
-                     columns="obs_date, tenor, zero_rate", order="obs_date, tenor", as_of=as_of)
+    rows = lake.read(
+        "discount_curves",
+        where=f"curve = {sql_str(CURVE_OF_CURRENCY[currency])}",
+        columns="obs_date, tenor, zero_rate",
+        order="obs_date, tenor",
+        as_of=as_of,
+    )
     rows["obs_date"] = pd.to_datetime(rows["obs_date"])
-    return {d: (g["tenor"].to_numpy(dtype=float), g["zero_rate"].to_numpy(dtype=float)) for d, g in rows.groupby("obs_date")}
+    return {
+        d: (g["tenor"].to_numpy(dtype=float), g["zero_rate"].to_numpy(dtype=float)) for d, g in rows.groupby("obs_date")
+    }
 
 
 def _last_curve(curves: dict, days: np.ndarray, day: pd.Timestamp):
@@ -61,7 +68,10 @@ def forward_rows(spots: pd.Series, base_curves: dict, quote_curves: dict, tenors
     """obs_date, tenor, forward, points. The base currency is the foreign one of `cip_forward`. Curves are read as
     `discount_function` reads them: the last within ten days, flat zero rate outside the pillars. A day without both is skipped."""
     T = np.asarray(tenors, dtype=float)
-    base_days, quote_days = np.array(sorted(base_curves), dtype="datetime64[ns]"), np.array(sorted(quote_curves), dtype="datetime64[ns]")
+    base_days, quote_days = (
+        np.array(sorted(base_curves), dtype="datetime64[ns]"),
+        np.array(sorted(quote_curves), dtype="datetime64[ns]"),
+    )
     frames = []
     for day, spot in spots.items():
         base, quote = _last_curve(base_curves, base_days, day), _last_curve(quote_curves, quote_days, day)
@@ -69,13 +79,19 @@ def forward_rows(spots: pd.Series, base_curves: dict, quote_curves: dict, tenors
             continue
         forward = cip_forward(spot, np.exp(-np.interp(T, *quote) * T), np.exp(-np.interp(T, *base) * T))
         frames.append(pd.DataFrame({"obs_date": day, "tenor": T, "forward": forward, "points": forward - spot}))
-    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["obs_date", "tenor", "forward", "points"])
+    return (
+        pd.concat(frames, ignore_index=True)
+        if frames
+        else pd.DataFrame(columns=["obs_date", "tenor", "forward", "points"])
+    )
 
 
 def _closed_no_curve(lake: Lake, pair: str) -> pd.DataFrame:
     """The new version of the pair's open `no_curve` issues."""
     still_open = open_issues(lake, f"dataset = 'fx_forwards' AND check_name = 'no_curve' AND item = {sql_str(pair)}")
-    return still_open[["dataset", "item", "check_name", "obs_date"]].assign(severity=RESOLVED, detail=still_open["detail"] + "; curves loaded since")
+    return still_open[["dataset", "item", "check_name", "obs_date"]].assign(
+        severity=RESOLVED, detail=still_open["detail"] + "; curves loaded since"
+    )
 
 
 def build_fx_forwards(lake: Lake, pairs=None) -> list[dict]:
@@ -90,8 +106,16 @@ def build_fx_forwards(lake: Lake, pairs=None) -> list[dict]:
         curves = {c: _curve_days(lake, c) if c in CURVE_OF_CURRENCY else {} for c in (base, quote)}
         missing = [c for c, days in curves.items() if not days]
         if missing:
-            issues.append({"dataset": "fx_forwards", "item": pair, "check_name": "no_curve", "severity": "warning",
-                           "detail": f"no forward: no discount curve in {', '.join(missing)}", "obs_date": spots.index[-1].date()})
+            issues.append(
+                {
+                    "dataset": "fx_forwards",
+                    "item": pair,
+                    "check_name": "no_curve",
+                    "severity": "warning",
+                    "detail": f"no forward: no discount curve in {', '.join(missing)}",
+                    "obs_date": spots.index[-1].date(),
+                }
+            )
             continue
         rows = forward_rows(spots, curves[base], curves[quote])
         out.append(lake.ingest("fx_forwards", rows.assign(pair=pair), "cip_on_ecb", "derived", run))
@@ -114,7 +138,11 @@ def build_fx_vols(lake: Lake, pairs=None) -> list[dict]:
         spots = spot_series(lake, pair)
         for w in WINDOWS:
             s = realised_vol(spots, w)
-            rows.append(pd.DataFrame({"pair": pair, "window": w, "method": "realized", "obs_date": s.index, "vol": s.to_numpy()}))
+            rows.append(
+                pd.DataFrame(
+                    {"pair": pair, "window": w, "method": "realized", "obs_date": s.index, "vol": s.to_numpy()}
+                )
+            )
     return [lake.ingest("fx_vols", pd.concat(rows, ignore_index=True), "fx_spots", "derived", run)] if rows else []
 
 
@@ -134,21 +162,35 @@ def build_fx_correl(lake: Lake, names=None, pairs=None) -> list[dict]:
         for name in closes.columns:
             for w in WINDOWS:
                 s = name_pair_series(closes, spots, name, pair, w)
-                rows.append(pd.DataFrame({"name_a": name, "name_b": pair, "window": w, "obs_date": s.index, "correlation": s.to_numpy()}))
-    return [lake.ingest("correl_realized", pd.concat(rows, ignore_index=True), "prices_eod+fx_spots", "derived", run)] if rows else []
+                rows.append(
+                    pd.DataFrame(
+                        {"name_a": name, "name_b": pair, "window": w, "obs_date": s.index, "correlation": s.to_numpy()}
+                    )
+                )
+    return (
+        [lake.ingest("correl_realized", pd.concat(rows, ignore_index=True), "prices_eod+fx_spots", "derived", run)]
+        if rows
+        else []
+    )
 
 
 def _latest(rows: pd.DataFrame, what: str, day: pd.Timestamp):
     if rows.empty or (day - pd.Timestamp(rows["obs_date"].iloc[0])).days > READ_MAX_AGE:
-        raise KeyError(f"no {what} in the {READ_MAX_AGE} days up to {day.date()}: run scripts/lake_update.py --only fx and scripts/lake_derive.py --only fx")
+        raise KeyError(
+            f"no {what} in the {READ_MAX_AGE} days up to {day.date()}: run scripts/lake_update.py --only fx and scripts/lake_derive.py --only fx"
+        )
     return rows.iloc[0]
 
 
 def fx_vol_at(lake: Lake, pair: str, day, window: int = 120, as_of=None) -> tuple[float, str, str]:
     """(volatility, origin, method): the latest stored at or before `day`."""
     day = pd.Timestamp(day)
-    rows = lake.read("fx_vols", where=f"pair = {sql_str(pair)} AND \"window\" = {int(window)} AND obs_date <= DATE '{day.date()}'",
-                     order="obs_date DESC LIMIT 1", as_of=as_of)
+    rows = lake.read(
+        "fx_vols",
+        where=f"pair = {sql_str(pair)} AND \"window\" = {int(window)} AND obs_date <= DATE '{day.date()}'",
+        order="obs_date DESC LIMIT 1",
+        as_of=as_of,
+    )
     r = _latest(rows, f"{pair} volatility", day)
     return float(r["vol"]), str(r["origin"]), str(r["method"])
 
@@ -156,8 +198,13 @@ def fx_vol_at(lake: Lake, pair: str, day, window: int = 120, as_of=None) -> tupl
 def fx_correlation_at(lake: Lake, name: str, pair: str, day, window: int = 120, as_of=None) -> tuple[float, str]:
     """(correlation of the name with the pair as quoted, origin): the latest stored at or before `day`."""
     day = pd.Timestamp(day)
-    rows = lake.read("correl_realized", where=f"name_a = {sql_str(name)} AND name_b = {sql_str(pair)} AND \"window\" = {int(window)} "
-                     f"AND obs_date <= DATE '{day.date()}'", order="obs_date DESC LIMIT 1", as_of=as_of)
+    rows = lake.read(
+        "correl_realized",
+        where=f'name_a = {sql_str(name)} AND name_b = {sql_str(pair)} AND "window" = {int(window)} '
+        f"AND obs_date <= DATE '{day.date()}'",
+        order="obs_date DESC LIMIT 1",
+        as_of=as_of,
+    )
     r = _latest(rows, f"{name}-{pair} correlation", day)
     return float(r["correlation"]), str(r["origin"])
 
@@ -175,6 +222,7 @@ def quoted_pair(foreign: str, domestic: str) -> tuple[str, float]:
 @dataclass(frozen=True)
 class QuantoLink:
     """What links a name to its payment currency at a date. `rho` is the correlation of the name with X = domestic per foreign."""
+
     rho: float
     vol_fx: float
     meta: dict
@@ -187,5 +235,19 @@ def quanto_link_at(lake: Lake, name: str, payment: str, day, window: int = 120, 
     vol, vol_origin, method = fx_vol_at(lake, pair, day, window, as_of)
     corr, corr_origin = fx_correlation_at(lake, name, pair, day, window, as_of)
     rho = sign * corr
-    return QuantoLink(rho, vol, {"foreign": foreign, "domestic": payment, "pair": pair, "inverted": sign < 0, "window": window, "rho": rho,
-                                 "rho_origin": corr_origin, "vol_fx": vol, "vol_origin": vol_origin, "vol_method": method})
+    return QuantoLink(
+        rho,
+        vol,
+        {
+            "foreign": foreign,
+            "domestic": payment,
+            "pair": pair,
+            "inverted": sign < 0,
+            "window": window,
+            "rho": rho,
+            "rho_origin": corr_origin,
+            "vol_fx": vol,
+            "vol_origin": vol_origin,
+            "vol_method": method,
+        },
+    )

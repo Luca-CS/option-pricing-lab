@@ -6,5 +6,17 @@ from .engine import Measure, RiskGroup, RiskRun, RiskSettings, revalue, run_grou
 from .shocks import BASE, RiskEnv, Shock, VolMove, apply
 from .curves import CurveMove
 
-__all__ = ["Measure", "RiskGroup", "RiskRun", "RiskSettings", "revalue", "run_group", "BASE", "RiskEnv", "Shock", "VolMove",
-           "apply", "CurveMove"]
+__all__ = [
+    "Measure",
+    "RiskGroup",
+    "RiskRun",
+    "RiskSettings",
+    "revalue",
+    "run_group",
+    "BASE",
+    "RiskEnv",
+    "Shock",
+    "VolMove",
+    "apply",
+    "CurveMove",
+]

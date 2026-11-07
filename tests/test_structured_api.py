@@ -18,15 +18,19 @@ from optlab.structured.units import UNITS
 CTX = flat_context()
 
 
-@pytest.mark.parametrize("changes, message", [
-    ({"coupon.rate": 8}, "fractions: 0.6 = 60 %, 0.08 = 8 % p.a."),
-    ({"downside.barrier": 60}, "above the maximum 3.0"),
-    ({"upside.participation": 50}, "above the maximum 10.0"),
-])
+@pytest.mark.parametrize(
+    "changes, message",
+    [
+        ({"coupon.rate": 8}, "fractions: 0.6 = 60 %, 0.08 = 8 % p.a."),
+        ({"downside.barrier": 60}, "above the maximum 3.0"),
+        ({"upside.participation": 50}, "above the maximum 10.0"),
+    ],
+)
 def test_levels_and_rates_are_fractions(changes, message):
     with pytest.raises(TermSheetError, match=message.replace(".", r"\.").replace("(", r"\(")):
-        preset("phoenix" if "coupon.rate" in changes or "downside.barrier" in changes else "capital_protected",
-               **changes)
+        preset(
+            "phoenix" if "coupon.rate" in changes or "downside.barrier" in changes else "capital_protected", **changes
+        )
 
 
 def test_a_field_path_needs_a_section():
@@ -35,16 +39,27 @@ def test_a_field_path_needs_a_section():
 
 
 def test_model_names_are_case_insensitive():
-    q = quote(preset("phoenix", **{"general.maturity_months": 12}), CTX, model="BS", control=None, n_paths=4_000,
-              batch=None)
+    q = quote(
+        preset("phoenix", **{"general.maturity_months": 12}), CTX, model="BS", control=None, n_paths=4_000, batch=None
+    )
     assert q.decision.model == "bs" and q.decision.forced
 
 
 def test_tables_name_every_underlying_and_the_implied_margin():
-    basket = BasketContext(("SPX", "SX5E"), {"SPX": CTX.market, "SX5E": CTX.market}, {"SPX": 0.2, "SX5E": 0.25},
-                           np.array([[1, 0.5], [0.5, 1]]), CTX.valuation)
-    q = quote(preset("phoenix", **{"general.basket": "worst_of", "general.maturity_months": 12}), basket,
-              control=None, n_paths=4_000, batch=None)
+    basket = BasketContext(
+        ("SPX", "SX5E"),
+        {"SPX": CTX.market, "SX5E": CTX.market},
+        {"SPX": 0.2, "SX5E": 0.25},
+        np.array([[1, 0.5], [0.5, 1]]),
+        CTX.valuation,
+    )
+    q = quote(
+        preset("phoenix", **{"general.basket": "worst_of", "general.maturity_months": 12}),
+        basket,
+        control=None,
+        n_paths=4_000,
+        batch=None,
+    )
     assert q.table().splitlines()[0].startswith("Autocallable on SPX, SX5E")
     cpn = quote(preset("capital_protected"), CTX, control=None)
     assert f"implied margin at par {100 - cpn.upfront:.2f} %" in cpn.table()
@@ -67,10 +82,21 @@ def test_quote_greeks_of_a_running_product_go_through_a_book():
 
 
 def test_quote_greeks_of_a_basket_are_summed_over_the_names():
-    basket = BasketContext(("SPX", "SX5E"), {"SPX": CTX.market, "SX5E": CTX.market}, {"SPX": 0.2, "SX5E": 0.25},
-                           np.array([[1, 0.5], [0.5, 1]]), CTX.valuation)
-    q = quote(preset("reverse_convertible", **{"general.basket": "worst_of", "wrapper.solve": "upfront"}), basket,
-              control=None, n_paths=20_000, batch=10_000, with_greeks=True)
+    basket = BasketContext(
+        ("SPX", "SX5E"),
+        {"SPX": CTX.market, "SX5E": CTX.market},
+        {"SPX": 0.2, "SX5E": 0.25},
+        np.array([[1, 0.5], [0.5, 1]]),
+        CTX.valuation,
+    )
+    q = quote(
+        preset("reverse_convertible", **{"general.basket": "worst_of", "wrapper.solve": "upfront"}),
+        basket,
+        control=None,
+        n_paths=20_000,
+        batch=10_000,
+        with_greeks=True,
+    )
     per = q.greeks.per_name
     assert set(per) == {"SPX", "SX5E"} and all(v["delta"] > 0 for v in per.values())
     assert q.greeks.delta == pytest.approx(sum(v["delta"] for v in per.values()), rel=1e-12)

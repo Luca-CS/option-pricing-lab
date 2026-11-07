@@ -58,18 +58,23 @@ class Repository:
             version = (row[0] or 0) + 1
             stored = Trade.from_json(trade.to_json())
             object.__setattr__(stored, "version", version)
-            con.execute("INSERT INTO trades VALUES (?, ?, ?, ?, ?, 0, ?)",
-                        (stored.trade_id, version, stored.book, stored.status, stored.to_json(), _now()))
+            con.execute(
+                "INSERT INTO trades VALUES (?, ?, ?, ?, ?, 0, ?)",
+                (stored.trade_id, version, stored.book, stored.status, stored.to_json(), _now()),
+            )
         return stored
 
     def trade(self, trade_id: str, version: int | None = None) -> Trade:
         with self._db() as con:
             if version is None:
-                row = con.execute("SELECT payload FROM trades WHERE trade_id = ? AND deleted = 0 ORDER BY version "
-                                  "DESC LIMIT 1", (trade_id,)).fetchone()
+                row = con.execute(
+                    "SELECT payload FROM trades WHERE trade_id = ? AND deleted = 0 ORDER BY version DESC LIMIT 1",
+                    (trade_id,),
+                ).fetchone()
             else:
-                row = con.execute("SELECT payload FROM trades WHERE trade_id = ? AND version = ?",
-                                  (trade_id, version)).fetchone()
+                row = con.execute(
+                    "SELECT payload FROM trades WHERE trade_id = ? AND version = ?", (trade_id, version)
+                ).fetchone()
         if row is None:
             raise KeyError(f"no trade {trade_id!r}")
         return Trade.from_json(row["payload"])
@@ -77,24 +82,37 @@ class Repository:
     def trades(self, book: str | None = None, status: str | None = None) -> list[Trade]:
         """Latest version of every trade not deleted."""
         with self._db() as con:
-            rows = con.execute("SELECT t.payload FROM trades t JOIN (SELECT trade_id, MAX(version) v FROM trades "
-                               "GROUP BY trade_id) m ON t.trade_id = m.trade_id AND t.version = m.v "
-                               "WHERE t.deleted = 0 ORDER BY t.recorded_at").fetchall()
+            rows = con.execute(
+                "SELECT t.payload FROM trades t JOIN (SELECT trade_id, MAX(version) v FROM trades "
+                "GROUP BY trade_id) m ON t.trade_id = m.trade_id AND t.version = m.v "
+                "WHERE t.deleted = 0 ORDER BY t.recorded_at"
+            ).fetchall()
         out = [Trade.from_json(r["payload"]) for r in rows]
         return [t for t in out if (book is None or t.book == book) and (status is None or t.status == status)]
 
     def versions(self, trade_id: str) -> list[dict]:
         """Every stored version of a trade, oldest first, with what changed between them."""
         with self._db() as con:
-            rows = con.execute("SELECT version, payload, deleted, recorded_at FROM trades WHERE trade_id = ? "
-                               "ORDER BY version", (trade_id,)).fetchall()
+            rows = con.execute(
+                "SELECT version, payload, deleted, recorded_at FROM trades WHERE trade_id = ? ORDER BY version",
+                (trade_id,),
+            ).fetchall()
         if not rows:
             raise KeyError(f"no trade {trade_id!r}")
         out = []
         for r in rows:
             t = Trade.from_json(r["payload"])
-            out.append({"version": r["version"], "recorded_at": r["recorded_at"], "deleted": bool(r["deleted"]),
-                        "quantity": t.quantity, "status": t.status, "book": t.book, "counterparty": t.counterparty})
+            out.append(
+                {
+                    "version": r["version"],
+                    "recorded_at": r["recorded_at"],
+                    "deleted": bool(r["deleted"]),
+                    "quantity": t.quantity,
+                    "status": t.status,
+                    "book": t.book,
+                    "counterparty": t.counterparty,
+                }
+            )
         return out
 
     def delete_trade(self, trade_id: str) -> None:
@@ -112,8 +130,10 @@ class Repository:
 
     # --- fixings (in the model's scale: the market is rescaled to a spot of 100) ---
     def put_fixings(self, underlying: str, levels: dict, source: str = "manual") -> int:
-        rows = [(underlying, (d.isoformat() if isinstance(d, dt.date) else str(d)), float(v), source, _now())
-                for d, v in levels.items()]
+        rows = [
+            (underlying, (d.isoformat() if isinstance(d, dt.date) else str(d)), float(v), source, _now())
+            for d, v in levels.items()
+        ]
         with self._lock, self._db() as con:
             con.executemany("INSERT OR REPLACE INTO fixings VALUES (?, ?, ?, ?, ?)", rows)
         return len(rows)
@@ -146,15 +166,27 @@ class Repository:
             row = con.execute("SELECT * FROM quotes WHERE quote_id = ?", (quote_id,)).fetchone()
         if row is None:
             raise KeyError(f"no quote {quote_id!r}")
-        return {"quote_id": row["quote_id"], "created_at": row["created_at"], "sheet": json.loads(row["sheet"]),
-                "result": json.loads(row["result"])}
+        return {
+            "quote_id": row["quote_id"],
+            "created_at": row["created_at"],
+            "sheet": json.loads(row["sheet"]),
+            "result": json.loads(row["result"]),
+        }
 
     def quotes(self, limit: int = 20) -> list[dict]:
         with self._db() as con:
-            rows = con.execute("SELECT quote_id, created_at, sheet, result FROM quotes ORDER BY created_at DESC "
-                               "LIMIT ?", (limit,)).fetchall()
-        return [{"quote_id": r["quote_id"], "created_at": r["created_at"], "sheet": json.loads(r["sheet"]),
-                 "headline": json.loads(r["result"]).get("headline")} for r in rows]
+            rows = con.execute(
+                "SELECT quote_id, created_at, sheet, result FROM quotes ORDER BY created_at DESC LIMIT ?", (limit,)
+            ).fetchall()
+        return [
+            {
+                "quote_id": r["quote_id"],
+                "created_at": r["created_at"],
+                "sheet": json.loads(r["sheet"]),
+                "headline": json.loads(r["result"]).get("headline"),
+            }
+            for r in rows
+        ]
 
     # --- settings (JSON values) ---
     def setting(self, key: str, default=None):
@@ -180,7 +212,11 @@ class Repository:
                 row = con.execute("SELECT * FROM cost_defaults ORDER BY version DESC LIMIT 1").fetchone()
             else:
                 row = con.execute("SELECT * FROM cost_defaults WHERE version = ?", (version,)).fetchone()
-        return None if row is None else {"version": row["version"], "recorded_at": row["recorded_at"], **json.loads(row["payload"])}
+        return (
+            None
+            if row is None
+            else {"version": row["version"], "recorded_at": row["recorded_at"], **json.loads(row["payload"])}
+        )
 
     def default_versions(self) -> list[dict]:
         with self._db() as con:

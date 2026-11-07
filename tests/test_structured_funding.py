@@ -19,8 +19,16 @@ FUNDED = {"wrapper.format": "swap", "wrapper.funding": "floating"}
 
 def mc(sheet, n_paths=40_000, seed=4):
     p = compile_sheet(sheet, CTX.valuation)
-    return price(p.program, CTX.model("bs"), FLAT, fmt=wrapper(sheet, p), n_paths=n_paths, seed=seed,
-                 batch=10_000, valuation=CTX.valuation), p
+    return price(
+        p.program,
+        CTX.model("bs"),
+        FLAT,
+        fmt=wrapper(sheet, p),
+        n_paths=n_paths,
+        seed=seed,
+        batch=10_000,
+        valuation=CTX.valuation,
+    ), p
 
 
 def test_funded_swap_is_the_note_minus_par_path_by_path():
@@ -44,8 +52,9 @@ def test_solved_coupon_is_the_same_in_note_and_in_funded_swap_without_lag():
 def test_bullet_funding_leg_is_deterministic():
     sheet = preset("reverse_convertible", **{"wrapper.solve": "upfront", **FUNDED, "wrapper.funding_spread": 0.01})
     funded, p = mc(sheet)
-    plain = price(p.program, CTX.model("bs"), FLAT, fmt=Swap(), n_paths=40_000, seed=4, batch=10_000,
-                  valuation=CTX.valuation)
+    plain = price(
+        p.program, CTX.model("bs"), FLAT, fmt=Swap(), n_paths=40_000, seed=4, batch=10_000, valuation=CTX.valuation
+    )
     fs = wrapper(sheet, p)
     assert isinstance(fs, FundedSwap) and len(fs.periods) == 4
     leg = 100 * fs.funding_amounts(FLAT, 100.0).sum() / 100

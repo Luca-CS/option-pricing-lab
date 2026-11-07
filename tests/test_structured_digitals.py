@@ -37,9 +37,13 @@ def test_a_phoenix_has_its_coupons_triggers_and_final_barrier():
     kinds = [d.kind for d in found]
     assert kinds.count("coupon") == 8 and kinds.count("autocall") == 7 and kinds.count("barrier") == 1
     coupon = next(d for d in found if d.kind == "coupon")
-    assert coupon.level == 0.7 and coupon.jump == 0.02 and coupon.width(0.005, DELTA) == pytest.approx(0.02)  # 2 % at 1 % per 1 %
+    assert (
+        coupon.level == 0.7 and coupon.jump == 0.02 and coupon.width(0.005, DELTA) == pytest.approx(0.02)
+    )  # 2 % at 1 % per 1 %
     final = next(d for d in found if d.kind == "barrier")
-    assert final.level == 0.6 and final.jump == pytest.approx(0.4) and final.width(0.005, DELTA) == pytest.approx(0.08)  # 8 points at 5 % per 1 %
+    assert (
+        final.level == 0.6 and final.jump == pytest.approx(0.4) and final.width(0.005, DELTA) == pytest.approx(0.08)
+    )  # 8 points at 5 % per 1 %
     assert next(d for d in found if d.kind == "autocall").jump == 0.02
     assert coupon.width(0.05, DELTA) == 0.05  # the minimum spread binds
 
@@ -54,18 +58,31 @@ def test_a_snowball_jumps_by_what_the_call_pays_and_a_step_down_moves_the_level(
 def test_a_barrier_on_the_strike_has_no_jump_and_a_daily_barrier_is_a_shift():
     assert not find_digitals(compiled(preset("reverse_convertible")), {"cpn": 0.02})
     brc = find_digitals(compiled(preset("barrier_reverse_convertible")), {"cpn": 0.02})
-    assert [d.kind for d in brc] == ["daily"] and brc[0].width(0.01, DELTA) == 0.01 and brc[0].ramp("down", 0.01, DELTA).shift
+    assert (
+        [d.kind for d in brc] == ["daily"]
+        and brc[0].width(0.01, DELTA) == 0.01
+        and brc[0].ramp("down", 0.01, DELTA).shift
+    )
 
 
 def test_an_observation_already_passed_is_not_a_digital():
-    running = preset("phoenix", **{"general.strike_date": "2026-01-27", "wrapper.solve": "upfront", "coupon.rate": 0.06})
+    running = preset(
+        "phoenix", **{"general.strike_date": "2026-01-27", "wrapper.solve": "upfront", "coupon.rate": 0.06}
+    )
     found = find_digitals(compiled(running))
     assert all(d.date > SPX.valuation.isoformat() for d in found) and len(found) < 16
 
 
 # --- the ramp ---
-@pytest.mark.parametrize("op,side,want", [(">=", "up", [0, 0, 0.5, 1, 1]), (">=", "down", [0, 0.5, 1, 1, 1]),
-                                          ("<", "up", [1, 1, 0.5, 0, 0]), ("<", "down", [1, 0.5, 0, 0, 0])])
+@pytest.mark.parametrize(
+    "op,side,want",
+    [
+        (">=", "up", [0, 0, 0.5, 1, 1]),
+        (">=", "down", [0, 0.5, 1, 1, 1]),
+        ("<", "up", [1, 1, 0.5, 0, 0]),
+        ("<", "down", [1, 0.5, 0, 0, 0]),
+    ],
+)
 def test_a_ramp_lies_on_one_side_of_the_level(op, side, want):
     a = np.array([0.8, 0.9, 1.05, 1.1, 1.2])
     if side == "down":
@@ -81,7 +98,15 @@ def test_a_shift_moves_the_level_and_stays_hard():
 
 # --- the closed form ---
 def digital_sheet(months=12, amount=0.1):
-    return preset("capital_protected", **{"general.maturity_months": months, "upside.type": "digital", "upside.strike": 1.0, "upside.digital_amount": amount})
+    return preset(
+        "capital_protected",
+        **{
+            "general.maturity_months": months,
+            "upside.type": "digital",
+            "upside.strike": 1.0,
+            "upside.digital_amount": amount,
+        },
+    )
 
 
 def test_an_upside_digital_costs_the_call_spread_on_the_side_against_the_desk():
@@ -122,7 +147,9 @@ def test_the_delta_of_the_payoff_stays_under_the_limit():
                 return sum(np.broadcast_to(f, grid.shape) for f in flows.flows.values())
 
             def slope(v):
-                return np.max(np.abs(np.diff(v) / np.diff(grid))) * 100.0 / N  # % of notional per 1 % of spot at a spot of 100
+                return (
+                    np.max(np.abs(np.diff(v) / np.diff(grid))) * 100.0 / N
+                )  # % of notional per 1 % of spot at a spot of 100
 
             assert slope(pv({})) > 10 * delta_max
             assert slope(pv({(k, found[0].line): r})) == pytest.approx(delta_max, rel=1e-2)
@@ -133,7 +160,9 @@ def test_a_european_barrier_is_the_same_by_replication_and_monte_carlo():
     rep = quote(sheet, SPX, control=None, costs=inputs())
     mc = quote(sheet, SPX, model="lv", control=None, n_paths=100_000, batch=25_000, costs=inputs())
     a, b = rep.desk.line("barrier"), mc.desk.line("barrier")
-    assert a.se == 0.0 and a.cost > 0 and b.detail[0]["side"] == a.detail[0]["side"] == "down"  # less often knocked in: against the seller
+    assert (
+        a.se == 0.0 and a.cost > 0 and b.detail[0]["side"] == a.detail[0]["side"] == "down"
+    )  # less often knocked in: against the seller
     assert abs(a.cost - b.cost) < max(4 * b.se, 0.02)
 
 
@@ -149,30 +178,56 @@ def test_each_digital_of_an_autocall_has_its_width_side_and_cost_and_the_price_i
         if x.kind == "digital":
             assert x.cost > 0 and x.se < q.result.stderr and x.note
     coupon = d.line("coupon")
-    assert len(coupon.detail) == 8 and all(c["width"] == pytest.approx(cpn, rel=2e-2) for c in coupon.detail)  # width of the solved coupon
+    assert len(coupon.detail) == 8 and all(
+        c["width"] == pytest.approx(cpn, rel=2e-2) for c in coupon.detail
+    )  # width of the solved coupon
     assert all(c["side"] == "down" for c in coupon.detail)  # paid more often: against the seller
     assert sum(x.cost for x in d.lines) == pytest.approx(d.final_price - d.base_price, abs=1e-10)
     assert d.coupon_final < d.coupon_base
 
 
 def test_a_daily_barrier_moved_is_the_sheet_with_the_barrier_moved_bit_for_bit():
-    sheet = preset("barrier_reverse_convertible", **{"wrapper.solve": "upfront", "coupon.rate": 0.05, "downside.barrier": 0.7})
+    sheet = preset(
+        "barrier_reverse_convertible", **{"wrapper.solve": "upfront", "coupon.rate": 0.05, "downside.barrier": 0.7}
+    )
     q = quote(sheet, SPX, model="lv", control=None, n_paths=PATHS, batch=10_000, costs=inputs(0.01))
     line = q.desk.line("daily")
     assert line.detail[0]["side"] == "down" and line.detail[0]["width"] == 0.01 and line.cost > 0
     moved = sheet.replace(**{"downside.barrier": 0.69})
     p = compile_sheet(moved, SPX.valuation)
-    again = price_many(p.program, SPX.model("lv"), SPX.market, [{}], wrapper(moved, p), PATHS, q.decision.seed, 10_000, valuation=p.valuation, calendar=p.calendar)[0]
+    again = price_many(
+        p.program,
+        SPX.model("lv"),
+        SPX.market,
+        [{}],
+        wrapper(moved, p),
+        PATHS,
+        q.decision.seed,
+        10_000,
+        valuation=p.valuation,
+        calendar=p.calendar,
+    )[0]
     assert again.price == pytest.approx(q.desk.final_price, abs=1e-9)
 
 
 def test_a_worst_of_and_workers_take_the_digitals_too():
     from optlab.market import Market
     from optlab.structured.multiasset import BasketContext
+
     markets = {n: Market.flat(100.0, 0.02, 0.01) for n in ("SPX", "NDX")}
-    ctx = BasketContext(("SPX", "NDX"), markets, {"SPX": 0.3, "NDX": 0.35}, np.array([[1.0, 0.7], [0.7, 1.0]]), SPX.valuation)
-    s = preset("phoenix", **{"general.basket": "worst_of", "general.underlyings": ["SPX", "NDX"], "general.maturity_months": 12, "coupon.barrier": 0.8,
-                             "downside.barrier": 0.8})
+    ctx = BasketContext(
+        ("SPX", "NDX"), markets, {"SPX": 0.3, "NDX": 0.35}, np.array([[1.0, 0.7], [0.7, 1.0]]), SPX.valuation
+    )
+    s = preset(
+        "phoenix",
+        **{
+            "general.basket": "worst_of",
+            "general.underlyings": ["SPX", "NDX"],
+            "general.maturity_months": 12,
+            "coupon.barrier": 0.8,
+            "downside.barrier": 0.8,
+        },
+    )
     a = quote(s, ctx, control=None, n_paths=4000, batch=2000, costs=inputs())
     b = quote(s, ctx, control=None, n_paths=4000, batch=2000, costs=inputs(), workers=2)
     assert a.desk.final_price == pytest.approx(98.0, abs=1e-9) and a.desk.line("coupon").cost > 0

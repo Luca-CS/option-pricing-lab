@@ -45,6 +45,7 @@ FACTORS = ("spot", "vol", "skew", "dividend", "rates", "corr")
 
 # --- factor history ---
 
+
 def group_names(group) -> list[str]:
     items = group.book._prepare(group.ctx)
     used = sorted({n for it in items for n in it["underlyings"]})
@@ -54,6 +55,7 @@ def group_names(group) -> list[str]:
 def factor_levels(lake, names, currencies, start, end, layer: str = "reconstructed") -> tuple[pd.DataFrame, dict]:
     """Levels of every factor by date (rows where every spot and surface is known), and their origins."""
     from .history import carry, closes, realised_correlation, vol_factors, zero_rates
+
     start_wide = (pd.Timestamp(start) - pd.tseries.offsets.BDay(130)).date()  # the correlation window needs its history
     spots = closes(lake, names, start_wide, end)
     cols, origins = {}, {}
@@ -107,18 +109,25 @@ def shock_of(row: pd.Series, names, currency: str, factors=FACTORS) -> Shock:
     for n in names:
         if "spot" in factors:
             spot[n] = float(np.expm1(row.get(f"spot:{n}", 0.0)))
-        term = {j: float(row.get(f"atm:{n}:{lab}", 0.0)) for j, lab in enumerate(grid.TENOR_LABELS)} if "vol" in factors else {}
+        term = (
+            {j: float(row.get(f"atm:{n}:{lab}", 0.0)) for j, lab in enumerate(grid.TENOR_LABELS)}
+            if "vol" in factors
+            else {}
+        )
         skew = float(row.get(f"skew:{n}", 0.0)) if "skew" in factors else 0.0
         if any(term.values()) or skew:
             vol[n] = VolMove(skew=skew, term={j: v for j, v in term.items() if v})
         if "dividend" in factors and f"div:{n}:1y" in row:
-            div[n] = CurveMove(0.0, {j: float(row.get(f"div:{n}:{lab}", 0.0)) / 1e-4 for j, lab in enumerate(grid.TENOR_LABELS)})
+            div[n] = CurveMove(
+                0.0, {j: float(row.get(f"div:{n}:{lab}", 0.0)) / 1e-4 for j, lab in enumerate(grid.TENOR_LABELS)}
+            )
     if "rates" in factors and f"rate:{currency}:1y" in row:
-        rates[currency] = CurveMove(0.0, {j: float(row.get(f"rate:{currency}:{lab}", 0.0)) / 1e-4
-                                          for j, lab in enumerate(grid.TENOR_LABELS)})
+        rates[currency] = CurveMove(
+            0.0, {j: float(row.get(f"rate:{currency}:{lab}", 0.0)) / 1e-4 for j, lab in enumerate(grid.TENOR_LABELS)}
+        )
     if "corr" in factors:
         for a_i, a in enumerate(names):
-            for b in names[a_i + 1:]:
+            for b in names[a_i + 1 :]:
                 key = "|".join(sorted((a, b)))
                 v = float(row.get(f"corr:{key}", 0.0))
                 if v:
@@ -140,7 +149,13 @@ def _chunk(job):
     gi, shocks, settings = job
     groups, env = _GROUPS
     r = run_group_safe(groups[gi], shocks, None, settings, env)
-    return gi, {k: (r.pnl[k][0], r.pnl[k][1], r.pnl[k][2], r.pnl[k][3]) for k in shocks}, r.values["base"], r.warnings, r.seconds
+    return (
+        gi,
+        {k: (r.pnl[k][0], r.pnl[k][1], r.pnl[k][2], r.pnl[k][3]) for k in shocks},
+        r.values["base"],
+        r.warnings,
+        r.seconds,
+    )
 
 
 def worker_settings(settings: RiskSettings, workers: int) -> RiskSettings:
@@ -150,14 +165,22 @@ def worker_settings(settings: RiskSettings, workers: int) -> RiskSettings:
         return settings
     if settings.engine is None:
         from .. import native
+
         settings = dataclasses.replace(settings, engine=native.default_engine())
     if settings.eval_threads is None:
         settings = dataclasses.replace(settings, eval_threads=1)
     return settings
 
 
-def revalue_many(groups: list, shocks: dict, settings: RiskSettings, env: RiskEnv | None = None, workers: int = 1,
-                 chunk: int = 25, log=None) -> dict:
+def revalue_many(
+    groups: list,
+    shocks: dict,
+    settings: RiskSettings,
+    env: RiskEnv | None = None,
+    workers: int = 1,
+    chunk: int = 25,
+    log=None,
+) -> dict:
     """{"pnl": {shock: [book pnl, se]}, "positions": {shock: {position: pnl}}, "seconds"}: every shock on every group."""
     env = env or RiskEnv()
     t0 = time.perf_counter()
@@ -165,11 +188,16 @@ def revalue_many(groups: list, shocks: dict, settings: RiskSettings, env: RiskEn
     settings = worker_settings(settings, workers)
     cost = [len(group_names(g)) for g in groups]  # the groups with most names are the slowest: they go first
     order = sorted(range(len(groups)), key=lambda gi: -cost[gi])
-    jobs = [(gi, {k: shocks[k] for k in names[i:i + chunk]}, settings) for gi in order for i in range(0, len(names), chunk)]
+    jobs = [
+        (gi, {k: shocks[k] for k in names[i : i + chunk]}, settings)
+        for gi in order
+        for i in range(0, len(names), chunk)
+    ]
     results = []
     if workers > 1 and len(jobs) > 1:
-        with ProcessPoolExecutor(max_workers=workers, mp_context=mp.get_context("spawn"), initializer=_init,
-                                 initargs=(groups, env)) as pool:
+        with ProcessPoolExecutor(
+            max_workers=workers, mp_context=mp.get_context("spawn"), initializer=_init, initargs=(groups, env)
+        ) as pool:
             for k, res in enumerate(pool.map(_chunk, jobs)):
                 results.append(res)
                 if log:
@@ -198,6 +226,7 @@ def revalue_many(groups: list, shocks: dict, settings: RiskSettings, env: RiskEn
 
 # --- statistics ---
 
+
 def var_es(pnl, level: float = LEVEL, es_level: float = ES_LEVEL) -> dict:
     """VaR (the loss at `level`, positive) on the empirical distribution, an actual scenario (numpy's "lower" quantile), and ES
     (the mean loss beyond the `es_level` quantile)."""
@@ -205,14 +234,20 @@ def var_es(pnl, level: float = LEVEL, es_level: float = ES_LEVEL) -> dict:
     q = float(np.quantile(x, 1 - level, method="lower"))
     qe = float(np.quantile(x, 1 - es_level, method="lower"))
     tail = x[x <= qe]
-    return {"var": -q, "es": -float(tail.mean()), "n": int(len(x)), "var_index": int(np.flatnonzero(x == q)[0]),
-            "tail": np.flatnonzero(x <= qe).tolist()}
+    return {
+        "var": -q,
+        "es": -float(tail.mean()),
+        "n": int(len(x)),
+        "var_index": int(np.flatnonzero(x == q)[0]),
+        "tail": np.flatnonzero(x <= qe).tolist(),
+    }
 
 
 def kupiec(exceptions: int, n: int, p: float = 1 - LEVEL) -> dict:
     """Kupiec's proportion-of-failures test: LR = -2 ln[(1 - p)^(n - x) p^x / ((1 - x/n)^(n - x) (x/n)^x)], chi-square with
     one degree of freedom under the hypothesis that the VaR is right."""
     from scipy.stats import chi2
+
     x, n = int(exceptions), int(n)
     if n == 0:
         return {"exceptions": 0, "n": 0, "expected": 0.0, "lr": None, "p_value": None}
@@ -247,7 +282,7 @@ def taylor_pnl(report, row: pd.Series, names, currency: str) -> float:
     for lab in grid.TENOR_LABELS:
         total += v(f"rho_tenor|{currency}|{lab}") * float(row.get(f"rate:{currency}:{lab}", 0.0)) / 1e-4
     for a_i, a in enumerate(names):
-        for b in names[a_i + 1:]:
+        for b in names[a_i + 1 :]:
             total += v(f"corr|{a}~{b}|") * float(row.get(f"corr:{'|'.join(sorted((a, b)))}", 0.0)) / 0.01
     return float(total)
 
@@ -258,17 +293,24 @@ def search_stressed(levels: pd.DataFrame, report, names, currency: str, window: 
     approx = np.array([taylor_pnl(report, row, names, currency) for _, row in ch.iterrows()])
     best, best_i = -np.inf, 0
     for i in range(0, len(approx) - window + 1, 5):
-        v = var_es(approx[i:i + window])["var"]
+        v = var_es(approx[i : i + window])["var"]
         if v > best:
             best, best_i = v, i
     days = list(ch.index)
-    return {"start": days[best_i].isoformat(), "end": days[best_i + window - 1].isoformat(), "approx_var": float(best),
-            "window": window, "searched": [days[0].isoformat(), days[-1].isoformat()], "method": "delta-gamma-vega search"}
+    return {
+        "start": days[best_i].isoformat(),
+        "end": days[best_i + window - 1].isoformat(),
+        "approx_var": float(best),
+        "window": window,
+        "searched": [days[0].isoformat(), days[-1].isoformat()],
+        "method": "delta-gamma-vega search",
+    }
 
 
 @dataclass
 class VarResult:
     """One VaR (a horizon on a window): statistics, distribution, contributions, noise and the Taylor check."""
+
     label: str
     horizon: int
     start: str
@@ -288,7 +330,9 @@ class VarResult:
     origins: dict = field(default_factory=dict)
 
 
-def _result(label, horizon, ch: pd.DataFrame, reval: dict, keys: list, origins: dict, seconds: float, taylor=None) -> VarResult:
+def _result(
+    label, horizon, ch: pd.DataFrame, reval: dict, keys: list, origins: dict, seconds: float, taylor=None
+) -> VarResult:
     pnl = np.array([reval["pnl"][k][0] for k in keys])
     se = [reval["pnl"][k][1] for k in keys]
     st = var_es(pnl)
@@ -298,13 +342,44 @@ def _result(label, horizon, ch: pd.DataFrame, reval: dict, keys: list, origins: 
     contrib_var = {p: reval["positions"][keys[i]][p][0] for p in positions}
     contrib_es = {p: float(np.mean([reval["positions"][keys[t]][p][0] for t in tail])) for p in positions}
     dates = [d.isoformat() for d in ch.index]
-    return VarResult(label, horizon, dates[0], dates[-1], dates, pnl.tolist(), se, st["var"], st["es"], dates[i], se[i],
-                     {"var": contrib_var, "es": contrib_es}, {}, taylor, seconds, len(pnl), origins)
+    return VarResult(
+        label,
+        horizon,
+        dates[0],
+        dates[-1],
+        dates,
+        pnl.tolist(),
+        se,
+        st["var"],
+        st["es"],
+        dates[i],
+        se[i],
+        {"var": contrib_var, "es": contrib_es},
+        {},
+        taylor,
+        seconds,
+        len(pnl),
+        origins,
+    )
 
 
-def run_var(groups: list, lake, day, settings: RiskSettings | None = None, env: RiskEnv | None = None, days: int = 500,
-            ten_day: bool = True, stressed: dict | None = None, greeks_report=None, workers: int = 1, store=None,
-            stressed_window: int = 250, log=None, factors=FACTORS, with_stressed: bool = True) -> dict:
+def run_var(
+    groups: list,
+    lake,
+    day,
+    settings: RiskSettings | None = None,
+    env: RiskEnv | None = None,
+    days: int = 500,
+    ten_day: bool = True,
+    stressed: dict | None = None,
+    greeks_report=None,
+    workers: int = 1,
+    store=None,
+    stressed_window: int = 250,
+    log=None,
+    factors=FACTORS,
+    with_stressed: bool = True,
+) -> dict:
     """1-day and 10-day VaR over `days` business days to `day`, and the stressed VaR on `stressed` ({"start", "end"}: searched
     with `greeks_report` and stored when None and a report is given)."""
     t_all = time.perf_counter()
@@ -316,9 +391,17 @@ def run_var(groups: list, lake, day, settings: RiskSettings | None = None, env: 
     cur = currencies[0]
     start = (pd.Timestamp(day) - pd.tseries.offsets.BDay(days + 15)).date()
     levels, origins = factor_levels(lake, names, currencies, start, day)
-    levels = levels.iloc[-(days + 10 + 1):]
-    out = {"day": day.isoformat(), "names": names, "currency": cur, "origins": origins, "settings": settings.to_dict(),
-           "level": LEVEL, "es_level": ES_LEVEL, "factors": list(factors)}
+    levels = levels.iloc[-(days + 10 + 1) :]
+    out = {
+        "day": day.isoformat(),
+        "names": names,
+        "currency": cur,
+        "origins": origins,
+        "settings": settings.to_dict(),
+        "level": LEVEL,
+        "es_level": ES_LEVEL,
+        "factors": list(factors),
+    }
 
     horizons = [("1d", changes(levels, 1).iloc[-days:], 1)]
     if ten_day:
@@ -339,7 +422,11 @@ def run_var(groups: list, lake, day, settings: RiskSettings | None = None, env: 
     # every horizon in one pool: one start of the processes, one tail
     t0 = time.perf_counter()
     keys = {label: [f"{label}:{d.isoformat()}" for d in ch.index] for label, ch, _ in horizons}
-    shocks = {k: shock_of(row, names, cur, factors) for label, ch, _ in horizons for k, (_, row) in zip(keys[label], ch.iterrows())}
+    shocks = {
+        k: shock_of(row, names, cur, factors)
+        for label, ch, _ in horizons
+        for k, (_, row) in zip(keys[label], ch.iterrows())
+    }
     reval = revalue_many(groups, shocks, settings, env, workers, log=log)
     shared = time.perf_counter() - t0
     for label, ch, horizon in horizons:
@@ -348,20 +435,32 @@ def run_var(groups: list, lake, day, settings: RiskSettings | None = None, env: 
         if greeks_report is not None:
             approx = np.array([taylor_pnl(greeks_report, row, names, cur) for _, row in ch.iterrows()])
             full = np.array([reval["pnl"][k][0] for k in keys[label]])
-            taylor = {"var": var_es(approx)["var"], "es": var_es(approx)["es"],
-                      "mean_abs_gap": float(np.mean(np.abs(approx - full))), "pnl": approx.tolist()}
+            taylor = {
+                "var": var_es(approx)["var"],
+                "es": var_es(approx)["es"],
+                "mean_abs_gap": float(np.mean(np.abs(approx - full))),
+                "pnl": approx.tolist(),
+            }
         res = _result(label, horizon, ch, reval, keys[label], origins, 0.0, taylor)
         row = ch.loc[pd.Timestamp(res.var_date).date()]  # the VaR day's move one factor at a time
         f_shocks = {f"{label}:factor:{f}": shock_of(row, names, cur, (f,)) for f in factors}
         fr = revalue_many(groups, f_shocks, settings, env, 1)
         res.factors = {f: fr["pnl"][f"{label}:factor:{f}"] for f in factors}
-        res.factors["interaction"] = [res.pnl[res.dates.index(res.var_date)] - sum(v[0] for v in res.factors.values()), None]
-        res.seconds = shared * len(ch) / len(shocks) + time.perf_counter() - t1  # its share of the pool, and its factors
+        res.factors["interaction"] = [
+            res.pnl[res.dates.index(res.var_date)] - sum(v[0] for v in res.factors.values()),
+            None,
+        ]
+        res.seconds = (
+            shared * len(ch) / len(shocks) + time.perf_counter() - t1
+        )  # its share of the pool, and its factors
         d = dataclasses.asdict(res)
         if label == "1d":
             out["one_day"] = d
         elif label == "10d":
-            out["ten_day"] = {**d, "note": "overlapping 10-day changes over the same window, not sqrt(10) x the 1-day VaR"}
+            out["ten_day"] = {
+                **d,
+                "note": "overlapping 10-day changes over the same window, not sqrt(10) x the 1-day VaR",
+            }
         else:
             out["stressed"] = {**d, "window": stressed}
     out["revaluation_seconds"] = shared

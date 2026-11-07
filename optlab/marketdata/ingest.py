@@ -69,7 +69,9 @@ def load_ecb(lake: Lake, fetch=http_get) -> list[dict]:
     for label, tenor in simple.ECB_TENORS.items():
         url = simple.ecb_yc_url(label, START)
         raw = lake.store_raw("ecb", f"YC_{label}.csv", fetch(url, headers=simple.ECB_HEADERS), url)
-        rows = simple.parse_ecb(raw.content).rename(columns={"value": "rate"}).assign(curve=simple.ECB_CURVE, tenor=tenor)
+        rows = (
+            simple.parse_ecb(raw.content).rename(columns={"value": "rate"}).assign(curve=simple.ECB_CURVE, tenor=tenor)
+        )
         out.append(lake.ingest("rate_points", rows, "ecb", "observed", raw_sha256=raw.sha256))
     return out
 
@@ -89,7 +91,9 @@ def load_fx(lake: Lake, fetch=http_get, fred_fetch=curl_get, pause=lambda: time.
         url = simple.fred_url(series, START)
         raw = lake.store_raw("fred", f"{series}.csv", fred_fetch(url), url)
         pause()  # FRED drops the connection on quick series of requests
-        out.append(lake.ingest("fx_spots", fx.parse_fred_fx(raw.content, pair), "fred", "observed", raw_sha256=raw.sha256))
+        out.append(
+            lake.ingest("fx_spots", fx.parse_fred_fx(raw.content, pair), "fred", "observed", raw_sha256=raw.sha256)
+        )
     return out
 
 
@@ -110,7 +114,11 @@ def load_mof(lake: Lake, fetch=http_get) -> list[dict]:
 def load_boj(lake: Lake, fetch=http_get) -> list[dict]:
     url = rates.boj_call_url(START[:4] + START[5:7])
     raw = lake.store_raw("boj", "call_rate.csv", fetch(url), url)
-    rows = _since_start(rates.parse_boj_call(raw.content)).rename(columns={"value": "rate"}).assign(curve=rates.CALL_CURVE, tenor=1 / 365)
+    rows = (
+        _since_start(rates.parse_boj_call(raw.content))
+        .rename(columns={"value": "rate"})
+        .assign(curve=rates.CALL_CURVE, tenor=1 / 365)
+    )
     return [lake.ingest("rate_points", rows, "boj", "observed", raw_sha256=raw.sha256)]
 
 
@@ -125,7 +133,11 @@ def load_boe(lake: Lake, fetch=http_get) -> list[dict]:
             out.append(lake.ingest("rate_points", rows, "boe", "observed", raw_sha256=raw.sha256))
     url = rates.boe_series_url()
     raw = lake.store_raw("boe", f"{rates.SONIA_SERIES}.csv", fetch(url), url)
-    rows = _since_start(rates.parse_boe_series(raw.content)).rename(columns={"value": "rate"}).assign(curve=rates.SONIA_CURVE, tenor=1 / 365)
+    rows = (
+        _since_start(rates.parse_boe_series(raw.content))
+        .rename(columns={"value": "rate"})
+        .assign(curve=rates.SONIA_CURVE, tenor=1 / 365)
+    )
     out.append(lake.ingest("rate_points", rows, "boe", "observed", raw_sha256=raw.sha256))
     return out
 
@@ -160,7 +172,9 @@ def load_calendars(lake: Lake) -> list[dict]:
     """Per place, the weekdays traded by its reference instrument: open when a close exists, closed otherwise."""
     out = []
     for place, name in REFERENCE_INSTRUMENT.items():
-        days = lake.read("prices_eod", where=f"instrument = '{name}' AND source = 'yahoo'", columns="obs_date")["obs_date"]
+        days = lake.read("prices_eod", where=f"instrument = '{name}' AND source = 'yahoo'", columns="obs_date")[
+            "obs_date"
+        ]
         if days.empty:
             continue
         days = pd.to_datetime(days)
@@ -170,7 +184,9 @@ def load_calendars(lake: Lake) -> list[dict]:
     return out
 
 
-def load_yahoo_chains(lake: Lake, names=("SPX", "NDX", "RUT", "AAPL"), tickers=None, download=yahoo.download_chain) -> list[dict]:
+def load_yahoo_chains(
+    lake: Lake, names=("SPX", "NDX", "RUT", "AAPL"), tickers=None, download=yahoo.download_chain
+) -> list[dict]:
     """One snapshot of the day's chains, on request only: Luca chose not to collect them every day."""
     tickers = tickers or {"SPX": "^SPX", "NDX": "^NDX", "RUT": "^RUT"}
     out = []
@@ -182,17 +198,42 @@ def load_yahoo_chains(lake: Lake, names=("SPX", "NDX", "RUT", "AAPL"), tickers=N
         two_sided = float(((rows["bid"] > 0) & (rows["ask"] > rows["bid"])).mean())
         quality = "ok" if two_sided >= MIN_TWO_SIDED else "suspect"
         if quality == "suspect":  # Yahoo blanks bid and ask outside US market hours
-            issue = pd.DataFrame([{"dataset": "option_quotes", "item": name, "check_name": "market_closed", "severity": "warning",
-                                   "detail": f"{two_sided:.1%} two-sided quotes: taken outside US market hours", "obs_date": day}])
+            issue = pd.DataFrame(
+                [
+                    {
+                        "dataset": "option_quotes",
+                        "item": name,
+                        "check_name": "market_closed",
+                        "severity": "warning",
+                        "detail": f"{two_sided:.1%} two-sided quotes: taken outside US market hours",
+                        "obs_date": day,
+                    }
+                ]
+            )
             lake.ingest("quality_issues", issue, "ingest", "derived", new_run_id("ingest"))
-        out.append({**lake.ingest("option_quotes", rows, "yahoo", "observed", quality=quality, raw_sha256=raw.sha256),
-                    "two_sided": two_sided})
+        out.append(
+            {
+                **lake.ingest("option_quotes", rows, "yahoo", "observed", quality=quality, raw_sha256=raw.sha256),
+                "two_sided": two_sided,
+            }
+        )
     return out
 
 
-STEPS = {"universe": load_universe, "cboe": load_cboe, "stoxx": load_stoxx, "fred": load_fred,
-         "treasury": load_treasury, "ecb": load_ecb, "mof": load_mof, "boj": load_boj, "boe": load_boe, "fx": load_fx, "yahoo": load_yahoo,
-         "calendars": load_calendars}
+STEPS = {
+    "universe": load_universe,
+    "cboe": load_cboe,
+    "stoxx": load_stoxx,
+    "fred": load_fred,
+    "treasury": load_treasury,
+    "ecb": load_ecb,
+    "mof": load_mof,
+    "boj": load_boj,
+    "boe": load_boe,
+    "fx": load_fx,
+    "yahoo": load_yahoo,
+    "calendars": load_calendars,
+}
 
 
 def update_all(lake: Lake, only=None, log=LOG.info) -> dict:
@@ -205,13 +246,27 @@ def update_all(lake: Lake, only=None, log=LOG.info) -> dict:
         try:
             result = step(lake)
             rows = result if isinstance(result, list) else [result]
-            report[name] = {"ok": True, "new": sum(r["n_new"] for r in rows), "changed": sum(r["n_changed"] for r in rows),
-                            "input": sum(r["n_input"] for r in rows), "seconds": (dt.datetime.now() - t0).total_seconds()}
+            report[name] = {
+                "ok": True,
+                "new": sum(r["n_new"] for r in rows),
+                "changed": sum(r["n_changed"] for r in rows),
+                "input": sum(r["n_input"] for r in rows),
+                "seconds": (dt.datetime.now() - t0).total_seconds(),
+            }
         except Exception as exc:  # a source down is a report line, not a failed load
             report[name] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
-            issue = pd.DataFrame([{"dataset": name, "item": name, "check_name": "load_failed", "severity": "error",
-                                   "detail": report[name]["error"][:500], "obs_date": dt.date.today()}])
+            issue = pd.DataFrame(
+                [
+                    {
+                        "dataset": name,
+                        "item": name,
+                        "check_name": "load_failed",
+                        "severity": "error",
+                        "detail": report[name]["error"][:500],
+                        "obs_date": dt.date.today(),
+                    }
+                ]
+            )
             lake.ingest("quality_issues", issue, "ingest", "derived", new_run_id("ingest"))
         log(f"{name}: {report[name]}")
     return report
-

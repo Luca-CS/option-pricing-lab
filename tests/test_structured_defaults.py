@@ -30,7 +30,11 @@ def worst_of(*names, **kw):
 
 # --- groups and tiers ---
 def test_every_loaded_name_has_a_group_with_defaults():
-    assert instrument("SPX").group == "index_us" and instrument("SX5E").group == "index_eu" and instrument("AAPL").group == "equity_us"
+    assert (
+        instrument("SPX").group == "index_us"
+        and instrument("SX5E").group == "index_eu"
+        and instrument("AAPL").group == "equity_us"
+    )
     for i in UNIVERSE:
         if i.enabled and i.asset_class != "fx":  # FX pairs feed quanto adjustments, they are not underlyings of a sheet
             assert i.group in STARTING, i.id
@@ -50,7 +54,9 @@ def test_above_the_last_tier_it_alerts_and_asks_for_the_values():
     big = preset("phoenix", **{"general.notional": 1e9})
     got = resolve(None, big)
     assert got.tiers["index_us"] is None and "above the last tier" in got.alerts[0]
-    assert {"vol", "skew", "dividend", "repo", "spot", "slv_mix", "min_spread", "delta_max_autocall"} <= set(got.missing)
+    assert {"vol", "skew", "dividend", "repo", "spot", "slv_mix", "min_spread", "delta_max_autocall"} <= set(
+        got.missing
+    )
     with pytest.raises(ValueError, match="no default"):
         got.inputs()
     filled = big.replace(**{f"costs.{k}": 0.02 for k in got.missing})
@@ -86,7 +92,10 @@ def test_one_sign_takes_the_largest_in_size():
     got = resolve(None, worst_of("SPX", "AAPL"))
     us, eq = STARTING["index_us"]["tiers"][0], STARTING["equity_us"]["tiers"][0]
     assert got.params["vol"]["value"] == min(us["vol"], eq["vol"]) and got.params["vol"]["conflict"] is None
-    assert got.params["spot"]["value"] == max(us["spot"], eq["spot"]) and set(got.params["vol"]["by_group"]) == {"index_us", "equity_us"}
+    assert got.params["spot"]["value"] == max(us["spot"], eq["spot"]) and set(got.params["vol"]["by_group"]) == {
+        "index_us",
+        "equity_us",
+    }
 
 
 def test_opposite_signs_are_candidates_and_an_override_settles_them():
@@ -108,14 +117,19 @@ def test_a_stored_table_is_validated_and_completed():
         validate_table({"index_us": {"tiers": [{"max_notional": 2e6, "gamma": 1.0}]}})
     old = {"groups": {"index_us": {"label": "US", "currency": "USD", "tiers": [{"max_notional": 1e6, "vol": 0.01}]}}}
     m = merged(old)
-    assert m["index_us"]["tiers"][0]["vol"] == 0.01 and m["index_us"]["tiers"][0]["skew"] == STARTING["index_us"]["tiers"][0]["skew"]
+    assert (
+        m["index_us"]["tiers"][0]["vol"] == 0.01
+        and m["index_us"]["tiers"][0]["skew"] == STARTING["index_us"]["tiers"][0]["skew"]
+    )
     assert "equity_us" in m
 
 
 # --- bumps on a basket ---
 def two_names(rho=0.5, vol=0.2):
     markets = {n: Market.flat(100.0, 0.02, 0.01) for n in ("SPX", "NDX")}
-    return BasketContext(("SPX", "NDX"), markets, {"SPX": vol, "NDX": vol}, np.array([[1.0, rho], [rho, 1.0]]), SPX.valuation)
+    return BasketContext(
+        ("SPX", "NDX"), markets, {"SPX": vol, "NDX": vol}, np.array([[1.0, rho], [rho, 1.0]]), SPX.valuation
+    )
 
 
 def bivariate_digital(F, K, vol, T, rho, D):
@@ -130,8 +144,18 @@ def test_moved_correlation_is_repaired_and_keeps_the_diagonal():
 
 def test_the_correlation_line_of_a_worst_of_digital_is_the_bivariate_normal():
     ctx = two_names()
-    s = preset("reverse_convertible", **{"general.basket": "worst_of", "general.underlyings": ["SPX", "NDX"], "general.maturity_months": 12,
-                                         "wrapper.solve": "upfront", "coupon.type": "none", "downside.barrier": 1.0, "downside.strike": 1.0})
+    s = preset(
+        "reverse_convertible",
+        **{
+            "general.basket": "worst_of",
+            "general.underlyings": ["SPX", "NDX"],
+            "general.maturity_months": 12,
+            "wrapper.solve": "upfront",
+            "coupon.type": "none",
+            "downside.barrier": 1.0,
+            "downside.strike": 1.0,
+        },
+    )
     q = quote(s, ctx, control=None, n_paths=200_000, batch=25_000, costs=CostInputs({"corr": 0.1}))
     # the redemption pays N - N max(1 - worst, 0): its correlation effect is checked with the same simulation against the digital below
     line = q.desk.line("corr")
@@ -139,8 +163,10 @@ def test_the_correlation_line_of_a_worst_of_digital_is_the_bivariate_normal():
     T = 1.0
     D, F = float(ctx.market.D(T)), float(ctx.market.F(T))
     gain = bivariate_digital(F, 100.0, 0.2, T, 0.6, D) - bivariate_digital(F, 100.0, 0.2, T, 0.5, D)
-    script = ("underlying SPX\nunderlying NDX\nparam N = 100\nevent t=1.0 pay t=1.0\n  if worst(SPX, NDX) >= 100 then\n"
-              "    pay N as upside\n  end\n  pay N as redemption\nend\n")
+    script = (
+        "underlying SPX\nunderlying NDX\nparam N = 100\nevent t=1.0 pay t=1.0\n  if worst(SPX, NDX) >= 100 then\n"
+        "    pay N as upside\n  end\n  pay N as redemption\nend\n"
+    )
     from types import SimpleNamespace
 
     from optlab.structured.cashflows import Swap
@@ -150,10 +176,13 @@ def test_the_correlation_line_of_a_worst_of_digital_is_the_bivariate_normal():
     from optlab.structured.script.parser import parse
     from optlab.structured.script.timeline import Clock, build_timeline
     from optlab.structured.script.validate import validate
+
     program = validate(parse(script))
     prof = profile(program, build_timeline(program, Clock(ctx.valuation)))
     d = PricingDecision("basket", "monte_carlo", "lv", None, "", 400_000, 25_000, 3)
-    lines = _Lines(SimpleNamespace(program=program, valuation=ctx.valuation, calendar=None, horizon=T), ctx, Swap(), d, prof, [{}])
+    lines = _Lines(
+        SimpleNamespace(program=program, valuation=ctx.valuation, calendar=None, horizon=T), ctx, Swap(), d, prof, [{}]
+    )
     runs = lines.run({"base": {}, "corr": {"corr": 0.1}})
     pairs = runs["corr"].results[0].pairs - runs["base"].results[0].pairs
     within(float(pairs.mean()), 100.0 * gain, float(pairs.std(ddof=1)) / np.sqrt(len(pairs)))
@@ -162,7 +191,14 @@ def test_the_correlation_line_of_a_worst_of_digital_is_the_bivariate_normal():
 def test_vol_and_forward_bumps_reach_every_name_of_a_basket():
     ctx = two_names()
     s = worst_of("SPX", "NDX")
-    q = quote(s, ctx, control=None, n_paths=PATHS, batch=10_000, costs=CostInputs({"vol": -0.005, "dividend": -0.1, "repo": -0.001, "spot": 0.0005, "corr": 0.01}))
+    q = quote(
+        s,
+        ctx,
+        control=None,
+        n_paths=PATHS,
+        batch=10_000,
+        costs=CostInputs({"vol": -0.005, "dividend": -0.1, "repo": -0.001, "spot": 0.0005, "corr": 0.01}),
+    )
     d = q.desk
     assert d.final_price == pytest.approx(98.0, abs=1e-9)
     assert {x.key for x in d.lines} == {"vol", "corr", "dividend", "repo", "spot", "interaction"}
@@ -180,10 +216,26 @@ def test_with_one_name_moved_the_worst_of_lines_stay_on_common_numbers_and_flat_
 def test_opposite_signs_are_measured_and_the_one_against_the_desk_stays():
     ctx = two_names()
     s = worst_of("SPX", "NDX")
-    pick = quote(s, ctx, control=None, n_paths=PATHS, batch=10_000, costs=CostInputs({"vol": 0.01}, "sell", {"vol": 0.01}, {"vol": (-0.01, 0.01)}))
-    assert pick.desk.line("vol").used == -0.01 and pick.desk.line("vol").cost > 0  # a lower vol raises the note: against the seller
+    pick = quote(
+        s,
+        ctx,
+        control=None,
+        n_paths=PATHS,
+        batch=10_000,
+        costs=CostInputs({"vol": 0.01}, "sell", {"vol": 0.01}, {"vol": (-0.01, 0.01)}),
+    )
+    assert (
+        pick.desk.line("vol").used == -0.01 and pick.desk.line("vol").cost > 0
+    )  # a lower vol raises the note: against the seller
     assert "disagree" in pick.desk.line("vol").note
-    bought = quote(s, ctx, control=None, n_paths=PATHS, batch=10_000, costs=CostInputs({"vol": 0.01}, "buy", {"vol": 0.01}, {"vol": (-0.01, 0.01)}))
+    bought = quote(
+        s,
+        ctx,
+        control=None,
+        n_paths=PATHS,
+        batch=10_000,
+        costs=CostInputs({"vol": 0.01}, "buy", {"vol": 0.01}, {"vol": (-0.01, 0.01)}),
+    )
     assert bought.desk.line("vol").used == 0.01 and bought.desk.line("vol").cost > 0
 
 
@@ -213,18 +265,39 @@ def body(sheet):
 def test_the_form_loads_the_defaults_of_a_sheet(desk):
     f = desk.form(body(preset("phoenix", **{"general.notional": 20e6, "costs.vol": -0.02})))
     p = f["costs"]["params"]
-    assert p["skew"]["default"] == STARTING["index_us"]["tiers"][1]["skew"] and p["skew"]["starting"] and not p["skew"]["overridden"]
-    assert p["vol"]["overridden"] and p["vol"]["value"] == -0.02 and p["vol"]["default"] == STARTING["index_us"]["tiers"][1]["vol"]
+    assert (
+        p["skew"]["default"] == STARTING["index_us"]["tiers"][1]["skew"]
+        and p["skew"]["starting"]
+        and not p["skew"]["overridden"]
+    )
+    assert (
+        p["vol"]["overridden"]
+        and p["vol"]["value"] == -0.02
+        and p["vol"]["default"] == STARTING["index_us"]["tiers"][1]["vol"]
+    )
     assert f["costs"]["tiers"]["index_us"]["index"] == 1
     assert next(sec for sec in f["form"]["sections"] if sec["name"] == "costs")
 
 
 def test_a_quote_shows_its_lines_and_the_report_too(desk):
-    q = wait(desk, desk.quote({"sheet": body(preset("barrier_reverse_convertible", **{"costs.vol": -0.01})), "options": {"precision": "quick", "model": "lv", "control": False}})["job"])
+    q = wait(
+        desk,
+        desk.quote(
+            {
+                "sheet": body(preset("barrier_reverse_convertible", **{"costs.vol": -0.01})),
+                "options": {"precision": "quick", "model": "lv", "control": False},
+            }
+        )["job"],
+    )
     d = q["desk"]
     assert d["side"] == "sell" and d["final_price"] == pytest.approx(98.0, abs=1e-6)
     vol = next(x for x in d["lines"] if x["key"] == "vol")
-    assert vol["used"] == -0.01 and vol["overridden"] and vol["default"] == STARTING["index_us"]["tiers"][0]["vol"] and vol["se"] > 0
+    assert (
+        vol["used"] == -0.01
+        and vol["overridden"]
+        and vol["default"] == STARTING["index_us"]["tiers"][0]["vol"]
+        and vol["se"] > 0
+    )
     assert any(x["key"] == "interaction" and not x["in_price"] for x in d["lines"])
     saved = desk.saved_quote(q["quote_id"])
     assert saved["result"]["desk"]["final_price"] == d["final_price"]
@@ -234,16 +307,42 @@ def test_a_quote_shows_its_lines_and_the_report_too(desk):
 
 
 def test_starting_values_are_against_the_seller_of_a_phoenix(desk):
-    q = wait(desk, desk.quote({"sheet": body(preset("phoenix", **{"general.notional": 20e6})), "options": {"precision": "quick", "model": "lv", "control": False}})["job"])
+    q = wait(
+        desk,
+        desk.quote(
+            {
+                "sheet": body(preset("phoenix", **{"general.notional": 20e6})),
+                "options": {"precision": "quick", "model": "lv", "control": False},
+            }
+        )["job"],
+    )
     lines = {x["key"]: x for x in q["desk"]["lines"]}
-    assert lines["dividend"]["cost"] > 0 and lines["repo"]["cost"] > 0 and lines["vol"]["cost"] > 0 and lines["spot"]["cost"] > 0
+    assert (
+        lines["dividend"]["cost"] > 0
+        and lines["repo"]["cost"] > 0
+        and lines["vol"]["cost"] > 0
+        and lines["spot"]["cost"] > 0
+    )
     assert q["desk"]["coupon_final"] < q["desk"]["coupon_base"]
 
 
 def test_a_forced_model_outside_the_base_says_it_has_no_costs(desk):
-    q = wait(desk, desk.quote({"sheet": body(preset("phoenix")), "options": {"precision": "quick", "model": "bs", "control": False}})["job"])
+    q = wait(
+        desk,
+        desk.quote(
+            {"sheet": body(preset("phoenix")), "options": {"precision": "quick", "model": "bs", "control": False}}
+        )["job"],
+    )
     assert q["desk"] is None and any("no hedging costs" in w for w in q["warnings"])
-    q = wait(desk, desk.quote({"sheet": body(preset("phoenix")), "options": {"precision": "quick", "model": "lv", "control": False, "costs": False}})["job"])
+    q = wait(
+        desk,
+        desk.quote(
+            {
+                "sheet": body(preset("phoenix")),
+                "options": {"precision": "quick", "model": "lv", "control": False, "costs": False},
+            }
+        )["job"],
+    )
     assert q["desk"] is None and not any("hedging" in w for w in q["warnings"])
 
 

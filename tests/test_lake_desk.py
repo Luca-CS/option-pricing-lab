@@ -47,7 +47,11 @@ def test_overview_gives_coverage_with_origins_and_the_universe(desk):
     d = desk.data_overview()
     assert d["available"] is True and d["lake"]
     origins = {c["dataset"]: c["origin"] for c in d["coverage"]}
-    assert origins["prices_eod"] == "observed" and origins["vol_surfaces"] == "reconstructed" and origins["credit_spreads"] == "synthetic"
+    assert (
+        origins["prices_eod"] == "observed"
+        and origins["vol_surfaces"] == "reconstructed"
+        and origins["credit_spreads"] == "synthetic"
+    )
     names = {i["id"]: i for i in d["instruments"]}
     assert names["SPX"]["origin"] == "observed" and names["SPX"]["n"] > 0 and names["NVDA"]["enabled"] is False
     json.dumps(d)
@@ -73,8 +77,11 @@ def test_market_at_a_past_date_becomes_a_snapshot_the_desk_can_use(desk):
         assert ctx["origin"]["extrapolated_from"] == 1.0 and ctx["origin"]["layer"] == "reconstructed"
         stored = desk.fixings_from_lake({"underlying": "SPX", "start": "2020-06-01"})
         assert stored["origin"] == "observed" and stored["last"] == "2020-06-15"
-        level = {f["date"]: f["level"] for f in desk.fixings("SPX")["fixings"]}["2020-06-15"] if isinstance(desk.fixings("SPX")["fixings"], list) \
+        level = (
+            {f["date"]: f["level"] for f in desk.fixings("SPX")["fixings"]}["2020-06-15"]
+            if isinstance(desk.fixings("SPX")["fixings"], list)
             else desk.fixings("SPX")["fixings"]["SPX"]["2020-06-15"]
+        )
         assert level == pytest.approx(100.0)
     finally:
         desk.use_snapshot({"snapshot_id": before})
@@ -92,7 +99,10 @@ def test_lab_lists_fits_and_replays_runs(desk):
     assert days["sets"][0]["underlying"] == "SPX" and list(days["models"]) == ["svi", "ssvi", "heston", "slv"]
     q = desk.lab_quotes("SPX", str(DAY), "archive")
     assert q["origin"] == "observed" and q["slices"]
-    res = wait(desk, desk.lab_fit({"underlying": "SPX", "day": str(DAY), "source": "archive", "models": ["svi", "heston"]})["job"])
+    res = wait(
+        desk,
+        desk.lab_fit({"underlying": "SPX", "day": str(DAY), "source": "archive", "models": ["svi", "heston"]})["job"],
+    )
     assert set(res["fits"]) == {"svi", "heston"} and res["origin"] == "observed"
     rid = res["fits"]["svi"]["calibration_id"]
     assert any(r["calibration_id"] == rid for r in desk.lab_runs("SPX")["runs"])
@@ -116,7 +126,9 @@ def test_a_shared_desk_keeps_quotes_and_levels_private(desk):
         over = desk.data_overview()
         assert over["lake"] is None and over["shared"] is True
         assert desk.lab_days()["shared"] is True
-        res = wait(desk, desk.lab_fit({"underlying": "SPX", "day": str(DAY), "source": "archive", "models": ["svi"]})["job"])
+        res = wait(
+            desk, desk.lab_fit({"underlying": "SPX", "day": str(DAY), "source": "archive", "models": ["svi"]})["job"]
+        )
         text = json.dumps(res)
         assert "iv_bid" not in text and "iv_ask" not in text and "bid" not in text.replace("median_half", "")
     finally:
@@ -124,15 +136,26 @@ def test_a_shared_desk_keeps_quotes_and_levels_private(desk):
 
 
 def test_the_lab_fit_result_never_carries_raw_quotes(desk):
-    res = wait(desk, desk.lab_fit({"underlying": "SPX", "day": str(DAY), "source": "archive", "models": ["ssvi"]})["job"])
-    assert "slices" not in res and "table" not in res and {"curves", "params", "by_maturity"} <= set(res["fits"]["ssvi"])
+    res = wait(
+        desk, desk.lab_fit({"underlying": "SPX", "day": str(DAY), "source": "archive", "models": ["ssvi"]})["job"]
+    )
+    assert (
+        "slices" not in res and "table" not in res and {"curves", "params", "by_maturity"} <= set(res["fits"]["ssvi"])
+    )
 
 
 def test_replay_runs_as_a_job_and_is_kept_without_real_levels(desk):
-    body = {"preset": "barrier_reverse_convertible", "strike": "2020-01-15", "every": 40, "n_paths": 2000,
-            "changes": {"general.maturity_months": 6}}
+    body = {
+        "preset": "barrier_reverse_convertible",
+        "strike": "2020-01-15",
+        "every": 40,
+        "n_paths": 2000,
+        "changes": {"general.maturity_months": 6},
+    }
     out = wait(desk, desk.replay_run(body)["job"])
-    assert out["trade_id"].startswith("barrier-reverse-convertible-SPX") and out["reconciliation"]["cash_gap"] == pytest.approx(0.0, abs=1e-9)
+    assert out["trade_id"].startswith("barrier-reverse-convertible-SPX") and out["reconciliation"][
+        "cash_gap"
+    ] == pytest.approx(0.0, abs=1e-9)
     assert out["daily"][0]["perf"]["SPX"] == pytest.approx(1.0) and "spot" not in out["daily"][0]
     assert {v for d in out["daily"] for v in d["layer"].values()} == {"reconstructed"}
     runs = desk.replay_runs()["runs"]
@@ -174,17 +197,21 @@ def test_showcase_seed_fills_a_store_with_trades_struck_on_their_own_markets(tmp
     spec = importlib.util.spec_from_file_location("seed_showcase", path)
     mod = importlib.util.module_from_spec(spec)
     import sys
+
     sys.modules["seed_showcase"] = mod
     spec.loader.exec_module(mod)
     lake, days, _ = synthetic_lake(tmp_path / "lake", "2019-01-01", "2021-06-30")
     desk = Desk(tmp_path / "store" / "desk.sqlite", lake=tmp_path / "lake")
     try:
-        deals = (mod.Deal("SHOW-A", "phoenix", ("SPX",), "2020-06-15", 24, 1e6, "Client", {"coupon.barrier": 0.8}),
-                 mod.Deal("SHOW-B", "barrier_reverse_convertible", ("SPX",), "2020-09-15", 18, 2e6, "Client"))
+        deals = (
+            mod.Deal("SHOW-A", "phoenix", ("SPX",), "2020-06-15", 24, 1e6, "Client", {"coupon.barrier": 0.8}),
+            mod.Deal("SHOW-B", "barrier_reverse_convertible", ("SPX",), "2020-09-15", 18, 2e6, "Client"),
+        )
         import time
 
         import pandas as pd
         from optlab.marketdata.derive.bank import spread_at
+
         day = pd.Timestamp("2021-06-30").date()
         added = mod.seed(desk, lake, day, deals, n_paths=2000, log=lambda s: None, look_back=())
         assert added == ["SHOW-A", "SHOW-B"]
@@ -221,12 +248,26 @@ def test_data_screen_shows_the_latest_basket_spreads_as_synthetic(tmp_path):
     import pandas as pd
     from optlab.app.api import Desk
     from optlab.marketdata.lake import Lake
+
     desk = Desk(tmp_path / "store" / "desk.sqlite", lake=tmp_path / "lake")
     try:
         assert desk.data_baskets() == {"rows": [], "day": None}
-        row = {"basket": "SPX+NDX", "kind": "cvc", "strike": 1.1, "price": -0.1, "price_se": 0.01, "basket_price": 5.0, "members_price": 5.1,
-               "basket_vol": 0.2, "rho": 0.8, "implied_rho": 0.82}
-        rows = pd.DataFrame([{**row, "tenor": 1.0, "obs_date": d} for d in ("2026-09-30", "2026-10-30")] + [{**row, "tenor": 0.5, "obs_date": "2026-10-30"}])
+        row = {
+            "basket": "SPX+NDX",
+            "kind": "cvc",
+            "strike": 1.1,
+            "price": -0.1,
+            "price_se": 0.01,
+            "basket_price": 5.0,
+            "members_price": 5.1,
+            "basket_vol": 0.2,
+            "rho": 0.8,
+            "implied_rho": 0.82,
+        }
+        rows = pd.DataFrame(
+            [{**row, "tenor": 1.0, "obs_date": d} for d in ("2026-09-30", "2026-10-30")]
+            + [{**row, "tenor": 0.5, "obs_date": "2026-10-30"}]
+        )
         Lake(tmp_path / "lake").ingest("basket_spreads", rows, "copula_on_surfaces", "synthetic")
         got = desk.data_baskets()
         assert got["day"] == "2026-10-30" and len(got["rows"]) == 1 and got["rows"][0]["origin"] == "synthetic"

@@ -20,7 +20,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from optlab.market import Market
 from optlab.marketdata.derive.correl import closes_wide
 from optlab.marketdata.derive.curves import CURVE_OF_CURRENCY
-from optlab.marketdata.derive.fx import fx_correlation_at, fx_vol_at, name_pair_series, quanto_link_at, realised_vol, spot_series
+from optlab.marketdata.derive.fx import (
+    fx_correlation_at,
+    fx_vol_at,
+    name_pair_series,
+    quanto_link_at,
+    realised_vol,
+    spot_series,
+)
 from optlab.marketdata.derive.surfaces import surface_at
 from optlab.marketdata.lake import Lake, sql_str
 from optlab.marketdata.pit import basket_at, market_at
@@ -39,7 +46,11 @@ from optlab.structured.quote import quote
 REPORT = Path(__file__).resolve().parents[1] / "reports" / "fx_check.md"
 DATES = ("2020-03-23", "2022-07-01", "2026-11-04")
 SEEDS = (2026, 2027, 2028, 2029, 2030)
-FUTURES = {"EURUSD": ("6E", "EURUSD=X", False), "GBPUSD": ("6B", "GBPUSD=X", False), "USDJPY": ("6J", "JPY=X", True)}  # root, spot, the contract is the inverse of the pair
+FUTURES = {
+    "EURUSD": ("6E", "EURUSD=X", False),
+    "GBPUSD": ("6B", "GBPUSD=X", False),
+    "USDJPY": ("6J", "JPY=X", True),
+}  # root, spot, the contract is the inverse of the pair
 
 
 def table(header, rows) -> str:
@@ -54,9 +65,21 @@ def source_gaps(lake: Lake) -> str:
         a, b = spot_series(lake, pair, source="ecb"), spot_series(lake, pair, source="fred")
         both = pd.concat({"a": a, "b": b}, axis=1, sort=True).dropna()
         gap = 1e4 * np.log(both["a"] / both["b"]).abs()
-        rows.append((pair, len(both), f"{gap.median():.0f}", f"{gap.quantile(0.99):.0f}", f"{gap.max():.0f}",
-                     f"{np.log(both['a']).diff().corr(np.log(both['b']).diff()):.3f}", f"{np.log(both['a']).diff(5).corr(np.log(both['b']).diff(5)):.3f}"))
-    return table(("Pair", "Days", "Median gap (bp)", "99 % (bp)", "Largest (bp)", "Correlation, 1 day", "Correlation, 5 days"), rows)
+        rows.append(
+            (
+                pair,
+                len(both),
+                f"{gap.median():.0f}",
+                f"{gap.quantile(0.99):.0f}",
+                f"{gap.max():.0f}",
+                f"{np.log(both['a']).diff().corr(np.log(both['b']).diff()):.3f}",
+                f"{np.log(both['a']).diff(5).corr(np.log(both['b']).diff(5)):.3f}",
+            )
+        )
+    return table(
+        ("Pair", "Days", "Median gap (bp)", "99 % (bp)", "Largest (bp)", "Correlation, 1 day", "Correlation, 5 days"),
+        rows,
+    )
 
 
 def imm_date(year: int, month: int) -> pd.Timestamp:
@@ -68,6 +91,7 @@ def imm_date(year: int, month: int) -> pd.Timestamp:
 
 def history(ticker: str) -> pd.Series:
     import yfinance as yf
+
     h = yf.Ticker(ticker).history(start="2015-01-01", auto_adjust=False)
     if h.empty:
         return pd.Series(dtype=float)
@@ -85,7 +109,12 @@ def futures_gaps(lake: Lake, pair: str) -> tuple[pd.DataFrame, int]:
     curves = {}
     base, quote = pair_currencies(pair)
     for currency in (base, quote):
-        frame = lake.read("discount_curves", where=f"curve = '{CURVE_OF_CURRENCY[currency]}'", columns="obs_date, tenor, zero_rate", order="obs_date, tenor")
+        frame = lake.read(
+            "discount_curves",
+            where=f"curve = '{CURVE_OF_CURRENCY[currency]}'",
+            columns="obs_date, tenor, zero_rate",
+            order="obs_date, tenor",
+        )
         frame["obs_date"] = pd.to_datetime(frame["obs_date"])
         curves[currency] = {d: (g["tenor"].to_numpy(), g["zero_rate"].to_numpy()) for d, g in frame.groupby("obs_date")}
     rows, contracts = [], 0
@@ -101,7 +130,14 @@ def futures_gaps(lake: Lake, pair: str) -> tuple[pd.DataFrame, int]:
                 if T < 0.25 or day not in spot.index or day not in curves[base] or day not in curves[quote]:
                     continue
                 forward = 1.0 / f if inverted else f
-                rows.append((day, T, np.log(forward / spot[day]) / T, np.interp(T, *curves[quote][day]) - np.interp(T, *curves[base][day])))
+                rows.append(
+                    (
+                        day,
+                        T,
+                        np.log(forward / spot[day]) / T,
+                        np.interp(T, *curves[quote][day]) - np.interp(T, *curves[base][day]),
+                    )
+                )
     frame = pd.DataFrame(rows, columns=["day", "T", "market", "cip"]).set_index("day")
     frame["gap"] = 1e4 * (frame["market"] - frame["cip"])
     return frame, contracts
@@ -109,20 +145,50 @@ def futures_gaps(lake: Lake, pair: str) -> tuple[pd.DataFrame, int]:
 
 def cip_against_futures(lake: Lake) -> tuple[str, str, str]:
     def line(pair, label, g):
-        return (pair, label, len(g), f"{1e4 * g['market'].median():.0f}", f"{1e4 * g['cip'].median():.0f}", f"{g['gap'].median():+.0f}",
-                f"{g['gap'].abs().quantile(0.9):.0f}", f"{g['market'].corr(g['cip']):.2f}")
+        return (
+            pair,
+            label,
+            len(g),
+            f"{1e4 * g['market'].median():.0f}",
+            f"{1e4 * g['cip'].median():.0f}",
+            f"{g['gap'].median():+.0f}",
+            f"{g['gap'].abs().quantile(0.9):.0f}",
+            f"{g['market'].corr(g['cip']):.2f}",
+        )
 
-    head = ("Days", "Futures carry (bp/yr)", "CIP on our curves (bp/yr)", "Median gap (bp/yr)", "90 % of absolute gap (bp/yr)", "Correlation")
-    buckets = (("3 to 6 months", 0.25, 0.5), ("6 to 12 months", 0.5, 1.0), ("1 to 2 years", 1.0, 2.0), ("2 to 5 years", 2.0, 5.5))
+    head = (
+        "Days",
+        "Futures carry (bp/yr)",
+        "CIP on our curves (bp/yr)",
+        "Median gap (bp/yr)",
+        "90 % of absolute gap (bp/yr)",
+        "Correlation",
+    )
+    buckets = (
+        ("3 to 6 months", 0.25, 0.5),
+        ("6 to 12 months", 0.5, 1.0),
+        ("1 to 2 years", 1.0, 2.0),
+        ("2 to 5 years", 2.0, 5.5),
+    )
     by_t, by_year, notes = [], [], []
     for pair in FUTURES:
         frame, contracts = futures_gaps(lake, pair)
-        by_t += [line(pair, label, frame[frame["T"].between(lo, hi, inclusive="left")]) for label, lo, hi in buckets if frame["T"].between(lo, hi, inclusive="left").any()]
+        by_t += [
+            line(pair, label, frame[frame["T"].between(lo, hi, inclusive="left")])
+            for label, lo, hi in buckets
+            if frame["T"].between(lo, hi, inclusive="left").any()
+        ]
         far = frame[frame["T"] >= 0.5]
         by_year += [line(pair, str(y), g) for y, g in far.groupby(far.index.year)]
-        notes.append(f"{pair}: {contracts} contracts, {len(frame)} contract-days, {frame.index.min().date()} to {frame.index.max().date()}; from six months out, "
-                     f"median gap {far['gap'].median():+.0f} bp a year, correlation {far['market'].corr(far['cip']):.2f}.")
-    return table(("Pair", "Time to expiry", *head), by_t), table(("Pair", "Year, 6 months and more", *head), by_year), "\n".join(f"- {n}" for n in notes)
+        notes.append(
+            f"{pair}: {contracts} contracts, {len(frame)} contract-days, {frame.index.min().date()} to {frame.index.max().date()}; from six months out, "
+            f"median gap {far['gap'].median():+.0f} bp a year, correlation {far['market'].corr(far['cip']):.2f}."
+        )
+    return (
+        table(("Pair", "Time to expiry", *head), by_t),
+        table(("Pair", "Year, 6 months and more", *head), by_year),
+        "\n".join(f"- {n}" for n in notes),
+    )
 
 
 def monthly_mean(rows: pd.DataFrame) -> pd.Series:
@@ -132,18 +198,52 @@ def monthly_mean(rows: pd.DataFrame) -> pd.Series:
 def new_curves(lake: Lake) -> str:
     """Coverage of the two curves, and the ten-year point against the OECD's monthly long rates through FRED, an independent compilation."""
     rows = []
-    for label, curve, points, series in (("Yen", "JPY.DISC", "JPY.JGB", "IRLTLT01JPM156N"), ("Sterling", "GBP.DISC", "GBP.GLC", "IRLTLT01GBM156N")):
+    for label, curve, points, series in (
+        ("Yen", "JPY.DISC", "JPY.JGB", "IRLTLT01JPM156N"),
+        ("Sterling", "GBP.DISC", "GBP.GLC", "IRLTLT01GBM156N"),
+    ):
         pillars = lake.read("discount_curves", where=f"curve = '{curve}'", columns="obs_date, tenor")
         by_day = pillars.groupby("obs_date")["tenor"]
         first = by_day.apply(lambda t: np.sort(t.to_numpy())[1] if (t < 2 / 365).any() and len(t) > 1 else np.nan)
         overnight = by_day.apply(lambda t: bool((t < 2 / 365).any()))
         ten = lake.read("rate_points", where=f"curve = '{points}' AND tenor = 10", columns="obs_date, rate")
         oecd = parse_fred(curl_get(fred_url(series)), series)
-        both = pd.concat({"ours": monthly_mean(ten), "oecd": oecd.set_index(pd.to_datetime(oecd["obs_date"]))["value"].astype(float)}, axis=1, sort=True).dropna()
+        both = pd.concat(
+            {
+                "ours": monthly_mean(ten),
+                "oecd": oecd.set_index(pd.to_datetime(oecd["obs_date"]))["value"].astype(float),
+            },
+            axis=1,
+            sort=True,
+        ).dropna()
         gap = 1e2 * (both["ours"] - both["oecd"])
-        rows.append((label, f"{pd.Timestamp(pillars['obs_date'].min()).date()} to {pd.Timestamp(pillars['obs_date'].max()).date()}", by_day.ngroups, f"{100 * overnight.mean():.1f} %",
-                     f"{12 * first.median():.0f} months", f"{12 * first.quantile(0.95):.0f} months", len(both), f"{gap.median():+.0f}", f"{gap.abs().max():.0f}"))
-    return table(("Curve", "Period", "Days", "Days with an overnight rate", "Next pillar, median", "95 %", "Months against the OECD", "Median gap at 10 years (bp)", "Largest (bp)"), rows)
+        rows.append(
+            (
+                label,
+                f"{pd.Timestamp(pillars['obs_date'].min()).date()} to {pd.Timestamp(pillars['obs_date'].max()).date()}",
+                by_day.ngroups,
+                f"{100 * overnight.mean():.1f} %",
+                f"{12 * first.median():.0f} months",
+                f"{12 * first.quantile(0.95):.0f} months",
+                len(both),
+                f"{gap.median():+.0f}",
+                f"{gap.abs().max():.0f}",
+            )
+        )
+    return table(
+        (
+            "Curve",
+            "Period",
+            "Days",
+            "Days with an overnight rate",
+            "Next pillar, median",
+            "95 %",
+            "Months against the OECD",
+            "Median gap at 10 years (bp)",
+            "Largest (bp)",
+        ),
+        rows,
+    )
 
 
 def correlation_sources(lake: Lake) -> str:
@@ -154,21 +254,44 @@ def correlation_sources(lake: Lake) -> str:
     for name in ("SPX", "SX5E"):
         a, b = name_pair_series(closes, ecb, name, "EURUSD", 120), name_pair_series(closes, fred, name, "EURUSD", 120)
         both = pd.concat({"a": a, "b": b}, axis=1, sort=True).dropna()
-        rows.append((name, f"{both['a'].median():+.2f}", f"{both['b'].median():+.2f}", f"{(both['a'] - both['b']).abs().median():.2f}",
-                     f"{(both['a'] - both['b']).abs().quantile(0.95):.2f}", f"{both['a'].min():+.2f} to {both['a'].max():+.2f}"))
+        rows.append(
+            (
+                name,
+                f"{both['a'].median():+.2f}",
+                f"{both['b'].median():+.2f}",
+                f"{(both['a'] - both['b']).abs().median():.2f}",
+                f"{(both['a'] - both['b']).abs().quantile(0.95):.2f}",
+                f"{both['a'].min():+.2f} to {both['a'].max():+.2f}",
+            )
+        )
     return table(("Name", "Median, ECB", "Median, H.10", "Median difference", "95 % of difference", "Range, ECB"), rows)
 
 
 def links(lake: Lake) -> tuple[str, str]:
     vols, rows = realised_vol(spot_series(lake, "EURUSD"), 120), []
     for day in DATES:
-        for label, name, payment in (("SX5E paid in USD", "SX5E", "USD"), ("SPX paid in EUR", "SPX", "EUR"), ("SPX paid in JPY", "SPX", "JPY"), ("SPX paid in GBP", "SPX", "GBP")):
+        for label, name, payment in (
+            ("SX5E paid in USD", "SX5E", "USD"),
+            ("SPX paid in EUR", "SPX", "EUR"),
+            ("SPX paid in JPY", "SPX", "JPY"),
+            ("SPX paid in GBP", "SPX", "GBP"),
+        ):
             snap = market_at(lake, name, day, payment=payment)
             q = snap.provenance["quanto"]
             ctx, own = PricingContext.from_snapshot(snap), PricingContext.from_snapshot(market_at(lake, name, day))
             shift = {T: 1e4 * float(np.log(ctx.market.F(T) / own.market.F(T))) for T in (1.0, 2.0, 5.0)}
-            rows.append((day, label, f"{q['rho']:+.2f}", f"{100 * q['vol_fx']:.1f} %", f"{100 * float(own.surface.iv(0.0, 1.0)):.1f} %",
-                         f"{shift[1.0]:+.0f}", f"{shift[2.0]:+.0f}", f"{shift[5.0]:+.0f}"))
+            rows.append(
+                (
+                    day,
+                    label,
+                    f"{q['rho']:+.2f}",
+                    f"{100 * q['vol_fx']:.1f} %",
+                    f"{100 * float(own.surface.iv(0.0, 1.0)):.1f} %",
+                    f"{shift[1.0]:+.0f}",
+                    f"{shift[2.0]:+.0f}",
+                    f"{shift[5.0]:+.0f}",
+                )
+            )
     vol = f"EURUSD realised volatility, 120 days: median {100 * vols.median():.1f} %, range {100 * vols.min():.1f} to {100 * vols.max():.1f} %."
     return table(("Date", "Case", "rho", "FX vol", "ATM 1y", "Forward shift 1y (bp)", "2y (bp)", "5y (bp)"), rows), vol
 
@@ -197,13 +320,31 @@ def lv_error(lake: Lake, day: str, n_pairs: int = 100_000, T: float = 2.0, seed:
     F_own = float(PricingContext.from_snapshot(market_at(lake, "SX5E", day)).market.F(T))
     s_det, s_state, s_own = F * np.exp(x_det), F * np.exp(x_state), F_own * np.exp(x_det)
     rows = []
-    for label, pay in (("Discounted forward", lambda s: s / 100), ("Put 100 %", lambda s: np.maximum(1 - s / 100, 0)),
-                       ("Put 80 %", lambda s: np.maximum(0.8 - s / 100, 0)), ("Digital put 70 %", lambda s: (s < 70.0).astype(float))):
+    for label, pay in (
+        ("Discounted forward", lambda s: s / 100),
+        ("Put 100 %", lambda s: np.maximum(1 - s / 100, 0)),
+        ("Put 80 %", lambda s: np.maximum(0.8 - s / 100, 0)),
+        ("Digital put 70 %", lambda s: (s < 70.0).astype(float)),
+    ):
         a, b = pay(s_state), pay(s_det)
         diff = 0.5 * ((a - b)[:n_pairs] + (a - b)[n_pairs:])
         gap, se = 1e4 * D * diff.mean(), 1e4 * D * diff.std(ddof=1) / np.sqrt(n_pairs)
-        rows.append((label, f"{100 * D * b.mean():.2f}", f"{1e4 * D * (b - pay(s_own)).mean():+.1f}", f"{gap:+.1f}", f"{se:.2f}"))
-    head = ("Payoff, 2 years, % of notional", "With the deterministic drift", "The adjustment itself (bp)", "State-dependent minus deterministic (bp)", "SE (bp)")
+        rows.append(
+            (
+                label,
+                f"{100 * D * b.mean():.2f}",
+                f"{1e4 * D * (b - pay(s_own)).mean():+.1f}",
+                f"{gap:+.1f}",
+                f"{se:.2f}",
+            )
+        )
+    head = (
+        "Payoff, 2 years, % of notional",
+        "With the deterministic drift",
+        "The adjustment itself (bp)",
+        "State-dependent minus deterministic (bp)",
+        "SE (bp)",
+    )
     return f"{day}: rho {rho:+.2f}, FX volatility {100 * vol_fx:.1f} %.\n\n" + table(head, rows)
 
 
@@ -211,11 +352,21 @@ def worst_of_effect(lake: Lake, day: str, n_paths: int) -> tuple[str, str]:
     """A Phoenix on SPX and SX5E: the coupon with the performances mixed as they were, and with the adjustment, on the same draws. Each
     seed gives one difference, and the spread of the differences gives their standard error."""
     d = pd.Timestamp(day).date()
-    sheet = preset("phoenix", **{"general.basket": "worst_of", "general.underlyings": ("SPX", "SX5E"), "general.strike_date": d, "general.calendar": "weekend"})
+    sheet = preset(
+        "phoenix",
+        **{
+            "general.basket": "worst_of",
+            "general.underlyings": ("SPX", "SX5E"),
+            "general.strike_date": d,
+            "general.calendar": "weekend",
+        },
+    )
     adjusted, _, _ = basket_at(lake, ["SPX", "SX5E"], d)
     own = PricingContext.from_snapshot(market_at(lake, "SX5E", d)).market
     t = np.asarray(own.to_dict()["pillars"], dtype=float)
-    mixed_sx5e = Market(own.spot, t, discount_function(lake, "USD", d)(t), own.F(t))  # dollar discounting, the euro forward
+    mixed_sx5e = Market(
+        own.spot, t, discount_function(lake, "USD", d)(t), own.F(t)
+    )  # dollar discounting, the euro forward
     mixed = BasketContext(("SPX", "SX5E"), {**adjusted.markets, "SX5E": mixed_sx5e}, adjusted.vols, adjusted.corr, d)
     in_eur, _, _ = basket_at(lake, ["SPX", "SX5E"], d, payment="EUR")
 
@@ -223,8 +374,11 @@ def worst_of_effect(lake: Lake, day: str, n_paths: int) -> tuple[str, str]:
         runs = [quote(s, ctx, model="lv", control=None, n_paths=n_paths, seed=seed) for seed in SEEDS]
         return np.array([1e4 * q.coupon_rate for q in runs]), float(np.mean([1e4 * q.coupon_rate_se for q in runs]))
 
-    runs = {"USD, no adjustment (the old mix)": coupons(sheet, mixed), "USD, SX5E quanto": coupons(sheet, adjusted),
-            "EUR, SPX quanto": coupons(sheet.replace(**{"general.payment_currency": "EUR"}), in_eur)}
+    runs = {
+        "USD, no adjustment (the old mix)": coupons(sheet, mixed),
+        "USD, SX5E quanto": coupons(sheet, adjusted),
+        "EUR, SPX quanto": coupons(sheet.replace(**{"general.payment_currency": "EUR"}), in_eur),
+    }
     rows = [(label, f"{c.mean():.0f}", f"{se / np.sqrt(len(SEEDS)):.1f}") for label, (c, se) in runs.items()]
     diff = runs["USD, SX5E quanto"][0] - runs["USD, no adjustment (the old mix)"][0]
     note = f"The adjustment alone moves the coupon by {diff.mean():+.1f} bp a year, SE {diff.std(ddof=1) / np.sqrt(len(SEEDS)):.1f}, from {len(SEEDS)} seeds on common draws."
@@ -243,13 +397,17 @@ def main():
     adjust, vol_line = links(lake)
     effect, effect_note = worst_of_effect(lake, day, args.n_paths)
     lv = "\n\n".join(lv_error(lake, d) for d in ("2022-07-01", day))
-    last_forwards = "; ".join(f"{p} {pd.to_datetime(lake.read('fx_forwards', where=f'pair = {sql_str(p)}', columns='obs_date')['obs_date']).max().date()}" for p in FUTURES)
+    last_forwards = "; ".join(
+        f"{p} {pd.to_datetime(lake.read('fx_forwards', where=f'pair = {sql_str(p)}', columns='obs_date')['obs_date']).max().date()}"
+        for p in FUTURES
+    )
     no_curve = open_issues(lake, "check_name = 'no_curve'")
     vol, vol_origin, vol_method = fx_vol_at(lake, "EURUSD", day)
     rho, rho_origin = fx_correlation_at(lake, "SX5E", "EURUSD", day)
     surface = surface_at(lake, "SX5E", day)
     link = quanto_link_at(lake, "SX5E", "USD", day)
-    REPORT.write_text(f"""# FX in the lake and the quanto adjustment
+    REPORT.write_text(
+        f"""# FX in the lake and the quanto adjustment
 
 Written by `scripts/lake_fx_check.py`, {dt.date.today().isoformat()}. Gaps and statistics only: no vendor's levels.
 
@@ -333,7 +491,9 @@ Read the two middle columns together. In absolute terms the term left out is sma
 - A vol bump keeps the adjustment of the base market: the vega misses about {abs(link.rho) * link.vol_fx * 0.01 * 2.0 * 1e4:.1f} bp of 2-year forward per vol point on SX5E in USD, on {day}.
 - The pseudo CvC and PvP of `basket_spreads` stay in each name's own currency, as their docstring says.
 - The Pricer and the Book still build worst-ofs on flat inputs (`Desk._basket_ctx`): a quote says the performances are not adjusted, and an explicit payment currency is refused until they read the lake's market.
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
     print(f"written {REPORT}")
 
 

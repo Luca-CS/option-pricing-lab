@@ -44,11 +44,16 @@ def _tenor(T):
     flat = T.reshape(-1)
     if T.ndim == 2 and T.shape[1] > 1 and np.all(T == T[:, :1]):  # a table: one maturity per row
         psi, dpsi = grid.tenor_tents(T[:, 0], order=1)
-        return (np.broadcast_to(psi[:, :, None], (psi.shape[0], *T.shape)), np.broadcast_to(dpsi[:, :, None], (psi.shape[0], *T.shape)))
+        return (
+            np.broadcast_to(psi[:, :, None], (psi.shape[0], *T.shape)),
+            np.broadcast_to(dpsi[:, :, None], (psi.shape[0], *T.shape)),
+        )
     if flat.size and flat[0] == flat[-1] and np.all(flat == flat[0]):
         psi, dpsi = grid.scalar_tenor_tents(float(flat[0]))
-        return (np.broadcast_to(psi[:, :1].reshape((-1,) + (1,) * T.ndim), (psi.shape[0], *T.shape)),
-                np.broadcast_to(dpsi[:, :1].reshape((-1,) + (1,) * T.ndim), (psi.shape[0], *T.shape)))
+        return (
+            np.broadcast_to(psi[:, :1].reshape((-1,) + (1,) * T.ndim), (psi.shape[0], *T.shape)),
+            np.broadcast_to(dpsi[:, :1].reshape((-1,) + (1,) * T.ndim), (psi.shape[0], *T.shape)),
+        )
     return grid.tenor_tents(T, order=1)
 
 
@@ -87,8 +92,16 @@ def _term(vector, tenor):
 class TentBumpedSurface:
     """A surface moved by absolute and relative tents of the grid (see the module docstring)."""
 
-    def __init__(self, surface, nodes=None, relative_nodes=None, parallel: float = 0.0, relative: float = 0.0, term=None,
-                 skew: float = 0.0):
+    def __init__(
+        self,
+        surface,
+        nodes=None,
+        relative_nodes=None,
+        parallel: float = 0.0,
+        relative: float = 0.0,
+        term=None,
+        skew: float = 0.0,
+    ):
         self.base = surface
         self.skew = float(skew)  # the rotation of structured.surfaces.BumpedSurface, in the same layer
         shape = (len(grid.STRIKES), len(grid.TENORS))
@@ -185,8 +198,9 @@ class _SKEW(BumpedSurface):
         self.vol, self.skew = 0.0, float(skew)
 
 
-def bumped_surface(surface, parallel: float = 0.0, relative: float = 0.0, skew: float = 0.0, nodes=None,
-                   relative_nodes=None, term=None):
+def bumped_surface(
+    surface, parallel: float = 0.0, relative: float = 0.0, skew: float = 0.0, nodes=None, relative_nodes=None, term=None
+):
     """The surface with every move applied in one layer; the base object itself when nothing moves (its cached tables stay
     valid)."""
     if np.isscalar(surface):  # a flat Black-Scholes name: only the parallel moves apply

@@ -5,8 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-KEYWORDS = {"underlying", "param", "event", "pay", "as", "end", "if", "then", "else", "terminate", "and", "or",
-            "not"}
+KEYWORDS = {"underlying", "param", "event", "pay", "as", "end", "if", "then", "else", "terminate", "and", "or", "not"}
 
 
 class ScriptError(ValueError):
@@ -26,7 +25,8 @@ class Token:
     col: int
 
 
-_TOKEN = re.compile(r"""
+_TOKEN = re.compile(
+    r"""
     (?P<SPACE>[ \t\r]+)
   | (?P<COMMENT>\#[^\n]*)
   | (?P<NEWLINE>\n)
@@ -34,7 +34,9 @@ _TOKEN = re.compile(r"""
   | (?P<NUMBER>(\d+\.\d*|\.\d+|\d+)([eE][+-]?\d+)?)
   | (?P<NAME>[A-Za-z_][A-Za-z0-9_]*)
   | (?P<OP><=|>=|==|[-+*/()<>=,])
-""", re.VERBOSE)
+""",
+    re.VERBOSE,
+)
 
 
 def tokenize(text: str) -> list[Token]:

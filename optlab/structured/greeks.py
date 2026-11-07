@@ -61,9 +61,11 @@ class ShiftedSurface:
 
 def _recalibrated_slv(ctx, surface, horizon: float, n_particles: int, seed: int):
     from ..slv import calibrate_leverage
+
     T_max = min(max(horizon, 1 / 12), ctx.t_max)
-    return calibrate_leverage(ctx.heston, surface, ctx.market, T_max, mix=ctx.slv.mix, n_particles=n_particles,
-                              rng=seed)
+    return calibrate_leverage(
+        ctx.heston, surface, ctx.market, T_max, mix=ctx.slv.mix, n_particles=n_particles, rng=seed
+    )
 
 
 class StickyStrikeSurface:
@@ -140,11 +142,27 @@ def _diff(up, down, scale):
     return float(d.mean()), float(d.std(ddof=1) / np.sqrt(len(d)))
 
 
-def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, fmt=None, valuation=None,
-           n_paths: int = 200_000, seed: int = DEFAULT_SEED, batch: int | None = 25_000, smoothing: float = 0.005,
-           h_spot: float = 0.01, h_vol: float = 0.01, T_obs: float | None = None, slv_vega: bool = False,
-           n_particles: int = 200_000, calendar=None, workers: int | None = None, sticky: str = "moneyness"
-           ) -> Greeks:
+def greeks(
+    program,
+    ctx,
+    model: str,
+    method: str = "monte_carlo",
+    params=None,
+    fmt=None,
+    valuation=None,
+    n_paths: int = 200_000,
+    seed: int = DEFAULT_SEED,
+    batch: int | None = 25_000,
+    smoothing: float = 0.005,
+    h_spot: float = 0.01,
+    h_vol: float = 0.01,
+    T_obs: float | None = None,
+    slv_vega: bool = False,
+    n_particles: int = 200_000,
+    calendar=None,
+    workers: int | None = None,
+    sticky: str = "moneyness",
+) -> Greeks:
     """Delta and vega of a program under `model` ('bs', 'lv', 'slv', 'heston') or by replication on the surface
     (method 'replication'), with central differences. Monte Carlo digitals are smoothed (ramp of relative width
     `smoothing`); the bias this adds to the price is measured on the same paths. With `slv_vega`, the SLV
@@ -155,6 +173,7 @@ def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, f
     default: the surface and the leverage move with the forward), "strike" (implied vols, local vol and leverage
     stay at absolute strikes) or "model" (strike for local vol, SLV and replication, moneyness for BS and Heston)."""
     import time
+
     fmt = fmt or Note()
     valuation = valuation or ctx.valuation
     S0 = ctx.market.spot
@@ -162,6 +181,7 @@ def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, f
     horizon = timeline.horizon
     if method == "replication" and T_obs is None:
         from .profile import profile
+
         times = profile(program, timeline).observation_times
         T_obs = times[-1] if times else horizon
     seconds = {}
@@ -197,8 +217,21 @@ def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, f
             m = _recalibrated_slv(ctx, surface, horizon, n_particles, seed) if vol_shift else ctx.model(model, horizon)
             if strike_bump and model == "slv":
                 m = SLVModel(m.params, ShiftedLeverage(m.leverage, spot_factor - 1.0), m.mix)
-        return price_many(program, m, market, [params or {}], fmt, n_paths, seed, batch, smoothing=eps,
-                          valuation=valuation, initial_fixing=S0, calendar=calendar, workers=workers)[0]
+        return price_many(
+            program,
+            m,
+            market,
+            [params or {}],
+            fmt,
+            n_paths,
+            seed,
+            batch,
+            smoothing=eps,
+            valuation=valuation,
+            initial_fixing=S0,
+            calendar=calendar,
+            workers=workers,
+        )[0]
 
     t0 = time.perf_counter()
     eps = 0.0 if method == "replication" else smoothing
@@ -211,8 +244,20 @@ def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, f
     elif convention == "strike" and not homogeneous:  # the bumped models differ: two more simulations
         p = params or {}
         base_exact, base = price_many(
-            program, mc_model(), ctx.market, [p, p], fmt, n_paths, seed, batch, smoothings=[0.0, eps],
-            valuation=valuation, initial_fixing=S0, calendar=calendar, workers=workers)
+            program,
+            mc_model(),
+            ctx.market,
+            [p, p],
+            fmt,
+            n_paths,
+            seed,
+            batch,
+            smoothings=[0.0, eps],
+            valuation=valuation,
+            initial_fixing=S0,
+            calendar=calendar,
+            workers=workers,
+        )
         bias, bias_se = _diff(base, base_exact, 1.0)
         seconds["base"] = time.perf_counter() - t0
         t0 = time.perf_counter()
@@ -220,9 +265,21 @@ def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, f
     else:
         p = params or {}
         base_exact, base, up, down = price_many(
-            program, mc_model(), ctx.market, [p, p, p, p], fmt, n_paths, seed, batch, smoothings=[0.0, eps, eps, eps],
-            spot_factors=[1.0, 1.0, 1 + h_spot, 1 - h_spot], valuation=valuation, initial_fixing=S0,
-            calendar=calendar, workers=workers)
+            program,
+            mc_model(),
+            ctx.market,
+            [p, p, p, p],
+            fmt,
+            n_paths,
+            seed,
+            batch,
+            smoothings=[0.0, eps, eps, eps],
+            spot_factors=[1.0, 1.0, 1 + h_spot, 1 - h_spot],
+            valuation=valuation,
+            initial_fixing=S0,
+            calendar=calendar,
+            workers=workers,
+        )
         bias, bias_se = _diff(base, base_exact, 1.0)
         seconds["base"] = time.perf_counter() - t0
         t0 = time.perf_counter()
@@ -236,7 +293,7 @@ def greeks(program, ctx, model: str, method: str = "monte_carlo", params=None, f
         vega, vega_se = _diff(vu, vd, 0.01 / (2 * h_vol))
     else:
         note = f"no vega under {model.upper()}: a vol bump needs a recalibration of the model" + (
-            " (pass slv_vega=True to recalibrate the leverage)" if model == "slv" else "")
+            " (pass slv_vega=True to recalibrate the leverage)" if model == "slv" else ""
+        )
     seconds["vega"] = time.perf_counter() - t0
-    return Greeks(delta, delta_se, vega, vega_se, eps, bias, bias_se, method, model, seconds, note,
-                  sticky=convention)
+    return Greeks(delta, delta_se, vega, vega_se, eps, bias, bias_se, method, model, seconds, note, sticky=convention)

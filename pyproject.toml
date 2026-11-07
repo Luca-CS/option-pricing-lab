@@ -42,6 +42,7 @@ markers = [
 [tool.ruff]
 line-length = 120
 target-version = "py314"
+extend-exclude = ["*.md"]  # code blocks in docs keep their hand-aligned comments
 
 [tool.ruff.lint]
 # v0's rules (pycodestyle errors, pyflakes) plus import sorting; the wider set of ADR-0014 (C901, S, B, UP) comes with

@@ -9,7 +9,15 @@ from optlab.market import Market
 from optlab.marketdata.derive.correl import CorrelationSkew, spread_payoff
 from optlab.structured import PricingContext, preset, quote
 from optlab.structured.costs import CostInputs
-from optlab.structured.localcorr import LocalCorrelation, StochasticMix, W0, basket_sigma, calibrate, low_matrix, targets
+from optlab.structured.localcorr import (
+    LocalCorrelation,
+    StochasticMix,
+    W0,
+    basket_sigma,
+    calibrate,
+    low_matrix,
+    targets,
+)
 from optlab.structured.multiasset import Basket, BasketContext, simulate_basket
 from optlab.models import BlackScholesModel
 
@@ -24,15 +32,29 @@ def within(got, want, se, n=4.0):
 def flat_basket(mixer=None, rho=RHO, vols=(0.2, 0.3)):
     names = ("AAA", "BBB")
     markets = {n: Market.flat(100.0, 0.03, 0.01) for n in names}
-    return Basket(names, {n: BlackScholesModel(v) for n, v in zip(names, vols)}, markets, np.array([[1.0, rho], [rho, 1.0]]), "same", mixer)
+    return Basket(
+        names,
+        {n: BlackScholesModel(v) for n, v in zip(names, vols)},
+        markets,
+        np.array([[1.0, rho], [rho, 1.0]]),
+        "same",
+        mixer,
+    )
 
 
 @pytest.fixture(scope="module")
 def ctx():
     from optlab.structured.surfaces import BumpedSurface
+
     market = Market.flat(100.0, 0.03, 0.01)
-    return BasketContext(("SPX", "AAA"), {"SPX": SPX.market, "AAA": market}, {"SPX": SPX.surface, "AAA": BumpedSurface(SPX.surface, 0.04)},
-                         np.array([[1.0, RHO], [RHO, 1.0]]), SPX.valuation, {"SPX": SPX})
+    return BasketContext(
+        ("SPX", "AAA"),
+        {"SPX": SPX.market, "AAA": market},
+        {"SPX": SPX.surface, "AAA": BumpedSurface(SPX.surface, 0.04)},
+        np.array([[1.0, RHO], [RHO, 1.0]]),
+        SPX.valuation,
+        {"SPX": SPX},
+    )
 
 
 STEEP = LocalCorrelation(0.2, 0.2, 0.5, 0.3)
@@ -59,6 +81,7 @@ def _with_grid(basket):
     """The same law on a time grid: a local vol model on a flat surface steps where Black-Scholes would jump."""
     from _structured_refs import flat_surface
     from optlab.models import LocalVolModel
+
     models = {n: LocalVolModel(flat_surface(m.vol)) for n, m in basket.models.items()}
     return Basket(basket.names, models, basket.markets, basket.corr, basket.vol_corr, basket.mixer)
 
@@ -122,7 +145,16 @@ def test_the_pseudo_quotes_are_refitted_and_the_correlation_is_higher_below(ctx)
 
 def calibrate_flat(ctx):
     from optlab.structured.localcorr import model_quotes
-    return model_quotes(ctx, ("SPX", "AAA"), LocalCorrelation(basket_sigma(ctx, ("SPX", "AAA"))), targets(ctx, ("SPX", "AAA")), 1.0, 40_000, 2027)[0]
+
+    return model_quotes(
+        ctx,
+        ("SPX", "AAA"),
+        LocalCorrelation(basket_sigma(ctx, ("SPX", "AAA"))),
+        targets(ctx, ("SPX", "AAA")),
+        1.0,
+        40_000,
+        2027,
+    )[0]
 
 
 def test_the_stochastic_alternative_also_fits_and_is_kept_for_comparison(ctx):
@@ -133,13 +165,18 @@ def test_the_stochastic_alternative_also_fits_and_is_kept_for_comparison(ctx):
 
 
 def test_a_worst_of_has_both_provisions_and_says_what_the_skew_rests_on(ctx):
-    s = preset("phoenix", **{"general.basket": "worst_of", "general.underlyings": ["SPX", "AAA"], "general.maturity_months": 12})
+    s = preset(
+        "phoenix",
+        **{"general.basket": "worst_of", "general.underlyings": ["SPX", "AAA"], "general.maturity_months": 12},
+    )
     q = quote(s, ctx, n_paths=20_000, batch=10_000, costs=CostInputs({"corr_skew": 0.02}, mix=0.5))
     d = q.desk
     assert d.final_price == pytest.approx(98.0, abs=1e-9)
     line = d.line("local_corr")
     assert line.kind == "model" and line.origin == "synthetic" and "assumption" in line.note and len(line.fit) == 3
-    assert line.se < q.result.stderr  # on the base's market factor: an independent run would give 1.4 times the error of one price
+    assert (
+        line.se < q.result.stderr
+    )  # on the base's market factor: an independent run would give 1.4 times the error of one price
     bump = d.line("corr_skew")
     assert bump.used == 0.02 and bump.kind == "bump" and bump.se > 0
     assert sum(x.cost for x in d.lines) == pytest.approx(d.final_price - d.base_price, abs=1e-10)
@@ -150,9 +187,24 @@ def test_a_worst_of_has_both_provisions_and_says_what_the_skew_rests_on(ctx):
 
 def test_a_flat_name_has_no_pseudo_quote_so_no_correlation_skew():
     market = Market.flat(100.0, 0.03, 0.01)
-    c = BasketContext(("SPX", "FLAT"), {"SPX": SPX.market, "FLAT": market}, {"SPX": SPX.surface, "FLAT": 0.25}, np.array([[1.0, 0.5], [0.5, 1.0]]), SPX.valuation, {"SPX": SPX})
-    q = quote(preset("phoenix", **{"general.basket": "worst_of", "general.underlyings": ["SPX", "FLAT"], "general.maturity_months": 12}), c, n_paths=4000, batch=4000,
-              costs=CostInputs({"corr_skew": 0.02}, mix=0.5))
+    c = BasketContext(
+        ("SPX", "FLAT"),
+        {"SPX": SPX.market, "FLAT": market},
+        {"SPX": SPX.surface, "FLAT": 0.25},
+        np.array([[1.0, 0.5], [0.5, 1.0]]),
+        SPX.valuation,
+        {"SPX": SPX},
+    )
+    q = quote(
+        preset(
+            "phoenix",
+            **{"general.basket": "worst_of", "general.underlyings": ["SPX", "FLAT"], "general.maturity_months": 12},
+        ),
+        c,
+        n_paths=4000,
+        batch=4000,
+        costs=CostInputs({"corr_skew": 0.02}, mix=0.5),
+    )
     assert {x.key for x in q.desk.lines} == {"slv"}
 
 

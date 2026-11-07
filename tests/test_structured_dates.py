@@ -4,8 +4,15 @@ import datetime as dt
 
 import pytest
 
-from optlab.structured.dates import (add_business_days, add_months, adjust, business_days, is_business_day, schedule,
-                                     year_fraction)
+from optlab.structured.dates import (
+    add_business_days,
+    add_months,
+    adjust,
+    business_days,
+    is_business_day,
+    schedule,
+    year_fraction,
+)
 
 D = dt.date
 
@@ -16,25 +23,31 @@ def test_weekends_are_not_business_days():
     assert not is_business_day("2026-11-01")  # Sunday
 
 
-@pytest.mark.parametrize("d, n, expected", [
-    (D(2026, 10, 27), 5, D(2026, 11, 3)),  # Tuesday + 5 = next Tuesday
-    (D(2026, 10, 30), 1, D(2026, 11, 2)),  # Friday + 1 = Monday
-    (D(2026, 10, 31), 1, D(2026, 11, 2)),  # from a Saturday
-    (D(2026, 11, 2), -1, D(2026, 10, 30)),
-    (D(2026, 10, 27), 0, D(2026, 10, 27)),
-])
+@pytest.mark.parametrize(
+    "d, n, expected",
+    [
+        (D(2026, 10, 27), 5, D(2026, 11, 3)),  # Tuesday + 5 = next Tuesday
+        (D(2026, 10, 30), 1, D(2026, 11, 2)),  # Friday + 1 = Monday
+        (D(2026, 10, 31), 1, D(2026, 11, 2)),  # from a Saturday
+        (D(2026, 11, 2), -1, D(2026, 10, 30)),
+        (D(2026, 10, 27), 0, D(2026, 10, 27)),
+    ],
+)
 def test_add_business_days(d, n, expected):
     assert add_business_days(d, n) == expected
 
 
-@pytest.mark.parametrize("d, n, expected", [
-    (D(2027, 1, 31), 1, D(2027, 2, 28)),
-    (D(2028, 1, 31), 1, D(2028, 2, 29)),  # leap year
-    (D(2026, 10, 31), 4, D(2027, 2, 28)),
-    (D(2026, 10, 27), 24, D(2028, 10, 27)),
-    (D(2026, 12, 15), 1, D(2027, 1, 15)),
-    (D(2027, 3, 31), -1, D(2027, 2, 28)),
-])
+@pytest.mark.parametrize(
+    "d, n, expected",
+    [
+        (D(2027, 1, 31), 1, D(2027, 2, 28)),
+        (D(2028, 1, 31), 1, D(2028, 2, 29)),  # leap year
+        (D(2026, 10, 31), 4, D(2027, 2, 28)),
+        (D(2026, 10, 27), 24, D(2028, 10, 27)),
+        (D(2026, 12, 15), 1, D(2027, 1, 15)),
+        (D(2027, 3, 31), -1, D(2027, 2, 28)),
+    ],
+)
 def test_add_months_clamps_to_month_end(d, n, expected):
     assert add_months(d, n) == expected
 
@@ -91,8 +104,11 @@ def test_schedule_rejects_stubs():
 def test_date_window_uses_every_business_day():
     from optlab.structured.script.parser import parse
     from optlab.structured.script.timeline import Clock, build_timeline
-    p = parse("underlying SPX\nevent 2027-10-27 pay 2027-11-03\n"
-              "  x = lowest(SPX, 2026-10-27, 2027-10-27)\n  pay x as redemption\nend\n")
+
+    p = parse(
+        "underlying SPX\nevent 2027-10-27 pay 2027-11-03\n"
+        "  x = lowest(SPX, 2026-10-27, 2027-10-27)\n  pay x as redemption\nend\n"
+    )
     tl = build_timeline(p, Clock("2026-10-27"))
     (times,) = tl.windows.values()
     assert len(times) == 262 and times[0] == 0.0 and times[-1] == 1.0

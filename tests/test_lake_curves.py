@@ -8,11 +8,25 @@ import pytest
 
 from optlab.blackscholes import black_price
 from optlab.marketdata.derive.bank import ENTITY, BankParams, bank_spreads, build_bank, spread_at, wrapper_spreads
-from optlab.marketdata.derive.carry import (build_carry, cip_forward, dividend_stream, dividend_yield_at, equity_forward,
-                                            parity_carry_rows, parity_forward_discount, realised_yield,
-                                            trailing_dividend_yield)
-from optlab.marketdata.derive.curves import (EUR_CURVE, USD_CURVE, bootstrap_par, build_discount_curves, par_curve_rows,
-                                             zero_curve_rows)
+from optlab.marketdata.derive.carry import (
+    build_carry,
+    cip_forward,
+    dividend_stream,
+    dividend_yield_at,
+    equity_forward,
+    parity_carry_rows,
+    parity_forward_discount,
+    realised_yield,
+    trailing_dividend_yield,
+)
+from optlab.marketdata.derive.curves import (
+    EUR_CURVE,
+    USD_CURVE,
+    bootstrap_par,
+    build_discount_curves,
+    par_curve_rows,
+    zero_curve_rows,
+)
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.universe import instrument
 
@@ -76,10 +90,16 @@ def test_parity_carry_from_a_chain_with_the_curve_given():
     K, calls, puts = synthetic_chain(F, D, T)
     day = dt.date(2022, 7, 1)
     expiry = day + dt.timedelta(days=146)
-    q = pd.concat([pd.DataFrame({"obs_date": day, "expiry": expiry, "strike": K, "cp": "C", "bid": calls - 0.01,
-                                 "ask": calls + 0.01}),
-                   pd.DataFrame({"obs_date": day, "expiry": expiry, "strike": K, "cp": "P", "bid": puts - 0.01,
-                                 "ask": puts + 0.01})])
+    q = pd.concat(
+        [
+            pd.DataFrame(
+                {"obs_date": day, "expiry": expiry, "strike": K, "cp": "C", "bid": calls - 0.01, "ask": calls + 0.01}
+            ),
+            pd.DataFrame(
+                {"obs_date": day, "expiry": expiry, "strike": K, "cp": "P", "bid": puts - 0.01, "ask": puts + 0.01}
+            ),
+        ]
+    )
     rows = parity_carry_rows(q, lambda t: D, S)
     assert rows["carry"].iloc[0] == pytest.approx(np.log(F / S) / T, abs=1e-8)
     assert rows["forward_ratio"].iloc[0] == pytest.approx(F / S, abs=1e-8)
@@ -156,8 +176,10 @@ def test_derived_tables_load_with_their_origin_and_plug_into_the_wrapper(tmp_pat
 def test_build_curves_and_carry_on_the_lake(tmp_path):
     lake = Lake(tmp_path)
     days = pd.bdate_range("2019-01-01", "2020-12-31")
-    points = [pd.DataFrame({"obs_date": days, "rate": r, "curve": "USD.TREASURY", "tenor": t})
-              for t, r in ((0.25, 1.0), (1.0, 1.1), (5.0, 1.5))]
+    points = [
+        pd.DataFrame({"obs_date": days, "rate": r, "curve": "USD.TREASURY", "tenor": t})
+        for t, r in ((0.25, 1.0), (1.0, 1.1), (5.0, 1.5))
+    ]
     points.append(pd.DataFrame({"obs_date": days, "rate": 1.0, "curve": "USD.FF", "tenor": 1 / 365}))
     points.append(pd.DataFrame({"obs_date": days, "rate": 0.5, "curve": "EUR.AAA", "tenor": 1.0}))
     points.append(pd.DataFrame({"obs_date": days, "rate": 0.5, "curve": "EUR.ESTR", "tenor": 1 / 365}))
@@ -167,22 +189,34 @@ def test_build_curves_and_carry_on_the_lake(tmp_path):
     assert sum(r["n_new"] for r in build_discount_curves(lake, "2019-01-01")) == 0
     assert set(lake.read("discount_curves")["origin"]) == {"derived"}
     t = (days - days[0]).days / 365.0
-    prices = [pd.DataFrame({"instrument": n, "obs_date": days, "close": 100 * np.exp(g * t)})
-              for n, g in (("SPX", 0.05), ("SPX.TR", 0.07), ("NDX", 0.05), ("AAPL", 0.0))]
+    prices = [
+        pd.DataFrame({"instrument": n, "obs_date": days, "close": 100 * np.exp(g * t)})
+        for n, g in (("SPX", 0.05), ("SPX.TR", 0.07), ("NDX", 0.05), ("AAPL", 0.0))
+    ]
     lake.ingest("prices_eod", pd.concat(prices), "yahoo", "observed")
-    lake.ingest("corporate_actions", pd.DataFrame({"instrument": "AAPL", "kind": "dividend", "obs_date": ["2020-06-01"],
-                                                   "value": [1.0]}), "yahoo", "observed")
+    lake.ingest(
+        "corporate_actions",
+        pd.DataFrame({"instrument": "AAPL", "kind": "dividend", "obs_date": ["2020-06-01"], "value": [1.0]}),
+        "yahoo",
+        "observed",
+    )
     build_carry(lake, [instrument("SPX"), instrument("NDX"), instrument("AAPL")])
     assert dividend_yield_at(lake, "SPX", dt.date(2020, 6, 1))[0] == pytest.approx(0.02, abs=1e-3)
     assert dividend_yield_at(lake, "SPX", dt.date(2020, 6, 1))[1:] == ("derived", "total_return")
     assert dividend_yield_at(lake, "NDX", dt.date(2020, 6, 1))[1:] == ("synthetic", "assumed_yield")
-    assert dividend_yield_at(lake, "AAPL", dt.date(2020, 7, 1)) == (pytest.approx(0.01), "derived", "trailing_dividends")
+    assert dividend_yield_at(lake, "AAPL", dt.date(2020, 7, 1)) == (
+        pytest.approx(0.01),
+        "derived",
+        "trailing_dividends",
+    )
     assert dividend_yield_at(lake, "AAPL", dt.date(2020, 5, 1))[0] == 0.0  # the June dividend is not known in May
 
 
 def _lake_with_prices(tmp_path, name, days, levels):
     lake = Lake(tmp_path)
-    lake.ingest("prices_eod", pd.DataFrame({"instrument": name, "obs_date": days, "close": levels}), "yahoo", "observed")
+    lake.ingest(
+        "prices_eod", pd.DataFrame({"instrument": name, "obs_date": days, "close": levels}), "yahoo", "observed"
+    )
     return lake
 
 
@@ -195,7 +229,9 @@ def test_a_shares_stream_repeats_last_years_ex_dates_as_shares_of_todays_spot(tm
     day = dt.date(2021, 4, 1)
     stream = dividend_stream(lake, "AAPL", day, 50.0)
     assert stream.method == "dividend_dates" and stream.origin == "derived"
-    assert stream.annual_yield == pytest.approx(4 * 0.01)  # 0.5 on a spot of 50, from the four dividends known at that date
+    assert stream.annual_yield == pytest.approx(
+        4 * 0.01
+    )  # 0.5 on a spot of 50, from the four dividends known at that date
     first = np.sort(stream.times)[0]
     assert first == pytest.approx(((pd.Timestamp("2020-06-15") - pd.Timestamp(day)).days + 365.25) / 365)
     assert stream.factor(first - 1e-6)[0] == 1.0 and stream.factor(first)[0] == pytest.approx(0.99)
@@ -209,8 +245,17 @@ def test_a_fall_of_the_spot_raises_the_yield_at_once(tmp_path):
     level = pd.Series(100.0, index=days)
     tr = 100.0 * np.exp(0.02 * (days - days[0]).days / 365)
     lake = Lake(tmp_path)
-    lake.ingest("prices_eod", pd.concat([pd.DataFrame({"instrument": "SPX", "obs_date": days, "close": level.to_numpy()}),
-                                         pd.DataFrame({"instrument": "SPX.TR", "obs_date": days, "close": tr})]), "yahoo", "observed")
+    lake.ingest(
+        "prices_eod",
+        pd.concat(
+            [
+                pd.DataFrame({"instrument": "SPX", "obs_date": days, "close": level.to_numpy()}),
+                pd.DataFrame({"instrument": "SPX.TR", "obs_date": days, "close": tr}),
+            ]
+        ),
+        "yahoo",
+        "observed",
+    )
     day = days[-1].date()
     assert dividend_stream(lake, "SPX", day, 100.0).annual_yield == pytest.approx(0.02, rel=0.02)
     assert dividend_stream(lake, "SPX", day, 70.0).annual_yield == pytest.approx(0.02 / 0.7, rel=0.02)
@@ -232,6 +277,7 @@ def test_a_forward_has_its_steps_and_no_dividend_before_the_ex_date(tmp_path):
     from optlab.marketdata.derive.carry import DividendStream
     from optlab.marketdata.pit import ONE_DAY, curve_pillars
     from optlab.market import Market
+
     stream = DividendStream(np.array([0.4, 1.4]), np.array([0.02, 0.02]), "derived", "dividend_dates")
     pillars = curve_pillars(stream)
     assert {0.4 - ONE_DAY, 0.4, 1.4} <= set(pillars.tolist())
@@ -246,6 +292,7 @@ def test_every_dividend_of_a_stream_is_a_step_on_its_own_date():
     from optlab.marketdata.derive.carry import DividendStream
     from optlab.marketdata.pit import ONE_DAY, curve_pillars
     from optlab.market import Market
+
     times = np.array([0.1075342465, 0.3595890410958904, 0.6143835616438356, 0.8554794520547945, 1.3603])
     stream = DividendStream(times, np.full(5, 0.01), "derived", "dividend_dates")
     pillars = curve_pillars(stream)

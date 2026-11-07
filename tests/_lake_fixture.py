@@ -29,23 +29,59 @@ def price_paths(days, seed=11, names=NAMES):
 
 def fill_observed(lake: Lake, days, paths=None) -> dict:
     paths = paths or price_paths(days)
-    rows = [pd.DataFrame({"instrument": n, "obs_date": days, "close": p, "open": p, "high": p, "low": p, "adj_close": p})
-            for n, p in paths.items()]
+    rows = [
+        pd.DataFrame({"instrument": n, "obs_date": days, "close": p, "open": p, "high": p, "low": p, "adj_close": p})
+        for n, p in paths.items()
+    ]
     t = (days - days[0]).days / 365.0
     spx = paths["SPX"]
     rows.append(pd.DataFrame({"instrument": "SPX.TR", "obs_date": days, "close": spx * np.exp(0.015 * t)}))
     lake.ingest("prices_eod", pd.concat(rows), "yahoo", "observed")
     wiggle = 1 + 0.1 * np.sin(np.arange(len(days)) / 20)
-    vols = {"VIX9D": 15.0, "VIX": 17.0, "VIX3M": 19.0, "VIX6M": 20.0, "VIX1Y": 21.0, "VXN": 22.0, "VXAPL": 28.0, "SKEW": 130.0}
-    lake.ingest("vol_indices", pd.concat([pd.DataFrame({"index_name": n, "obs_date": days, "close": lvl * wiggle})
-                                          for n, lvl in vols.items()]), "cboe", "observed")
-    rates = [(c, ten, r) for c, ten, r in (("USD.TREASURY", 0.25, 2.0), ("USD.TREASURY", 1.0, 2.2), ("USD.TREASURY", 5.0, 2.5),
-                                           ("USD.TREASURY", 10.0, 2.8), ("USD.FF", 1 / 365, 1.9), ("USD.CMT10", 10.0, 2.0),
-                                           ("USD.BAA", 20.0, 4.0))]
-    lake.ingest("rate_points", pd.concat([pd.DataFrame({"curve": c, "tenor": ten, "obs_date": days, "rate": r * wiggle})
-                                          for c, ten, r in rates]), "fred", "observed")
-    lake.ingest("correl_implied", pd.DataFrame({"index_name": "COR3M", "tenor": 0.25, "obs_date": days, "correlation": 0.5}),
-                "cboe", "observed")
+    vols = {
+        "VIX9D": 15.0,
+        "VIX": 17.0,
+        "VIX3M": 19.0,
+        "VIX6M": 20.0,
+        "VIX1Y": 21.0,
+        "VXN": 22.0,
+        "VXAPL": 28.0,
+        "SKEW": 130.0,
+    }
+    lake.ingest(
+        "vol_indices",
+        pd.concat(
+            [pd.DataFrame({"index_name": n, "obs_date": days, "close": lvl * wiggle}) for n, lvl in vols.items()]
+        ),
+        "cboe",
+        "observed",
+    )
+    rates = [
+        (c, ten, r)
+        for c, ten, r in (
+            ("USD.TREASURY", 0.25, 2.0),
+            ("USD.TREASURY", 1.0, 2.2),
+            ("USD.TREASURY", 5.0, 2.5),
+            ("USD.TREASURY", 10.0, 2.8),
+            ("USD.FF", 1 / 365, 1.9),
+            ("USD.CMT10", 10.0, 2.0),
+            ("USD.BAA", 20.0, 4.0),
+        )
+    ]
+    lake.ingest(
+        "rate_points",
+        pd.concat(
+            [pd.DataFrame({"curve": c, "tenor": ten, "obs_date": days, "rate": r * wiggle}) for c, ten, r in rates]
+        ),
+        "fred",
+        "observed",
+    )
+    lake.ingest(
+        "correl_implied",
+        pd.DataFrame({"index_name": "COR3M", "tenor": 0.25, "obs_date": days, "correlation": 0.5}),
+        "cboe",
+        "observed",
+    )
     return paths
 
 

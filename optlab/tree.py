@@ -27,5 +27,4 @@ def _crr(S, K, T, r, q, vol, n, phi, american):
 def binomial_price(S, K, T, r, q, vol, cp="call", american=True, n=2000):
     """CRR price, averaged over n and n + 1 steps to damp the odd-even oscillation."""
     phi = 1.0 if str(cp).lower().startswith("c") else -1.0
-    return 0.5 * (_crr(S, K, T, r, q, vol, n, phi, american)
-                  + _crr(S, K, T, r, q, vol, n + 1, phi, american))
+    return 0.5 * (_crr(S, K, T, r, q, vol, n, phi, american) + _crr(S, K, T, r, q, vol, n + 1, phi, american))

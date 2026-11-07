@@ -19,12 +19,20 @@ def combine(r0: StructuredResult, r1: StructuredResult, x: float) -> StructuredR
     else:
         d = None
         value = MCResult(r0.value.price + x * (r1.value.price - r0.value.price), 0.0, r0.n_paths)
-    flows = {k: r0.expected_flows.get(k, 0.0) + x * (r1.expected_flows.get(k, 0.0) - r0.expected_flows.get(k, 0.0))
-             for k in set(r0.expected_flows) | set(r1.expected_flows)}
+    flows = {
+        k: r0.expected_flows.get(k, 0.0) + x * (r1.expected_flows.get(k, 0.0) - r0.expected_flows.get(k, 0.0))
+        for k in set(r0.expected_flows) | set(r1.expected_flows)
+    }
     N = r0.notional
-    return replace(r0, value=value, price=100 * value.price / N, stderr=100 * value.stderr / N,
-                   expected_flows=dict(sorted(flows.items())), pairs=d,
-                   numerical_error=max(r0.numerical_error, r1.numerical_error))
+    return replace(
+        r0,
+        value=value,
+        price=100 * value.price / N,
+        stderr=100 * value.stderr / N,
+        expected_flows=dict(sorted(flows.items())),
+        pairs=d,
+        numerical_error=max(r0.numerical_error, r1.numerical_error),
+    )
 
 
 def solve_affine(r0: StructuredResult, r1: StructuredResult, target: float) -> tuple[float, float]:

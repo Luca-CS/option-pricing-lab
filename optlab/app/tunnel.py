@@ -32,10 +32,22 @@ def open_tunnel(port: int, relay: str = "localhost.run", timeout: float = 30.0):
     ssh = shutil.which("ssh")
     if ssh is None:
         raise RuntimeError("ssh is not on PATH (Windows: Settings > System > Optional features > OpenSSH Client)")
-    cmd = [ssh, "-T", "-o", "StrictHostKeyChecking=accept-new", "-o", "ServerAliveInterval=30",
-           "-o", "ExitOnForwardFailure=yes", "-R", f"80:127.0.0.1:{port}", f"nokey@{relay}"]
-    proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            text=True, bufsize=1)
+    cmd = [
+        ssh,
+        "-T",
+        "-o",
+        "StrictHostKeyChecking=accept-new",
+        "-o",
+        "ServerAliveInterval=30",
+        "-o",
+        "ExitOnForwardFailure=yes",
+        "-R",
+        f"80:127.0.0.1:{port}",
+        f"nokey@{relay}",
+    ]
+    proc = subprocess.Popen(
+        cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
+    )
     found: dict = {}
     seen: list = []
     ready = threading.Event()

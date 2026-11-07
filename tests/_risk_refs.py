@@ -14,8 +14,14 @@ VALUATION = dt.date(2026, 10, 27)
 
 def flat_ctx(vol=VOL, valuation=VALUATION, market=FLAT) -> PricingContext:
     spx = PricingContext.from_calibration()
-    return PricingContext(market, flat_surface(vol, (0.05, 0.1, 0.25, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0)), spx.heston, spx.slv,
-                          valuation, "SPX")
+    return PricingContext(
+        market,
+        flat_surface(vol, (0.05, 0.1, 0.25, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0)),
+        spx.heston,
+        spx.slv,
+        valuation,
+        "SPX",
+    )
 
 
 def day(valuation, days: int) -> str:
@@ -50,7 +56,9 @@ def engine_name() -> str:
 
 
 def within(value, ref, se, k=4.0, floor=0.0):
-    assert abs(value - ref) <= k * se + floor, f"{value} vs {ref}: {abs(value - ref) / max(se, 1e-300):.1f} SE (se {se})"
+    assert abs(value - ref) <= k * se + floor, (
+        f"{value} vs {ref}: {abs(value - ref) / max(se, 1e-300):.1f} SE (se {se})"
+    )
 
 
 __all__ = ["FLAT", "Q", "R", "S0", "VOL", "np"]
@@ -59,6 +67,7 @@ __all__ = ["FLAT", "Q", "R", "S0", "VOL", "np"]
 def bs_cross(S, K, T, r, q, vol):
     """Analytic vanna (d2V / dS dvol) and volga (d2V / dvol2) of a call or a put (same for both)."""
     from scipy.stats import norm
+
     sd = vol * np.sqrt(T)
     d1 = (np.log(S / K) + (r - q + 0.5 * vol**2) * T) / sd
     d2 = d1 - sd
@@ -71,6 +80,7 @@ def worst_put_shifted(K, T, vols, rho, r, qs, a=(1.0, 1.0)):
     from scipy.integrate import quad
     from scipy.stats import norm
     from optlab.blackscholes import black_price
+
     (v1, v2), (q1, q2) = vols, qs
     m1, s1 = (r - q1 - 0.5 * v1**2) * T + np.log(a[0]), v1 * np.sqrt(T)
     m2, s2 = (r - q2 - 0.5 * v2**2) * T + np.log(a[1]), v2 * np.sqrt(T)

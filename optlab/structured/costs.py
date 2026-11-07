@@ -38,8 +38,15 @@ from .surfaces import BumpedSurface, surface_arbitrage
 
 # Fractions, like every level of the library: vol 0.005 is half a vol point, corr 0.01 is one correlation point, dividend 0.1 is 10 % of
 # the dividends, repo 0.001 is 10 bp.
-BUMPS = {"vol": "Volatility, parallel", "skew": "Volatility skew (90-110 % at 1 year)", "corr": "Correlation", "dividend": "Dividends",
-         "repo": "Repo", "spot": "Spot, delta bid-ask", "corr_skew": "Correlation skew"}
+BUMPS = {
+    "vol": "Volatility, parallel",
+    "skew": "Volatility skew (90-110 % at 1 year)",
+    "corr": "Correlation",
+    "dividend": "Dividends",
+    "repo": "Repo",
+    "spot": "Spot, delta bid-ask",
+    "corr_skew": "Correlation skew",
+}
 FORWARD_BUMPS = ("dividend", "repo", "spot")
 SIMULATION_BUMPS = ("vol", "skew", "corr")
 SIDES = {"sell": 1.0, "buy": -1.0}
@@ -58,6 +65,7 @@ def forward_bumped(market: Market, dividend: float = 0.0, repo: float = 0.0, spo
 class CostInputs:
     """What to add to a base price. `bumps` holds the values used, signed; `defaults` the ones they replace, for the summary.
     `candidates` holds two values for a parameter whose groups disagree in sign: the one against the desk on this product is kept, measured."""
+
     bumps: dict = field(default_factory=dict)
     side: str = "sell"
     defaults: dict = field(default_factory=dict)
@@ -134,12 +142,38 @@ class DeskPrice:
         return next(x for x in self.lines if x.key == key)
 
     def to_dict(self) -> dict:
-        return {"side": self.side, "base_price": self.base_price, "base_se": self.base_se, "final_price": self.final_price, "final_se": self.final_se,
-                "coupon_base": self.coupon_base, "coupon_final": self.coupon_final, "seconds": self.seconds, "passes": self.passes,
-                "digital_passes": self.digital_passes,
-                "lines": [{"key": x.key, "label": x.label, "kind": x.kind, "cost": x.cost, "se": x.se, "coupon_bp": x.coupon_bp, "used": x.used,
-                           "default": x.default, "overridden": x.overridden, "note": x.note, "in_price": x.in_price, "gap": x.gap, "detail": x.detail, "origin": x.origin, "fit": x.fit}
-                          for x in self.lines]}
+        return {
+            "side": self.side,
+            "base_price": self.base_price,
+            "base_se": self.base_se,
+            "final_price": self.final_price,
+            "final_se": self.final_se,
+            "coupon_base": self.coupon_base,
+            "coupon_final": self.coupon_final,
+            "seconds": self.seconds,
+            "passes": self.passes,
+            "digital_passes": self.digital_passes,
+            "lines": [
+                {
+                    "key": x.key,
+                    "label": x.label,
+                    "kind": x.kind,
+                    "cost": x.cost,
+                    "se": x.se,
+                    "coupon_bp": x.coupon_bp,
+                    "used": x.used,
+                    "default": x.default,
+                    "overridden": x.overridden,
+                    "note": x.note,
+                    "in_price": x.in_price,
+                    "gap": x.gap,
+                    "detail": x.detail,
+                    "origin": x.origin,
+                    "fit": x.fit,
+                }
+                for x in self.lines
+            ],
+        }
 
     def table(self) -> str:
         rows = [f"{'base':<38} {self.base_price:10.4f} +/- {self.base_se:.4f} %"]
@@ -181,7 +215,7 @@ class _Lines:
         self.program = product.program
         self.clock = Clock(product.valuation, product.calendar)
         self.timeline = build_timeline(self.program, self.clock)
-        self.T_obs = (profile.observation_times[-1] if profile.observation_times else self.timeline.horizon)
+        self.T_obs = profile.observation_times[-1] if profile.observation_times else self.timeline.horizon
         self.horizon = max(product.horizon, 1 / 365)
         self.names = self.program.underlying_names
         self.basket = isinstance(ctx, BasketContext)
@@ -198,6 +232,7 @@ class _Lines:
         surface = BumpedSurface(ctx.surface, bumps.get("vol", 0.0), bumps.get("skew", 0.0))
         if self.fast:
             from .fastmodels import TabulatedLocalVol
+
             return TabulatedLocalVol(surface)
         return LocalVolModel(surface)
 
@@ -207,7 +242,10 @@ class _Lines:
             return 1.0
         times = self.timeline.sim_times
         if self.basket:
-            return {n: forward_bumped(self.ctx.markets[n], **forward).F(times) / self.ctx.markets[n].F(times) for n in self.names}
+            return {
+                n: forward_bumped(self.ctx.markets[n], **forward).F(times) / self.ctx.markets[n].F(times)
+                for n in self.names
+            }
         return forward_bumped(self.ctx.market, **forward).F(times) / self.ctx.market.F(times)
 
     def _simulation(self, bumps: dict, forwards: list) -> list[_Run]:
@@ -215,22 +253,70 @@ class _Lines:
         if d.method == "replication":
             name = self.names[0]
             history = history_times(self.fixings, name, self.clock) or None
-            surface = BumpedSurface(self.ctx.surface, bumps.get("vol", 0.0), bumps.get("skew", 0.0)) if bumps else self.ctx.surface
-            return [_Run([replication_result(self.program, self.timeline, surface, forward_bumped(self.ctx.market, **f) if f else self.ctx.market,
-                                             self.T_obs, self.fmt, p, initial_fixing=self.initial, history=history) for p in self.sets])
-                    for f in forwards]
+            surface = (
+                BumpedSurface(self.ctx.surface, bumps.get("vol", 0.0), bumps.get("skew", 0.0))
+                if bumps
+                else self.ctx.surface
+            )
+            return [
+                _Run(
+                    [
+                        replication_result(
+                            self.program,
+                            self.timeline,
+                            surface,
+                            forward_bumped(self.ctx.market, **f) if f else self.ctx.market,
+                            self.T_obs,
+                            self.fmt,
+                            p,
+                            initial_fixing=self.initial,
+                            history=history,
+                        )
+                        for p in self.sets
+                    ]
+                )
+                for f in forwards
+            ]
         factors = [self._factor(f) for f in forwards]
         expanded = [(p, f) for f in factors for p in self.sets]
-        out = price_many(self.program, self._model(bumps), self.ctx.market, [p for p, _ in expanded], self.fmt, d.n_paths, d.seed, d.batch,
-                         valuation=self.product.valuation, fixings=self.fixings, calendar=self.product.calendar, workers=self.workers,
-                         spot_factors=[f for _, f in expanded], initial_fixing=self.initial)
+        out = price_many(
+            self.program,
+            self._model(bumps),
+            self.ctx.market,
+            [p for p, _ in expanded],
+            self.fmt,
+            d.n_paths,
+            d.seed,
+            d.batch,
+            valuation=self.product.valuation,
+            fixings=self.fixings,
+            calendar=self.product.calendar,
+            workers=self.workers,
+            spot_factors=[f for _, f in expanded],
+            initial_fixing=self.initial,
+        )
         n = len(self.sets)
-        return [_Run(out[i * n:(i + 1) * n]) for i in range(len(forwards))]
+        return [_Run(out[i * n : (i + 1) * n]) for i in range(len(forwards))]
 
     def _run_basket(self, model) -> _Run:
         d = self.decision
-        return _Run(price_many(self.program, model, self.ctx.market, self.sets, self.fmt, d.n_paths, d.seed, d.batch, valuation=self.product.valuation,
-                               fixings=self.fixings, calendar=self.product.calendar, workers=self.workers, initial_fixing=self.initial))
+        return _Run(
+            price_many(
+                self.program,
+                model,
+                self.ctx.market,
+                self.sets,
+                self.fmt,
+                d.n_paths,
+                d.seed,
+                d.batch,
+                valuation=self.product.valuation,
+                fixings=self.fixings,
+                calendar=self.product.calendar,
+                workers=self.workers,
+                initial_fixing=self.initial,
+            )
+        )
 
     def local_corr_run(self, slope: float = 0.0) -> _Run:
         """Local vol per name with the local correlation of these names, its slope moved by `slope`."""
@@ -250,10 +336,26 @@ class _Lines:
             model = replace(self.ctx.slv_model(self.horizon, mix), spot_driven=True)
             if self.fast:
                 from .fastmodels import fast_slv
+
                 model = fast_slv(model)
         d = self.decision
-        return _Run(price_many(self.program, model, self.ctx.market, self.sets, self.fmt, d.n_paths, d.seed, d.batch, valuation=self.product.valuation,
-                               fixings=self.fixings, calendar=self.product.calendar, workers=self.workers, initial_fixing=self.initial))
+        return _Run(
+            price_many(
+                self.program,
+                model,
+                self.ctx.market,
+                self.sets,
+                self.fmt,
+                d.n_paths,
+                d.seed,
+                d.batch,
+                valuation=self.product.valuation,
+                fixings=self.fixings,
+                calendar=self.product.calendar,
+                workers=self.workers,
+                initial_fixing=self.initial,
+            )
+        )
 
     def mix_used(self, mix: float | None) -> float:
         if mix is not None:
@@ -269,14 +371,45 @@ class _Lines:
         if d.method == "replication":
             name = self.names[0]
             history = history_times(self.fixings, name, self.clock) or None
-            return [_Run([replication_result(self.program, self.timeline, self.ctx.surface, self.ctx.market, self.T_obs, self.fmt, p, initial_fixing=self.initial,
-                                             history=history, ramps=r) for p in sets]) for r in requests]
+            return [
+                _Run(
+                    [
+                        replication_result(
+                            self.program,
+                            self.timeline,
+                            self.ctx.surface,
+                            self.ctx.market,
+                            self.T_obs,
+                            self.fmt,
+                            p,
+                            initial_fixing=self.initial,
+                            history=history,
+                            ramps=r,
+                        )
+                        for p in sets
+                    ]
+                )
+                for r in requests
+            ]
         expanded = [(p, r) for r in requests for p in sets]
-        out = price_many(self.program, self._model({}), self.ctx.market, [p for p, _ in expanded], self.fmt, d.n_paths, d.seed, d.batch,
-                         valuation=self.product.valuation, fixings=self.fixings, calendar=self.product.calendar, workers=self.workers,
-                         initial_fixing=self.initial, ramps=[r for _, r in expanded])
+        out = price_many(
+            self.program,
+            self._model({}),
+            self.ctx.market,
+            [p for p, _ in expanded],
+            self.fmt,
+            d.n_paths,
+            d.seed,
+            d.batch,
+            valuation=self.product.valuation,
+            fixings=self.fixings,
+            calendar=self.product.calendar,
+            workers=self.workers,
+            initial_fixing=self.initial,
+            ramps=[r for _, r in expanded],
+        )
         n = len(sets)
-        return [_Run(out[i * n:(i + 1) * n]) for i in range(len(requests))]
+        return [_Run(out[i * n : (i + 1) * n]) for i in range(len(requests))]
 
     def run(self, requests: dict) -> dict:
         """{key: run} for {key: bumps}, one simulation per distinct set of simulation bumps."""
@@ -328,6 +461,7 @@ class _DigitalRun:
 
     def found(self, x: float | None) -> list:
         from .digitals import find_digitals
+
         return find_digitals(self.lines.product, {self.param: x} if x is not None and self.param else None)
 
     def _ramp(self, d, side):
@@ -382,8 +516,20 @@ def _settled(inputs: CostInputs, lines: _Lines, base_requests: dict, target, set
     return values, {"base": base, **runs}
 
 
-def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target: float | None, coupon_param: str | None, coupon_scale: float,
-               fixings=None, workers=None, fast=False) -> tuple[DeskPrice, _Run, float | None, float | None]:
+def desk_price(
+    product,
+    ctx,
+    fmt,
+    decision,
+    profile,
+    inputs: CostInputs,
+    target: float | None,
+    coupon_param: str | None,
+    coupon_scale: float,
+    fixings=None,
+    workers=None,
+    fast=False,
+) -> tuple[DeskPrice, _Run, float | None, float | None]:
     """The lines of one product. With a `target`, the coupon is solved so that the client price is the target. Returns (the desk price,
     the base run, the solved coupon parameter, its standard error)."""
     t0 = time.perf_counter()
@@ -395,8 +541,12 @@ def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target:
     single = runs
     everything = lines.run({"all": values})["all"] if len(values) > 1 else None
     moved = everything if everything is not None else next(iter(single.values()), None)
-    no_smile = lines.basket and all(np.isscalar(ctx.vols[n]) for n in lines.names)  # flat names: every model is the same Black-Scholes
-    any_flat = lines.basket and any(np.isscalar(ctx.vols[n]) for n in lines.names)  # no pseudo-quote of a name without a surface
+    no_smile = lines.basket and all(
+        np.isscalar(ctx.vols[n]) for n in lines.names
+    )  # flat names: every model is the same Black-Scholes
+    any_flat = lines.basket and any(
+        np.isscalar(ctx.vols[n]) for n in lines.names
+    )  # no pseudo-quote of a name without a surface
     wanted = () if no_smile else tuple(m for m in decision.provisions if not (m == "local_corr" and any_flat))
     models = {name: lines.model_run(name, inputs.mix) for name in wanted}
     skew_up = None
@@ -457,8 +607,18 @@ def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target:
         mix = lines.mix_used(inputs.mix) if slv else None
         note = "" if on else "the gap is in the desk's favour: no provision"
         label = f"Model: SLV (mix {mix:g})" if slv else "Model: correlation skew (local correlation)"
-        c = line(name, label, "model", pairs, gap if on else 0.0, note=note, gap=inputs.sign * gap, used=mix, default=inputs.defaults.get("slv_mix") if slv else None,
-                 overridden=inputs.overridden_mix if slv else False)
+        c = line(
+            name,
+            label,
+            "model",
+            pairs,
+            gap if on else 0.0,
+            note=note,
+            gap=inputs.sign * gap,
+            used=mix,
+            default=inputs.defaults.get("slv_mix") if slv else None,
+            overridden=inputs.overridden_mix if slv else False,
+        )
         if name == "local_corr":
             c.origin = lines.ctx.local_correlation(lines.names)["origin"]
             c.note = (note + " · " if note else "") + lines.ctx.local_correlation(lines.names)["note"]
@@ -469,8 +629,19 @@ def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target:
         pairs = None if base_pairs is None else _pct_pairs(r) - _pct_pairs(rm)
         d = float(pairs.mean()) if pairs is not None else r.price - rm.price
         final_extra = final_extra + pairs
-        out.append(line("corr_skew", BUMPS["corr_skew"], "bump", pairs, d, used=inputs.corr_skew, default=inputs.defaults.get("corr_skew"),
-                        overridden=inputs.defaults.get("corr_skew") not in (None, inputs.corr_skew), note="the slope of the local correlation, on its own paths"))
+        out.append(
+            line(
+                "corr_skew",
+                BUMPS["corr_skew"],
+                "bump",
+                pairs,
+                d,
+                used=inputs.corr_skew,
+                default=inputs.defaults.get("corr_skew"),
+                overridden=inputs.defaults.get("corr_skew") not in (None, inputs.corr_skew),
+                note="the slope of the local correlation, on its own paths",
+            )
+        )
     for key, label in BUMPS.items():
         if key not in single:
             continue
@@ -484,8 +655,19 @@ def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target:
         if key in inputs.candidates:
             a, b = inputs.candidates[key]
             note = f"the groups disagree ({a:+.4f}, {b:+.4f}): the one against the desk on this product"
-        out.append(line(key, label, "bump", pairs, d, used=used, default=default,
-                        overridden=default is not None and key not in inputs.candidates and default != used, note=note))
+        out.append(
+            line(
+                key,
+                label,
+                "bump",
+                pairs,
+                d,
+                used=used,
+                default=default,
+                overridden=default is not None and key not in inputs.candidates and default != used,
+                note=note,
+            )
+        )
     final_pairs = base_pairs
     digital_effect = 0.0
     digital_pairs = None if base_pairs is None else np.zeros_like(base_pairs)
@@ -502,15 +684,37 @@ def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target:
             pairs = None if base_pairs is None else _pct_pairs(rk) - base_pairs
             d = float(pairs.mean()) if pairs is not None else rk.price - at_base.price
             total_kinds += d
-            detail = [{"date": g.date, "level": g.level, "jump": g.jump, "width": g.width(inputs.min_spread, inputs.delta_max),
-                       "side": digital_run.sides[digital_run._key(g)], "alone": digital_run.alone[digital_run._key(g)], "shift": g.kind == "daily"} for g in ds]
+            detail = [
+                {
+                    "date": g.date,
+                    "level": g.level,
+                    "jump": g.jump,
+                    "width": g.width(inputs.min_spread, inputs.delta_max),
+                    "side": digital_run.sides[digital_run._key(g)],
+                    "alone": digital_run.alone[digital_run._key(g)],
+                    "shift": g.kind == "daily",
+                }
+                for g in ds
+            ]
             widths_seen = sorted({round(c["width"], 6) for c in detail})
             what = "moved by" if kind == "daily" else "width"
-            note = f"{len(ds)} date{'s' if len(ds) > 1 else ''}, {what} " + (f"{100 * widths_seen[0]:.2f} pt" if len(widths_seen) == 1 else f"{100 * widths_seen[0]:.2f} to {100 * widths_seen[-1]:.2f} pt")
+            note = f"{len(ds)} date{'s' if len(ds) > 1 else ''}, {what} " + (
+                f"{100 * widths_seen[0]:.2f} pt"
+                if len(widths_seen) == 1
+                else f"{100 * widths_seen[0]:.2f} to {100 * widths_seen[-1]:.2f} pt"
+            )
             out.append(line(kind, KINDS[kind], "digital", pairs, d, note=note, detail=detail))
         if len(kinds) > 1:
             singles = None if base_pairs is None else sum(_pct_pairs(run.at(x)) - base_pairs for run in runs)
-            out.append(line("digital_interaction", "Interaction of the digitals", "interaction", None if base_pairs is None else digital_pairs - singles, digital_effect - total_kinds))
+            out.append(
+                line(
+                    "digital_interaction",
+                    "Interaction of the digitals",
+                    "interaction",
+                    None if base_pairs is None else digital_pairs - singles,
+                    digital_effect - total_kinds,
+                )
+            )
     if moved is not None:
         r = moved.at(x)
         final_pairs = _pct_pairs(r)
@@ -518,22 +722,45 @@ def desk_price(product, ctx, fmt, decision, profile, inputs: CostInputs, target:
             pairs = None if base_pairs is None else final_pairs - base_pairs
             d = (float(pairs.mean()) if pairs is not None else r.price - at_base.price) - total_single
             singles = None if pairs is None else sum(_pct_pairs(single[k].at(x)) - base_pairs for k in single)
-            out.append(line("interaction", "Interaction of the bumps", "interaction", None if pairs is None else pairs - singles, d))
+            out.append(
+                line(
+                    "interaction",
+                    "Interaction of the bumps",
+                    "interaction",
+                    None if pairs is None else pairs - singles,
+                    d,
+                )
+            )
     final_price = at_base.price + effect(x) + provided(x) + digital_effect
     final_pairs = None if final_pairs is None else final_pairs + final_extra + digital_pairs
     final_se = _se(final_pairs)
-    warnings = _arbitrage_warnings(ctx, values, lines.horizon, lines.names) if "vol" in values or "skew" in values else []
+    warnings = (
+        _arbitrage_warnings(ctx, values, lines.horizon, lines.names) if "vol" in values or "skew" in values else []
+    )
     rate_se = None
     if solving:
         on = in_force(x)
         slope_x = (base.price(1.0) + effect(1.0) + sum(r.price(1.0) - base.price(1.0) for r in on.values())) - (
-            base.price(0.0) + effect(0.0) + sum(r.price(0.0) - base.price(0.0) for r in on.values()))
+            base.price(0.0) + effect(0.0) + sum(r.price(0.0) - base.price(0.0) for r in on.values())
+        )
         if digital_all is not None:
             slope_x += (digital_all.price(1.0) - base.price(1.0)) - (digital_all.price(0.0) - base.price(0.0))
         rate_se = final_se / abs(slope_x)
-    desk = DeskPrice(inputs.side, at_base.price, at_base.stderr, final_price, final_se, out,
-                     (target - base.price(0.0)) / (base.price(1.0) - base.price(0.0)) / coupon_scale if solving else None,
-                     x / coupon_scale if solving else None, time.perf_counter() - t0, warnings, passes, {k: r.at(x) for k, r in models.items()}, digital_passes)
+    desk = DeskPrice(
+        inputs.side,
+        at_base.price,
+        at_base.stderr,
+        final_price,
+        final_se,
+        out,
+        (target - base.price(0.0)) / (base.price(1.0) - base.price(0.0)) / coupon_scale if solving else None,
+        x / coupon_scale if solving else None,
+        time.perf_counter() - t0,
+        warnings,
+        passes,
+        {k: r.at(x) for k, r in models.items()},
+        digital_passes,
+    )
     return desk, base, x, rate_se
 
 
@@ -549,7 +776,11 @@ def _arbitrage_warnings(ctx, values: dict, horizon: float, names) -> list:
         bumped = BumpedSurface(surface, values.get("vol", 0.0), values.get("skew", 0.0))
         got, base = surface_arbitrage(bumped, horizon), surface_arbitrage(surface, horizon)
         if not got["butterfly_free"] and got["min_g"] < min(base["min_g"], 0.0) - 1e-6:
-            out.append(f"{name}: the bumped surface has butterfly arbitrage (density g down to {got['min_g']:.3f}): reduce the vol or skew bump")
+            out.append(
+                f"{name}: the bumped surface has butterfly arbitrage (density g down to {got['min_g']:.3f}): reduce the vol or skew bump"
+            )
         if not got["calendar_free"] and got["min_wT"] < min(base["min_wT"], 0.0) - 1e-6:
-            out.append(f"{name}: the bumped surface has calendar arbitrage (dw/dT down to {got['min_wT']:.4f}): reduce the vol or skew bump")
+            out.append(
+                f"{name}: the bumped surface has calendar arbitrage (dw/dT down to {got['min_wT']:.4f}): reduce the vol or skew bump"
+            )
     return out

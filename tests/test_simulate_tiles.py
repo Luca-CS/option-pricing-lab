@@ -7,8 +7,12 @@ from optlab import BlackScholesModel, HestonModel, HestonParams, Market, simulat
 from optlab.structured import PricingContext
 
 SPX = PricingContext.from_calibration()
-MODELS = {"bs": BlackScholesModel(0.2), "heston": HestonModel(HestonParams(0.04, 1.5, 0.04, 0.5, -0.7)),
-          "lv": SPX.model("lv"), "slv": SPX.model("slv")}
+MODELS = {
+    "bs": BlackScholesModel(0.2),
+    "heston": HestonModel(HestonParams(0.04, 1.5, 0.04, 0.5, -0.7)),
+    "lv": SPX.model("lv"),
+    "slv": SPX.model("slv"),
+}
 
 
 @pytest.mark.parametrize("name", list(MODELS))

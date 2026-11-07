@@ -23,22 +23,38 @@ class Rule:
 
 
 RULES = {
-    "european": Rule("replication", "surface", "lv",
-                     "only the final fixing matters: any smile-consistent model gives the same price, so it is "
-                     "replicated on the implied surface (no Monte Carlo noise); local vol Monte Carlo as a check"),
-    "path_dependent": Rule("monte_carlo", "lv", "slv",
-                           "the payoff depends on the path: the base is local vol, which fits the smile; the smile dynamics "
-                           "are not in it, so the gap to SLV is a provision when it goes against the desk",
-                           ("slv",)),
-    "callable": Rule("monte_carlo", "lv", "slv",
-                     "the base is local vol, which fits the smile; autocalls depend on the forward skew between observation dates, "
-                     "which local vol flattens, so the gap to SLV is a provision when it goes against the desk",
-                     ("slv",)),
-    "basket": Rule("monte_carlo", "lv", "slv",
-                   "worst-of: each name on its own smile (Dupire local vol), correlated spots, with a measured correlation; the smile dynamics "
-                   "of each name are not in it, nor is a correlation that rises when the basket falls: the gaps to SLV, with a leverage per name, and to "
-                   "local correlation are provisions when they go against the desk",
-                   ("slv", "local_corr")),
+    "european": Rule(
+        "replication",
+        "surface",
+        "lv",
+        "only the final fixing matters: any smile-consistent model gives the same price, so it is "
+        "replicated on the implied surface (no Monte Carlo noise); local vol Monte Carlo as a check",
+    ),
+    "path_dependent": Rule(
+        "monte_carlo",
+        "lv",
+        "slv",
+        "the payoff depends on the path: the base is local vol, which fits the smile; the smile dynamics "
+        "are not in it, so the gap to SLV is a provision when it goes against the desk",
+        ("slv",),
+    ),
+    "callable": Rule(
+        "monte_carlo",
+        "lv",
+        "slv",
+        "the base is local vol, which fits the smile; autocalls depend on the forward skew between observation dates, "
+        "which local vol flattens, so the gap to SLV is a provision when it goes against the desk",
+        ("slv",),
+    ),
+    "basket": Rule(
+        "monte_carlo",
+        "lv",
+        "slv",
+        "worst-of: each name on its own smile (Dupire local vol), correlated spots, with a measured correlation; the smile dynamics "
+        "of each name are not in it, nor is a correlation that rises when the basket falls: the gaps to SLV, with a leverage per name, and to "
+        "local correlation are provisions when they go against the desk",
+        ("slv", "local_corr"),
+    ),
 }
 MODELS = ("bs", "heston", "lv", "slv")
 PROVISIONS = {"slv": "SLV", "local_corr": "local correlation"}
@@ -60,16 +76,27 @@ class PricingDecision:
 
     @property
     def label(self) -> str:
-        what = "replication on the SVI surface" if self.method == "replication" else \
-            f"{self.model.upper()} Monte Carlo ({self.n_paths:,} paths)"
+        what = (
+            "replication on the SVI surface"
+            if self.method == "replication"
+            else f"{self.model.upper()} Monte Carlo ({self.n_paths:,} paths)"
+        )
         ctrl = f", control {self.control.upper()}" if self.control else ""
         kept = f", provisions {' and '.join(PROVISIONS.get(x, x) for x in self.provisions)}" if self.provisions else ""
         return f"{self.product_class} -> {what}{ctrl}{kept}" + (" [forced]" if self.forced else "")
 
 
-def decide(prof: ProductProfile, t_max: float, model: str | None = None, control: str | None = "default",
-           n_paths: int = 200_000, batch: int = 25_000, seed: int = DEFAULT_SEED, rules: dict | None = None,
-           has_surfaces: bool = True) -> PricingDecision:
+def decide(
+    prof: ProductProfile,
+    t_max: float,
+    model: str | None = None,
+    control: str | None = "default",
+    n_paths: int = 200_000,
+    batch: int = 25_000,
+    seed: int = DEFAULT_SEED,
+    rules: dict | None = None,
+    has_surfaces: bool = True,
+) -> PricingDecision:
     """Policy decision for a profile. `model` forces a Monte Carlo model ('bs', 'heston', 'lv', 'slv') or
     'surface' (replication, European class only); `control=None` skips the control price."""
     rules = rules or RULES
@@ -80,8 +107,10 @@ def decide(prof: ProductProfile, t_max: float, model: str | None = None, control
     if basket and not has_surfaces:
         warnings.append("some names have a flat volatility (no smile): they are simulated with Black-Scholes")
     if prof.horizon > t_max + 1e-9:
-        warnings.append(f"horizon {prof.horizon:.2f}y beyond the last calibrated maturity {t_max:.2f}y: the surface "
-                        "is extrapolated and the SLV leverage is not calibrated there")
+        warnings.append(
+            f"horizon {prof.horizon:.2f}y beyond the last calibrated maturity {t_max:.2f}y: the surface "
+            "is extrapolated and the SLV leverage is not calibrated there"
+        )
     forced = model is not None
     if model is None:
         method, model = rule.method, rule.model
@@ -96,5 +125,16 @@ def decide(prof: ProductProfile, t_max: float, model: str | None = None, control
     if control == "default":
         control = rule.control if rule.control != model else None
     reason = rule.reason if not forced else f"forced by the user (policy default: {rule.model}, {rule.method})"
-    return PricingDecision(prof.product_class, method, model, control, reason, n_paths, batch, seed, forced, warnings,
-                           () if forced else rule.provisions)
+    return PricingDecision(
+        prof.product_class,
+        method,
+        model,
+        control,
+        reason,
+        n_paths,
+        batch,
+        seed,
+        forced,
+        warnings,
+        () if forced else rule.provisions,
+    )
