@@ -55,6 +55,14 @@ within 4 standard errors. The refactor moves every file: something must prove th
   the CI blocks on the four groups that hold and runs `calibration_simulated` and `structured_extra` with the same
   rule without blocking, their gaps printed. The guard of these two groups is the bit-for-bit check on this machine at
   every step.
+- **The native engine's goldens (A3)**, recorded on the `ctypes` bridge before the binding changed: `native_cpu` and
+  `native_gpu`, versioned (synthetic inputs, the simulated market), run with `--local` or by name since they need the
+  engine. They hold paths of the four models and of a basket with a local correlation, the fixed products of the CUDA
+  study, the SLV leverage and a Phoenix quoted on the engine. The CPU engine is bit for bit from run to run. The GPU is
+  not, in two places, both reductions by `atomicAdd` whose order of blocks changes: the fixed products' partial sums
+  (prices identical over six runs, SE within 8.6e-16 relative) and the leverage's histograms (within 1.3e-9). So
+  `native_gpu` is bit for bit except `fixed` within 1e-12 and `leverage` within 1e-8 (`WITHIN` in `golden.py`); its
+  paths and the quote priced on them stay bit for bit, and so does `presets_spx_gpu`.
 - **CI under 5 minutes**, measured: `pytest -m "not slow and not gpu and not lake"` with xdist on a synthetic
   mini-lake generated deterministically by the tests (no binary fixture), plus the CI golden groups.
 - **The full suite and the GPU on the machine**: `optlab check full` (the real lake, about 30 minutes) and `optlab check
