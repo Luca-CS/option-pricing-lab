@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 from _risk_refs import book, flat_ctx, forward_contract, vanilla
+
 from optlab.risk import RiskGroup
 from optlab.risk import var as V
 from optlab.risk.greeks import GreekOptions, compute
@@ -77,14 +78,14 @@ def test_full_reval_of_a_vanilla_stays_close_to_delta_gamma_vega(lake):
 
 
 def test_processes_get_the_engine_of_the_parent():
-    """native.set_default lives in the parent process (the desk sets it): the workers are told the engine explicitly."""
-    from optlab import native
+    """engines.set_default lives in the parent process (the desk sets it): the workers are told the engine explicitly."""
+    from optlab.core import engines
 
-    native.set_default("gpu")
+    engines.set_default("gpu")
     try:
         st = V.worker_settings(V.RiskSettings(), 5)
         assert st.engine == "gpu" and st.eval_threads == 1
         assert V.worker_settings(V.RiskSettings(), 1).engine is None
         assert V.worker_settings(V.RiskSettings(engine="cpu", eval_threads=2), 5).engine == "cpu"
     finally:
-        native.set_default(None)
+        engines.set_default(None)

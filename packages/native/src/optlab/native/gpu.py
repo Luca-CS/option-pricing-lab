@@ -22,7 +22,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+
 from optlab.core.config import REPO_ROOT
+from optlab.core.engines import EngineError  # noqa: F401 (gpu.EngineError, as before)
 from optlab.core.market import Market
 from optlab.core.models import BlackScholesModel, HestonModel, Model
 from optlab.core.products import MCResult, asian_mc, barrier_mc, european_mc
@@ -74,10 +76,6 @@ class EngineResult(MCResult):
 
     backend: str = "numpy"
     compute_ms: float = math.nan
-
-
-class EngineError(RuntimeError):
-    pass
 
 
 _lib = None

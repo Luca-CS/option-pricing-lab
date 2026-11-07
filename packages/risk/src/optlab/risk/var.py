@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
+
 from optlab.risk import grid
 from optlab.risk.curves import CurveMove
 from optlab.risk.engine import RiskSettings, run_group_safe
@@ -158,14 +159,14 @@ def _chunk(job):
 
 
 def worker_settings(settings: RiskSettings, workers: int) -> RiskSettings:
-    """Settings for revaluations spread over processes: a spawned process does not inherit `native.set_default`, so the
+    """Settings for revaluations spread over processes: a spawned process does not inherit `engines.set_default`, so the
     engine is named; the processes share the cores, so each evaluates on one thread."""
     if workers <= 1:
         return settings
     if settings.engine is None:
-        from optlab import native
+        from optlab.core import engines
 
-        settings = dataclasses.replace(settings, engine=native.default_engine())
+        settings = dataclasses.replace(settings, engine=engines.default_engine())
     if settings.eval_threads is None:
         settings = dataclasses.replace(settings, eval_threads=1)
     return settings

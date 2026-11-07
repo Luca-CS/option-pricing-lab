@@ -4,7 +4,9 @@ Skipped without the library (cuda/, cmake), the GPU checks without a CUDA device
 
 import numpy as np
 import pytest
+
 from optlab import native
+from optlab.core import engines
 from optlab.core.blackscholes import black_price
 from optlab.core.heston import heston_price
 from optlab.core.market import Market
@@ -187,12 +189,12 @@ def test_local_correlation_keeps_each_marginal_and_moves_the_worst_of():
 @needs_engine
 def test_what_the_engine_does_not_cover_goes_to_numpy_or_fails_when_asked_by_name():
     b = basket(StochasticMix())
-    assert native.choose("auto", b) == ("numpy", "StochasticMix is not in the path engine (local correlation only)")
+    assert engines.choose("auto", b) == ("numpy", "StochasticMix is not in the path engine (local correlation only)")
     with pytest.raises(RuntimeError, match="StochasticMix"):
-        native.choose("cpu", b)
-    assert native.choose("numpy", b) == ("numpy", None)
+        engines.choose("cpu", b)
+    assert engines.choose("numpy", b) == ("numpy", None)
     with pytest.raises(ValueError, match="engine"):
-        native.choose("cuda", b)
+        engines.choose("cuda", b)
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
@@ -242,3 +244,9 @@ def test_daily_windows_reduced_in_the_engine_give_the_same_numbers(name):
     assert (
         red.timings["windows"] == 1 and red.timings["columns"] < full.timings["columns"] / 10
     )  # two columns, not one a day
+
+
+def test_the_engine_is_found_by_its_entry_point_not_by_an_import():
+    """optlab-native registers this module in `optlab.engines`; the core reaches it there by name (ADR-0004)."""
+    assert engines.compiled() is native
+    assert native.MAX_WINDOWS == 2 and callable(native.plan) and callable(native.run)

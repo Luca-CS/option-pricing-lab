@@ -15,7 +15,9 @@ import time
 from pathlib import Path
 
 import numpy as np
+
 from optlab import native
+from optlab.core import engines
 from optlab.core.config import DEFAULT_SEED, paths
 from optlab.core.instruments import _BY_ID
 from optlab.core.log import get_logger
@@ -88,10 +90,10 @@ class Desk:
         lake=None,
         engine: str | None = None,
     ):
-        """`engine`: where Monte Carlo paths come from (numpy, cpu, gpu, auto; see optlab.native), for every job of this
+        """`engine`: where Monte Carlo paths come from (numpy, cpu, gpu, auto; see optlab.core.engines), for every job of this
         process. None keeps the library's default."""
         if engine is not None:
-            native.set_default(engine)
+            engines.set_default(engine)
         self.repo = Repository(store)
         self.lake = Lake(lake)
         self.names = NameMarkets(self.lake)

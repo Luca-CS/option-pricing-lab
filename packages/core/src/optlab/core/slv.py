@@ -13,6 +13,7 @@ Particles are binned on a fine grid first, so a step costs O(N + bins * grid) in
 from __future__ import annotations
 
 import numpy as np
+
 from optlab.core.heston import HestonParams
 from optlab.core.market import Market
 from optlab.core.models import Leverage, SLVModel, time_grid
@@ -74,13 +75,15 @@ def calibrate_leverage(
 
     `regression="local_linear"` (with `positive_part=True`, the regression of max(v, 0)) estimates E[v | x] with
     less bias than the default local constant; the default keeps the published leverage unchanged.
-    `engine` (else the default of `optlab.native`): cpu, gpu or auto run the same method on the compiled engine
+    `engine` (else the default of `optlab.core.engines`): cpu, gpu or auto run the same method on the compiled engine
     (auto falls back here without it), numpy keeps this implementation. A Generator as `rng` stays on NumPy."""
-    from optlab import native
+    from optlab.core import engines
 
-    choice = (engine or native.default_engine()).lower()
-    if choice != "numpy" and not isinstance(rng, np.random.Generator) and (choice != "auto" or native.available()):
-        return native.calibrate_leverage(
+    choice = (engine or engines.default_engine()).lower()
+    compiled = engines.compiled()
+    ready = compiled is not None and compiled.available()
+    if choice != "numpy" and not isinstance(rng, np.random.Generator) and (choice != "auto" or ready):
+        return engines.require().calibrate_leverage(
             params,
             surface,
             market,

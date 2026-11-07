@@ -4,6 +4,7 @@ reproduces the surface it was fitted to."""
 from __future__ import annotations
 
 import numpy as np
+
 from optlab.core.blackscholes import implied_vol
 from optlab.core.market import Market
 from optlab.core.models import Model, simulate
@@ -16,16 +17,16 @@ def mc_smile(
 
     Uses out-of-the-money options (puts below the forward, calls above) and S_T as a control
     variate (its mean F_T is known), which removes most of the noise shared across strikes.
-    `engine` (else the default of `optlab.native`) can simulate on the compiled engine; a Generator `rng` stays on NumPy.
+    `engine` (else the default of `optlab.core.engines`) can simulate on the compiled engine; a Generator `rng` stays on NumPy.
     Returns (iv, iv_stderr).
     """
-    from optlab import native
+    from optlab.core import engines
 
     strikes = np.asarray(strikes, dtype=float)
     F, D = float(market.F(T)), float(market.D(T))
-    backend, _ = native.choose(engine, model) if not isinstance(rng, np.random.Generator) else ("numpy", None)
+    backend, _ = engines.choose(engine, model) if not isinstance(rng, np.random.Generator) else ("numpy", None)
     if backend != "numpy" and n_paths % 2 == 0:
-        S = native.simulate(
+        S = engines.require().simulate(
             model,
             market,
             [T],

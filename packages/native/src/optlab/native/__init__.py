@@ -9,8 +9,9 @@ Philox, a function of (seed, pair, step), so a price depends on (seed, number of
 threads or the device. The CPU and the GPU use the same normals; their prices agree within a fraction of a standard
 error (cuda/tests/test_paths.cpp, tests/test_native.py).
 
-`backend`: "cpu", "gpu" or "auto" (the GPU when there is one). `choose()` decides between the engine and NumPy for
-the batch engine of `structured.engine`.
+`backend`: "cpu", "gpu" or "auto" (the GPU when there is one). This module is the `Engine` of `optlab.core.engines`,
+registered through the entry point group `optlab.engines`: the core and the products reach it by name there
+(`engines.choose`), never by importing it.
 """
 
 from __future__ import annotations
@@ -21,10 +22,11 @@ from collections import OrderedDict
 from dataclasses import asdict, dataclass
 
 import numpy as np
+
+from optlab.core.engines import EngineError, default_engine, seed64
 from optlab.core.models import BlackScholesModel, HestonModel, Leverage, LocalVolModel, Model, SLVModel, time_grid
 from optlab.native import gpu as _gpu
 
-ENGINES = ("numpy", "cpu", "gpu", "auto")
 _KIND = {"const": 0, "table": 1, "heston": 2, "slv": 3}
 N_X = 801  # points per table row
 MAX_NAMES = 8
@@ -292,15 +294,6 @@ def unsupported(model) -> str | None:
     return None
 
 
-def seed64(seed) -> int:
-    """A 64-bit key from an int, a SeedSequence or None (fresh entropy)."""
-    if isinstance(seed, np.random.SeedSequence):
-        return int(seed.generate_state(1, np.uint64)[0])
-    if seed is None:
-        return int(np.random.SeedSequence().generate_state(1, np.uint64)[0])
-    return int(seed) & (2**64 - 1)
-
-
 @dataclass
 class Plan:
     """Everything of a simulation but the pairs: built once, run on any range of pairs."""
@@ -405,7 +398,7 @@ def run(
     computed while simulating. timing: {"kernel_ms", "total_ms", "backend"}."""
     lib = _lib()
     if lib is None:
-        raise _gpu.EngineError(
+        raise EngineError(
             f"{_gpu._LIB_NAME} with the path engine not found: build cuda/ (README) or set OPTLAB_CUDA_LIB"
         )
     if backend == "auto":
@@ -441,7 +434,7 @@ def run(
     rq.n_cols, rq.n_keep, rq.col_of, rq.n_windows = n_cols, len(keep), _ptr(col_of), len(windows)
     rq.win_lo, rq.win_hi = (_ptr(win_lo), _ptr(win_hi)) if len(windows) else (None, None)
     if lib.optlab_paths(ctypes.byref(rq), 1 if backend == "gpu" else 0, threads) != 0:
-        raise _gpu.EngineError(lib.optlab_last_error().decode())
+        raise EngineError(lib.optlab_last_error().decode())
     m = len(keep)
     spots = [out[a, :m].T for a in range(k)]  # (rows, kept) views, Fortran order: one column per date, contiguous
     extremes = [[(out[a, m + 2 * w], out[a, m + 2 * w + 1]) for w in range(len(windows))] for a in range(k)]
@@ -496,7 +489,7 @@ def calibrate_leverage(
 
     lib = _lib()
     if lib is None:
-        raise _gpu.EngineError("the compiled engine is not built")
+        raise EngineError("the compiled engine is not built")
     if backend == "auto":
         backend = "gpu" if gpu_available() else "cpu"
     if regression not in ("nadaraya_watson", "local_linear"):
@@ -519,19 +512,8 @@ def calibrate_leverage(
     rq.local_linear, rq.positive_part, rq.n_lv = int(regression == "local_linear"), int(positive_part), N_X
     rq.x_grids, rq.values = xg.ctypes.data, vals.ctypes.data
     if lib.optlab_leverage(ctypes.byref(rq), 1 if backend == "gpu" else 0, threads) != 0:
-        raise _gpu.EngineError(lib.optlab_last_error().decode())
+        raise EngineError(lib.optlab_last_error().decode())
     return SLVModel(params, Leverage(t0, xg, vals), mix)
-
-
-_DEFAULT: str | None = None
-
-
-def set_default(engine: str | None):
-    """The engine of every simulation that does not name one (None: back to $OPTLAB_ENGINE or numpy)."""
-    global _DEFAULT
-    if engine is not None and engine.lower() not in ENGINES:
-        raise ValueError(f"engine must be one of {', '.join(ENGINES)}, not {engine!r}")
-    _DEFAULT = engine.lower() if engine else None
 
 
 def summary() -> dict:
@@ -547,33 +529,3 @@ def summary() -> dict:
         if lib is None or default_engine() == "numpy"
         else ("gpu" if default_engine() in ("gpu", "auto") and gpu_available() else "cpu"),
     }
-
-
-def default_engine() -> str:
-    """set_default's, else $OPTLAB_ENGINE, else numpy: the library's reference numbers stay those of NumPy unless
-    asked."""
-    if _DEFAULT:
-        return _DEFAULT
-    e = os.environ.get("OPTLAB_ENGINE", "numpy").lower()
-    return e if e in ENGINES else "numpy"
-
-
-def choose(engine: str | None, model) -> tuple[str, str | None]:
-    """(backend, reason): "numpy", "cpu" or "gpu" for this request; the reason says why NumPy when it falls back."""
-    engine = (engine or default_engine()).lower()
-    if engine not in ENGINES:
-        raise ValueError(f"engine must be one of {', '.join(ENGINES)}, not {engine!r}")
-    if engine == "numpy":
-        return "numpy", None
-    why = unsupported(model)
-    if why is None and not available():
-        why = "the compiled engine is not built"
-    if why is None and engine == "gpu" and not gpu_available():
-        why = "no CUDA device"
-    if why is not None:
-        if engine == "auto":
-            return "numpy", why
-        raise _gpu.EngineError(why)
-    if engine == "auto":
-        return ("gpu" if gpu_available() else "cpu"), None
-    return engine, None

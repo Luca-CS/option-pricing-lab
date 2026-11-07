@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
 def main():
-    from optlab import native
+    from optlab.core import engines
     from optlab.core.config import paths
     from optlab.marketdata.lake import Lake
     from optlab.risk import RiskSettings
@@ -44,7 +44,7 @@ def main():
     ap.add_argument("--no-greeks", action="store_true")
     ap.add_argument("--market", help="snapshot of the desk store for var and ladder (default: the one in use)")
     args = ap.parse_args()
-    native.set_default(args.engine)
+    engines.set_default(args.engine)
     n_paths, batch = PRECISION[args.precision]
     settings = RiskSettings(n_paths=n_paths, batch=batch, engine=args.engine)
     store_path = Path(args.store)

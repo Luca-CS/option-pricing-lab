@@ -339,10 +339,10 @@ def _quote_numbers(q) -> dict:
 
 
 def presets_simulated() -> dict:
-    from optlab import native
+    from optlab.core import engines
     from optlab.structured import PRESETS, preset, quote
 
-    native.set_default("numpy")
+    engines.set_default("numpy")
     ctx = _simulated_context()
     return {name: _quote_numbers(quote(preset(name), ctx, n_paths=20_000, batch=10_000)) for name in PRESETS}
 
@@ -370,11 +370,11 @@ def _desk_numbers(q) -> dict:
 
 def structured_extra() -> dict:
     """Forced models, the desk's cost lines on the starting table, Greeks, and a two-position book."""
-    from optlab import native
+    from optlab.core import engines
     from optlab.structured import Book, Position, preset, quote
     from optlab.structured.defaults import resolve
 
-    native.set_default("numpy")
+    engines.set_default("numpy")
     ctx = _simulated_context()
     out: dict = {"forced": {}, "costs": {}, "greeks": {}}
     for model in ("bs", "heston", "slv"):
@@ -468,24 +468,24 @@ def _spx_context():
 
 
 def presets_spx_numpy() -> dict:
-    from optlab import native
+    from optlab.core import engines
     from optlab.structured import PRESETS, preset, quote
 
-    native.set_default("numpy")
+    engines.set_default("numpy")
     ctx = _spx_context()
     return {name: _quote_numbers(quote(preset(name), ctx, n_paths=20_000, batch=10_000)) for name in PRESETS}
 
 
 def presets_spx_gpu() -> dict:
-    from optlab import native
+    from optlab.core import engines
     from optlab.structured import PRESETS, preset, quote
 
-    native.set_default("gpu")
+    engines.set_default("gpu")
     try:
         ctx = _spx_context()
         return {name: _quote_numbers(quote(preset(name), ctx, n_paths=100_000, batch=25_000)) for name in PRESETS}
     finally:
-        native.set_default("numpy")
+        engines.set_default("numpy")
 
 
 def _lake():
@@ -550,11 +550,11 @@ def _trades_pnl():
 
 
 def pnl_cascade() -> dict:
-    from optlab import native
+    from optlab.core import engines
     from optlab.risk import RiskSettings
     from optlab.risk import pnl as P
 
-    native.set_default("numpy")
+    engines.set_default("numpy")
     settings = RiskSettings(n_paths=20_000, batch=10_000, engine="numpy")
     lake = _lake()
     t20, t26 = _trades_pnl()
@@ -583,10 +583,10 @@ class _ShowcaseCopy:
     def __exit__(self, *exc):
         import gc
 
-        from optlab import native
+        from optlab.core import engines
 
         self.desk.jobs.shutdown()
-        native.set_default("numpy")
+        engines.set_default("numpy")
         del self.desk
         gc.collect()
         shutil.rmtree(self.dir, ignore_errors=True)

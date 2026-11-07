@@ -7,8 +7,8 @@ carry their own seeds (`default_rng(seed)` for one batch, `SeedSequence(seed).sp
 of processes returns the same batches as the sequential loop, and the summaries are added in the same order: the
 results are identical bit for bit whatever the number of workers.
 
-With `engine="cpu"`, `"gpu"` or `"auto"` (or $OPTLAB_ENGINE, or `native.set_default`), the paths come from the compiled
-engine (`optlab.native`) instead of NumPy: one process, every CPU thread or the GPU, and the next batch is simulated
+With `engine="cpu"`, `"gpu"` or `"auto"` (or $OPTLAB_ENGINE, or `optlab.core.engines.set_default`), the paths come from the compiled
+engine (`optlab.native`, reached by name through `optlab.core.engines`) instead of NumPy: one process, every CPU thread or the GPU, and the next batch is simulated
 while the current one is evaluated. Its draws depend on (seed, pair) only, so the batches are sized by memory and the
 prices depend on (seed, n_paths) alone. A model the engine does not cover goes to NumPy, and the timings say so.
 
@@ -26,7 +26,8 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 import numpy as np
-from optlab import native
+
+from optlab.core import engines
 from optlab.core.models import simulate
 from optlab.structured.cashflows import pair_averages
 from optlab.structured.multiasset import Basket, BasketScenario, simulate_basket
@@ -186,12 +187,12 @@ def evaluation_threads(backend: str) -> int:
     """Threads evaluating batches at once. On the GPU the NumPy evaluation is the bottleneck, and NumPy releases the
     GIL inside its array operations: one thread per physical core (half the hardware threads), at most 8. On the CPU
     backend the engine already uses every core: one."""
-    return max(1, min(8, native.cpu_threads() // 2)) if backend == "gpu" else 1
+    return max(1, min(8, engines.require().cpu_threads() // 2)) if backend == "gpu" else 1
 
 
 def reduction(times, evaluations) -> tuple:
     """(kept observation indices, windows as (first, last) indices, their keys) when the scripts read the daily dates
-    of at most native.MAX_WINDOWS windows only through their lowest and highest spots (the only way the language
+    of at most the engine's MAX_WINDOWS windows only through their lowest and highest spots (the only way the language
     reads a window): the engine then returns the event dates and two columns per window instead of one per day.
     (None, (), ()) when there is nothing to gain or a window is not a contiguous run of simulated dates."""
     from optlab.structured.scenario import window_key
@@ -213,7 +214,7 @@ def reduction(times, evaluations) -> tuple:
             if None in j or j != list(range(j[0], j[0] + len(j))):
                 return None, (), ()
             found[window_key(future)] = (j[0], j[-1])
-    if not found or len(found) > native.MAX_WINDOWS:
+    if not found or len(found) > engines.require().MAX_WINDOWS:
         return None, (), ()
     needed = set()
     for ev in evaluations:
@@ -229,8 +230,9 @@ def _run_native(backend, model, market, name, times, n_paths, seed, spot0, histo
     from optlab.structured.multiasset import Basket
 
     t_start = time.perf_counter()
-    plan = native.plan(model, market, times, sim_kwargs.get("dt_max", 1 / 252), sim_kwargs.get("dt_min", 1 / 2000))
-    key = native.seed64(seed)
+    eng = engines.require()
+    plan = eng.plan(model, market, times, sim_kwargs.get("dt_max", 1 / 252), sim_kwargs.get("dt_min", 1 / 2000))
+    key = engines.seed64(seed)
     threads = int(sim_kwargs.get("eval_threads") or evaluation_threads(backend))
     keep, windows, wkeys = reduction(times, evaluations) if sim_kwargs.get("reduce", True) else (None, (), ())
     kept_times = np.asarray(times, dtype=float) if keep is None else np.asarray(times, dtype=float)[keep]
@@ -242,7 +244,7 @@ def _run_native(backend, model, market, name, times, n_paths, seed, spot0, histo
 
     def produce(k):
         t = time.perf_counter()
-        spots, extremes, timing = native.run(
+        spots, extremes, timing = eng.run(
             plan, sizes[k], key, int(starts[k]), backend, int(sim_kwargs.get("threads", 0)), keep, windows
         )
         if basket:
@@ -312,7 +314,7 @@ def run(
 ):
     """Totals per evaluation and timings {"simulation", "evaluation", "wall", "workers", "engine"}. `engine` in
     sim_kwargs picks the source of the paths (numpy, cpu, gpu, auto)."""
-    backend, why = native.choose(sim_kwargs.pop("engine", None), model)
+    backend, why = engines.choose(sim_kwargs.pop("engine", None), model)
     if backend != "numpy" and (not len(times) or not sim_kwargs.get("antithetic", True) or n_paths % 2):
         backend, why = "numpy", "no simulated date, or no antithetic pairs"
     if backend != "numpy":

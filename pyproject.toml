@@ -85,14 +85,20 @@ venv = ".venv"
 [tool.importlinter]
 root_packages = ["optlab.core", "optlab.native", "optlab.structured", "optlab.marketdata", "optlab.risk", "optlab.server"]
 
+# The dependency direction of ADR-0004, checked in CI; grimp counts the imports inside functions too
 [[tool.importlinter.contracts]]
-name = "Only the desk imports the desk"
-type = "forbidden"
-source_modules = ["optlab.structured", "optlab.marketdata", "optlab.risk"]
-forbidden_modules = ["optlab.server"]
+name = "Layers: server > risk > marketdata > structured > core"
+type = "layers"
+layers = ["optlab.server", "optlab.risk", "optlab.marketdata", "optlab.structured", "optlab.core"]
 
 [[tool.importlinter.contracts]]
-name = "Products and market data do not import the risk engine"
+name = "Only the server imports the compiled engine; the others ask optlab.core.engines by name"
 type = "forbidden"
-source_modules = ["optlab.structured", "optlab.marketdata"]
-forbidden_modules = ["optlab.risk"]
+source_modules = ["optlab.core", "optlab.structured", "optlab.marketdata", "optlab.risk"]
+forbidden_modules = ["optlab.native"]
+
+[[tool.importlinter.contracts]]
+name = "The compiled engine sees the core and the basket types of structured, nothing above"
+type = "forbidden"
+source_modules = ["optlab.native"]
+forbidden_modules = ["optlab.marketdata", "optlab.risk", "optlab.server"]

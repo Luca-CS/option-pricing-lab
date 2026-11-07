@@ -86,7 +86,7 @@ def desk_quote(engine, precision):
     the SLV mix band and the desk's costs, in its own temporary store."""
     import tempfile
 
-    from optlab import native
+    from optlab.core import engines
     from optlab.server.api import Desk
 
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
@@ -117,7 +117,7 @@ def desk_quote(engine, precision):
             }
         finally:
             desk.jobs.shutdown()
-            native.set_default(None)
+            engines.set_default(None)
 
 
 def main():

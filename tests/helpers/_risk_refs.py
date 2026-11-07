@@ -4,7 +4,8 @@ import datetime as dt
 
 import numpy as np
 from _structured_refs import FLAT, S0, VOL, Q, R, flat_surface
-from optlab import native
+
+from optlab.core import engines
 from optlab.structured.context import PricingContext
 from optlab.structured.portfolio import Book, Position
 
@@ -51,7 +52,8 @@ def book(*scripts, quantities=None) -> Book:
 
 def engine_name() -> str:
     """The compiled CPU engine when the library is there, else NumPy (fewer paths are then used by the tests)."""
-    return "cpu" if native.available() else "numpy"
+    eng = engines.compiled()
+    return "cpu" if eng is not None and eng.available() else "numpy"
 
 
 def within(value, ref, se, k=4.0, floor=0.0):
@@ -76,9 +78,10 @@ def bs_cross(S, K, T, r, q, vol):
 
 def worst_put_shifted(K, T, vols, rho, r, qs, a=(1.0, 1.0)):
     """E[(K - min(a1 X1, a2 X2))+], X = S_T / S_0 lognormal: the worst-of put after spot moves a (initial fixings kept)."""
-    from optlab.core.blackscholes import black_price
     from scipy.integrate import quad
     from scipy.stats import norm
+
+    from optlab.core.blackscholes import black_price
 
     (v1, v2), (q1, q2) = vols, qs
     m1, s1 = (r - q1 - 0.5 * v1**2) * T + np.log(a[0]), v1 * np.sqrt(T)
