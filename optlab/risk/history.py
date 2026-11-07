@@ -77,11 +77,14 @@ def carry(lake: Lake, name: str, start, end) -> pd.DataFrame:
 
 
 def realised_correlation(spots: pd.DataFrame, window: int = 120) -> dict:
-    """{"A|B": rolling correlation of daily log returns} for every pair of columns."""
-    r = np.log(spots).diff()
+    """{"A|B": rolling correlation of daily log returns} for every pair of columns, each pair on the days both names have a
+    close (a holiday of one market does not break the window), carried to the other days."""
     out = {}
     cols = list(spots.columns)
     for i, a in enumerate(cols):
         for b in cols[i + 1:]:
-            out["|".join(sorted((a, b)))] = r[a].rolling(window).corr(r[b])
+            both = spots[[a, b]].dropna()
+            r = np.log(both).diff().dropna()
+            c = r[a].rolling(window).corr(r[b])
+            out["|".join(sorted((a, b)))] = c.reindex(spots.index).ffill()
     return out

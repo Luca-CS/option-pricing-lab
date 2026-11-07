@@ -60,6 +60,8 @@ class RiskSettings:
     engine: str | None = None  # numpy, cpu, gpu, auto (structured.engine)
     workers: int | None = None
     slv_particles: int = 100_000
+    eval_threads: int | None = None  # threads evaluating the engine's batches (None: the engine's choice; 1 in VaR processes)
+    engine_threads: int = 0  # CPU engine threads (0: every hardware thread)
 
     def to_dict(self) -> dict:
         return dataclasses.asdict(self)
@@ -161,6 +163,7 @@ class GroupRun:
     timings: list = field(default_factory=list)
     warnings: list = field(default_factory=list)
     smoothing_bias: tuple | None = None  # (per position, se, total, total se): smoothed - exact base value
+    pairs: list | None = None  # with keep_pairs: the base's values per pair of paths, per position
     cash: dict = field(default_factory=dict)  # base and rolled shocks: per position {payment time: expected cash}
 
     def to_dict(self) -> dict:
@@ -219,8 +222,10 @@ def _basket_simulation(ctx: BasketContext, sim_ctx: BasketContext, d_model: str)
 
 
 def run_group(group: RiskGroup, shocks: dict, measures: list | None = None, settings: RiskSettings | None = None,
-              env: RiskEnv | None = None) -> GroupRun:
-    """Every shock of `shocks` ({name: Shock}; "base" is added) on one group."""
+              env: RiskEnv | None = None, cash_since: float | None = None, keep_pairs: bool = False) -> GroupRun:
+    """Every shock of `shocks` ({name: Shock}; "base" is added) on one group. `cash_since` (< 0, years) counts what is paid in
+    (cash_since, 0] as cash in every value, as after a roll (the P&L cascade moves the valuation date itself); `keep_pairs`
+    keeps the base's pair values per position in `GroupRun.pairs`."""
     t_start = time.perf_counter()
     settings = settings or RiskSettings()
     env = env or RiskEnv()
@@ -290,7 +295,7 @@ def run_group(group: RiskGroup, shocks: dict, measures: list | None = None, sett
         sim_ctx = simulation_part(ctx, first, env)
         if basket:
             sim_ctx = _basket_simulation(ctx, sim_ctx, d.model)
-        items, since = base_items, None
+        items, since = base_items, cash_since
         if first.roll_days:
             rolled = rolled_book(book, base_items, ctx.valuation, sim_ctx.valuation, spot0)
             items = rolled._prepare(sim_ctx)
@@ -312,10 +317,23 @@ def run_group(group: RiskGroup, shocks: dict, measures: list | None = None, sett
                         N = float(r.notional)
                         run.cash.setdefault(m, []).append(
                             _expected_cash(it["fmt"], r.expected_flows, r.redemption_probabilities, N, 1.0, q * fx[m]))
+                if m == "base" and keep_pairs:
+                    run.pairs = list(vals)
                 finish(m, vals)
             continue
         horizon = max(it["profile"].horizon for it in items)
         times = np.unique(np.concatenate([it["timeline"].sim_times for it in items]))
+        base_markets = dict(ctx.markets) if basket else {names[0]: ctx.market}
+        surfaces = ctx.vols if basket else {names[0]: ctx.surface}
+        moved_markets = {m: {n: shocked_market(base_markets[n], surfaces[n], name_moves(shocks[m], n, cur, env), None,
+                                               with_spot=False) for n in names} for m in members}
+        sim_markets = dict(base_markets)
+        if len(members) == 1 and members[0] != "base":  # a shock alone on its simulation: simulate on its forwards (no
+            sim_markets.update(moved_markets[members[0]])  # factor per date, so daily windows can still be reduced)
+            if basket:
+                sim_ctx = dataclasses.replace(sim_ctx, markets={**sim_ctx.markets, **sim_markets})
+            else:
+                sim_ctx = dataclasses.replace(sim_ctx, market=sim_markets[names[0]])
         model = _sim_model(d.model, ctx, sim_ctx, horizon, settings, group.seed, slv_cache, names)
         history = _merged_history(items, basket, ctx)
         hist = history if basket else history.get(names[0], {})
@@ -325,18 +343,13 @@ def run_group(group: RiskGroup, shocks: dict, measures: list | None = None, sett
             s = shocks[m]
             disc = discount_move(s, cur)
             pv_market = bumped_market(market, disc) if disc else None
-            if basket:
-                factor = {}
-                for n in names:
-                    mv = name_moves(s, n, cur, env)
-                    moved = shocked_market(ctx.markets[n], ctx.vols[n], mv, None, with_spot=False)
-                    ratio = 1.0 if moved is ctx.markets[n] else forward_ratio(ctx.markets[n], moved, times)
-                    factor[n] = (1.0 + mv.spot) * ratio
-            else:
-                mv = name_moves(s, names[0], cur, env)
-                moved = shocked_market(ctx.market, ctx.surface, mv, None, with_spot=False)
-                ratio = 1.0 if moved is ctx.market else forward_ratio(ctx.market, moved, times)
-                factor = (1.0 + mv.spot) * ratio
+            factor = {}
+            for n in names:
+                moved, on = moved_markets[m][n], sim_markets[n]
+                ratio = 1.0 if moved is on else forward_ratio(on, moved, times)
+                factor[n] = (1.0 + name_moves(s, n, cur, env).spot) * ratio
+            if not basket:
+                factor = factor[names[0]]
             for it, N in zip(items, notionals):
                 fmt = it["fmt"] if pv_market is None and since is None else RiskFormat(it["fmt"], pv_market, since)
                 evaluations.append(Evaluation(it["program"], it["timeline"], it["pos"].params, fmt, N, smooth, True, factor))
@@ -346,7 +359,9 @@ def run_group(group: RiskGroup, shocks: dict, measures: list | None = None, sett
                     evaluations.append(Evaluation(it["program"], it["timeline"], it["pos"].params, it["fmt"], N, 0.0, True, 1.0))
                 layout.append("base@exact")
         totals, timings = batch_engine.run(model, market, names[0], times, settings.n_paths, group.seed, settings.batch,
-                                           spot0, hist, evaluations, settings.workers, engine=settings.engine)
+                                           spot0, hist, evaluations, settings.workers, engine=settings.engine,
+                                           threads=settings.engine_threads,
+                                           **({"eval_threads": settings.eval_threads} if settings.eval_threads else {}))
         run.simulations += 1
         run.timings.append({k: v for k, v in timings.items() if isinstance(v, (int, float, str))})
         if timings.get("engine_note") and timings["engine_note"] not in run.warnings:
@@ -359,6 +374,8 @@ def run_group(group: RiskGroup, shocks: dict, measures: list | None = None, sett
             if m == "base@exact":
                 exact = per
                 continue
+            if m == "base" and keep_pairs:
+                run.pairs = per
             if m == "base" or shocks[m].roll_days:
                 run.cash[m] = [_expected_cash(it["fmt"], t.flows, t.redemption, N, settings.n_paths, q * mult)
                                for it, t, N, q in zip(items, chunk, notionals, quantities)]

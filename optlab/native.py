@@ -150,6 +150,8 @@ def _cached(key, obj, build):
 def _local_var_rows(surface, t0: np.ndarray, n_x: int, sd_range=(-8.0, 6.0)):
     """(lo, inv_dx, rows) of the Dupire local variance at each step start, on x in sd_range ATM standard deviations."""
     def build():
+        if hasattr(surface, "local_var_rows"):  # a surface that builds its own table (optlab.risk.surfaces)
+            return surface.local_var_rows(t0, n_x, sd_range)
         lo, inv, rows = np.empty(len(t0)), np.empty(len(t0)), np.empty((len(t0), n_x))
         for i, t in enumerate(t0):
             T = max(float(t), 1.0 / 365)
