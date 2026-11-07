@@ -37,12 +37,15 @@ within 4 standard errors. The refactor moves every file: something must prove th
   on PR #3 (Azure northcentralus) and not on PR #4 (westus2), with the same image (`windows-2025-vs2026` 20261103.298.1),
   the same lock and code that is bit for bit on this machine. The gaps have the size of the Windows-Linux ones:
   `mc_products` 2.2e-14 relative, the calibration's parameters up to 6.5e-3, the presets' control variate 3.7e-4
-  relative on an SE, the forced SLV's termination probabilities up to 0.6 %. The cause is the CPU, not the OS: NumPy
-  picks its SIMD kernels at start-up (this machine, a Zen 2, runs X86_V3), and the last bit of `exp` and `log` follows
-  the kernel. So "same platform" means **same machine**: bit for bit is the rule on this machine (each step's local
-  check), and every hosted runner is treated as another platform. Until the tolerance above is confirmed, the CI blocks
-  on the fixed-input groups at `rtol = 1e-12` on both systems and runs the recalibrating groups without blocking, the
-  machine's CPU and SIMD level printed beside them.
+  relative on an SE, the forced SLV's termination probabilities up to 0.6 %. NumPy picks its SIMD kernels at start-up
+  and the last bit of `exp` and `log` follows the kernel; the step now prints each runner's CPU and SIMD level. On the
+  next run, a Windows runner on an AMD Zen 3 at X86_V3 (this machine, a Zen 2, runs X86_V3 too) gave all six groups bit
+  for bit, recalibrations included, while the Linux runner (EPYC 7763, also X86_V3) differed as in A0 (another build of
+  NumPy and of the C library). The failing Windows run did not record its CPU, so the CPU is the likely cause there, not
+  a proven one. Either way "same platform" means **same machine**: bit for bit is the rule on this machine (each step's
+  local check), and every hosted runner is treated as another platform. Until the tolerance above is confirmed, the CI
+  blocks on the fixed-input groups at `rtol = 1e-12` on both systems and runs the recalibrating groups without
+  blocking, the machine's CPU and SIMD level printed beside them.
 - **CI under 5 minutes**, measured: `pytest -m "not slow and not gpu and not lake"` with xdist on a synthetic
   mini-lake generated deterministically by the tests (no binary fixture), plus the CI golden groups.
 - **The full suite and the GPU on the machine**: `optlab check full` (the real lake, about 30 minutes) and `optlab check
