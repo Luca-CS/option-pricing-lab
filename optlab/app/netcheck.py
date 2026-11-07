@@ -5,7 +5,7 @@ desk only says what it found and where to change it. A tunnel (outbound) is not 
 from __future__ import annotations
 
 import json
-import os
+import ntpath
 import subprocess
 import sys
 
@@ -27,14 +27,15 @@ def _list(x) -> list:
 def interpret(data: dict, python: str) -> list[str]:
     """Plain-language reasons why another machine cannot connect, from the profiles and rules read on Windows."""
     out = []
-    me = os.path.normcase(os.path.abspath(python))
+    # the rules hold Windows paths: they are compared with Windows rules (case, separators) on any platform
+    me = ntpath.normcase(ntpath.abspath(python))
     blocks = [
         r
         for r in _list(data.get("rules"))
         if r.get("direction") == "Inbound"
         and r.get("action") == "Block"
         and r.get("enabled") == "True"
-        and os.path.normcase(os.path.abspath(os.path.expandvars(r.get("program", "")))) == me
+        and ntpath.normcase(ntpath.abspath(ntpath.expandvars(r.get("program", "")))) == me
     ]
     if blocks:
         where = ", ".join(sorted({r.get("profile", "?") for r in blocks}))
