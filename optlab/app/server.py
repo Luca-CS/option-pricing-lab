@@ -3,6 +3,11 @@
 By default it listens on 127.0.0.1. To share it (LAN, or a tunnel such as Tailscale or Cloudflare Tunnel pointed at
 the port), start it with a token: every request then needs it, as `?token=` once (it is kept in a cookie) or in the
 `X-Optlab-Token` header.
+
+Cross-site requests are refused, so that a web page open in the same browser cannot use the desk: without a token the
+`Host` must be a loopback name (a page that rebinds its DNS name to 127.0.0.1 is turned away), a request that writes
+must come from the desk's own origin when it says where it comes from (`Origin`), and a body must be declared as
+`application/json` (a cross-site form or `text/plain` post is not read).
 """
 
 from __future__ import annotations
@@ -15,7 +20,7 @@ import threading
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlparse, urlsplit
 
 from ..log import get_logger
 from .api import ApiError, Desk
@@ -24,6 +29,34 @@ from .risk_api import risk_routes
 
 STATIC = Path(__file__).resolve().parent / "static"
 LOG = get_logger(__name__)
+LOOPBACK = {"127.0.0.1", "localhost", "::1"}
+
+
+def _hostname(netloc: str) -> str | None:
+    try:
+        return urlsplit(f"//{netloc}").hostname
+    except ValueError:
+        return None
+
+
+def cross_site_refusal(method: str, headers, token: str | None) -> tuple[int, str] | None:
+    """(status, reason) when a request must be refused as cross-site, else None. Clients without a browser (scripts,
+    tests) send no `Origin` and are not affected."""
+    host = headers.get("Host") or ""
+    if not token and _hostname(host) not in LOOPBACK:
+        return 403, "this desk answers on 127.0.0.1 or localhost only"
+    if method not in ("GET", "HEAD"):
+        origin = headers.get("Origin")
+        if origin is not None and (origin == "null" or urlsplit(origin).netloc.lower() != host.lower()):
+            return 403, "cross-site request refused"
+        try:
+            length = int(headers.get("Content-Length") or 0)
+        except ValueError:
+            return 400, "bad Content-Length"
+        ctype = (headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if method in ("POST", "PUT") and (length or ctype) and ctype != "application/json":
+            return 415, "the body must be application/json"
+    return None
 
 
 def routes(desk: Desk):
@@ -124,6 +157,9 @@ def make_handler(desk: Desk, token: str | None = None):
         def _handle(self, method: str):
             url = urlparse(self.path)
             query = parse_qs(url.query)
+            if refusal := cross_site_refusal(method, self.headers, token):
+                LOG.warning("refused %s %s from %s: %s", method, url.path, self.address_string(), refusal[1])
+                return self._json(refusal[0], {"error": refusal[1]})
             if not self._authorised(query):
                 return self._json(401, {"error": "a token is required: open the address with ?token=..."})
             extra = {}
