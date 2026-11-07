@@ -5,7 +5,7 @@
 
 ## Context
 
-v0 has 817 tests (607 functions), about 10 minutes without the risk engine and longer with it, many of which read the
+v0 has 831 tests (52 files), 32 to 33 minutes in full (`reports/refactor-baseline.md` §5), many of which read the
 real lake or need the GPU and skip otherwise. Every stochastic pricer is validated against an independent reference
 within 4 standard errors. The refactor moves every file: something must prove that no number changed.
 
