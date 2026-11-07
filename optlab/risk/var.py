@@ -143,14 +143,26 @@ def _chunk(job):
     return gi, {k: (r.pnl[k][0], r.pnl[k][1], r.pnl[k][2], r.pnl[k][3]) for k in shocks}, r.values["base"], r.warnings, r.seconds
 
 
+def worker_settings(settings: RiskSettings, workers: int) -> RiskSettings:
+    """Settings for revaluations spread over processes: a spawned process does not inherit `native.set_default`, so the
+    engine is named; the processes share the cores, so each evaluates on one thread."""
+    if workers <= 1:
+        return settings
+    if settings.engine is None:
+        from .. import native
+        settings = dataclasses.replace(settings, engine=native.default_engine())
+    if settings.eval_threads is None:
+        settings = dataclasses.replace(settings, eval_threads=1)
+    return settings
+
+
 def revalue_many(groups: list, shocks: dict, settings: RiskSettings, env: RiskEnv | None = None, workers: int = 1,
                  chunk: int = 25, log=None) -> dict:
     """{"pnl": {shock: [book pnl, se]}, "positions": {shock: {position: pnl}}, "seconds"}: every shock on every group."""
     env = env or RiskEnv()
     t0 = time.perf_counter()
     names = list(shocks)
-    if workers > 1 and settings.eval_threads is None:  # the processes share the cores: one evaluation thread each
-        settings = dataclasses.replace(settings, eval_threads=1)
+    settings = worker_settings(settings, workers)
     cost = [len(group_names(g)) for g in groups]  # the groups with most names are the slowest: they go first
     order = sorted(range(len(groups)), key=lambda gi: -cost[gi])
     jobs = [(gi, {k: shocks[k] for k in names[i:i + chunk]}, settings) for gi in order for i in range(0, len(names), chunk)]

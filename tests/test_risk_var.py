@@ -63,3 +63,16 @@ def test_full_reval_of_a_vanilla_stays_close_to_delta_gamma_vega(lake):
     assert total == pytest.approx(one["pnl"][one["dates"].index(one["var_date"])])
     assert set(one["contributions"]["es"]) == {"p0"}
     np.testing.assert_allclose(one["contributions"]["es"]["p0"], -one["es"], rtol=1e-12)
+
+
+def test_processes_get_the_engine_of_the_parent():
+    """native.set_default lives in the parent process (the desk sets it): the workers are told the engine explicitly."""
+    from optlab import native
+    native.set_default("gpu")
+    try:
+        st = V.worker_settings(V.RiskSettings(), 5)
+        assert st.engine == "gpu" and st.eval_threads == 1
+        assert V.worker_settings(V.RiskSettings(), 1).engine is None
+        assert V.worker_settings(V.RiskSettings(engine="cpu", eval_threads=2), 5).engine == "cpu"
+    finally:
+        native.set_default(None)
