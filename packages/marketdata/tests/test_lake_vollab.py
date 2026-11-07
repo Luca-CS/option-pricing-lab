@@ -6,7 +6,7 @@ import json
 import numpy as np
 import pandas as pd
 import pytest
-from test_lake_quotes import DAY, curve_rows, synthetic_rows
+from _quote_fixture import DAY, curve_rows, synthetic_rows
 
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.quotes import clean_day

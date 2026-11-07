@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 from _lake_fixture import derive_all, fill_observed
-from test_lake_quotes import DAY, curve_rows, synthetic_rows
+from _quote_fixture import DAY, curve_rows, synthetic_rows
 
 from optlab.marketdata.ingest import as_rows
 from optlab.marketdata.lake import Lake

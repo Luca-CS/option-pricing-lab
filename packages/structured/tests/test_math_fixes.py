@@ -92,7 +92,7 @@ def test_local_linear_leverage_removes_the_atm_bias_on_spx():
 @pytest.mark.slow
 def test_local_linear_leverage_stays_within_tolerance_on_the_synthetic_surface():
     # on this surface both regressions are within the Monte Carlo error (a few bp per strike): no ranking claimed
-    from test_calibration import MARKET, TRUE_SSVI
+    from _synthetic_surface import MARKET, TRUE_SSVI
 
     from optlab.core import calibrate_leverage
     from optlab.core.validation import mc_smile

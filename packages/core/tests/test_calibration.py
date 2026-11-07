@@ -1,11 +1,10 @@
 import numpy as np
 import pytest
+from _synthetic_surface import MARKET, MATURITIES, TRUE_SSVI
 
 from optlab.core import (
-    SSVI,
     HestonParams,
     LocalVolModel,
-    Market,
     SVISurface,
     arbitrage_report,
     calibrate_heston,
@@ -17,10 +16,6 @@ from optlab.core import (
 )
 from optlab.core.svi import ssvi_slice_to_svi
 from optlab.core.validation import mc_smile
-
-MATURITIES = np.array([0.1, 0.25, 0.5, 1.0, 2.0])
-TRUE_SSVI = SSVI.power_law(-0.7, 1.1, 0.4, MATURITIES, 0.04 * MATURITIES * (1 + 0.2 * MATURITIES))
-MARKET = Market.flat(100.0, 0.02, 0.01)
 
 
 def synthetic_ssvi_quotes(noise=0.002, seed=0):
