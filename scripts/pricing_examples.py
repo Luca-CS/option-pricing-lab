@@ -17,7 +17,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from optlab.config import paths
+from optlab.core.config import paths
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.names import NameMarkets
 from optlab.marketdata.pit import basket_at

@@ -6,22 +6,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 uv sync --locked --all-extras                          # .venv from uv.lock (hashes); dev tools in the dev group
-uv run pytest -q tests/test_closed_forms.py            # fast sanity check (seconds)
-uv run pytest tests/test_monte_carlo.py::test_heston_mc_matches_fourier   # single test
-uv run pytest -m "not slow and not gpu and not lake" -n auto   # what CI runs (a few minutes)
+uv run pytest -q packages/core/tests/test_closed_forms.py   # fast sanity check (seconds)
+uv run pytest packages/core/tests/test_monte_carlo.py::test_heston_mc_matches_fourier   # single test
+uv run pytest -m "not slow and not gpu and not lake and not native" -n auto --dist loadfile   # what CI runs (a few minutes)
 uv run pytest                                          # full suite, about 33 min (real lake, GPU, node when present)
 uv run python tests/golden/golden.py check [--local]   # golden numbers, bit for bit (local: lake, showcase, GPU)
 uv run pre-commit install                              # ruff, ruff-format, gitleaks and file checks before each commit
+uv run lint-imports                                    # the package layers of ADR-0004
+uv run python tools/pyright_baseline.py               # pyright may only go down from pyright-baseline.json
 ```
 
-- Structured products: `.venv/Scripts/python -m pytest -q tests/test_structured_*.py` (about a minute);
+Tests live beside their package (`packages/<name>/tests`); fixtures shared across packages are in `tests/helpers`
+(on pytest's `pythonpath`), the golden recorder in `tests/golden`. Outside this repository's own checkout, set
+`OPTLAB_CUDA_LIB` to the built engine (`build/Release/optlab_cuda_c.dll`) and `OPTLAB_NODE` (or PATH) to a node.
+
+- Structured products: `uv run pytest -q packages/structured/tests` (about a minute);
   `scripts/structured_examples.py [--quick]` prints the autocall model-risk table, timings and example quotes.
-- Desk (web UI): `.venv/Scripts/python -m optlab.app [--open] [--workers 6] [--host 0.0.0.0]` serves
+- Desk (web UI): `uv run python -m optlab.server [--open] [--workers 6] [--host 0.0.0.0]` serves
   `http://localhost:8765` (a token is generated beyond localhost; `--tunnel` gives a public link through
-  localhost.run); `--store` and `--calibration` change the SQLite file and the calibration. `tests/test_app_api.py`
-  (about 40 s) covers the API and the HTTP server; `tests/test_app_js.py` runs the page's table sorting under
+  localhost.run); `--store` and `--calibration` change the SQLite file and the calibration. `packages/server/tests/test_app_api.py`
+  (about 40 s) covers the API and the HTTP server; `test_app_js.py` runs the page's table sorting under
   `node` (skipped without it, like `test_widget_js.py`).
-- `tests/test_widget_js.py` runs `docs/lab.js` under `node` and compares it to the Python library; it is
+- `packages/core/tests/test_widget_js.py` runs `docs/lab.js` under `node` and compares it to the Python library; it is
   skipped when `node` is not on PATH.
 - Calibration pipeline: `scripts/run_calibration.py --source simulated|spx` writes `results/*.json`;
   `scripts/make_report.py` writes `reports/calibration.md` and figures; `scripts/build_widget_data.py`
@@ -35,27 +41,33 @@ uv run pre-commit install                              # ruff, ruff-format, gitl
   Time the GPU only after a sustained warm-up (seconds of CPU work drop it to the 300 MHz idle clock).
   `-DOPTLAB_WITH_CUDA=OFF` builds the CPU engines only; `-DOPTLAB_CUDA_ARCHS=portable` targets sm_61 to sm_120.
   `build\Release\test_paths.exe` checks the path engine; `scripts/bench_accel.py [--desk standard]` times NumPy against
-  the CPU and GPU engines; `tests/test_native.py` validates the engine from Python (skipped without the library).
+  the CPU and GPU engines; `packages/native/tests/test_native.py` validates the engine from Python (skipped without the library).
   Profiling: `ncu --set full -k regex:mc_kernel -o build/ncu_profile build\Release\profile.exe` from an
   administrator shell (GPU counters are admin-only on this machine); read it with
   `ncu -i build/ncu_profile.ncu-rep --page raw --csv --metrics ...` (`--page details` fails under the French locale).
-- Risk engine (`optlab/risk/`): `tests/test_risk_*.py` (about 20 minutes; `test_risk_var`, `test_risk_pnl` and the betas test need the
+- Risk engine (`optlab.risk`): `packages/risk/tests` (about 20 minutes; `test_risk_var`, `test_risk_pnl` and the betas test need the
   lake and skip without it). `scripts/risk_eod.py eod --date D | backfill --from A --to B | pnl --from A --to B | var | ladder`
   works on a desk store (default the showcase's) and keeps every run in `risk.sqlite` beside it; method and measured numbers in
-  `reports/risk.md`. The desk serves it on `#/risk` and `#/pnl` (`app/risk_api.py`, routes `/api/risk/*`, `/api/pnl*`, report
+  `reports/risk.md`. The desk serves it on `#/risk` and `#/pnl` (`optlab.server.risk_api`, routes `/api/risk/*`, `/api/pnl*`, report
   `/report/risk`).
-- Data lake (`optlab/marketdata/`, needs `duckdb` and `pyarrow`; data in `OPTLAB_DATA`, default `optlab-data` beside the main checkout):
+- Data lake (`optlab.marketdata`, needs `duckdb` and `pyarrow`; data in `OPTLAB_DATA`, default `optlab-data` beside the main checkout):
   `scripts/lake_update.py` (public sources, yen and sterling rates in the steps `mof`, `boj`, `boe`; `--import-sample zip`, `--dolt default`,
   `--yahoo-chains` during US hours only: Yahoo blanks bid and ask otherwise), `scripts/lake_derive.py` (curves, carry, bank, surfaces, correlation, pairs, observed fits),
   `scripts/lake_fx_check.py` (FX against H.10 and CME futures, size of the quanto adjustment: `reports/fx_check.md`),
   `scripts/lake_surface_test.py` (reconstruction against real chains), `scripts/lake_regime_test.py` (the same by level of the VIX, crash held out),
   `scripts/lake_replay.py cost|run [--costs]`, `scripts/seed_showcase.py` (a dozen trades in their own store, `optlab-data/showcase`; guide in `reports/showcase.md`).
-  `tests/test_lake_real.py` checks the exit criteria on the real lake and skips without it.
-- Lint config: ruff, line length 120 (`pyproject.toml`). No build step for `docs/` (static, dependency-free JS).
+  `packages/server/tests/test_lake_real.py` checks the exit criteria on the real lake and skips without it.
+- Lint config: ruff, line length 120, absolute imports only (`pyproject.toml`). No build step for `docs/` (static, dependency-free JS).
 
 ## Architecture
 
-- **`optlab/`** is pure NumPy/SciPy. `Market` (`market.py`) holds deterministic discount and forward curves;
+- **A uv workspace of six distributions** sharing the PEP 420 namespace `optlab` (no `optlab/__init__.py`), each in
+  `packages/<name>/src/optlab/<name>` with its own `pyproject.toml` (hatchling) and tests: `optlab.core`, `optlab.native`,
+  `optlab.structured`, `optlab.marketdata`, `optlab.risk`, `optlab.server`. Layers, checked by `lint-imports` (imports inside
+  functions count): `server > risk > marketdata > structured > core`; `native` beside them sees core and the basket types
+  of structured; only `server` imports `optlab.native`, the others ask `optlab.core.engines` for an engine by name
+  (ADR-0003, ADR-0004 in `docs/architecture`). Imports are absolute (`from optlab.core.market import Market`).
+- **`optlab.core`** is pure NumPy/SciPy, with no I/O and no thread at import (`test_core_alone.py`). `Market` (`market.py`) holds deterministic discount and forward curves;
   every pricer takes `(model, market, ...)`.
 - **Simulation core** is `models.simulate`: every model is simulated in the log-forward coordinate
   `x = ln(S_t / F(t))` with a log-Euler step using the instantaneous variance `model.inst_var(t, x, v)` at the
@@ -71,7 +83,7 @@ uv run pre-commit install                              # ruff, ruff-format, gitl
   particle method (`slv.py`).
 - **`docs/`** is the GitHub Pages demo. `docs/lab.js` is an independent JavaScript re-implementation (closed
   forms, CRR, American PDE, Heston Fourier, Monte Carlo with Andersen's QE scheme for Heston in `simulate`,
-  LSM) exposed as `window.PricerWidget`; changes to its pricers should keep `tests/test_widget_js.py` passing.
+  LSM) exposed as `window.PricerWidget`; changes to its pricers should keep `test_widget_js.py` passing.
 - **`cuda/`** is a C++/CUDA Monte Carlo engine. `include/optlab_cuda/schemes.hpp` holds the path schemes (exact BS
   steps, Andersen QE-M for Heston, in the log-return y = ln(S/S0)) as `__host__ __device__` templates on the real
   type, shared by the double CPU reference (`cpu_mc.cpp`) and the float/double GPU kernels (`gpu_mc.cu`). Philox
@@ -79,22 +91,23 @@ uv run pre-commit install                              # ruff, ruff-format, gitl
   Keep path math free of double literals (`R(0.5)`), as FP64 runs at 1/32 rate on this card. Production defaults
   (float, Kahan float sums, `-prec-div=false -prec-sqrt=false -ftz=true`, block 512) come from the measured
   ablation; `__expf`/`__logf` stay off because they bias the Heston barrier by 0.13 SE.
-- **`optlab/gpu.py`** calls the CUDA engine from Python through `ctypes` (`build/Release/optlab_cuda_c.dll`, C API in
+- **`optlab.native.gpu`** calls the CUDA engine from Python through `ctypes` (`build/Release/optlab_cuda_c.dll`, C API in
   `cuda/src/capi.cpp`; the `_Request`/`_Result` structures mirror `capi.h` field by field) and falls back to the
   NumPy pricers without the library, without a GPU, or outside the engine's cases. Engine errors are C++
   exceptions turned into an error code, never `exit`: the engine runs inside the Python process.
-  `tests/test_gpu.py` skips the engine tests when the library or the GPU is missing.
-- **`optlab/native.py`** drives the path engine of `cuda/` (`paths.hpp`: one header for the CPU in double and the GPU in
+  `test_gpu.py` skips the engine tests when the library or the GPU is missing.
+- **`optlab.native`** drives the path engine of `cuda/` (`paths.hpp`: one header for the CPU in double and the GPU in
   float; `leverage.hpp`: the SLV particle method): `plan()` turns a model or a `Basket` into arrays (local variance and
   squared leverage as uniform rows per step), `run()` simulates a range of pairs. Normals are Philox, a function of
   (seed, pair, rank of the normal), so prices depend on (seed, n_paths) only and the CPU and GPU share their draws.
-  `engine=` (numpy, cpu, gpu, auto) on `price_many`, `native.set_default`, or `$OPTLAB_ENGINE` picks the source; the
+  `engine=` (numpy, cpu, gpu, auto) on `price_many`, `optlab.core.engines.set_default`, or `$OPTLAB_ENGINE` picks the source
+  (the registry finds this module through the entry point group `optlab.engines`); the
   default is numpy, so the library's numbers and its bit-for-bit tests are unchanged; `structured/engine.py` falls
   back to NumPy with the reason in `timings["engine_note"]`. On the engine, batches are sized by memory, evaluated on
   several threads while the next one simulates, and daily windows come back as their lowest and highest spot.
   `slv.calibrate_leverage(engine=...)` uses the same switch. The desk starts with `--engine auto`. Keep the
   `_PathsRequest` and `_LeverageRequest` structures field by field equal to `capi.h`.
-- **`optlab/structured/`** prices structured products in three layers. Engine: a payoff script language
+- **`optlab.structured`** prices structured products in three layers. Engine: a payoff script language
   (`script/`: hand-written lexer and recursive-descent parser, AST in `nodes.py`, printer, `validate`, `timeline`,
   vectorised `evaluator` with float masks: `x = e` under a mask m is `m*e + (1-m)*x`, `pay` adds `m*alive*e`,
   `terminate` multiplies `alive` by `1-m`), `Scenario` batches from `simulate` (one batch = `default_rng(seed)`,
@@ -112,10 +125,10 @@ uv run pre-commit install                              # ruff, ruff-format, gitl
   Batches run through `engine.py` (`Evaluation`s on each simulated batch, sequential or `workers=` on a persistent
   spawn process pool, same numbers bit for bit; spot factors scale the paths for the Greeks). Also `trade.py`,
   `calendars.py` (NYSE), `lifecycle.py`, `surfaces.py` (`FastSVISurface`, bit-identical), `fastmodels.py` and
-  `qmc.py` (opt-in, validated within the Monte Carlo error), `units.py`; `optlab/config.py`, `optlab/log.py` and
-  `optlab/marketdata/` (snapshots and their local store under `data/store`). A script with a NaN condition or a
+  `qmc.py` (opt-in, validated within the Monte Carlo error), `units.py`; `optlab.core.config`, `optlab.core.log`, `optlab.core.snapshot` and
+  `optlab.marketdata.store` (snapshots and their local store under `data/store`). A script with a NaN condition or a
   non-finite payment on a live path raises `ScriptError` with its line.
-- **`optlab/app/`** is the local web desk (design and status in `optlab/app/DESIGN.md`). `api.py` holds a `Desk`
+- **`optlab.server`** is the local web desk (design and status in its `DESIGN.md`). `api.py` holds a `Desk`
   whose methods are the API routes (JSON in and out, levels as fractions; the page shows percent), `server.py` maps
   routes to them on a stdlib `ThreadingHTTPServer` that also serves `static/` (same origin; one buffered write per
   response and no Nagle, or Windows browsers wait ~250 ms per call), `jobs.py` runs quotes and book valuations in a
@@ -129,14 +142,14 @@ uv run pre-commit install                              # ruff, ruff-format, gitl
   a run in progress. The page is plain ES modules
   without a build: `js/main.js` routes `#/screen/arg` to `js/views/*.js`, each exporting `render(page, arg)`, and
   makes every `table.data` sortable.
-- **`optlab/marketdata/`**: `lake.py` (raw manifest, append-only Parquet with `origin` on every row, idempotent and bitemporal loads, DuckDB
-  reads), `sources/` (one pure `parse` per source, tested offline), `universe.py` (the instrument registry, which `schema.py` reads),
-  `derive/` (curves, carry, fictitious bank, surfaces in three layers, FX forwards, volatility and correlation, correlation and pseudo CvC/PvP: option on a basket against the same option on its members), `quotes.py` (one cleaning chain,
-  `optlab.data.clean_chain`, for every source), `pit.py` (`market_at`: only rows dated at or before the date; the forward repeats last year's dividends, `carry.dividend_stream`; `payment` gives the quanto market, `structured/quanto.py`), `replay.py` (a trade's life on
+- **`optlab.marketdata`**: `lake.py` (raw manifest, append-only Parquet with `origin` on every row, idempotent and bitemporal loads, DuckDB
+  reads), `sources/` (one pure `parse` per source, tested offline), `ingest.py` (loads; the instrument registry itself is `optlab.core.instruments`, which `structured.schema` reads),
+  `derive/` (curves, carry, fictitious bank, surfaces in three layers, FX forwards, volatility and correlation, correlation and the stored pseudo CvC/PvP: option on a basket against the same option on its members, whose formulas are in `structured.localcorr`), `quotes.py` (one cleaning chain,
+  `optlab.marketdata.chains.clean_chain`, for every source), `pit.py` (`market_at`: only rows dated at or before the date; the forward repeats last year's dividends, `carry.dividend_stream`; `payment` gives the quanto market, `structured/quanto.py`), `replay.py` (a trade's life on
   real closes), `vollab.py` (fits as stored, replayable runs). The model stays at spot 100: real levels cross at the boundary through
   `spot_scale`. Pricing a sheet on another name's market is an error.
-- **`optlab/risk/`** is the risk engine, one block with JSON-ready dataclasses in and out, reading `structured/` and `marketdata/`
-  only (the desk reaches it through the thin `app/risk_api.py`). Principle: a risk is a list of `Shock`s (`shocks.py`: spots, vols
+- **`optlab.risk`** is the risk engine, one block with JSON-ready dataclasses in and out, reading `structured` and `marketdata`
+  only (the desk reaches it through the thin `optlab.server.risk_api`). Principle: a risk is a list of `Shock`s (`shocks.py`: spots, vols
   parallel, relative, per node or per tenor, skew, curves per tenor, dividends, repo, correlation, FX, quanto, roll, and the vol rule
   sticky moneyness / sticky strike / realistic) revalued by one engine (`engine.run_group`) on the base's seed. Shocks that only move
   spots, forwards or discounts ride on one simulation (a factor on the sticky-moneyness paths, exact); vol, correlation and the roll
@@ -154,7 +167,7 @@ uv run pre-commit install                              # ruff, ruff-format, gitl
 ## Conventions
 
 - Tests validate every stochastic pricer against an independent reference within 4 standard errors
-  (`within` helper in `tests/test_monte_carlo.py`); keep fixed seeds.
+  (`within` helper in `packages/core/tests/test_monte_carlo.py`); keep fixed seeds.
 - Market data from Yahoo is personal-use only: `data/` and the lake are never committed; only
   calibrated parameters, outputs and charts are versioned. Results hold performances, not levels; screens show the `origin`. `.gitignore` also ignores `*.csv` and `build/`.
 - README and code are in English; commit messages are short English sentences in the style

@@ -1,0 +1,193 @@
+"""The JavaScript pricers of the demo page (docs/lab.js) against the Python library. Needs node."""
+
+import json
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from optlab.core import barrier_price, barrier_shift_discrete, binomial_price, bs_price, geometric_asian_price
+
+JS = Path(__file__).resolve().parents[3] / "docs" / "lab.js"
+NODE = shutil.which("node")
+pytestmark = [pytest.mark.node, pytest.mark.skipif(NODE is None, reason="node is not installed")]
+
+CASES = [  # S, K, T, r, q, vol, call
+    (100, 100, 1.0, 0.04, 0.01, 0.20, True),
+    (100, 90, 0.5, 0.03, 0.0, 0.35, False),
+    (100, 120, 2.0, 0.05, 0.02, 0.15, True),
+    (100, 105, 0.25, 0.0, 0.01, 0.25, False),
+]
+BARRIERS = [("down-out", 80), ("down-in", 85), ("up-out", 120), ("up-in", 130)]
+
+
+def run_js(expr):
+    script = (
+        f"global.window = {{}};\n{JS.read_text(encoding='utf-8')}\nconst W = window.PricerWidget;\n"
+        f"console.log(JSON.stringify({expr}));"
+    )
+    with tempfile.TemporaryDirectory() as tmp:  # too long for a Windows command line
+        path = Path(tmp) / "run.js"
+        path.write_text(script, encoding="utf-8")
+        out = subprocess.run([NODE, str(path)], capture_output=True, text=True, check=True, timeout=60)
+    return json.loads(out.stdout)
+
+
+def test_black_scholes_and_tree():
+    js = run_js(
+        "["
+        + ",".join(
+            f"[W.bs({S},{K},{T},{r},{q},{v},{str(c).lower()}).price,"
+            f"W.crr({S},{K},{T},{r},{q},{v},{str(c).lower()},400,true),"
+            f"W.crr({S},{K},{T},{r},{q},{v},{str(c).lower()},400,false)]"
+            for S, K, T, r, q, v, c in CASES
+        )
+        + "]"
+    )
+    for (S, K, T, r, q, v, c), (eu, am_tree, eu_tree) in zip(CASES, js):
+        cp = "call" if c else "put"
+        assert eu == pytest.approx(bs_price(S, K, T, r, q, v, cp), abs=1e-9)
+        # the page shows the exact European plus the tree's early-exercise premium
+        am = eu + am_tree - eu_tree
+        assert am >= eu - 1e-12
+        assert am == pytest.approx(binomial_price(S, K, T, r, q, v, cp, True, 2000), abs=0.005)
+
+
+def test_geometric_asian():
+    js = run_js(
+        "["
+        + ",".join(f"W.geoAsian({S},{K},{T},{r},{q},{v},12,{str(c).lower()})" for S, K, T, r, q, v, c in CASES)
+        + "]"
+    )
+    for (S, K, T, r, q, v, c), price in zip(CASES, js):
+        fix = np.linspace(T / 12, T, 12)
+        exact = float(geometric_asian_price(S, K, r, q, v, fix, "call" if c else "put"))
+        assert price == pytest.approx(exact, abs=1e-9)
+
+
+def test_barriers_continuous_and_daily():
+    calls = []
+    for S, K, T, r, q, v, c in CASES:
+        for kind, H in BARRIERS:
+            calls.append(
+                f"[W.barrier({S},{K},{H},{T},{r},{q},{v},'{kind}',{str(c).lower()},false),"
+                f"W.barrier({S},{K},{H},{T},{r},{q},{v},'{kind}',{str(c).lower()},true)]"
+            )
+    js = iter(run_js("[" + ",".join(calls) + "]"))
+    for S, K, T, r, q, v, c in CASES:
+        for kind, H in BARRIERS:
+            cont, daily = next(js)
+            cp = "call" if c else "put"
+            assert cont == pytest.approx(barrier_price(S, K, H, T, r, q, v, kind, cp), abs=1e-9)
+            shifted = barrier_shift_discrete(H, S, v, 1 / 252)
+            assert daily == pytest.approx(barrier_price(S, K, shifted, T, r, q, v, kind, cp), abs=1e-9)
+
+
+def test_asian_monte_carlo_is_unbiased():
+    S, K, T, r, q, v = 100, 100, 1.0, 0.04, 0.01, 0.2
+    res = run_js(f"W.asianMC({S},{K},{T},{r},{q},{v},12,true,40000,7)")
+    from optlab.core import BlackScholesModel, Market, asian_mc
+
+    ref = asian_mc(BlackScholesModel(v), Market.flat(S, r, q), K, T, 12, "call", n_paths=400_000, rng=1)
+    assert abs(res["price"] - ref.price) < 4 * np.hypot(res["se"], ref.stderr)
+
+
+def test_levy_asian_approximation_is_close():
+    from optlab.core import BlackScholesModel, Market, asian_mc
+
+    for K, call in ((90, True), (100, True), (110, False)):
+        js = run_js(f"W.levyAsian(100,{K},1.0,0.04,0.01,0.2,12,{str(call).lower()})")
+        ref = asian_mc(
+            BlackScholesModel(0.2),
+            Market.flat(100, 0.04, 0.01),
+            K,
+            1.0,
+            12,
+            "call" if call else "put",
+            n_paths=200_000,
+            rng=2,
+        )
+        assert abs(js - ref.price) < 0.005 * ref.price + 4 * ref.stderr  # moment matching: within 0.5 %
+
+
+def test_longstaff_schwartz_matches_tree():
+    expr = (
+        "(() => { const out = []; for (const [r, q, call] of [[0.04, 0.01, false], [0.04, 0.06, true]]) {"
+        " const st = {product: 'american', call, model: 'bs', K: 100, T: 1, v: 0.2, r, q};"
+        " const c = W.convergence(W.payoffs(st, W.simulate(st, 20000, 50, 3)).pay, 100);"
+        " out.push([c[c.length - 1][1], c[c.length - 1][2], W.american(100, 100, 1, r, q, 0.2, call, 600)]); }"
+        " return out; })()"
+    )
+    for lsm, se, tree in run_js(expr):
+        # 50 exercise dates against continuous exercise: LSM may sit slightly below the tree
+        assert tree - 0.05 - 4 * se < lsm < tree + 4 * se
+
+
+SPX_HESTON = {"v0": 0.0228466, "kappa": 3.0892636, "theta": 0.0537246, "xi": 1.3077452, "rho": -0.6879607}
+
+
+def test_heston_fourier_matches_python():
+    from optlab.core import HestonParams, heston_price
+
+    h = HestonParams(**SPX_HESTON)
+    cases = [(100, 1.0, True), (119, 1.0, True), (85, 0.5, False), (110, 2.0, False)]
+    js = run_js(
+        "["
+        + ",".join(
+            f"W.hestonPrice(100,{K},{T},0.04,0.01,{json.dumps(SPX_HESTON)},{str(c).lower()})" for K, T, c in cases
+        )
+        + "]"
+    )
+    for (K, T, call), price in zip(cases, js):
+        F, D = 100 * np.exp(0.03 * T), np.exp(-0.04 * T)
+        ref = float(heston_price(F, K, T, h, D, "call" if call else "put")[0])
+        assert price == pytest.approx(ref, abs=1e-6)
+
+
+def test_heston_monte_carlo_converges_to_fourier():
+    expr = (
+        "(() => { const h = " + json.dumps(SPX_HESTON) + ";"
+        " const st = {product: 'european', call: true, model: 'heston', K: 119, T: 1, v: 0.2,"
+        " r: 0.04, q: 0.01, heston: h};"
+        " const c = W.convergence(W.payoffs(st, W.simulate(st, 40000, 252, 5)).pay, 100);"
+        " return [c[c.length - 1][1], c[c.length - 1][2], W.hestonPrice(100, 119, 1, 0.04, 0.01, h, true)]; })()"
+    )
+    mc, se, exact = run_js(expr)
+    # full-truncation Euler at daily steps: small bias on top of the noise
+    assert abs(mc - exact) < 4 * se + 0.02
+
+
+def test_heston_paths_have_no_flat_stretches():
+    # The calibrated parameters violate Feller (2 kappa theta / xi^2 = 0.19). A truncated Euler scheme then
+    # leaves the variance below zero for weeks and the paths drift flat; the QE scheme must not.
+    expr = (
+        "(() => { const h = " + json.dumps(SPX_HESTON) + ";"
+        " const st = {product: 'european', call: true, model: 'heston', K: 100, T: 1, v: 0.2,"
+        " r: 0.04, q: 0.01, heston: h}; const sim = W.simulate(st, 2000, 252, 3); let worst = 0, mean = 0;"
+        " for (let p = 0; p < 2000; p++) { let run = 0; mean += sim.S[p * 253 + 252] / 2000;"
+        "  for (let i = 0; i < 252; i++) { const r = Math.log(sim.S[p * 253 + i + 1] / sim.S[p * 253 + i]);"
+        "   run = Math.abs(r - 0.03 / 252) < 2e-4 ? run + 1 : 0; worst = Math.max(worst, run); } }"
+        " return [worst, mean]; })()"
+    )
+    worst, mean = run_js(expr)
+    assert worst <= 10
+    assert mean == pytest.approx(100 * np.exp(0.03), rel=0.005)  # martingale correction keeps the forward
+
+
+def test_american_greeks_are_smooth_in_spot():
+    # Greeks across spot from one PDE grid: no jags beyond 1e-5 (a tree rebuilt around each spot gave ~20 sign
+    # changes in delta and ~50 in gamma), and the at-the-money gamma close to the European one, not half of it.
+    expr = (
+        "(() => { const base = {product: 'american', call: false, model: 'bs', K: 100, T: 1, v: 0.2,"
+        " r: 0.04, q: 0.01}; const g = [];"
+        " for (let i = 0; i <= 80; i++) g.push(W.greeks(Object.assign({}, base, {S: 50 + 1.25 * i})));"
+        " let flips = 0; for (let i = 2; i < g.length; i++) { const d1 = g[i].delta - g[i - 1].delta,"
+        " d0 = g[i - 1].delta - g[i - 2].delta; if (d1 * d0 < 0 && Math.abs(d1) > 1e-5) flips++; }"
+        " return [flips, g[40].gamma, W.bs(100, 100, 1, 0.04, 0.01, 0.2, false).gamma]; })()"
+    )
+    flips, gamma_am, gamma_eu = run_js(expr)
+    assert flips == 0
+    assert 0.95 * gamma_eu < gamma_am < 1.3 * gamma_eu

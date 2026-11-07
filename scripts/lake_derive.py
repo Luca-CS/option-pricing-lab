@@ -14,6 +14,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from optlab.core.instruments import enabled_names, enabled_underlyings
 from optlab.marketdata.derive.bank import build_bank
 from optlab.marketdata.derive.carry import build_carry, build_parity_carry
 from optlab.marketdata.derive.correl import build_basket_quotes, build_premium, build_realized
@@ -22,7 +23,6 @@ from optlab.marketdata.derive.fx import build_fx_correl, build_fx_forwards, buil
 from optlab.marketdata.derive.surfaces import build_observed, build_reconstructed
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.quotes import quote_days
-from optlab.marketdata.universe import enabled_names, enabled_underlyings
 
 BASKETS = (
     ("SPX", "NDX"),

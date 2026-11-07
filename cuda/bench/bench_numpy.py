@@ -17,8 +17,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from optlab import BlackScholesModel, HestonModel, HestonParams, Market, barrier_mc, european_mc  # noqa: E402
-from optlab.models import time_grid  # noqa: E402
+from optlab.core import BlackScholesModel, HestonModel, HestonParams, Market, barrier_mc, european_mc  # noqa: E402
+from optlab.core.models import time_grid  # noqa: E402
 
 TIME_BUDGET = 5.0  # seconds per repetition
 MEMORY_BUDGET = 4e9  # bytes for the stored paths (two float64 arrays of n_paths x n_obs)

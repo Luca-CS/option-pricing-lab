@@ -42,7 +42,7 @@ SPX_MARKET = "SPX-20261104T1600-8b7fa10118"  # the showcase's market in use (clo
 
 
 def local_dir() -> Path:
-    from optlab.config import paths
+    from optlab.core.config import paths
 
     base = os.environ.get("OPTLAB_DATA")
     return (Path(base) if base else paths().lake.parent) / "golden"
@@ -119,7 +119,7 @@ def numbers_only(x):
 
 
 def closed_forms() -> dict:
-    from optlab import (
+    from optlab.core import (
         HestonParams,
         Market,
         barrier_price,
@@ -134,7 +134,7 @@ def closed_forms() -> dict:
         heston_price,
         implied_vol,
     )
-    from optlab.blackscholes import black_vega
+    from optlab.core.blackscholes import black_vega
 
     S, r, q = 100.0, 0.03, 0.01
     Ks, Ts, vols = [70.0, 90.0, 100.0, 110.0, 140.0], [0.05, 0.5, 1.0, 3.0], [0.1, 0.25, 0.6]
@@ -186,14 +186,14 @@ def closed_forms() -> dict:
 
 
 def _synthetic_ssvi():
-    from optlab import SSVI
+    from optlab.core import SSVI
 
     mats = np.array([0.1, 0.25, 0.5, 1.0, 2.0])
     return SSVI.power_law(-0.7, 1.1, 0.4, mats, 0.04 * mats * (1 + 0.2 * mats))
 
 
 def mc_products() -> dict:
-    from optlab import (
+    from optlab.core import (
         BlackScholesModel,
         HestonModel,
         HestonParams,
@@ -241,7 +241,7 @@ def mc_products() -> dict:
 
 def _simulated_market(noise_bp=15, seed=1):
     """Frozen copy of scripts/run_calibration.py:simulated_market (A0): Heston quotes plus noise on a flat market."""
-    from optlab import HestonParams, Market, heston_iv
+    from optlab.core import HestonParams, Market, heston_iv
 
     true = HestonParams(v0=0.025, kappa=1.8, theta=0.04, xi=0.75, rho=-0.75)
     rng = np.random.default_rng(seed)
@@ -275,7 +275,7 @@ _FIT: dict = {}
 
 def _simulated_fit():
     if not _FIT:
-        from optlab.pipeline import calibrate_all
+        from optlab.core.pipeline import calibrate_all
 
         market, slices = _simulated_market()
         _FIT.update(
@@ -287,7 +287,7 @@ def _simulated_fit():
 
 
 def calibration_simulated() -> dict:
-    from optlab.pipeline import exotics_table, fit_errors
+    from optlab.core.pipeline import exotics_table, fit_errors
 
     f = _simulated_fit()
     fit, market, slices = f["fit"], f["market"], f["slices"]
@@ -339,10 +339,10 @@ def _quote_numbers(q) -> dict:
 
 
 def presets_simulated() -> dict:
-    from optlab import native
+    from optlab.core import engines
     from optlab.structured import PRESETS, preset, quote
 
-    native.set_default("numpy")
+    engines.set_default("numpy")
     ctx = _simulated_context()
     return {name: _quote_numbers(quote(preset(name), ctx, n_paths=20_000, batch=10_000)) for name in PRESETS}
 
@@ -370,11 +370,11 @@ def _desk_numbers(q) -> dict:
 
 def structured_extra() -> dict:
     """Forced models, the desk's cost lines on the starting table, Greeks, and a two-position book."""
-    from optlab import native
+    from optlab.core import engines
     from optlab.structured import Book, Position, preset, quote
     from optlab.structured.defaults import resolve
 
-    native.set_default("numpy")
+    engines.set_default("numpy")
     ctx = _simulated_context()
     out: dict = {"forced": {}, "costs": {}, "greeks": {}}
     for model in ("bs", "heston", "slv"):
@@ -468,24 +468,24 @@ def _spx_context():
 
 
 def presets_spx_numpy() -> dict:
-    from optlab import native
+    from optlab.core import engines
     from optlab.structured import PRESETS, preset, quote
 
-    native.set_default("numpy")
+    engines.set_default("numpy")
     ctx = _spx_context()
     return {name: _quote_numbers(quote(preset(name), ctx, n_paths=20_000, batch=10_000)) for name in PRESETS}
 
 
 def presets_spx_gpu() -> dict:
-    from optlab import native
+    from optlab.core import engines
     from optlab.structured import PRESETS, preset, quote
 
-    native.set_default("gpu")
+    engines.set_default("gpu")
     try:
         ctx = _spx_context()
         return {name: _quote_numbers(quote(preset(name), ctx, n_paths=100_000, batch=25_000)) for name in PRESETS}
     finally:
-        native.set_default("numpy")
+        engines.set_default("numpy")
 
 
 def _lake():
@@ -550,11 +550,11 @@ def _trades_pnl():
 
 
 def pnl_cascade() -> dict:
-    from optlab import native
+    from optlab.core import engines
     from optlab.risk import RiskSettings
     from optlab.risk import pnl as P
 
-    native.set_default("numpy")
+    engines.set_default("numpy")
     settings = RiskSettings(n_paths=20_000, batch=10_000, engine="numpy")
     lake = _lake()
     t20, t26 = _trades_pnl()
@@ -573,7 +573,7 @@ class _ShowcaseCopy:
         self.dir = local_dir() / f"work-{name}-{os.getpid()}"
 
     def __enter__(self):
-        from optlab.app.api import Desk
+        from optlab.server.api import Desk
 
         shutil.copytree(local_dir().parent / "showcase", self.dir / "showcase")
         self.desk = Desk(self.dir / "showcase" / "desk.sqlite", engine="gpu", workers=6)
@@ -583,10 +583,10 @@ class _ShowcaseCopy:
     def __exit__(self, *exc):
         import gc
 
-        from optlab import native
+        from optlab.core import engines
 
         self.desk.jobs.shutdown()
-        native.set_default("numpy")
+        engines.set_default("numpy")
         del self.desk
         gc.collect()
         shutil.rmtree(self.dir, ignore_errors=True)
@@ -609,7 +609,7 @@ _TIMES: dict = {}
 
 
 def showcase_book() -> dict:
-    from optlab.app.risk_api import RiskApi
+    from optlab.server.risk_api import RiskApi
 
     with _ShowcaseCopy("book") as desk:
         t0 = time.perf_counter()
@@ -622,7 +622,7 @@ def showcase_book() -> dict:
 
 
 def showcase_var() -> dict:
-    from optlab.app.risk_api import RiskApi
+    from optlab.server.risk_api import RiskApi
 
     with _ShowcaseCopy("var") as desk:
         t0 = time.perf_counter()

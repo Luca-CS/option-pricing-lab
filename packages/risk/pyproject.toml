@@ -1,0 +1,26 @@
+[project]
+name = "optlab-risk"
+version = "0.1.0"
+description = "optlab's risk engine: Greeks, ladders, scenarios, historical VaR and the explained P&L, by revaluation"
+requires-python = ">=3.14"
+license = "MIT"
+dependencies = [
+    "optlab-core",
+    "optlab-structured",
+    "optlab-marketdata",
+    "numpy>=2.5",
+    "scipy>=1.18",
+    "pandas>=3.1",
+]
+
+[build-system]
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/optlab"]  # a portion of the PEP 420 namespace `optlab`: no optlab/__init__.py (ADR-0003)
+
+[tool.uv.sources]
+optlab-core = { workspace = true }
+optlab-structured = { workspace = true }
+optlab-marketdata = { workspace = true }

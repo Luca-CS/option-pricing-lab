@@ -24,13 +24,13 @@ for root in (HERE, HERE.parent):  # the Space ships optlab/ next to app.py; the 
         sys.path.insert(0, str(root))
         break
 
-from optlab import (  # noqa: E402 (space/ is removed in A8)
+from optlab.core import (  # noqa: E402 (space/ is removed in A8)
     BlackScholesModel,
     HestonModel,
     HestonParams,
     Leverage,
     LocalVolModel,
-    Market,  # noqa: E402
+    Market,
     SLVModel,
     SVISurface,
     american_lsm,

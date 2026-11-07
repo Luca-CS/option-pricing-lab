@@ -7,6 +7,17 @@ resolution-markers = [
     "sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 
+[manifest]
+members = [
+    "optlab",
+    "optlab-core",
+    "optlab-marketdata",
+    "optlab-native",
+    "optlab-risk",
+    "optlab-server",
+    "optlab-structured",
+]
+
 [[package]]
 name = "beautifulsoup4"
 version = "4.15.0"
@@ -866,22 +877,20 @@ name = "optlab"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "numpy" },
-    { name = "scipy" },
+    { name = "optlab-core" },
+    { name = "optlab-marketdata" },
+    { name = "optlab-native" },
+    { name = "optlab-risk" },
+    { name = "optlab-server" },
+    { name = "optlab-structured" },
 ]
 
 [package.optional-dependencies]
-data = [
-    { name = "duckdb" },
-    { name = "pandas" },
-    { name = "pyarrow" },
-    { name = "requests" },
-]
 reports = [
     { name = "matplotlib" },
 ]
 yahoo = [
-    { name = "yfinance" },
+    { name = "optlab-marketdata", extra = ["yahoo"] },
 ]
 
 [package.dev-dependencies]
@@ -897,16 +906,16 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "duckdb", marker = "extra == 'data'", specifier = ">=2.0" },
     { name = "matplotlib", marker = "extra == 'reports'", specifier = ">=3.11" },
-    { name = "numpy", specifier = ">=2.5" },
-    { name = "pandas", marker = "extra == 'data'", specifier = ">=3.1" },
-    { name = "pyarrow", marker = "extra == 'data'", specifier = ">=26.0" },
-    { name = "requests", marker = "extra == 'data'", specifier = ">=2.34" },
-    { name = "scipy", specifier = ">=1.18" },
-    { name = "yfinance", marker = "extra == 'yahoo'", specifier = ">=1.7" },
+    { name = "optlab-core", editable = "packages/core" },
+    { name = "optlab-marketdata", editable = "packages/marketdata" },
+    { name = "optlab-marketdata", extras = ["yahoo"], marker = "extra == 'yahoo'", editable = "packages/marketdata" },
+    { name = "optlab-native", editable = "packages/native" },
+    { name = "optlab-risk", editable = "packages/risk" },
+    { name = "optlab-server", editable = "packages/server" },
+    { name = "optlab-structured", editable = "packages/structured" },
 ]
-provides-extras = ["data", "yahoo", "reports"]
+provides-extras = ["yahoo", "reports"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -917,6 +926,133 @@ dev = [
     { name = "pytest-cov", specifier = ">=7.1" },
     { name = "pytest-xdist", specifier = ">=3.8" },
     { name = "ruff", specifier = "==0.17.2" },
+]
+
+[[package]]
+name = "optlab-core"
+version = "0.1.0"
+source = { editable = "packages/core" }
+dependencies = [
+    { name = "numpy" },
+    { name = "scipy" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy", specifier = ">=2.5" },
+    { name = "scipy", specifier = ">=1.18" },
+]
+
+[[package]]
+name = "optlab-marketdata"
+version = "0.1.0"
+source = { editable = "packages/marketdata" }
+dependencies = [
+    { name = "duckdb" },
+    { name = "numpy" },
+    { name = "optlab-core" },
+    { name = "optlab-structured" },
+    { name = "pandas" },
+    { name = "pyarrow" },
+    { name = "requests" },
+    { name = "scipy" },
+]
+
+[package.optional-dependencies]
+yahoo = [
+    { name = "yfinance" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "duckdb", specifier = ">=2.0" },
+    { name = "numpy", specifier = ">=2.5" },
+    { name = "optlab-core", editable = "packages/core" },
+    { name = "optlab-structured", editable = "packages/structured" },
+    { name = "pandas", specifier = ">=3.1" },
+    { name = "pyarrow", specifier = ">=26.0" },
+    { name = "requests", specifier = ">=2.34" },
+    { name = "scipy", specifier = ">=1.18" },
+    { name = "yfinance", marker = "extra == 'yahoo'", specifier = ">=1.7" },
+]
+provides-extras = ["yahoo"]
+
+[[package]]
+name = "optlab-native"
+version = "0.1.0"
+source = { editable = "packages/native" }
+dependencies = [
+    { name = "numpy" },
+    { name = "optlab-core" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy", specifier = ">=2.5" },
+    { name = "optlab-core", editable = "packages/core" },
+]
+
+[[package]]
+name = "optlab-risk"
+version = "0.1.0"
+source = { editable = "packages/risk" }
+dependencies = [
+    { name = "numpy" },
+    { name = "optlab-core" },
+    { name = "optlab-marketdata" },
+    { name = "optlab-structured" },
+    { name = "pandas" },
+    { name = "scipy" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy", specifier = ">=2.5" },
+    { name = "optlab-core", editable = "packages/core" },
+    { name = "optlab-marketdata", editable = "packages/marketdata" },
+    { name = "optlab-structured", editable = "packages/structured" },
+    { name = "pandas", specifier = ">=3.1" },
+    { name = "scipy", specifier = ">=1.18" },
+]
+
+[[package]]
+name = "optlab-server"
+version = "0.1.0"
+source = { editable = "packages/server" }
+dependencies = [
+    { name = "numpy" },
+    { name = "optlab-core" },
+    { name = "optlab-marketdata" },
+    { name = "optlab-native" },
+    { name = "optlab-risk" },
+    { name = "optlab-structured" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy", specifier = ">=2.5" },
+    { name = "optlab-core", editable = "packages/core" },
+    { name = "optlab-marketdata", editable = "packages/marketdata" },
+    { name = "optlab-native", editable = "packages/native" },
+    { name = "optlab-risk", editable = "packages/risk" },
+    { name = "optlab-structured", editable = "packages/structured" },
+]
+
+[[package]]
+name = "optlab-structured"
+version = "0.1.0"
+source = { editable = "packages/structured" }
+dependencies = [
+    { name = "numpy" },
+    { name = "optlab-core" },
+    { name = "scipy" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy", specifier = ">=2.5" },
+    { name = "optlab-core", editable = "packages/core" },
+    { name = "scipy", specifier = ">=1.18" },
 ]
 
 [[package]]

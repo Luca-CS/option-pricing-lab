@@ -1,0 +1,17 @@
+[project]
+name = "optlab-core"
+version = "0.1.0"
+description = "optlab's core: closed forms, models, Monte Carlo, calibration (SSVI, SVI, Heston, SLV), the engine registry; numpy and scipy only"
+requires-python = ">=3.14"
+license = "MIT"
+dependencies = [
+    "numpy>=2.5",
+    "scipy>=1.18",
+]
+
+[build-system]
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/optlab"]  # a portion of the PEP 420 namespace `optlab`: no optlab/__init__.py (ADR-0003)

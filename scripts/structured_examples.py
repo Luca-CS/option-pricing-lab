@@ -14,11 +14,11 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from optlab.core.validation import mc_smile  # noqa: E402
 from optlab.structured import Book, Position, PricingContext, compile_sheet, preset, price_many, quote  # noqa: E402
 from optlab.structured.greeks import greeks  # noqa: E402
 from optlab.structured.multiasset import BasketContext  # noqa: E402
 from optlab.structured.solve import combine, solve_affine  # noqa: E402
-from optlab.validation import mc_smile  # noqa: E402
 
 MODELS = {"bs": "Black-Scholes (ATM vol)", "lv": "Local vol (Dupire)", "heston": "Heston", "slv": "SLV"}
 
