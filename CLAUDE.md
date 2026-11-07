@@ -37,6 +37,11 @@ python -m venv .venv
   Profiling: `ncu --set full -k regex:mc_kernel -o build/ncu_profile build\Release\profile.exe` from an
   administrator shell (GPU counters are admin-only on this machine); read it with
   `ncu -i build/ncu_profile.ncu-rep --page raw --csv --metrics ...` (`--page details` fails under the French locale).
+- Risk engine (`optlab/risk/`): `tests/test_risk_*.py` (about 20 minutes; `test_risk_var`, `test_risk_pnl` and the betas test need the
+  lake and skip without it). `scripts/risk_eod.py eod --date D | backfill --from A --to B | pnl --from A --to B | var | ladder`
+  works on a desk store (default the showcase's) and keeps every run in `risk.sqlite` beside it; method and measured numbers in
+  `reports/risk.md`. The desk serves it on `#/risk` and `#/pnl` (`app/risk_api.py`, routes `/api/risk/*`, `/api/pnl*`, report
+  `/report/risk`).
 - Data lake (`optlab/marketdata/`, needs `duckdb` and `pyarrow`; data in `OPTLAB_DATA`, default `optlab-data` beside the main checkout):
   `scripts/lake_update.py` (public sources, yen and sterling rates in the steps `mof`, `boj`, `boe`; `--import-sample zip`, `--dolt default`,
   `--yahoo-chains` during US hours only: Yahoo blanks bid and ask otherwise), `scripts/lake_derive.py` (curves, carry, bank, surfaces, correlation, pairs, observed fits),
@@ -128,6 +133,20 @@ python -m venv .venv
   `optlab.data.clean_chain`, for every source), `pit.py` (`market_at`: only rows dated at or before the date; the forward repeats last year's dividends, `carry.dividend_stream`; `payment` gives the quanto market, `structured/quanto.py`), `replay.py` (a trade's life on
   real closes), `vollab.py` (fits as stored, replayable runs). The model stays at spot 100: real levels cross at the boundary through
   `spot_scale`. Pricing a sheet on another name's market is an error.
+- **`optlab/risk/`** is the risk engine, one block with JSON-ready dataclasses in and out, reading `structured/` and `marketdata/`
+  only (the desk reaches it through the thin `app/risk_api.py`). Principle: a risk is a list of `Shock`s (`shocks.py`: spots, vols
+  parallel, relative, per node or per tenor, skew, curves per tenor, dividends, repo, correlation, FX, quanto, roll, and the vol rule
+  sticky moneyness / sticky strike / realistic) revalued by one engine (`engine.run_group`) on the base's seed. Shocks that only move
+  spots, forwards or discounts ride on one simulation (a factor on the sticky-moneyness paths, exact); vol, correlation and the roll
+  resimulate on the same seed; `Measure`s combine revaluations into Greeks with paired SEs. `grid.py` (moneyness x tenors, smooth
+  tents: smoothed hats in strike, wider in the wings and with sqrt(T), so that a one-point node bump stays free of butterfly
+  arbitrage), `surfaces.TentBumpedSurface` (exact derivatives for Dupire; `local_var_rows` builds the engine's table at once, a
+  hook in `native._local_var_rows`), `curves.py`, `greeks.py` (every variant, keys "greek|name|bucket"), `aggregate.py`,
+  `ladder.py` (and spot-vol betas from the lake), `scenarios.py` (signed, versioned in the store), `var.py` (historical full
+  reval on processes, stressed window searched by delta-gamma-vega then frozen), `pnl.py` (EOD runs, backfill, the cascade
+  time, spot, vol, skew, rates, dividends, corr, fx on the seeds of the day before, the Greeks' prediction), `store.py`
+  (SQLite: versioned records and runs keyed by what determines them), `report.py`. Tests compare with closed forms and
+  `tests/_risk_refs.py`.
 - **`space/app.py`** is a local Gradio front-end (needs `pip install gradio`), not deployed.
 
 ## Conventions

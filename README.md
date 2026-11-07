@@ -190,6 +190,15 @@ step and no CDN.
   the model-risk table and the calibration fit. **Script lab**: any single-name payoff of the script language,
   checked as it is typed, priced under any model.
 
+- **Risk** (`#/risk`): the Greeks of the live book per trade, per underlying and in total, each with its standard error (delta
+  sticky moneyness, sticky strike and realistic, gamma at 1 and 5 %, vega per tenor and per node with net, gross and weighted,
+  vanna, volga, skew vega, theta split into carry, events and decay, rho and epsilon per tenor, correlation and cross gamma), the
+  vega matrix, the spot ladder under three vol rules, the hypothetical scenarios (signed and versioned, edited on the screen),
+  and the historical VaR by full revaluation with its stressed window and contributions. **P&L explained** (`#/pnl`): stored
+  end-of-day runs, daily and cumulated, the cascade of full revaluations (time, spot, vol, skew, rates, dividends, correlation,
+  FX) against the prediction of the Greeks, per trade, with events and new trades. Method and measured numbers in
+  [reports/risk.md](reports/risk.md); `scripts/risk_eod.py` runs the same from the console.
+
 Every table sorts by its headers. Sharing while the engine stays on this PC:
 
 | How | Start with | Notes |
@@ -323,6 +332,7 @@ runs locally: `pip install gradio`, then `python space/app.py`.
 | `optlab/gpu.py` | Python bridge to the CUDA engine, NumPy fallback |
 | `optlab/data.py` | SPX chain download and cleaning |
 | `optlab/structured/` | structured products: script language, term-sheet builder, policy, pricers |
+| `optlab/risk/` | risk engine: shocks and one revaluation engine, Greeks, ladder, scenarios, VaR, EOD runs and explained P&L |
 | `optlab/app/` | local web desk: HTTP server, JSON API, jobs, SQLite store, reports, the page in `static/` |
 | `optlab/pipeline.py`, `scripts/` | calibration runs, report and charts |
 | `cuda/` | C++/CUDA Monte Carlo engine, benchmarks and optimisation study |
