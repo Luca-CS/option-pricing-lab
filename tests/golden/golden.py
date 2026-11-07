@@ -394,14 +394,32 @@ def pnl_cascade() -> dict:
             "2026-11-04": numbers_only(plain(P.explain_day(lake, [t26], "2026-11-03", "2026-11-04", None, settings)))}
 
 
-def _showcase_desk(workdir: Path):
-    """A Desk on a copy of the showcase store: the golden run never writes into the real one."""
-    from optlab.app.api import Desk
-    src = local_dir().parent / "showcase"
-    shutil.copytree(src, workdir / "showcase")
-    desk = Desk(workdir / "showcase" / "desk.sqlite", engine="gpu", workers=6)
-    desk.use_snapshot({"snapshot_id": SPX_MARKET})
-    return desk
+class _ShowcaseCopy:
+    """A Desk on a copy of the showcase store, so the golden run never writes into the real one. The copy lives beside
+    the data it comes from (`optlab-data/golden/work-*`, never the system temp folder) and is removed afterwards; if
+    Windows still holds a file open, the folder stays there and a warning says so, but the result is kept."""
+
+    def __init__(self, name: str):
+        self.dir = local_dir() / f"work-{name}-{os.getpid()}"
+
+    def __enter__(self):
+        from optlab.app.api import Desk
+        shutil.copytree(local_dir().parent / "showcase", self.dir / "showcase")
+        self.desk = Desk(self.dir / "showcase" / "desk.sqlite", engine="gpu", workers=6)
+        self.desk.use_snapshot({"snapshot_id": SPX_MARKET})
+        return self.desk
+
+    def __exit__(self, *exc):
+        import gc
+        from optlab import native
+        self.desk.jobs.shutdown()
+        native.set_default("numpy")
+        del self.desk
+        gc.collect()
+        shutil.rmtree(self.dir, ignore_errors=True)
+        if self.dir.exists():
+            print(f"warning: {self.dir} could not be removed (a file is still open); delete it by hand", file=sys.stderr)
+        return False
 
 
 def _wait(desk, job_id: str) -> dict:
@@ -417,34 +435,22 @@ _TIMES: dict = {}
 
 def showcase_book() -> dict:
     from optlab.app.risk_api import RiskApi
-    with tempfile.TemporaryDirectory(prefix="golden-showcase-") as tmp:
-        desk = _showcase_desk(Path(tmp))
-        try:
-            t0 = time.perf_counter()
-            book = _wait(desk, desk.price_book({"options": {"precision": "standard", "greeks": True}})["job"])
-            _TIMES["showcase_book_s"] = time.perf_counter() - t0
-            t0 = time.perf_counter()
-            greeks = _wait(desk, RiskApi(desk).run({"options": {"precision": "standard"}})["job"])
-            _TIMES["showcase_greeks_s"] = time.perf_counter() - t0
-        finally:
-            desk.jobs.shutdown()
-            from optlab import native
-            native.set_default("numpy")
+    with _ShowcaseCopy("book") as desk:
+        t0 = time.perf_counter()
+        book = _wait(desk, desk.price_book({"options": {"precision": "standard", "greeks": True}})["job"])
+        _TIMES["showcase_book_s"] = time.perf_counter() - t0
+        t0 = time.perf_counter()
+        greeks = _wait(desk, RiskApi(desk).run({"options": {"precision": "standard"}})["job"])
+        _TIMES["showcase_greeks_s"] = time.perf_counter() - t0
     return {"book": numbers_only(plain(book)), "greeks": numbers_only(plain(greeks))}
 
 
 def showcase_var() -> dict:
     from optlab.app.risk_api import RiskApi
-    with tempfile.TemporaryDirectory(prefix="golden-var-") as tmp:
-        desk = _showcase_desk(Path(tmp))
-        try:
-            t0 = time.perf_counter()
-            res = _wait(desk, RiskApi(desk).var({"options": {"precision": "standard"}, "workers": 5, "days": 500})["job"])
-            _TIMES["showcase_var_s"] = time.perf_counter() - t0
-        finally:
-            desk.jobs.shutdown()
-            from optlab import native
-            native.set_default("numpy")
+    with _ShowcaseCopy("var") as desk:
+        t0 = time.perf_counter()
+        res = _wait(desk, RiskApi(desk).var({"options": {"precision": "standard"}, "workers": 5, "days": 500})["job"])
+        _TIMES["showcase_var_s"] = time.perf_counter() - t0
     return numbers_only(plain(res))
 
 
@@ -523,6 +529,7 @@ def main(argv=None) -> int:
     ap.add_argument("--local", action="store_true", help="include the local groups (lake, showcase, GPU)")
     ap.add_argument("--rtol", type=float, default=0.0)
     ap.add_argument("--force", action="store_true", help="record over an existing file")
+    ap.add_argument("--dump", help="check: also write the computed values to this folder (to compare platforms)")
     args = ap.parse_args(argv)
     groups = args.group or [g for g, (w, _) in GROUPS.items() if w == "ci" or args.local]
     if args.action == "list":
@@ -544,6 +551,10 @@ def main(argv=None) -> int:
             print(f"{g}: recorded in {seconds:.1f} s -> {target}")
         else:
             gold = json.loads(target.read_text(encoding="utf-8"))
+            if args.dump:
+                Path(args.dump).mkdir(parents=True, exist_ok=True)
+                (Path(args.dump) / f"{g}.json").write_text(json.dumps({"meta": _meta(seconds), "values": values}, indent=1),
+                                                           encoding="utf-8")
             d = diff(gold["values"], values, args.rtol)
             rels = [float(x) for line in d for x in re.findall(r"\(rel ([0-9.e+-]+)\)", line)]
             worst = f", max rel {max(rels):.2e}" if rels else ""
