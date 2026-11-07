@@ -400,7 +400,7 @@ def desk_snapshot(desk, fragment: bool = False, note: str | None = None) -> str:
 
 def risk_report(risk) -> str:
     """The last stored runs of the risk engine: Greeks, ladder, scenarios, VaR, and the explained P&L."""
-    from ..risk import report as R
+    from optlab.risk import report as R
 
     def last(kind):
         runs = risk.store.runs(kind, latest=False)

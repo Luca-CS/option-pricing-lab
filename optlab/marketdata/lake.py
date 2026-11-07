@@ -28,8 +28,8 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from ..config import paths
-from ..log import get_logger
+from optlab.config import paths
+from optlab.log import get_logger
 
 LOG = get_logger(__name__)
 ORIGINS = ("observed", "derived", "reconstructed", "synthetic")

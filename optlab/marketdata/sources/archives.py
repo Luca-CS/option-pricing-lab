@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from ..lake import Lake, new_run_id
+from optlab.marketdata.lake import Lake, new_run_id
 
 HD_SOURCE, OPTIONSDX_SOURCE = "historicaldata", "optionsdx"
 # The archive reports SPXW under its own underlying; everything on the S&P 500 index is stored under SPX.

@@ -7,8 +7,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..dates import WeekendCalendar, year_fraction
-from .nodes import Binary, Call, DateLit, If, Pay, Program, Unary, Window
+from optlab.structured.dates import WeekendCalendar, year_fraction
+from optlab.structured.script.nodes import Binary, Call, DateLit, If, Pay, Program, Unary, Window
 
 
 @dataclass

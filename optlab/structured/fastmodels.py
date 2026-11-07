@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from ..models import Model, SLVModel
+from optlab.models import Model, SLVModel
 
 
 def _uniform_interp(x, x0: float, inv_dx: float, y: np.ndarray):

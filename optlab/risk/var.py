@@ -33,11 +33,11 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from ..structured.multiasset import BasketContext
-from . import grid
-from .curves import CurveMove
-from .engine import RiskSettings, run_group_safe
-from .shocks import RiskEnv, Shock, VolMove, context_currency
+from optlab.risk import grid
+from optlab.risk.curves import CurveMove
+from optlab.risk.engine import RiskSettings, run_group_safe
+from optlab.risk.shocks import RiskEnv, Shock, VolMove, context_currency
+from optlab.structured.multiasset import BasketContext
 
 LEVEL, ES_LEVEL = 0.99, 0.975
 FACTORS = ("spot", "vol", "skew", "dividend", "rates", "corr")
@@ -54,7 +54,7 @@ def group_names(group) -> list[str]:
 
 def factor_levels(lake, names, currencies, start, end, layer: str = "reconstructed") -> tuple[pd.DataFrame, dict]:
     """Levels of every factor by date (rows where every spot and surface is known), and their origins."""
-    from .history import carry, closes, realised_correlation, vol_factors, zero_rates
+    from optlab.risk.history import carry, closes, realised_correlation, vol_factors, zero_rates
 
     start_wide = (pd.Timestamp(start) - pd.tseries.offsets.BDay(130)).date()  # the correlation window needs its history
     spots = closes(lake, names, start_wide, end)
@@ -164,7 +164,7 @@ def worker_settings(settings: RiskSettings, workers: int) -> RiskSettings:
     if workers <= 1:
         return settings
     if settings.engine is None:
-        from .. import native
+        from optlab import native
 
         settings = dataclasses.replace(settings, engine=native.default_engine())
     if settings.eval_threads is None:

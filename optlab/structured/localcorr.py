@@ -31,7 +31,7 @@ NOTE = "Calibrated on pseudo-quotes of CvC and PvP, where the correlation skew i
 
 def low_matrix(corr, w0: float) -> np.ndarray:
     """The matrix that gives `corr` once mixed with the matrix of ones at w0, repaired if taking w0 out leaves it not semi-definite."""
-    from ..marketdata.derive.correl import nearest_correlation
+    from optlab.marketdata.derive.correl import nearest_correlation
 
     c = np.asarray(corr, dtype=float)
     low = (c - w0) / (1.0 - w0)
@@ -43,7 +43,7 @@ def aligned_factors(corr, root, w0: float) -> tuple:
     """(factors of the low matrix with the signs of `root`, sign of the market factor, angle). With two independent normals M (the market factor of `root`) and N,
     Z_0 = cos a M + sin a N and e_top = sin a M - cos a N are independent normals, and the angle takes N out of the spots at w0: a price then moves against the constant
     matrix's on the same draws only where the weight has moved. Independence is all the marginals need, so the angle changes no law."""
-    from .multiasset import correlation_root
+    from optlab.structured.multiasset import correlation_root
 
     low = correlation_root(low_matrix(corr, w0)).copy()
     for j in range(low.shape[1] - 1):  # the other factors have the signs of `root`
@@ -117,7 +117,7 @@ def basket_sigma(ctx, names, T: float = 1.0) -> float:
 
 def targets(ctx, names, T: float = 1.0, skew=None) -> list:
     """The pseudo-quotes of one tenor: PvP at 90 %, CvC at 100 % and 110 %, in % of notional and undiscounted."""
-    from ..marketdata.derive.correl import CorrelationSkew, basket_rows
+    from optlab.marketdata.derive.correl import CorrelationSkew, basket_rows
 
     surfaces = [ctx.vols[n] for n in names]
     idx = [ctx.names.index(n) for n in names]
@@ -132,8 +132,8 @@ def targets(ctx, names, T: float = 1.0, skew=None) -> list:
 
 def model_quotes(ctx, names, mixer, wanted, T: float, n_paths: int, seed: int) -> tuple[np.ndarray, np.ndarray]:
     """(prices in %, standard errors) of the same lines under a mixer, by local vol per name on a coarse grid."""
-    from ..marketdata.derive.correl import spread_payoff
-    from .multiasset import simulate_basket
+    from optlab.marketdata.derive.correl import spread_payoff
+    from optlab.structured.multiasset import simulate_basket
 
     basket = ctx.model("lv", T, names, mixer=mixer)
     paths = simulate_basket(basket, [T], n_paths, seed, dt_max=1 / 50)

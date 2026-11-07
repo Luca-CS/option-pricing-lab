@@ -6,12 +6,12 @@ import datetime as dt
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..config import paths
-from ..heston import HestonParams
-from ..market import Market
-from ..models import BlackScholesModel, HestonModel, Leverage, LocalVolModel, SLVModel
-from ..svi import SVISurface
-from .surfaces import FastSVISurface
+from optlab.config import paths
+from optlab.heston import HestonParams
+from optlab.market import Market
+from optlab.models import BlackScholesModel, HestonModel, Leverage, LocalVolModel, SLVModel
+from optlab.structured.surfaces import FastSVISurface
+from optlab.svi import SVISurface
 
 DEFAULT_CALIBRATION = paths().results / "spx_calibration.json"
 LEVERAGE_HORIZONS = (
@@ -48,14 +48,14 @@ class PricingContext:
         """The calibrated market of a results/*.json file; files without a snapshot time need `valuation`.
         `slv_regression="local_linear"` recalibrates the SLV leverage at load (about 7 s) with the local linear
         regression of max(v, 0), which removes most of the ATM vanilla bias left by the stored leverage."""
-        from ..marketdata import MarketSnapshot
+        from optlab.marketdata import MarketSnapshot
 
         snap = MarketSnapshot.from_calibration_file(
             path or DEFAULT_CALIBRATION, underlying, valuation, provenance=False
         )
         ctx = cls.from_snapshot(snap)
         if slv_regression:
-            from ..slv import calibrate_leverage
+            from optlab.slv import calibrate_leverage
 
             fresh = calibrate_leverage(
                 ctx.heston,
@@ -93,7 +93,7 @@ class PricingContext:
     def slv_at_mix(self, mix: float, horizon: float, n_particles: int = 200_000, seed: int = 2026):
         """The SLV model with its leverage recalibrated for another mixing fraction (cached): the vanillas stay on
         the surface while the share of stochastic vol of vol changes."""
-        from ..slv import calibrate_leverage
+        from optlab.slv import calibrate_leverage
 
         T_max = round(min(max(horizon, 1 / 12), self.t_max), 6)
         key = (round(float(mix), 6), T_max, n_particles, seed)
@@ -130,11 +130,11 @@ class PricingContext:
         if name == "heston":
             return HestonModel(self.heston)
         if name == "lv" and fast:
-            from .fastmodels import TabulatedLocalVol
+            from optlab.structured.fastmodels import TabulatedLocalVol
 
             return TabulatedLocalVol(self.surface)
         if name == "slv" and fast:
-            from .fastmodels import fast_slv
+            from optlab.structured.fastmodels import fast_slv
 
             return fast_slv(self.slv_model(T))
         if name == "lv":

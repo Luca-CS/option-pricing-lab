@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..svi import SVISurface, g_function, svi_derivs
+from optlab.svi import SVISurface, g_function, svi_derivs
 
 
 class FastSVISurface(SVISurface):

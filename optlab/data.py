@@ -23,8 +23,8 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 
-from .blackscholes import implied_vol
-from .market import Market
+from optlab.blackscholes import implied_vol
+from optlab.market import Market
 
 NY = ZoneInfo("America/New_York")
 RAW_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"

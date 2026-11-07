@@ -8,9 +8,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .blackscholes import geometric_asian_price_curve
-from .market import Market
-from .models import BlackScholesModel, Model, simulate
+from optlab.blackscholes import geometric_asian_price_curve
+from optlab.market import Market
+from optlab.models import BlackScholesModel, Model, simulate
 
 
 @dataclass

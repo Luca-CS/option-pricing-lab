@@ -7,7 +7,7 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 
-from .lake import Lake, new_run_id
+from optlab.marketdata.lake import Lake, new_run_id
 
 MAX_MOVE = {"index": 0.2, "equity": 0.3}  # one-day moves beyond these are flagged, not removed
 STALE_DAYS = 10
@@ -173,8 +173,8 @@ def check_fx(spots: pd.DataFrame, today: dt.date, max_gap: float = 0.02, max_mov
 def check_calendar(lake: Lake) -> list[dict]:
     """Weekdays where the rule calendar of a place and the traded days disagree. A traded day missing from Yahoo shows
     here too: the fixings of that day have to be filled before a replay crosses it."""
-    from ..structured.calendars import CALENDARS
-    from .universe import PLACE_CALENDAR
+    from optlab.marketdata.universe import PLACE_CALENDAR
+    from optlab.structured.calendars import CALENDARS
 
     issues = []
     for place, name in PLACE_CALENDAR.items():

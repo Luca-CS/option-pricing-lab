@@ -11,8 +11,8 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
-from ..config import paths
-from ..structured.trade import Trade
+from optlab.config import paths
+from optlab.structured.trade import Trade
 
 SCHEMA = (
     """CREATE TABLE IF NOT EXISTS trades (trade_id TEXT, version INTEGER, book TEXT, status TEXT, payload TEXT,

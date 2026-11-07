@@ -7,8 +7,8 @@ from dataclasses import replace
 
 import numpy as np
 
-from ..products import MCResult
-from .pricer import StructuredResult
+from optlab.products import MCResult
+from optlab.structured.pricer import StructuredResult
 
 
 def combine(r0: StructuredResult, r1: StructuredResult, x: float) -> StructuredResult:

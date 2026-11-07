@@ -15,13 +15,13 @@ import numpy as np
 from scipy.special import ndtri
 from scipy.stats import qmc
 
-from ..models import BlackScholesModel, time_grid
-from ..products import MCResult
-from .cashflows import Note
-from .engine import Evaluation, _summary
-from .pricer import StructuredResult, _program, check_fixing_scale, history_times
-from .scenario import Scenario
-from .script.timeline import Clock, build_timeline
+from optlab.models import BlackScholesModel, time_grid
+from optlab.products import MCResult
+from optlab.structured.cashflows import Note
+from optlab.structured.engine import Evaluation, _summary
+from optlab.structured.pricer import StructuredResult, _program, check_fixing_scale, history_times
+from optlab.structured.scenario import Scenario
+from optlab.structured.script.timeline import Clock, build_timeline
 
 
 def bridge_order(times: np.ndarray):
@@ -113,7 +113,7 @@ def price_rqmc(
 ) -> StructuredResult:
     """RQMC price of a single-underlying script: `replications` scramblings of 2^m antithetic pairs each. The SE
     is the standard deviation of the scrambled estimates over sqrt(replications)."""
-    from ..models import simulate
+    from optlab.models import simulate
 
     t0 = time.perf_counter()
     fmt = fmt or Note()

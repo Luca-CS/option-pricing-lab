@@ -27,12 +27,12 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .. import native
-from ..models import simulate
-from .cashflows import pair_averages
-from .multiasset import Basket, BasketScenario, simulate_basket
-from .scenario import Scenario, batch_sizes
-from .script.evaluator import Evaluator
+from optlab import native
+from optlab.models import simulate
+from optlab.structured.cashflows import pair_averages
+from optlab.structured.multiasset import Basket, BasketScenario, simulate_basket
+from optlab.structured.scenario import Scenario, batch_sizes
+from optlab.structured.script.evaluator import Evaluator
 
 
 @dataclass
@@ -195,7 +195,7 @@ def reduction(times, evaluations) -> tuple:
     of at most native.MAX_WINDOWS windows only through their lowest and highest spots (the only way the language
     reads a window): the engine then returns the event dates and two columns per window instead of one per day.
     (None, (), ()) when there is nothing to gain or a window is not a contiguous run of simulated dates."""
-    from .scenario import window_key
+    from optlab.structured.scenario import window_key
 
     for ev in evaluations:  # a factor per date (a forward bump) would scale a window's days unequally
         factors = ev.spot_factor.values() if isinstance(ev.spot_factor, dict) else [ev.spot_factor]
@@ -227,7 +227,7 @@ def reduction(times, evaluations) -> tuple:
 
 
 def _run_native(backend, model, market, name, times, n_paths, seed, spot0, history, evaluations, sim_kwargs):
-    from .multiasset import Basket
+    from optlab.structured.multiasset import Basket
 
     t_start = time.perf_counter()
     plan = native.plan(model, market, times, sim_kwargs.get("dt_max", 1 / 252), sim_kwargs.get("dt_min", 1 / 2000))

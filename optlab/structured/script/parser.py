@@ -15,8 +15,8 @@ Grammar (one statement per line, blocks closed by `end`):
 
 from __future__ import annotations
 
-from .lexer import ScriptError, Token, tokenize
-from .nodes import (
+from optlab.structured.script.lexer import ScriptError, Token, tokenize
+from optlab.structured.script.nodes import (
     FUNCTIONS,
     WINDOWS,
     Assign,

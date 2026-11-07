@@ -22,8 +22,8 @@ from dataclasses import asdict, dataclass
 
 import numpy as np
 
-from . import gpu as _gpu
-from .models import BlackScholesModel, HestonModel, Leverage, LocalVolModel, Model, SLVModel, time_grid
+from optlab import gpu as _gpu
+from optlab.models import BlackScholesModel, HestonModel, Leverage, LocalVolModel, Model, SLVModel, time_grid
 
 ENGINES = ("numpy", "cpu", "gpu", "auto")
 _KIND = {"const": 0, "table": 1, "heston": 2, "slv": 3}
@@ -250,7 +250,7 @@ def _leverage_rows(leverage, t0: np.ndarray, n_x: int):
 
 def _describe(model: Model, t0: np.ndarray, n_x: int):
     """(kind, constant variance, Heston parameters, table rows or None, step rows or None) of one name."""
-    from .structured.fastmodels import TabulatedLocalVol, UniformLeverage  # noqa: F401
+    from optlab.structured.fastmodels import TabulatedLocalVol, UniformLeverage  # noqa: F401
 
     if isinstance(model, BlackScholesModel):
         return _KIND["const"], model.vol**2, (0.0, 1.0, 1.0, 0.0, 0.0), None, None
@@ -270,8 +270,8 @@ def _describe(model: Model, t0: np.ndarray, n_x: int):
 
 def unsupported(model) -> str | None:
     """Why the engine cannot simulate this model or basket, or None."""
-    from .structured.fastmodels import TabulatedLocalVol
-    from .structured.multiasset import Basket
+    from optlab.structured.fastmodels import TabulatedLocalVol
+    from optlab.structured.multiasset import Basket
 
     known = (BlackScholesModel, LocalVolModel, TabulatedLocalVol, SLVModel, HestonModel)
     if isinstance(model, Basket):
@@ -281,7 +281,7 @@ def unsupported(model) -> str | None:
         if bad:
             return f"{', '.join(type(model.models[n]).__name__ for n in bad)} not in the path engine"
         if model.mixer is not None:
-            from .structured.localcorr import LocalCorrelation
+            from optlab.structured.localcorr import LocalCorrelation
 
             if not isinstance(model.mixer, LocalCorrelation):
                 return f"{type(model.mixer).__name__} is not in the path engine (local correlation only)"
@@ -332,7 +332,7 @@ class Plan:
 
 def plan(model, market, times, dt_max=1 / 252, dt_min=1 / 2000, n_x: int = N_X) -> Plan:
     """The simulation of `models.simulate` (one model) or `simulate_basket` (a Basket) as arrays for the engine."""
-    from .structured.multiasset import Basket
+    from optlab.structured.multiasset import Basket
 
     why = unsupported(model)
     if why:
@@ -362,7 +362,7 @@ def plan(model, market, times, dt_max=1 / 252, dt_min=1 / 2000, n_x: int = N_X) 
     fwd = np.stack([np.asarray(mk.F(times), dtype=float) for mk in markets]) if len(times) else np.zeros((k, 0))
     mixer, mix, low = 0, (0.0,) * 8, None
     if isinstance(model, Basket) and model.mixer is not None:
-        from .structured.localcorr import aligned_factors
+        from optlab.structured.localcorr import aligned_factors
 
         mx = model.mixer
         low, sign, turn = aligned_factors(model.corr, model.root, mx.w0)
@@ -462,7 +462,7 @@ def simulate(
     threads: int = 0,
 ):
     """`models.simulate` (or `simulate_basket` for a Basket: a {name: array} dict) on the engine."""
-    from .structured.multiasset import Basket
+    from optlab.structured.multiasset import Basket
 
     p = plan(model, market, times, dt_max, dt_min)
     spots, _, _ = run(p, n_paths // 2, seed64(seed), first_pair, backend, threads)
@@ -493,7 +493,7 @@ def calibrate_leverage(
     quantiles that bound the grid read from a histogram of 8192 bins and the local variance from uniform rows (1e-4
     relative), on Philox draws. The leverage therefore differs from NumPy's by noise and those approximations; the
     SLV vanillas it gives are checked against the surface in tests/test_native.py."""
-    from .heston import HestonParams
+    from optlab.heston import HestonParams
 
     lib = _lib()
     if lib is None:

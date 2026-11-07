@@ -21,9 +21,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .script.evaluator import Ramp
-from .script.nodes import Assign, Binary, Call, If, Name, Num, Window
-from .script.timeline import Clock, build_timeline
+from optlab.structured.script.evaluator import Ramp
+from optlab.structured.script.nodes import Assign, Binary, Call, If, Name, Num, Window
+from optlab.structured.script.timeline import Clock, build_timeline
 
 KINDS = {
     "coupon": "Digital: coupon barrier",

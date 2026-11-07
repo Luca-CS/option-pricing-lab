@@ -16,25 +16,25 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from ..config import DEFAULT_SEED
-from ..models import BlackScholesModel, LocalVolModel
-from ..products import MCResult
-from . import engine
-from .cashflows import Note, Swap
-from .compiler import compile_sheet
-from .context import PricingContext
-from .engine import Evaluation
-from .greeks import ShiftedSurface, _recalibrated_slv
-from .multiasset import BasketContext
-from .policy import RULES, decide
-from .pricer import basket_history, check_fixing_scale
-from .profile import ProductProfile, profile
-from .replication import replication_result
-from .schema import TermSheet
-from .script.parser import parse
-from .script.timeline import Clock, build_timeline
-from .script.validate import validate
-from .units import BOOK_UNITS
+from optlab.config import DEFAULT_SEED
+from optlab.models import BlackScholesModel, LocalVolModel
+from optlab.products import MCResult
+from optlab.structured import engine
+from optlab.structured.cashflows import Note, Swap
+from optlab.structured.compiler import compile_sheet
+from optlab.structured.context import PricingContext
+from optlab.structured.engine import Evaluation
+from optlab.structured.greeks import ShiftedSurface, _recalibrated_slv
+from optlab.structured.multiasset import BasketContext
+from optlab.structured.policy import RULES, decide
+from optlab.structured.pricer import basket_history, check_fixing_scale
+from optlab.structured.profile import ProductProfile, profile
+from optlab.structured.replication import replication_result
+from optlab.structured.schema import TermSheet
+from optlab.structured.script.parser import parse
+from optlab.structured.script.timeline import Clock, build_timeline
+from optlab.structured.script.validate import validate
+from optlab.structured.units import BOOK_UNITS
 
 CLASS_ORDER = ("european", "path_dependent", "callable")
 
@@ -68,7 +68,7 @@ class Position:
             program = validate(parse(product) if isinstance(product, str) else product)
             cal = self.calendar
         if sheet is not None and self.fmt is None:
-            from .quote import wrapper
+            from optlab.structured.quote import wrapper
 
             return program, wrapper(sheet, compile_sheet(sheet, valuation)), cal
         return program, (Swap() if self.fmt == "swap" else Note()), cal

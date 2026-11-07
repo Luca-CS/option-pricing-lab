@@ -6,23 +6,23 @@ Layers: the engine (dates, script language, scenarios, cash flows, note and swap
 
 from __future__ import annotations
 
-from .calendars import CALENDARS, NYSECalendar
-from .cashflows import Note, Swap
-from .compiler import compile_sheet
-from .context import PricingContext
-from .lifecycle import Event, events
-from .policy import RULES, decide
-from .portfolio import Book, BookResult, Position
-from .presets import PRESETS, preset
-from .pricer import StructuredResult, price, price_many
-from .qmc import price_rqmc
-from .quote import Quote, quote
-from .schema import MASKS, TermSheet, TermSheetError, describe, json_schema
-from .script.lexer import ScriptError
-from .script.parser import parse
-from .script.printer import to_text
-from .script.validate import validate
-from .trade import Trade
+from optlab.structured.calendars import CALENDARS, NYSECalendar
+from optlab.structured.cashflows import Note, Swap
+from optlab.structured.compiler import compile_sheet
+from optlab.structured.context import PricingContext
+from optlab.structured.lifecycle import Event, events
+from optlab.structured.policy import RULES, decide
+from optlab.structured.portfolio import Book, BookResult, Position
+from optlab.structured.presets import PRESETS, preset
+from optlab.structured.pricer import StructuredResult, price, price_many
+from optlab.structured.qmc import price_rqmc
+from optlab.structured.quote import Quote, quote
+from optlab.structured.schema import MASKS, TermSheet, TermSheetError, describe, json_schema
+from optlab.structured.script.lexer import ScriptError
+from optlab.structured.script.parser import parse
+from optlab.structured.script.printer import to_text
+from optlab.structured.script.validate import validate
+from optlab.structured.trade import Trade
 
 __all__ = [
     "Note",

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .schema import TermSheet
+from optlab.structured.schema import TermSheet
 
 PRESETS = {
     "reverse_convertible": (

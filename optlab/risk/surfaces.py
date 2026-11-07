@@ -20,9 +20,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..structured.surfaces import BumpedSurface, surface_arbitrage
-from ..svi import g_function
-from . import grid
+from optlab.risk import grid
+from optlab.structured.surfaces import BumpedSurface, surface_arbitrage
+from optlab.svi import g_function
 
 
 def _sigma_parts(surface, k, T):

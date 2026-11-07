@@ -24,10 +24,10 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from ..structured.multiasset import BasketContext
-from . import grid
-from .curves import CurveMove, bumped_market
-from .surfaces import bumped_surface
+from optlab.risk import grid
+from optlab.risk.curves import CurveMove, bumped_market
+from optlab.risk.surfaces import bumped_surface
+from optlab.structured.multiasset import BasketContext
 
 RULES = ("sticky_moneyness", "sticky_strike", "realistic")
 
@@ -300,7 +300,7 @@ def context_currency(ctx) -> str:
     cur = getattr(ctx, "payment_currency", None)
     if cur:
         return cur
-    from ..marketdata.universe import _BY_ID
+    from optlab.marketdata.universe import _BY_ID
 
     name = ctx.names[0] if isinstance(ctx, BasketContext) else ctx.underlying
     inst = _BY_ID.get(name)
@@ -309,7 +309,7 @@ def context_currency(ctx) -> str:
 
 def moved_corr(corr, shock: Shock, names) -> np.ndarray:
     """The correlation matrix with every pair moved by shock.corr and the listed pairs by their own move, repaired."""
-    from ..marketdata.derive.correl import nearest_correlation
+    from optlab.marketdata.derive.correl import nearest_correlation
 
     c = np.array(corr, dtype=float)
     if not shock.corr and not shock.corr_pairs:
@@ -336,8 +336,8 @@ def _quanto_forward(market, surface, drift: float):
     """Forwards moved by exp(-drift int_0^T sigma): the quanto adjustment for a change of rho * vol_fx."""
     if not drift:
         return market
-    from ..market import Market
-    from ..structured.quanto import integrated_vol
+    from optlab.market import Market
+    from optlab.structured.quanto import integrated_vol
 
     t = np.asarray(market.to_dict()["pillars"], dtype=float)
     return Market(
@@ -355,7 +355,7 @@ def shocked_market(market, surface, move: NameMove, discount: CurveMove | None =
 
 def shocked_surface(surface, move: NameMove):
     """Sticky strike reindexing first (the base smile at absolute strikes), then the vol moves."""
-    from ..structured.greeks import StickyStrikeSurface
+    from optlab.structured.greeks import StickyStrikeSurface
 
     s = surface
     if move.strike_shift and not np.isscalar(s):
@@ -364,7 +364,7 @@ def shocked_surface(surface, move: NameMove):
 
 
 def roll_date(valuation, days: int, calendar: str = "nyse"):
-    from ..structured.calendars import calendar as get_calendar
+    from optlab.structured.calendars import calendar as get_calendar
 
     if not days:
         return valuation

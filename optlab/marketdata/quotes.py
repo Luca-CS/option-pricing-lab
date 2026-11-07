@@ -8,12 +8,12 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from ..data import clean_chain
-from ..market import Market
-from .derive.curves import CURVE_OF_CURRENCY
-from .lake import Lake, sql_str
-from .sources.archives import snapshot_time
-from .universe import _BY_ID
+from optlab.data import clean_chain
+from optlab.market import Market
+from optlab.marketdata.derive.curves import CURVE_OF_CURRENCY
+from optlab.marketdata.lake import Lake, sql_str
+from optlab.marketdata.sources.archives import snapshot_time
+from optlab.marketdata.universe import _BY_ID
 
 
 def discount_function(lake: Lake, currency: str, day: dt.date, as_of=None):

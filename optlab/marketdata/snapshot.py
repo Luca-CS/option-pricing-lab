@@ -15,7 +15,7 @@ import subprocess
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
-from ..config import REPO_ROOT
+from optlab.config import REPO_ROOT
 
 
 def _code_version() -> str | None:

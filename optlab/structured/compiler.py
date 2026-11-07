@@ -5,13 +5,13 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass
 
-from . import calendars
-from .dates import add_months, as_date, schedule, year_fraction
-from .schema import TermSheet
-from .script.nodes import Program
-from .script.parser import parse
-from .script.printer import number
-from .script.validate import validate
+from optlab.structured import calendars
+from optlab.structured.dates import add_months, as_date, schedule, year_fraction
+from optlab.structured.schema import TermSheet
+from optlab.structured.script.nodes import Program
+from optlab.structured.script.parser import parse
+from optlab.structured.script.printer import number
+from optlab.structured.script.validate import validate
 
 
 @dataclass

@@ -12,10 +12,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ..marketdata.universe import instrument
-from .costs import BUMPS, CostInputs
-from .digitals import DELTA_FIELD
-from .schema import SECTIONS, TermSheet
+from optlab.marketdata.universe import instrument
+from optlab.structured.costs import BUMPS, CostInputs
+from optlab.structured.digitals import DELTA_FIELD
+from optlab.structured.schema import SECTIONS, TermSheet
 
 TIERS = (10e6, 50e6, 250e6)
 

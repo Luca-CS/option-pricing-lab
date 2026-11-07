@@ -17,8 +17,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..market import Market
-from ..marketdata.universe import _BY_ID
+from optlab.market import Market
+from optlab.marketdata.universe import _BY_ID
 
 
 def integrated_vol(T, vol) -> np.ndarray:

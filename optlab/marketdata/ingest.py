@@ -12,10 +12,10 @@ import time
 
 import pandas as pd
 
-from ..log import get_logger
-from .lake import Lake, new_run_id
-from .sources import curl_get, fx, http_get, rates, simple, yahoo
-from .universe import REFERENCE_INSTRUMENT, as_rows, enabled_underlyings
+from optlab.log import get_logger
+from optlab.marketdata.lake import Lake, new_run_id
+from optlab.marketdata.sources import curl_get, fx, http_get, rates, simple, yahoo
+from optlab.marketdata.universe import REFERENCE_INSTRUMENT, as_rows, enabled_underlyings
 
 LOG = get_logger(__name__)
 START = "2015-01-01"  # the replay period starts in 2018; earlier history feeds rolling windows

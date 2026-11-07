@@ -28,17 +28,9 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from ..config import DEFAULT_SEED
-from ..structured import engine as batch_engine
-from ..structured.cashflows import FundedSwap, Swap
-from ..structured.dates import year_fraction
-from ..structured.engine import Evaluation
-from ..structured.multiasset import BasketContext
-from ..structured.portfolio import Book
-from ..structured.pricer import check_fixing_scale
-from ..structured.replication import replication_result
-from .curves import bumped_market, forward_ratio
-from .shocks import (
+from optlab.config import DEFAULT_SEED
+from optlab.risk.curves import bumped_market, forward_ratio
+from optlab.risk.shocks import (
     BASE,
     RiskEnv,
     Shock,
@@ -51,6 +43,14 @@ from .shocks import (
     sim_key,
     simulation_part,
 )
+from optlab.structured import engine as batch_engine
+from optlab.structured.cashflows import FundedSwap, Swap
+from optlab.structured.dates import year_fraction
+from optlab.structured.engine import Evaluation
+from optlab.structured.multiasset import BasketContext
+from optlab.structured.portfolio import Book
+from optlab.structured.pricer import check_fixing_scale
+from optlab.structured.replication import replication_result
 
 
 @dataclass
@@ -227,7 +227,7 @@ def _expected_cash(fmt, flows: dict, redemption: dict, notional: float, n: float
 
 
 def _sim_model(d_model: str, ctx, sim_ctx, horizon: float, settings: RiskSettings, seed: int, cache: dict, names):
-    from ..models import BlackScholesModel, LocalVolModel
+    from optlab.models import BlackScholesModel, LocalVolModel
 
     if isinstance(sim_ctx, BasketContext):
         return sim_ctx.model(d_model, horizon, tuple(names))
@@ -240,7 +240,7 @@ def _sim_model(d_model: str, ctx, sim_ctx, horizon: float, settings: RiskSetting
             return ctx.model("slv", horizon)
         key = id(sim_ctx.surface)
         if key not in cache:
-            from ..structured.greeks import _recalibrated_slv
+            from optlab.structured.greeks import _recalibrated_slv
 
             cache[key] = (
                 sim_ctx.surface,

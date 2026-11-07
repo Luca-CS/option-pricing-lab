@@ -14,10 +14,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from .heston import HestonParams
-from .market import Market
-from .models import Leverage, SLVModel, time_grid
-from .ssvi import SSVI
+from optlab.heston import HestonParams
+from optlab.market import Market
+from optlab.models import Leverage, SLVModel, time_grid
+from optlab.ssvi import SSVI
 
 
 def _conditional_mean(x, v, x_eval, bandwidth, n_bins=400, regression="nadaraya_watson", positive_part=False):
@@ -77,7 +77,7 @@ def calibrate_leverage(
     less bias than the default local constant; the default keeps the published leverage unchanged.
     `engine` (else the default of `optlab.native`): cpu, gpu or auto run the same method on the compiled engine
     (auto falls back here without it), numpy keeps this implementation. A Generator as `rng` stays on NumPy."""
-    from . import native
+    from optlab import native
 
     choice = (engine or native.default_engine()).lower()
     if choice != "numpy" and not isinstance(rng, np.random.Generator) and (choice != "auto" or native.available()):

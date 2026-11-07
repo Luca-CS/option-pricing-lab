@@ -8,7 +8,7 @@ from __future__ import annotations
 import datetime as dt
 from functools import lru_cache
 
-from .dates import CONVENTIONS, WeekendCalendar, as_date
+from optlab.structured.dates import CONVENTIONS, WeekendCalendar, as_date
 
 
 def easter(year: int) -> dt.date:

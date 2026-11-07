@@ -16,8 +16,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from ..market import Market
-from . import grid
+from optlab.market import Market
+from optlab.risk import grid
 
 BP = 1e-4
 

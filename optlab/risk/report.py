@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import html
 
-from . import grid
+from optlab.risk import grid
 
 
 def _e(x) -> str:

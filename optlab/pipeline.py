@@ -7,13 +7,13 @@ import time
 
 import numpy as np
 
-from .heston import HestonParams, calibrate_heston, heston_iv
-from .market import Market
-from .models import BlackScholesModel, HestonModel, LocalVolModel
-from .products import american_lsm, asian_mc, barrier_mc
-from .slv import calibrate_leverage
-from .svi import fit_svi_surface, svi_arbitrage_report
-from .validation import mc_smile
+from optlab.heston import HestonParams, calibrate_heston, heston_iv
+from optlab.market import Market
+from optlab.models import BlackScholesModel, HestonModel, LocalVolModel
+from optlab.products import american_lsm, asian_mc, barrier_mc
+from optlab.slv import calibrate_leverage
+from optlab.svi import fit_svi_surface, svi_arbitrage_report
+from optlab.validation import mc_smile
 
 
 def _weights(s, floor=0.002):

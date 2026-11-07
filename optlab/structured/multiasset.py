@@ -19,10 +19,10 @@ from dataclasses import dataclass, field, replace
 
 import numpy as np
 
-from ..heston import HestonParams
-from ..market import Market
-from ..models import BlackScholesModel, Leverage, LocalVolModel, Model, SLVModel, time_grid
-from .scenario import batch_sizes
+from optlab.heston import HestonParams
+from optlab.market import Market
+from optlab.models import BlackScholesModel, Leverage, LocalVolModel, Model, SLVModel, time_grid
+from optlab.structured.scenario import batch_sizes
 
 
 def correlation_root(corr) -> np.ndarray:
@@ -42,7 +42,7 @@ def correlation_root(corr) -> np.ndarray:
 
 def moved_correlation(corr, shift: float) -> np.ndarray:
     """Every pair moved by `shift`, kept within (-0.99, 0.99), and repaired into a correlation matrix when the move breaks it."""
-    from ..marketdata.derive.correl import nearest_correlation
+    from optlab.marketdata.derive.correl import nearest_correlation
 
     c = np.array(corr, dtype=float)
     moved = np.clip(c + shift, -0.99, 0.99)
@@ -101,7 +101,7 @@ def simulate_basket(
     residual = rng.spawn(1)[0] if spot_driven else rng
     same = basket.vol_corr == "same" and any(hp is not None for hp in hps)
     if mixer is not None:
-        from .localcorr import aligned_factors
+        from optlab.structured.localcorr import aligned_factors
 
         root_low, market_sign, turn = aligned_factors(basket.corr, basket.root, mixer.w0)
         state = mixer.start(n)
@@ -174,7 +174,7 @@ class BasketScenario:
     def extreme(self, name: str, times, func: str):
         """Lowest ("min") or highest ("max") fixing over `times` on each path, without copying the window: the
         simulated dates of a window are contiguous columns. Same result as fixings(...).min(axis=1)."""
-        from .scenario import window_key
+        from optlab.structured.scenario import window_key
 
         self._check(name)
         times = np.asarray(times, dtype=float)
@@ -259,7 +259,7 @@ class BasketContext:
     @classmethod
     def with_spx(cls, others: dict, corr, spx=None) -> "BasketContext":
         """SPX from the calibration plus other names given as {name: (spot, r, q, vol)} on flat markets."""
-        from .context import PricingContext
+        from optlab.structured.context import PricingContext
 
         spx = spx or PricingContext.from_calibration()
         names = ("SPX", *others)
@@ -273,7 +273,7 @@ class BasketContext:
 
     def bumped(self, name: str, spot_factor: float = 1.0, vol_shift: float = 0.0) -> "BasketContext":
         """The same context with one name's spot scaled (sticky moneyness) or its implied vols shifted."""
-        from .greeks import ShiftedSurface
+        from optlab.structured.greeks import ShiftedSurface
 
         markets, vols = dict(self.markets), dict(self.vols)
         if spot_factor != 1.0:
@@ -294,7 +294,7 @@ class BasketContext:
 
     def with_bumps(self, vol: float = 0.0, skew: float = 0.0, corr: float = 0.0) -> "BasketContext":
         """The same context with every name's implied vols moved, and every pair's correlation, the matrix repaired if needed."""
-        from .surfaces import BumpedSurface
+        from optlab.structured.surfaces import BumpedSurface
 
         vols = {
             n: (v + vol if np.isscalar(v) else BumpedSurface(v, vol, skew)) if vol or skew else v
@@ -328,8 +328,8 @@ class BasketContext:
         """The context that keeps a name's SLV leverages, one with the day's levels and the prior's dynamics when none was given."""
         got = self.contexts.get(name)
         if got is None:
-            from ..marketdata.pit import MIX, quick_heston
-            from .context import PricingContext
+            from optlab.marketdata.pit import MIX, quick_heston
+            from optlab.structured.context import PricingContext
 
             heston = HestonParams(**quick_heston(self.vols[name]))
             flat = SLVModel(heston, Leverage([0.0], [[-1.0, 1.0]], [[1.0, 1.0]]), MIX)
@@ -341,7 +341,7 @@ class BasketContext:
 
     def local_correlation(self, names=None, T: float = 1.0) -> dict:
         """The local correlation calibrated on the pseudo-quotes of these names at this date, kept: {"mixer", "lines", "rmse", "origin", "note"}."""
-        from .localcorr import calibrate
+        from optlab.structured.localcorr import calibrate
 
         names = tuple(names or self.names)
         idx = [self.names.index(n) for n in names]

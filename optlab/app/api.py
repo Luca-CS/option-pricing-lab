@@ -16,33 +16,33 @@ from pathlib import Path
 
 import numpy as np
 
-from .. import native
-from ..config import DEFAULT_SEED, paths
-from ..log import get_logger
-from ..market import Market
-from ..marketdata import MarketSnapshot, MarketStore
-from ..marketdata.derive.correl import correlation_at
-from ..marketdata.lake import Lake
-from ..marketdata.names import NameMarkets
-from ..marketdata.universe import _BY_ID
-from ..structured import MASKS, PRESETS, PricingContext, TermSheet, TermSheetError, describe, preset, quote
-from ..structured.compiler import compile_sheet
-from ..structured.context import DEFAULT_CALIBRATION
-from ..structured.defaults import STARTING, merged, parameters, resolve, validate_table
-from ..structured.lifecycle import events
-from ..structured.multiasset import BasketContext
-from ..structured.portfolio import Book
-from ..structured.pricer import price
-from ..structured.reserves import frozen, remaining
-from ..structured.schema import SECTIONS, json_schema
-from ..structured.script.lexer import ScriptError
-from ..structured.script.parser import parse
-from ..structured.script.validate import validate
-from ..structured.trade import Trade
-from .fixings import parse_fixings
-from .jobs import Jobs
-from .repository import Repository
-from .serialize import book_json, clean, events_json, quote_json, result_json, trade_json
+from optlab import native
+from optlab.app.fixings import parse_fixings
+from optlab.app.jobs import Jobs
+from optlab.app.repository import Repository
+from optlab.app.serialize import book_json, clean, events_json, quote_json, result_json, trade_json
+from optlab.config import DEFAULT_SEED, paths
+from optlab.log import get_logger
+from optlab.market import Market
+from optlab.marketdata import MarketSnapshot, MarketStore
+from optlab.marketdata.derive.correl import correlation_at
+from optlab.marketdata.lake import Lake
+from optlab.marketdata.names import NameMarkets
+from optlab.marketdata.universe import _BY_ID
+from optlab.structured import MASKS, PRESETS, PricingContext, TermSheet, TermSheetError, describe, preset, quote
+from optlab.structured.compiler import compile_sheet
+from optlab.structured.context import DEFAULT_CALIBRATION
+from optlab.structured.defaults import STARTING, merged, parameters, resolve, validate_table
+from optlab.structured.lifecycle import events
+from optlab.structured.multiasset import BasketContext
+from optlab.structured.portfolio import Book
+from optlab.structured.pricer import price
+from optlab.structured.reserves import frozen, remaining
+from optlab.structured.schema import SECTIONS, json_schema
+from optlab.structured.script.lexer import ScriptError
+from optlab.structured.script.parser import parse
+from optlab.structured.script.validate import validate
+from optlab.structured.trade import Trade
 
 PRECISION = {
     "quick": (20_000, 10_000),
@@ -243,8 +243,8 @@ class Desk:
             raise ApiError(f"{what} stay on the owner's machine: this desk is shared beyond it", 403)
 
     def data_overview(self) -> dict:
-        from ..marketdata.quality import open_issues
-        from ..marketdata.universe import UNIVERSE
+        from optlab.marketdata.quality import open_issues
+        from optlab.marketdata.universe import UNIVERSE
 
         lake = self.lake
         if not lake.has("instruments") and not lake.has("prices_eod"):
@@ -329,7 +329,7 @@ class Desk:
 
     def market_from_lake(self, body: dict) -> dict:
         """A market at a past date (a job: the leverage takes seconds), stored like any snapshot; /api/market/use prices on it."""
-        from ..marketdata.pit import market_at
+        from optlab.marketdata.pit import market_at
 
         name, day = str(body.get("underlying", "SPX")), body.get("date")
         calibrate = bool(body.get("leverage", True))
@@ -357,7 +357,7 @@ class Desk:
 
     def fixings_from_lake(self, body: dict) -> dict:
         """Real closes of the lake as desk fixings, in the active market's scale."""
-        from ..marketdata.pit import real_close, real_fixings
+        from optlab.marketdata.pit import real_close, real_fixings
 
         und = str(body.get("underlying", self.ctx.underlying)).upper()
         ctx = self.ctx
@@ -380,7 +380,7 @@ class Desk:
 
     # --- Vol Fitting Lab ---
     def lab_days(self) -> dict:
-        from ..marketdata.vollab import DEFAULTS, MODELS, lab_days
+        from optlab.marketdata.vollab import DEFAULTS, MODELS, lab_days
 
         return clean(
             {
@@ -393,7 +393,7 @@ class Desk:
         )
 
     def lab_quotes(self, name: str, day: str, source: str | None = None) -> dict:
-        from ..marketdata.vollab import quote_table
+        from optlab.marketdata.vollab import quote_table
 
         self._private("Option quotes")
         try:
@@ -403,7 +403,7 @@ class Desk:
             raise ApiError(str(exc).strip("'\""), 404)
 
     def lab_fit(self, body: dict) -> dict:
-        from ..marketdata.vollab import MODELS, public_summary, run_fit
+        from optlab.marketdata.vollab import MODELS, public_summary, run_fit
 
         name, day, source = str(body.get("underlying", "SPX")), str(body.get("day", "")), body.get("source")
         try:
@@ -421,12 +421,12 @@ class Desk:
         return {"job": self.jobs.submit("fit", run)}
 
     def lab_runs(self, underlying: str | None = None) -> dict:
-        from ..marketdata.vollab import list_runs
+        from optlab.marketdata.vollab import list_runs
 
         return clean({"runs": list_runs(self.lake, underlying)})
 
     def lab_reproduce(self, calibration_id: str) -> dict:
-        from ..marketdata.vollab import reproduce
+        from optlab.marketdata.vollab import reproduce
 
         return {"job": self.jobs.submit("reproduce", lambda: clean(reproduce(self.lake, calibration_id)))}
 
@@ -467,7 +467,7 @@ class Desk:
         return clean(data[key] if key else data)
 
     def replay_run(self, body: dict) -> dict:
-        from ..marketdata.replay import ReplayConfig, replay, result_json, strike_trade
+        from optlab.marketdata.replay import ReplayConfig, replay, result_json, strike_trade
 
         name = str(body.get("preset", "barrier_reverse_convertible"))
         if name not in PRESETS:

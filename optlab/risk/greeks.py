@@ -27,12 +27,12 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from ..structured.multiasset import BasketContext
-from ..structured.units import UNITS as STRUCTURED_UNITS
-from . import grid
-from .curves import CurveMove
-from .engine import Measure, RiskSettings, run_group
-from .shocks import RiskEnv, Shock, VolMove, context_currency
+from optlab.risk import grid
+from optlab.risk.curves import CurveMove
+from optlab.risk.engine import Measure, RiskSettings, run_group
+from optlab.risk.shocks import RiskEnv, Shock, VolMove, context_currency
+from optlab.structured.multiasset import BasketContext
+from optlab.structured.units import UNITS as STRUCTURED_UNITS
 
 UNITS = {
     "value": "currency (payment currency), desk side",
@@ -285,8 +285,8 @@ def plan(
 
 def _forward_drift(ctx, names, days: int) -> dict:
     """{name: F(dt) / S - 1}: where the spot goes over the roll if it follows its forward."""
-    from ..structured.dates import year_fraction
-    from .shocks import roll_date
+    from optlab.risk.shocks import roll_date
+    from optlab.structured.dates import year_fraction
 
     dt_ = year_fraction(ctx.valuation, roll_date(ctx.valuation, days))
     markets = ctx.markets if isinstance(ctx, BasketContext) else {names[0]: ctx.market}
@@ -331,8 +331,8 @@ def compute(
     env: RiskEnv | None = None,
 ) -> RiskReport:
     """Every Greek of every group, aggregated per position, per name and for the book."""
-    from ..structured.dates import year_fraction
-    from .shocks import roll_date
+    from optlab.risk.shocks import roll_date
+    from optlab.structured.dates import year_fraction
 
     t0 = time.perf_counter()
     bumps = bumps or Bumps()

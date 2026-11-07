@@ -1,6 +1,6 @@
 """optlab: option pricing under Black-Scholes, Heston, Dupire local volatility and Heston SLV."""
 
-from .blackscholes import (
+from optlab.blackscholes import (
     barrier_price,
     barrier_shift_discrete,
     black_price,
@@ -10,14 +10,14 @@ from .blackscholes import (
     geometric_asian_price_curve,
     implied_vol,
 )
-from .heston import HestonParams, calibrate_heston, heston_iv, heston_price
-from .market import Market
-from .models import BlackScholesModel, HestonModel, Leverage, LocalVolModel, SLVModel, simulate
-from .products import american_lsm, asian_mc, barrier_mc, european_mc
-from .slv import calibrate_leverage
-from .ssvi import SSVI, arbitrage_report, fit_ssvi
-from .svi import SVISurface, fit_svi_surface, svi_arbitrage_report
-from .tree import binomial_price
+from optlab.heston import HestonParams, calibrate_heston, heston_iv, heston_price
+from optlab.market import Market
+from optlab.models import BlackScholesModel, HestonModel, Leverage, LocalVolModel, SLVModel, simulate
+from optlab.products import american_lsm, asian_mc, barrier_mc, european_mc
+from optlab.slv import calibrate_leverage
+from optlab.ssvi import SSVI, arbitrage_report, fit_ssvi
+from optlab.svi import SVISurface, fit_svi_surface, svi_arbitrage_report
+from optlab.tree import binomial_price
 
 __all__ = [
     "Market",

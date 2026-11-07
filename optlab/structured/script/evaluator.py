@@ -17,9 +17,9 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .lexer import ScriptError
-from .nodes import Assign, Binary, Call, If, Name, Num, Pay, Program, Terminate, Unary, Window
-from .timeline import Timeline
+from optlab.structured.script.lexer import ScriptError
+from optlab.structured.script.nodes import Assign, Binary, Call, If, Name, Num, Pay, Program, Terminate, Unary, Window
+from optlab.structured.script.timeline import Timeline
 
 FUNCS = {"min": np.minimum, "max": np.maximum, "abs": np.abs, "exp": np.exp, "log": np.log}
 ARITH = {"+": np.add, "-": np.subtract, "*": np.multiply, "/": np.divide}

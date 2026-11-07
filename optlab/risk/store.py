@@ -16,7 +16,7 @@ import sqlite3
 import subprocess
 from pathlib import Path
 
-from ..config import REPO_ROOT, paths
+from optlab.config import REPO_ROOT, paths
 
 SCHEMA = (
     """CREATE TABLE IF NOT EXISTS records (kind TEXT, key TEXT, version INTEGER, payload TEXT, meta TEXT, created_at TEXT,

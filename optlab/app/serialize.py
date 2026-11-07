@@ -7,8 +7,8 @@ import math
 
 import numpy as np
 
-from ..structured.script.nodes import DateLit
-from ..structured.script.timeline import Clock, build_timeline
+from optlab.structured.script.nodes import DateLit
+from optlab.structured.script.timeline import Clock, build_timeline
 
 
 def clean(x):

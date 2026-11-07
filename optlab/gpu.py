@@ -23,9 +23,9 @@ from pathlib import Path
 
 import numpy as np
 
-from .market import Market
-from .models import BlackScholesModel, HestonModel, Model
-from .products import MCResult, asian_mc, barrier_mc, european_mc
+from optlab.market import Market
+from optlab.models import BlackScholesModel, HestonModel, Model
+from optlab.products import MCResult, asian_mc, barrier_mc, european_mc
 
 _ROOT = Path(__file__).resolve().parent.parent
 _LIB_NAME = "optlab_cuda_c.dll" if os.name == "nt" else "liboptlab_cuda_c.so"

@@ -33,17 +33,17 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from ..config import DEFAULT_SEED
-from ..structured.calendars import CALENDARS
-from ..structured.multiasset import BasketContext
-from ..structured.portfolio import Book
-from ..structured.reserves import remaining
-from . import grid
-from .engine import RiskGroup, RiskSettings, run_group
-from .greeks import Bumps, GreekOptions, compute
-from .shocks import RiskEnv, context_currency
-from .store import RiskStore, code_version, run_key
-from .surfaces import TentBumpedSurface
+from optlab.config import DEFAULT_SEED
+from optlab.risk import grid
+from optlab.risk.engine import RiskGroup, RiskSettings, run_group
+from optlab.risk.greeks import Bumps, GreekOptions, compute
+from optlab.risk.shocks import RiskEnv, context_currency
+from optlab.risk.store import RiskStore, code_version, run_key
+from optlab.risk.surfaces import TentBumpedSurface
+from optlab.structured.calendars import CALENDARS
+from optlab.structured.multiasset import BasketContext
+from optlab.structured.portfolio import Book
+from optlab.structured.reserves import remaining
 
 STEPS = ("time", "spot", "vol", "skew", "rates", "dividends", "corr", "fx")
 EOD_GREEKS = GreekOptions(kxt="none", curves=True, sticky_strike=False, realistic=False, cross=True, theta=True)
@@ -58,7 +58,7 @@ def group_seed(label: str) -> int:
 
 
 def _maturity(trade) -> dt.date:
-    from ..structured.compiler import compile_sheet
+    from optlab.structured.compiler import compile_sheet
 
     return compile_sheet(trade.term_sheet(), trade.strike_date).maturity
 
@@ -77,7 +77,7 @@ def alive(trades, day) -> list:
 
 def real_fixings(lake, trade, day) -> dict:
     """{name: {date: real close}} of a trade from its strike date to `day` (a day without a close takes the last one)."""
-    from ..marketdata.replay import filled_fixings
+    from optlab.marketdata.replay import filled_fixings
 
     sheet = trade.term_sheet()
     levels, _ = filled_fixings(lake, sheet.underlyings, trade.strike_date, day, sheet.get("general.calendar"))
@@ -96,7 +96,7 @@ class BookDay:
 
 def book_at(lake, trades, day, layer: str | None = "reconstructed") -> BookDay:
     """The book of a date on the lake's market of that date."""
-    from ..marketdata.pit import basket_at, context_at
+    from optlab.marketdata.pit import basket_at, context_at
 
     day = pd.Timestamp(day).date()
     live = alive(trades, day)
@@ -305,8 +305,8 @@ def _rolled_positions(book: Book, fixings_real: dict, scale: dict, a: dt.date, b
 
 def _rates_market(ma, mb_in_a, spot):
     """d's discounts with d-1's forward shape moved by the change of the rate: F / S = (F_a / S_a) D_a / D_b."""
-    from ..market import Market
-    from .curves import _pillars
+    from optlab.market import Market
+    from optlab.risk.curves import _pillars
 
     T = np.unique(np.concatenate([_pillars(ma), _pillars(mb_in_a)]))
     Da, Db = np.asarray(ma.D(T)), np.asarray(mb_in_a.D(T))
@@ -427,8 +427,8 @@ def explain_day(
     reuse: bool = True,
 ) -> dict:
     """The explained P&L from the close of `a` to the close of `b` (stored as a "pnl" run)."""
-    from ..structured.dates import year_fraction
-    from ..structured.lifecycle import events as lifecycle_events
+    from optlab.structured.dates import year_fraction
+    from optlab.structured.lifecycle import events as lifecycle_events
 
     t0 = time.perf_counter()
     a, b = pd.Timestamp(a).date(), pd.Timestamp(b).date()
@@ -462,7 +462,7 @@ def explain_day(
         basket = isinstance(ga.ctx, BasketContext)
         names = list(ga.ctx.names) if basket else [ga.ctx.underlying]
         if gb is None:  # every trade of the group ended: d's market of its names from the lake
-            from ..marketdata.pit import basket_at, context_at
+            from optlab.marketdata.pit import basket_at, context_at
 
             if basket:
                 gb_ctx, snaps, _ = basket_at(lake, names, b, layer=layer, payment=ga.ctx.payment_currency)

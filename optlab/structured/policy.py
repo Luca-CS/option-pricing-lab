@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ..config import DEFAULT_SEED
-from .profile import ProductProfile
+from optlab.config import DEFAULT_SEED
+from optlab.structured.profile import ProductProfile
 
 
 @dataclass(frozen=True)

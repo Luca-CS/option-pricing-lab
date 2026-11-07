@@ -14,14 +14,14 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from ..config import DEFAULT_SEED
-from ..models import BlackScholesModel, LocalVolModel, SLVModel
-from ..svi import g_function
-from .cashflows import Note
-from .pricer import price_many
-from .replication import replication_result
-from .script.timeline import Clock, build_timeline
-from .units import GREEK_UNITS
+from optlab.config import DEFAULT_SEED
+from optlab.models import BlackScholesModel, LocalVolModel, SLVModel
+from optlab.structured.cashflows import Note
+from optlab.structured.pricer import price_many
+from optlab.structured.replication import replication_result
+from optlab.structured.script.timeline import Clock, build_timeline
+from optlab.structured.units import GREEK_UNITS
+from optlab.svi import g_function
 
 
 class ShiftedSurface:
@@ -60,7 +60,7 @@ class ShiftedSurface:
 
 
 def _recalibrated_slv(ctx, surface, horizon: float, n_particles: int, seed: int):
-    from ..slv import calibrate_leverage
+    from optlab.slv import calibrate_leverage
 
     T_max = min(max(horizon, 1 / 12), ctx.t_max)
     return calibrate_leverage(
@@ -180,7 +180,7 @@ def greeks(
     timeline = build_timeline(program, Clock(valuation, calendar))
     horizon = timeline.horizon
     if method == "replication" and T_obs is None:
-        from .profile import profile
+        from optlab.structured.profile import profile
 
         times = profile(program, timeline).observation_times
         T_obs = times[-1] if times else horizon

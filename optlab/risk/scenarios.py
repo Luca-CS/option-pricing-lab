@@ -18,11 +18,11 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..structured.multiasset import BasketContext
-from .curves import CurveMove
-from .engine import RiskSettings, run_group_safe
-from .shocks import RiskEnv, Shock, VolMove, apply
-from .surfaces import arbitrage
+from optlab.risk.curves import CurveMove
+from optlab.risk.engine import RiskSettings, run_group_safe
+from optlab.risk.shocks import RiskEnv, Shock, VolMove, apply
+from optlab.risk.surfaces import arbitrage
+from optlab.structured.multiasset import BasketContext
 
 STARTING = "starting value: to be corrected by the desk"
 KEY = "hypothetical"

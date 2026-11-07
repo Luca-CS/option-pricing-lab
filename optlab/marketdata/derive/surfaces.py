@@ -30,12 +30,12 @@ import pandas as pd
 from scipy.optimize import brentq, least_squares
 from scipy.special import ndtr
 
-from ...log import get_logger
-from ...pipeline import _weights
-from ...svi import SVISurface, fit_svi_surface, ssvi_slice_to_svi, svi_arbitrage_report
-from ..lake import Lake, new_run_id, sql_str
-from ..quotes import clean_day
-from ..universe import instrument
+from optlab.log import get_logger
+from optlab.marketdata.lake import Lake, new_run_id, sql_str
+from optlab.marketdata.quotes import clean_day
+from optlab.marketdata.universe import instrument
+from optlab.pipeline import _weights
+from optlab.svi import SVISurface, fit_svi_surface, ssvi_slice_to_svi, svi_arbitrage_report
 
 LOG = get_logger(__name__)
 TERM_INDICES = {"VIX9D": 9 / 365, "VIX": 30 / 365, "VIX3M": 93 / 365, "VIX6M": 183 / 365, "VIX1Y": 365 / 365}
@@ -211,7 +211,7 @@ def reconstruct(levels: dict, prior: ShapePrior, skew: float | None = None, scal
 
 def static_prior(path=None) -> ShapePrior:
     """The shape of the versioned SPX calibration (27/10/2026)."""
-    from ...config import paths
+    from optlab.config import paths
 
     cal = json.loads((path or paths().results / "spx_calibration.json").read_text(encoding="utf-8"))
     shape = fit_shape(
@@ -302,7 +302,7 @@ def build_reconstructed(
 
 def fit_observed(lake: Lake, name: str, day, source: str | None = None, targets=OBSERVED_TARGETS) -> dict:
     """SVI on a day's chain: the stored row, with the fit's error against mid and bid-ask, and the arbitrage report."""
-    from ...data import select_maturities
+    from optlab.data import select_maturities
 
     cleaned = clean_day(lake, name, day, source)
     slices = select_maturities(cleaned.slices, targets)

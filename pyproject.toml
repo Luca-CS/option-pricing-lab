@@ -47,7 +47,10 @@ extend-exclude = ["*.md"]  # code blocks in docs keep their hand-aligned comment
 [tool.ruff.lint]
 # v0's rules (pycodestyle errors, pyflakes) plus import sorting; the wider set of ADR-0014 (C901, S, B, UP) comes with
 # the clean-up of A8, measured against reports/refactor-baseline.md
-select = ["E4", "E7", "E9", "F", "I"]
+select = ["E4", "E7", "E9", "F", "I", "TID252"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"  # absolute `optlab.<package>` imports only (ADR-0003): a move never changes their meaning
 
 [tool.pyright]
 include = ["optlab", "scripts", "tests", "cuda/bench"]

@@ -8,16 +8,16 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .compiler import compile_sheet
-from .dates import as_date
-from .multiasset import BasketScenario
-from .pricer import basket_history, history_times
-from .scenario import Scenario
-from .schema import TermSheet
-from .script.evaluator import Evaluator
-from .script.lexer import ScriptError
-from .script.nodes import Program
-from .script.timeline import Clock, build_timeline
+from optlab.structured.compiler import compile_sheet
+from optlab.structured.dates import as_date
+from optlab.structured.multiasset import BasketScenario
+from optlab.structured.pricer import basket_history, history_times
+from optlab.structured.scenario import Scenario
+from optlab.structured.schema import TermSheet
+from optlab.structured.script.evaluator import Evaluator
+from optlab.structured.script.lexer import ScriptError
+from optlab.structured.script.nodes import Program
+from optlab.structured.script.timeline import Clock, build_timeline
 
 KINDS = ("coupon_paid", "coupon_missed", "called", "knocked_in", "matured")
 

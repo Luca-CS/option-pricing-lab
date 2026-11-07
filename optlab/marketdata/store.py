@@ -11,8 +11,8 @@ import sqlite3
 from dataclasses import replace
 from pathlib import Path
 
-from ..config import paths
-from .snapshot import MarketSnapshot
+from optlab.config import paths
+from optlab.marketdata.snapshot import MarketSnapshot
 
 SCHEMA = """CREATE TABLE IF NOT EXISTS snapshots (
     snapshot_id TEXT PRIMARY KEY, underlying TEXT, valuation TEXT, asof TEXT, source TEXT, path TEXT,

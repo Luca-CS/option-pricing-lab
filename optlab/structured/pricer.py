@@ -7,19 +7,19 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from ..log import get_logger
-from ..market import Market
-from ..models import Model
-from ..products import MCResult
-from . import engine
-from .cashflows import Note
-from .engine import Evaluation
-from .multiasset import Basket
-from .script.evaluator import Evaluator
-from .script.nodes import DateLit, Program
-from .script.parser import parse
-from .script.timeline import Clock, Timeline, build_timeline
-from .script.validate import validate
+from optlab.log import get_logger
+from optlab.market import Market
+from optlab.models import Model
+from optlab.products import MCResult
+from optlab.structured import engine
+from optlab.structured.cashflows import Note
+from optlab.structured.engine import Evaluation
+from optlab.structured.multiasset import Basket
+from optlab.structured.script.evaluator import Evaluator
+from optlab.structured.script.nodes import DateLit, Program
+from optlab.structured.script.parser import parse
+from optlab.structured.script.timeline import Clock, Timeline, build_timeline
+from optlab.structured.script.validate import validate
 
 LOG = get_logger(__name__)
 
@@ -195,7 +195,7 @@ def price_many(
 
 
 def _forward_controls(program, timeline, model, market) -> tuple:
-    from .profile import profile
+    from optlab.structured.profile import profile
 
     times = profile(program, timeline).observation_times
     names = program.underlying_names

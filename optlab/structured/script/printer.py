@@ -2,7 +2,21 @@
 
 from __future__ import annotations
 
-from .nodes import Assign, Binary, Call, DateLit, Event, If, Name, Num, Pay, Program, Terminate, Unary, Window
+from optlab.structured.script.nodes import (
+    Assign,
+    Binary,
+    Call,
+    DateLit,
+    Event,
+    If,
+    Name,
+    Num,
+    Pay,
+    Program,
+    Terminate,
+    Unary,
+    Window,
+)
 
 PRECEDENCE = {"or": 1, "and": 2, "not": 3, "<": 4, "<=": 4, ">": 4, ">=": 4, "==": 4, "+": 5, "-": 5, "*": 6, "/": 6}
 UNARY_MINUS = 7

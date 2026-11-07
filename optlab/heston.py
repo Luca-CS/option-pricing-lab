@@ -11,7 +11,7 @@ from dataclasses import asdict, dataclass
 import numpy as np
 from scipy.optimize import least_squares
 
-from .blackscholes import black_price, black_vega, implied_vol
+from optlab.blackscholes import black_price, black_vega, implied_vol
 
 
 @dataclass

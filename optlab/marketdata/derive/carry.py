@@ -18,8 +18,8 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from ..lake import Lake, new_run_id, sql_str
-from ..universe import instrument
+from optlab.marketdata.lake import Lake, new_run_id, sql_str
+from optlab.marketdata.universe import instrument
 
 # Assumed dividend yields of indices with neither chains nor a total-return index (origin = synthetic).
 SYNTHETIC_YIELD = {"NDX": 0.008, "SX5E": 0.03}
@@ -143,7 +143,7 @@ def build_carry(lake: Lake, instruments) -> list[dict]:
 def build_parity_carry(lake: Lake, name: str, source: str, days=None, currency: str = "USD") -> dict:
     """Net carry per expiry from put-call parity, on the days with a chain: an index's carry is not split into dividend and
     repo. Stored next to the estimates from the past, which `dividend_yield_at` keeps using for a homogeneous history."""
-    from ..quotes import chain_rows, discount_function, quote_days
+    from optlab.marketdata.quotes import chain_rows, discount_function, quote_days
 
     rows = []
     for day in days if days is not None else quote_days(lake, name, source):

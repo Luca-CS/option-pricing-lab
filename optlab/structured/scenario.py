@@ -10,8 +10,8 @@ from collections.abc import Iterator
 
 import numpy as np
 
-from ..market import Market
-from ..models import Model, simulate
+from optlab.market import Market
+from optlab.models import Model, simulate
 
 
 def window_key(future) -> tuple:

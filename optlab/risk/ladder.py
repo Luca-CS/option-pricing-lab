@@ -22,10 +22,10 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from . import grid
-from .curves import CurveMove
-from .engine import Measure, RiskSettings, run_group_safe
-from .shocks import RULES, RiskEnv, Shock, VolMove, context_currency
+from optlab.risk import grid
+from optlab.risk.curves import CurveMove
+from optlab.risk.engine import Measure, RiskSettings, run_group_safe
+from optlab.risk.shocks import RULES, RiskEnv, Shock, VolMove, context_currency
 
 POINTS = (-0.30, -0.20, -0.10, -0.05, 0.0, 0.05, 0.10)
 
@@ -35,7 +35,7 @@ POINTS = (-0.30, -0.20, -0.10, -0.05, 0.0, 0.05, 0.10)
 
 def estimate_betas(lake, name: str, day, window: int = 500, layer: str = "reconstructed") -> dict:
     """Spot-vol betas of a name at a date: d(ATM vol at T) = a + beta_T d ln S, per tenor, with standard errors."""
-    from .history import closes, vol_factors
+    from optlab.risk.history import closes, vol_factors
 
     day = pd.Timestamp(day).date()
     start = (pd.Timestamp(day) - pd.tseries.offsets.BDay(window + 10)).date()

@@ -17,12 +17,12 @@ import time
 import numpy as np
 from scipy.stats import norm
 
-from ..market import Market
-from ..products import MCResult
-from .cashflows import Note
-from .scenario import Scenario
-from .script.evaluator import Evaluator
-from .script.timeline import Timeline
+from optlab.market import Market
+from optlab.products import MCResult
+from optlab.structured.cashflows import Note
+from optlab.structured.scenario import Scenario
+from optlab.structured.script.evaluator import Evaluator
+from optlab.structured.script.timeline import Timeline
 
 TAIL = 1e-13
 
@@ -131,7 +131,7 @@ def replication_result(
     ramps: dict | None = None,
 ):
     """Price on the surface. The numerical error is the change when the coarse grid is halved."""
-    from .pricer import StructuredResult
+    from optlab.structured.pricer import StructuredResult
 
     t0 = time.perf_counter()
     fmt = fmt or Note()

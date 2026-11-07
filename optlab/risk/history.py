@@ -12,9 +12,9 @@ import json
 import numpy as np
 import pandas as pd
 
-from ..marketdata.lake import Lake, sql_str
-from ..svi import SVISurface
-from . import grid
+from optlab.marketdata.lake import Lake, sql_str
+from optlab.risk import grid
+from optlab.svi import SVISurface
 
 SKEW_K = (float(np.log(0.9)), float(np.log(1.1)))
 SKEW_T = 1.0

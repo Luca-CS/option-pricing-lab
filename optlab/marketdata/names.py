@@ -13,9 +13,9 @@ from collections import OrderedDict
 
 import pandas as pd
 
-from .lake import Lake
-from .pit import market_at
-from .snapshot import MarketSnapshot
+from optlab.marketdata.lake import Lake
+from optlab.marketdata.pit import market_at
+from optlab.marketdata.snapshot import MarketSnapshot
 
 LAYER = "reconstructed"
 KEPT = 64  # contexts in memory, each with its leverages
@@ -31,7 +31,7 @@ class NameMarkets:
     def context(self, name: str, day, payment: str | None = None) -> tuple:
         """(PricingContext, MarketSnapshot) of a name at a date, on its quanto market when `payment` is another currency.
         KeyError when the lake cannot build it."""
-        from ..structured.context import PricingContext
+        from optlab.structured.context import PricingContext
 
         day = pd.Timestamp(day).date()
         key = (name, day, payment)

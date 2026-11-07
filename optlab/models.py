@@ -15,9 +15,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .heston import HestonParams
-from .market import Market
-from .ssvi import SSVI
+from optlab.heston import HestonParams
+from optlab.market import Market
+from optlab.ssvi import SSVI
 
 
 class Model:

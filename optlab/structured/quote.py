@@ -7,23 +7,23 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from ..config import DEFAULT_SEED
-from ..log import get_logger
-from .cashflows import FundedSwap, Note, Swap, funding_periods
-from .compiler import CompiledProduct, compile_sheet
-from .context import PricingContext
-from .costs import desk_price
-from .multiasset import BasketContext
-from .policy import PricingDecision, decide
-from .pricer import StructuredResult, check_fixing_scale, history_times, price_many
-from .profile import ProductProfile, profile
-from .quanto import payment_warnings
-from .replication import replication_result
-from .schema import TermSheet
-from .script.nodes import Param, Program
-from .script.printer import to_text
-from .script.timeline import Clock, build_timeline
-from .solve import combine, solve_affine
+from optlab.config import DEFAULT_SEED
+from optlab.log import get_logger
+from optlab.structured.cashflows import FundedSwap, Note, Swap, funding_periods
+from optlab.structured.compiler import CompiledProduct, compile_sheet
+from optlab.structured.context import PricingContext
+from optlab.structured.costs import desk_price
+from optlab.structured.multiasset import BasketContext
+from optlab.structured.policy import PricingDecision, decide
+from optlab.structured.pricer import StructuredResult, check_fixing_scale, history_times, price_many
+from optlab.structured.profile import ProductProfile, profile
+from optlab.structured.quanto import payment_warnings
+from optlab.structured.replication import replication_result
+from optlab.structured.schema import TermSheet
+from optlab.structured.script.nodes import Param, Program
+from optlab.structured.script.printer import to_text
+from optlab.structured.script.timeline import Clock, build_timeline
+from optlab.structured.solve import combine, solve_affine
 
 
 @dataclass
@@ -64,7 +64,7 @@ class Quote:
         return to_text(Program(p.underlyings, params, p.events))
 
     def table(self) -> str:
-        from .report import quote_table
+        from optlab.structured.report import quote_table
 
         return quote_table(self)
 
@@ -78,8 +78,8 @@ def _book_greeks(
     """Greeks of a running product or of a basket, through a one-position book (which keeps the fixings and bumps
     each name), converted to % of notional. For a basket, delta and vega are the sums over the names (all names
     moved together, to first order) and `per_name` holds each name; the SE of a sum adds the SEs in quadrature."""
-    from .greeks import Greeks
-    from .portfolio import Book, Position
+    from optlab.structured.greeks import Greeks
+    from optlab.structured.portfolio import Book, Position
 
     model = None if decision.method == "replication" else decision.model
     g = Book([Position("quote", sheet, 1.0, params=params, fixings=fixings)]).greeks(
@@ -158,7 +158,7 @@ def wrapper(sheet: TermSheet, product: CompiledProduct):
 
 def _mix_band(mixes, product, ctx, fmt, decision, prof, fixings, workers, margin, sheet) -> dict:
     """Coupon (or upfront) under SLV for each mixing fraction, and the ATM vol error of each recalibrated model."""
-    from ..validation import mc_smile
+    from optlab.validation import mc_smile
 
     T = max(product.horizon, 1 / 365)
     T_check = min(T, ctx.t_max)
@@ -371,7 +371,7 @@ def quote(
     if with_greeks and (basket or fixings):
         g = _book_greeks(sheet, params, fixings, ctx, decision, slv_vega, workers)
     elif with_greeks:
-        from .greeks import greeks
+        from optlab.structured.greeks import greeks
 
         g = greeks(
             product.program,

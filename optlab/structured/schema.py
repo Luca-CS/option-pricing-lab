@@ -12,7 +12,7 @@ import datetime as dt
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..marketdata.universe import _BY_ID, enabled_names
+from optlab.marketdata.universe import _BY_ID, enabled_names
 
 
 @dataclass(frozen=True)

@@ -14,8 +14,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..market import Market
-from .script.evaluator import BatchFlows
+from optlab.market import Market
+from optlab.structured.script.evaluator import BatchFlows
 
 
 @dataclass(frozen=True)
@@ -100,7 +100,7 @@ def funding_periods(
     strike, months: int, freq_months: int, valuation, convention="modified_following", pay_lag: int = 5, calendar=None
 ) -> tuple:
     """Funding periods from the strike date: (start, end, payment, ACT/360 accrual), times from the valuation."""
-    from .dates import schedule, year_fraction
+    from optlab.structured.dates import schedule, year_fraction
 
     start, out = strike, []
     for end, pay in schedule(strike, months, freq_months, convention, pay_lag, calendar):

@@ -23,7 +23,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.interpolate import PchipInterpolator
 
-from .ssvi import fit_ssvi
+from optlab.ssvi import fit_ssvi
 
 
 def svi_w(p, k):

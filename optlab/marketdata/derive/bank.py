@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from ..lake import Lake, new_run_id
+from optlab.marketdata.lake import Lake, new_run_id
 
 ENTITY = "BANQUE-FICTIVE"
 

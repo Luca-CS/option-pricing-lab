@@ -12,16 +12,16 @@ import datetime as dt
 import os
 import time
 
-from ..config import DEFAULT_SEED
-from ..log import get_logger
-from ..risk import RiskGroup, RiskSettings
-from ..risk import scenarios as sc
-from ..risk.greeks import Bumps, GreekOptions, compute
-from ..risk.ladder import LadderOptions, env_with_betas, ladder, stored_betas
-from ..risk.store import RiskStore, code_version, run_key
-from ..structured.portfolio import Book
-from .api import PRECISION, ApiError
-from .serialize import clean
+from optlab.app.api import PRECISION, ApiError
+from optlab.app.serialize import clean
+from optlab.config import DEFAULT_SEED
+from optlab.log import get_logger
+from optlab.risk import RiskGroup, RiskSettings
+from optlab.risk import scenarios as sc
+from optlab.risk.greeks import Bumps, GreekOptions, compute
+from optlab.risk.ladder import LadderOptions, env_with_betas, ladder, stored_betas
+from optlab.risk.store import RiskStore, code_version, run_key
+from optlab.structured.portfolio import Book
 
 LOG = get_logger(__name__)
 
@@ -65,7 +65,7 @@ class RiskApi:
         )
 
     def _names(self, groups) -> list:
-        from ..risk.var import group_names
+        from optlab.risk.var import group_names
 
         return sorted({n for g in groups for n in group_names(g)})
 
@@ -217,7 +217,7 @@ class RiskApi:
 
     # --- VaR ---
     def var(self, body: dict) -> dict:
-        from ..risk.var import run_var
+        from optlab.risk.var import run_var
 
         opts = body.get("options") or {}
         groups = self.groups()
@@ -255,7 +255,7 @@ class RiskApi:
 
     # --- explained P&L ---
     def pnl(self, start: str | None, end: str | None) -> dict:
-        from ..risk.pnl import cumulative
+        from optlab.risk.pnl import cumulative
 
         runs = self.store.runs("pnl")
         if not runs:
@@ -272,7 +272,7 @@ class RiskApi:
         return clean({**cumulative(self.store, start, end), "eod": self.store.runs("eod", start, end)})
 
     def pnl_eod(self, body: dict) -> dict:
-        from ..risk.pnl import backfill
+        from optlab.risk.pnl import backfill
 
         opts = body.get("options") or {}
         settings = self._settings(opts)

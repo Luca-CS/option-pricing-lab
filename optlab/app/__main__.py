@@ -8,11 +8,11 @@ import secrets
 import threading
 import webbrowser
 
-from ..log import configure
-from .api import Desk
-from .netcheck import lan_blockers
-from .server import serve
-from .tunnel import open_tunnel
+from optlab.app.api import Desk
+from optlab.app.netcheck import lan_blockers
+from optlab.app.server import serve
+from optlab.app.tunnel import open_tunnel
+from optlab.log import configure
 
 
 def main():

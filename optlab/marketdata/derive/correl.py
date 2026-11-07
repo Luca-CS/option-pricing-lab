@@ -29,10 +29,10 @@ import numpy as np
 import pandas as pd
 from scipy.special import ndtr
 
-from ...blackscholes import black_price, implied_vol
-from ...log import get_logger
-from ..lake import Lake, new_run_id, sql_str
-from ..universe import instrument
+from optlab.blackscholes import black_price, implied_vol
+from optlab.log import get_logger
+from optlab.marketdata.lake import Lake, new_run_id, sql_str
+from optlab.marketdata.universe import instrument
 
 LOG = get_logger(__name__)
 
@@ -236,7 +236,7 @@ def skewed_matrix(matrix, strike: float, skew: CorrelationSkew = CorrelationSkew
 
 def basket_paths(quantiles, forwards, matrix, n_pairs: int, seed: int = SEED) -> np.ndarray:
     """Antithetic pairs of S_i(T) / S_i(0): the marginals of the surfaces joined by a Gaussian copula."""
-    from ...structured.multiasset import correlation_root
+    from optlab.structured.multiasset import correlation_root
 
     z = np.random.default_rng(seed).standard_normal((n_pairs, len(quantiles)))
     u = ndtr(np.concatenate([z, -z]) @ correlation_root(np.asarray(matrix, dtype=float)).T)
@@ -333,8 +333,8 @@ def basket_rows(
 def build_basket_quotes(lake: Lake, baskets, days, n_pairs: int = 100_000, as_of=None, log=None) -> list[dict]:
     """Pseudo-quotes on the reconstructed layer only, so that the series never changes layer. A day missing a member's market
     is skipped and counted: nothing is carried over."""
-    from ..pit import MODEL_SPOT, market_curves
-    from .surfaces import surface_at
+    from optlab.marketdata.derive.surfaces import surface_at
+    from optlab.marketdata.pit import MODEL_SPOT, market_curves
 
     rows, skipped = [], 0
     for day in days:

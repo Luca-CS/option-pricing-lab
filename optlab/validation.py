@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from .blackscholes import implied_vol
-from .market import Market
-from .models import Model, simulate
+from optlab.blackscholes import implied_vol
+from optlab.market import Market
+from optlab.models import Model, simulate
 
 
 def mc_smile(
@@ -20,7 +20,7 @@ def mc_smile(
     `engine` (else the default of `optlab.native`) can simulate on the compiled engine; a Generator `rng` stays on NumPy.
     Returns (iv, iv_stderr).
     """
-    from . import native
+    from optlab import native
 
     strikes = np.asarray(strikes, dtype=float)
     F, D = float(market.F(T)), float(market.D(T))

@@ -14,7 +14,7 @@ import io
 
 import pandas as pd
 
-from .simple import _text, parse_fred
+from optlab.marketdata.sources.simple import _text, parse_fred
 
 ECB_CURRENCIES = ("USD", "JPY", "GBP")
 FRED_PAIRS = {"EURUSD": "DEXUSEU", "USDJPY": "DEXJPUS", "GBPUSD": "DEXUSUK"}

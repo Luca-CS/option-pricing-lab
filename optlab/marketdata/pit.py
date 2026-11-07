@@ -15,15 +15,15 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 
-from ..market import Market
-from .derive.carry import DividendStream, dividend_stream
-from .derive.correl import correlation_at
-from .derive.fx import quanto_link_at
-from .derive.surfaces import surface_at
-from .lake import TABLES, Lake, sql_str
-from .quotes import discount_function
-from .snapshot import MarketSnapshot
-from .universe import instrument
+from optlab.market import Market
+from optlab.marketdata.derive.carry import DividendStream, dividend_stream
+from optlab.marketdata.derive.correl import correlation_at
+from optlab.marketdata.derive.fx import quanto_link_at
+from optlab.marketdata.derive.surfaces import surface_at
+from optlab.marketdata.lake import TABLES, Lake, sql_str
+from optlab.marketdata.quotes import discount_function
+from optlab.marketdata.snapshot import MarketSnapshot
+from optlab.marketdata.universe import instrument
 
 PILLARS = np.array([1 / 52, 1 / 12, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 7.0])
 STEPS_UP_TO = 3.0  # years over which a forward keeps its dividend steps; beyond it, the pillars smooth them
@@ -113,7 +113,7 @@ def quick_heston(surface) -> dict:
 
 def fitted_heston(surface, market: Market, x0: dict | None = None) -> dict:
     """Heston fitted to the surface on five maturities and nine strikes."""
-    from ..heston import HestonParams, calibrate_heston
+    from optlab.heston import HestonParams, calibrate_heston
 
     slices = []
     for T in (1 / 12, 0.25, 0.5, 1.0, 2.0):
@@ -149,7 +149,7 @@ def market_at(
     got = surface_at(lake, name, day, as_of, layer=layer)
     pay = payment or instrument(name).currency
     if pay != instrument(name).currency:
-        from ..structured.quanto import quanto_market
+        from optlab.structured.quanto import quanto_market
 
         link = quanto_link_at(lake, name, pay, day, fx_window, as_of)
         market = quanto_market(market, discount_function(lake, pay, day, as_of), link.rho, link.vol_fx, got.surface)
@@ -157,8 +157,8 @@ def market_at(
     prov["payment"] = pay
     h = quick_heston(got.surface) if heston == "prior" else fitted_heston(got.surface, market)
     if leverage == "calibrate":
-        from ..heston import HestonParams
-        from ..slv import calibrate_leverage
+        from optlab.heston import HestonParams
+        from optlab.slv import calibrate_leverage
 
         fit = calibrate_leverage(
             HestonParams(**h), got.surface, market, T_max, mix=mix, n_particles=n_particles, rng=seed
@@ -192,7 +192,7 @@ def market_at(
 
 def context_at(lake: Lake, name: str, day, as_of=None, **kw):
     """(PricingContext, MarketSnapshot) at a date."""
-    from ..structured.context import PricingContext
+    from optlab.structured.context import PricingContext
 
     snap = market_at(lake, name, day, as_of, **kw)
     return PricingContext.from_snapshot(snap), snap
@@ -210,8 +210,8 @@ def basket_at(
 ):
     """(BasketContext, {name: snapshot}, correlation meta): each name on its own surface, correlation known at `day`. Everything is
     paid in `payment`, by default the first name's currency, and a name in another currency is on its quanto market."""
-    from ..structured.context import PricingContext
-    from ..structured.multiasset import BasketContext
+    from optlab.structured.context import PricingContext
+    from optlab.structured.multiasset import BasketContext
 
     pay = payment or instrument(names[0]).currency
     snaps = {n: market_at(lake, n, day, as_of, layer=layer, payment=pay, fx_window=window) for n in names}

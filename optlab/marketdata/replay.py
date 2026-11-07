@@ -15,22 +15,22 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 
-from ..config import DEFAULT_SEED
-from ..log import get_logger
-from ..structured.calendars import CALENDARS
-from ..structured.fastmodels import TabulatedLocalVol
-from ..structured.greeks import ShiftedSurface
-from ..structured.lifecycle import events as lifecycle_events
-from ..structured.multiasset import BasketContext
-from ..structured.portfolio import Book
-from ..structured.quote import quote
-from ..structured.reserves import frozen, remaining
-from ..structured.schema import TermSheet
-from ..structured.trade import Trade
-from .lake import Lake, sql_str
-from .pit import basket_at, context_at, real_fixings
-from .snapshot import to_model_scale
-from .universe import PLACE_CALENDAR, instrument
+from optlab.config import DEFAULT_SEED
+from optlab.log import get_logger
+from optlab.marketdata.lake import Lake, sql_str
+from optlab.marketdata.pit import basket_at, context_at, real_fixings
+from optlab.marketdata.snapshot import to_model_scale
+from optlab.marketdata.universe import PLACE_CALENDAR, instrument
+from optlab.structured.calendars import CALENDARS
+from optlab.structured.fastmodels import TabulatedLocalVol
+from optlab.structured.greeks import ShiftedSurface
+from optlab.structured.lifecycle import events as lifecycle_events
+from optlab.structured.multiasset import BasketContext
+from optlab.structured.portfolio import Book
+from optlab.structured.quote import quote
+from optlab.structured.reserves import frozen, remaining
+from optlab.structured.schema import TermSheet
+from optlab.structured.trade import Trade
 
 LOG = get_logger(__name__)
 
@@ -425,7 +425,7 @@ def surface_of(ctx, name):
 
 
 def sheet_maturity(sheet: TermSheet) -> dt.date:
-    from ..structured.compiler import compile_sheet
+    from optlab.structured.compiler import compile_sheet
 
     return compile_sheet(sheet, sheet.get("general.strike_date")).maturity
 

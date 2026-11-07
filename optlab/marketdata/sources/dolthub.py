@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from ...config import paths
-from ..lake import Lake, new_run_id
+from optlab.config import paths
+from optlab.marketdata.lake import Lake, new_run_id
 
 SOURCE = "dolthub"
 SYMBOLS = (

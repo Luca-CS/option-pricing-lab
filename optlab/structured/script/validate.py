@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from .lexer import KEYWORDS, ScriptError
-from .nodes import (
+from optlab.structured.script.lexer import KEYWORDS, ScriptError
+from optlab.structured.script.nodes import (
     FUNCTIONS,
     TAGS,
     WINDOWS,

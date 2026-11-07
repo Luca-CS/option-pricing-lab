@@ -20,7 +20,7 @@ import zipfile
 
 import pandas as pd
 
-from .simple import _text
+from optlab.marketdata.sources.simple import _text
 
 # --- Ministry of Finance: two title and header lines, YYYY/M/D, percent, "-" when a maturity did not exist ---
 MOF_HISTORY_URL = "https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/historical/jgbcme_all.csv"

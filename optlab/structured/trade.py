@@ -11,7 +11,7 @@ import datetime as dt
 import json
 from dataclasses import asdict, dataclass, field
 
-from .schema import TermSheet, TermSheetError
+from optlab.structured.schema import TermSheet, TermSheetError
 
 STATUSES = ("live", "called", "matured", "cancelled")
 
@@ -75,7 +75,7 @@ class Trade:
         return TermSheet.from_dict(self.product["term_sheet"]) if self.product["kind"] == "term_sheet" else None
 
     def to_position(self, fixings: dict | None = None):
-        from .portfolio import Position
+        from optlab.structured.portfolio import Position
 
         if self.product["kind"] == "term_sheet":
             return Position(self.trade_id, self.term_sheet(), self.quantity, fixings=fixings)

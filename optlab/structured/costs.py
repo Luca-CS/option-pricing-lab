@@ -26,15 +26,15 @@ from dataclasses import dataclass, field, replace
 
 import numpy as np
 
-from ..market import Market
-from ..models import LocalVolModel
-from .digitals import KINDS
-from .multiasset import BasketContext
-from .pricer import StructuredResult, history_times, price_many
-from .replication import replication_result
-from .script.timeline import Clock, build_timeline
-from .solve import combine
-from .surfaces import BumpedSurface, surface_arbitrage
+from optlab.market import Market
+from optlab.models import LocalVolModel
+from optlab.structured.digitals import KINDS
+from optlab.structured.multiasset import BasketContext
+from optlab.structured.pricer import StructuredResult, history_times, price_many
+from optlab.structured.replication import replication_result
+from optlab.structured.script.timeline import Clock, build_timeline
+from optlab.structured.solve import combine
+from optlab.structured.surfaces import BumpedSurface, surface_arbitrage
 
 # Fractions, like every level of the library: vol 0.005 is half a vol point, corr 0.01 is one correlation point, dividend 0.1 is 10 % of
 # the dividends, repo 0.001 is 10 bp.
@@ -231,7 +231,7 @@ class _Lines:
             return ctx.model("lv", self.horizon, fast=True) if self.fast else ctx.model("lv", self.horizon)
         surface = BumpedSurface(ctx.surface, bumps.get("vol", 0.0), bumps.get("skew", 0.0))
         if self.fast:
-            from .fastmodels import TabulatedLocalVol
+            from optlab.structured.fastmodels import TabulatedLocalVol
 
             return TabulatedLocalVol(surface)
         return LocalVolModel(surface)
@@ -335,7 +335,7 @@ class _Lines:
         else:
             model = replace(self.ctx.slv_model(self.horizon, mix), spot_driven=True)
             if self.fast:
-                from .fastmodels import fast_slv
+                from optlab.structured.fastmodels import fast_slv
 
                 model = fast_slv(model)
         d = self.decision
@@ -460,7 +460,7 @@ class _DigitalRun:
         self.alone: dict = {}
 
     def found(self, x: float | None) -> list:
-        from .digitals import find_digitals
+        from optlab.structured.digitals import find_digitals
 
         return find_digitals(self.lines.product, {self.param: x} if x is not None and self.param else None)
 

@@ -8,7 +8,7 @@ import traceback
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
-from ..log import get_logger
+from optlab.log import get_logger
 
 LOG = get_logger(__name__)
 

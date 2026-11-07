@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .script.nodes import Assign, Binary, Call, If, Name, Pay, Program, Terminate, Unary, Window
-from .script.timeline import Timeline
+from optlab.structured.script.nodes import Assign, Binary, Call, If, Name, Pay, Program, Terminate, Unary, Window
+from optlab.structured.script.timeline import Timeline
 
 
 @dataclass(frozen=True)

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from . import grid
+from optlab.risk import grid
 
 
 def split(key: str) -> tuple[str, str, str]:

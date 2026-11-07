@@ -22,10 +22,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse, urlsplit
 
-from ..log import get_logger
-from .api import ApiError, Desk
-from .report import book_report, desk_snapshot, quote_report, risk_report
-from .risk_api import risk_routes
+from optlab.app.api import ApiError, Desk
+from optlab.app.report import book_report, desk_snapshot, quote_report, risk_report
+from optlab.app.risk_api import risk_routes
+from optlab.log import get_logger
 
 STATIC = Path(__file__).resolve().parent / "static"
 LOG = get_logger(__name__)
