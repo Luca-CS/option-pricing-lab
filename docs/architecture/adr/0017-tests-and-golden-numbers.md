@@ -1,6 +1,6 @@
 # ADR-0017: Golden numbers, a fast CI, the full suite on the machine
 
-- Status: Accepted (A0 checkpoint, 7 November 2026); the tolerance across platforms below is still open
+- Status: Accepted (A0 checkpoint, 7 November 2026); the tolerance across machines below is still open
 - Handoff §1: Tests; §5
 
 ## Context
@@ -33,6 +33,16 @@ within 4 standard errors. The refactor moves every file: something must prove th
   (`calibration_simulated`, `presets_simulated`, `structured_extra`), Monte Carlo values within 0.1 SE and fitted
   parameters within `rtol = 2e-2`, checked by a dedicated comparison, not bit for bit. Within one platform the rule
   stays equality to the last bit. To be confirmed at the A0 checkpoint.
+- **Measured in A2 across machines of one platform**: the hosted Windows runner gave the versioned goldens bit for bit
+  on PR #3 (Azure northcentralus) and not on PR #4 (westus2), with the same image (`windows-2025-vs2026` 20261103.298.1),
+  the same lock and code that is bit for bit on this machine. The gaps have the size of the Windows-Linux ones:
+  `mc_products` 2.2e-14 relative, the calibration's parameters up to 6.5e-3, the presets' control variate 3.7e-4
+  relative on an SE, the forced SLV's termination probabilities up to 0.6 %. The cause is the CPU, not the OS: NumPy
+  picks its SIMD kernels at start-up (this machine, a Zen 2, runs X86_V3), and the last bit of `exp` and `log` follows
+  the kernel. So "same platform" means **same machine**: bit for bit is the rule on this machine (each step's local
+  check), and every hosted runner is treated as another platform. Until the tolerance above is confirmed, the CI blocks
+  on the fixed-input groups at `rtol = 1e-12` on both systems and runs the recalibrating groups without blocking, the
+  machine's CPU and SIMD level printed beside them.
 - **CI under 5 minutes**, measured: `pytest -m "not slow and not gpu and not lake"` with xdist on a synthetic
   mini-lake generated deterministically by the tests (no binary fixture), plus the CI golden groups.
 - **The full suite and the GPU on the machine**: `optlab check full` (the real lake, about 30 minutes) and `optlab check
