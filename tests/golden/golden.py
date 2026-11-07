@@ -1,14 +1,16 @@
 """Golden numbers: the library's outputs frozen before the refactor, compared bit for bit after every step.
 
     python tests/golden/golden.py record [--group NAME ...]     # write the files (A0 only, or after a documented fix)
-    python tests/golden/golden.py check [--group NAME ...] [--rtol 1e-12]
+    python tests/golden/golden.py check [--group NAME ...] [--rtol 1e-12 | --across]
 
 Groups marked `ci` use synthetic inputs only and are versioned in `tests/golden/`. Groups marked `local` read the
 real lake, the showcase store or the GPU: their files go to `$OPTLAB_DATA/golden/` (default `optlab-data/golden`
 beside the main checkout), never into the repository, since they derive from personal-use market data.
 
-Every Monte Carlo number is recorded with its standard error. Same platform and same engine: equality to the last
-bit. Another platform: a relative tolerance, stated and measured (`--rtol`), never widened silently.
+Every Monte Carlo number is recorded with its standard error. Same machine and same engine: equality to the last
+bit. Another machine (a hosted runner, another OS): `--across`, the tolerance of ADR-0017, never widened silently:
+groups with fixed inputs within `ACROSS_RTOL`; groups that recalibrate, whose fits amplify the last bits, with each
+Monte Carlo number within `SE_RATIO` of its standard error and every other number within `FIT_RTOL`.
 
 This file becomes `optlab check golden [--record]` in step A7; the case definitions stay as they are.
 """
@@ -631,6 +633,12 @@ def showcase_var() -> dict:
     return numbers_only(plain(res))
 
 
+# ADR-0017, agreed with Luca on 7 November 2026: the comparison across machines
+ACROSS_RTOL = 1e-12  # groups with fixed inputs
+SE_RATIO = 0.1  # recalibrating groups: a Monte Carlo number moves by at most this many of its standard errors
+FIT_RTOL = 2e-2  # recalibrating groups: fitted parameters and the other numbers, relative
+RECALIBRATING = ("calibration_simulated", "presets_simulated", "structured_extra")
+
 GROUPS = {
     "closed_forms": ("ci", closed_forms),
     "mc_products": ("ci", mc_products),
@@ -712,12 +720,56 @@ def diff(a, b, rtol: float, path: str = "") -> list[str]:
     return [] if a == b else [f"{path}: {a!r} -> {b!r}"]
 
 
+def _se_of(d: dict, key: str):
+    """The standard error recorded beside a Monte Carlo number: `x_se`, `base_price` -> `base_se`, or the `se` /
+    `stderr` of a {value | price | cost, se} record. None for a number without one (a fitted parameter, a frequency)."""
+    for cand in (f"{key}_se", key[: -len("_price")] + "_se" if key.endswith("_price") else None):
+        if cand and isinstance(d.get(cand), (int, float)) and not isinstance(d.get(cand), bool):
+            return float(d[cand])
+    if key in ("value", "price", "cost"):
+        for cand in ("se", "stderr"):
+            if isinstance(d.get(cand), (int, float)) and not isinstance(d.get(cand), bool):
+                return float(d[cand])
+    return None
+
+
+def diff_recalibrating(a, b, path: str = "", se=None, worst=None) -> list[str]:
+    """`diff` for a group that recalibrates, across machines: a number with a standard error within SE_RATIO of it,
+    any other within FIT_RTOL. `worst` collects the largest gap of each kind: {"se": ..., "rel": ...}."""
+    worst = {} if worst is None else worst
+    if isinstance(a, dict) and isinstance(b, dict) and "digest" in a and "digest" in b:
+        keep = ("shape", "sum", "samples")
+        return diff_recalibrating({k: a[k] for k in keep}, {k: b[k] for k in keep}, path, None, worst)
+    if isinstance(a, dict) and isinstance(b, dict):
+        out = [f"{path}/{k}: missing" for k in a if k not in b] + [f"{path}/{k}: new" for k in b if k not in a]
+        for k in a:
+            if k in b:
+                out += diff_recalibrating(a[k], b[k], f"{path}/{k}", _se_of(a, k), worst)
+        return out
+    if isinstance(a, list) and isinstance(b, list):
+        if len(a) != len(b):
+            return [f"{path}: length {len(a)} -> {len(b)}"]
+        return [d for i, (x, y) in enumerate(zip(a, b)) for d in diff_recalibrating(x, y, f"{path}[{i}]", None, worst)]
+    if isinstance(a, float) and isinstance(b, (float, int)) and not isinstance(b, bool):
+        if a == b or (math.isnan(a) and math.isnan(b)):
+            return []
+        if se is not None and se > 0:
+            z = abs(a - b) / se
+            worst["se"] = max(worst.get("se", 0.0), z)
+            return [] if z <= SE_RATIO else [f"{path}: {a!r} -> {b!r} ({z:.3f} SE, at most {SE_RATIO})"]
+        rel = abs(a - b) / max(abs(a), abs(b), 1e-300)
+        worst["rel"] = max(worst.get("rel", 0.0), rel)
+        return [] if rel <= FIT_RTOL else [f"{path}: {a!r} -> {b!r} (rel {rel:.2e}, at most {FIT_RTOL:g})"]
+    return [] if a == b else [f"{path}: {a!r} -> {b!r}"]
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("action", choices=("record", "check", "list"))
     ap.add_argument("--group", nargs="*", default=None, help="default: every ci group, plus local ones with --local")
     ap.add_argument("--local", action="store_true", help="include the local groups (lake, showcase, GPU)")
     ap.add_argument("--rtol", type=float, default=0.0)
+    ap.add_argument("--across", action="store_true", help="the tolerance across machines of ADR-0017 (hosted runners)")
     ap.add_argument("--force", action="store_true", help="record over an existing file")
     ap.add_argument("--dump", help="check: also write the computed values to this folder (to compare platforms)")
     args = ap.parse_args(argv)
@@ -748,10 +800,17 @@ def main(argv=None) -> int:
                 (Path(args.dump) / f"{g}.json").write_text(
                     json.dumps({"meta": _meta(seconds), "values": values}, indent=1), encoding="utf-8"
                 )
-            d = diff(gold["values"], values, args.rtol)
-            rels = [float(x) for line in d for x in re.findall(r"\(rel ([0-9.e+-]+)\)", line)]
-            worst = f", max rel {max(rels):.2e}" if rels else ""
-            print(f"{g}: {'OK' if not d else f'{len(d)} differences{worst}'} ({seconds:.1f} s, rtol {args.rtol:g})")
+            if args.across and g in RECALIBRATING:
+                gaps: dict = {}
+                d = diff_recalibrating(gold["values"], values, worst=gaps)
+                rule = f"across: {gaps.get('se', 0.0):.3f} SE and rel {gaps.get('rel', 0.0):.2e} at most"
+                rule += f"; allowed {SE_RATIO} SE, rel {FIT_RTOL:g}"
+            else:
+                rtol = ACROSS_RTOL if args.across else args.rtol
+                d = diff(gold["values"], values, rtol)
+                rels = [float(x) for line in d for x in re.findall(r"\(rel ([0-9.e+-]+)\)", line)]
+                rule = (f"max rel {max(rels):.2e}, " if rels else "") + f"rtol {rtol:g}"
+            print(f"{g}: {'OK' if not d else f'{len(d)} differences'} ({seconds:.1f} s, {rule})")
             for line in d[:20]:
                 print("   ", line)
             failed += bool(d)

@@ -6,8 +6,9 @@ the internet; the public face is a static demo on GitHub Pages. The threat model
 
 ## Reporting a vulnerability
 
-Please report privately, through **GitHub's private vulnerability reporting**: the *Security* tab of this repository,
-then *Report a vulnerability*. Do not open a public issue for a security problem.
+Please do not describe a security problem in public. Open an issue titled "Security report" that says only which part
+it concerns (library, engine, server, workflows, images, demo), with no detail; the owner then gives you a private way
+to send the report.
 
 Useful in a report: the version or commit, what an attacker can do, and the steps to reproduce. You should get an
 answer within a week; a fix, or the reason there is none, follows as soon as it is understood. Credit is given in the
