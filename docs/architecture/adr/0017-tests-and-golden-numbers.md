@@ -1,6 +1,6 @@
 # ADR-0017: Golden numbers, a fast CI, the full suite on the machine
 
-- Status: Accepted (A0 checkpoint, 7 November 2026); the tolerance across machines below is still open
+- Status: Accepted (A0 checkpoint, 7 November 2026); tolerance across machines agreed on 7 and 8 November 2026
 - Handoff §1: Tests; §5
 
 ## Context
@@ -46,6 +46,23 @@ within 4 standard errors. The refactor moves every file: something must prove th
   local check), and every hosted runner is treated as another platform. Until the tolerance above is confirmed, the CI
   blocks on the fixed-input groups at `rtol = 1e-12` on both systems and runs the recalibrating groups without
   blocking, the machine's CPU and SIMD level printed beside them.
+- **Agreed with Luca (7 November 2026)**: the tolerance proposed above, implemented as `golden.py check --across`
+  (`ACROSS_RTOL`, `SE_RATIO`, `FIT_RTOL`; a number's standard error is the one recorded beside it). Checked on the
+  code of A2 under Linux: every number of `closed_forms`, `mc_products`, `labjs` and `presets_simulated` holds (the
+  presets within 0.007 SE), and so do all the others but two, both SLV prices on a leverage the run recalibrated: the
+  American put of the exotics table at 0.32 SE and the Phoenix's SLV provision at 0.13 SE. A0's "up to 0.07 SE" had
+  looked at the presets only. **Luca's decision (8 November 2026): the rule stays at 0.1 SE**, not widened for them;
+  the CI blocks on the four groups that hold and runs `calibration_simulated` and `structured_extra` with the same
+  rule without blocking, their gaps printed. The guard of these two groups is the bit-for-bit check on this machine at
+  every step.
+- **The native engine's goldens (A3)**, recorded on the `ctypes` bridge before the binding changed: `native_cpu` and
+  `native_gpu`, versioned (synthetic inputs, the simulated market), run with `--local` or by name since they need the
+  engine. They hold paths of the four models and of a basket with a local correlation, the fixed products of the CUDA
+  study, the SLV leverage and a Phoenix quoted on the engine. The CPU engine is bit for bit from run to run. The GPU is
+  not, in two places, both reductions by `atomicAdd` whose order of blocks changes: the fixed products' partial sums
+  (prices identical over six runs, SE within 8.6e-16 relative) and the leverage's histograms (within 1.3e-9). So
+  `native_gpu` is bit for bit except `fixed` within 1e-12 and `leverage` within 1e-8 (`WITHIN` in `golden.py`); its
+  paths and the quote priced on them stay bit for bit, and so does `presets_spx_gpu`.
 - **CI under 5 minutes**, measured: `pytest -m "not slow and not gpu and not lake"` with xdist on a synthetic
   mini-lake generated deterministically by the tests (no binary fixture), plus the CI golden groups.
 - **The full suite and the GPU on the machine**: `optlab check full` (the real lake, about 30 minutes) and `optlab check

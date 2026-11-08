@@ -1,14 +1,17 @@
 """Golden numbers: the library's outputs frozen before the refactor, compared bit for bit after every step.
 
     python tests/golden/golden.py record [--group NAME ...]     # write the files (A0 only, or after a documented fix)
-    python tests/golden/golden.py check [--group NAME ...] [--rtol 1e-12]
+    python tests/golden/golden.py check [--group NAME ...] [--rtol 1e-12 | --across]
 
-Groups marked `ci` use synthetic inputs only and are versioned in `tests/golden/`. Groups marked `local` read the
+Groups marked `ci` use synthetic inputs only and are versioned in `tests/golden/`; `native` ones too, but they need the
+compiled engine (and a GPU for `native_gpu`), so only `--local` or `--group` runs them. Groups marked `local` read the
 real lake, the showcase store or the GPU: their files go to `$OPTLAB_DATA/golden/` (default `optlab-data/golden`
 beside the main checkout), never into the repository, since they derive from personal-use market data.
 
-Every Monte Carlo number is recorded with its standard error. Same platform and same engine: equality to the last
-bit. Another platform: a relative tolerance, stated and measured (`--rtol`), never widened silently.
+Every Monte Carlo number is recorded with its standard error. Same machine and same engine: equality to the last
+bit. Another machine (a hosted runner, another OS): `--across`, the tolerance of ADR-0017, never widened silently:
+groups with fixed inputs within `ACROSS_RTOL`; groups that recalibrate, whose fits amplify the last bits, with each
+Monte Carlo number within `SE_RATIO` of its standard error and every other number within `FIT_RTOL`.
 
 This file becomes `optlab check golden [--record]` in step A7; the case definitions stay as they are.
 """
@@ -400,6 +403,61 @@ def structured_extra() -> dict:
     return out
 
 
+def _native_case(backend: str) -> dict:
+    """The compiled engine on synthetic inputs (the simulated market): paths of the four models and of a basket with a
+    local correlation, the fixed products of the CUDA study, the SLV leverage and a preset quoted on the engine."""
+    from optlab import native
+    from optlab.core import engines
+    from optlab.core.models import BlackScholesModel, HestonModel
+    from optlab.native import gpu
+    from optlab.structured import preset, quote
+    from optlab.structured.localcorr import LocalCorrelation
+    from optlab.structured.multiasset import Basket
+
+    if not native.available() or (backend == "gpu" and not native.gpu_available()):
+        raise RuntimeError(f"the native engine ({backend}) is not available on this machine")
+    engines.set_default("numpy")
+    ctx = _simulated_context()
+    out: dict = {"paths": {}, "fixed": {}}
+    for kind in ("bs", "lv", "heston", "slv"):
+        S = native.simulate(ctx.model(kind, 1.0), ctx.market, [0.25, 0.5, 1.0], 20_000, seed=7, backend=backend)
+        out["paths"][kind] = np.asarray(S)
+    names = ("SPX", "AAA", "BBB")
+    corr = np.array([[1.0, 0.8, 0.6], [0.8, 1.0, 0.7], [0.6, 0.7, 1.0]])
+    lv = ctx.model("lv", 1.0)
+    mixer = LocalCorrelation(sigma=0.15, level=0.0, down=0.3, up=0.1)
+    b = Basket(names, {n: lv for n in names}, {n: ctx.market for n in names}, corr, mixer=mixer)
+    paths = native.simulate(b, None, [0.5, 1.0], 20_000, seed=9, backend=backend)
+    assert isinstance(paths, dict)  # a basket: one array per name
+    out["paths"]["basket_localcorr"] = {n: np.asarray(paths[n]) for n in names}
+    bs, hes = BlackScholesModel(0.2), HestonModel(ctx.heston)
+    m, n = ctx.market, 200_000
+    out["fixed"]["bs_european"] = gpu.european(bs, m, 100.0, 1.0, "call", n_paths=n, seed=11, backend=backend)
+    out["fixed"]["heston_european"] = gpu.european(hes, m, 100.0, 1.0, "put", n_paths=n, seed=11, backend=backend)
+    out["fixed"]["bs_asian"] = gpu.asian(bs, m, 100.0, 1.0, 12, "call", n_paths=n, seed=11, backend=backend)
+    out["fixed"]["heston_barrier"] = gpu.barrier(
+        hes, m, 100.0, 80.0, 1.0, n_monitor=52, n_paths=n, seed=11, backend=backend
+    )
+    lev = native.calibrate_leverage(ctx.heston, ctx.surface, ctx.market, 1.0, 0.5, 20_000, rng=5, backend=backend)
+    out["leverage"] = {"times": lev.leverage.times, "x_grids": lev.leverage.x_grids, "values": lev.leverage.values}
+    engines.set_default(backend)  # a quote takes the process default, as on the desk
+    try:
+        out["phoenix"] = _quote_numbers(quote(preset("phoenix"), ctx, n_paths=20_000, batch=10_000))
+    finally:
+        engines.set_default("numpy")
+    values = numbers_only(plain(out))
+    assert isinstance(values, dict)
+    return values
+
+
+def native_cpu() -> dict:
+    return _native_case("cpu")
+
+
+def native_gpu() -> dict:
+    return _native_case("gpu")
+
+
 def _node() -> str:
     node = shutil.which("node") or os.environ.get("OPTLAB_NODE")
     if not node:
@@ -631,6 +689,17 @@ def showcase_var() -> dict:
     return numbers_only(plain(res))
 
 
+# ADR-0017, agreed with Luca on 7 November 2026: the comparison across machines
+ACROSS_RTOL = 1e-12  # groups with fixed inputs
+SE_RATIO = 0.1  # recalibrating groups: a Monte Carlo number moves by at most this many of its standard errors
+FIT_RTOL = 2e-2  # recalibrating groups: fitted parameters and the other numbers, relative
+RECALIBRATING = ("calibration_simulated", "presets_simulated", "structured_extra")
+# On one machine, the GPU's reductions are not bit for bit: the fixed products add each block's partial sums with
+# atomicAdd(double) and the leverage fills its histograms with atomicAdd(float), in an order that changes from run to
+# run. Measured over six runs (8 November 2026): prices identical, their SE within 8.6e-16 relative, the leverage within
+# 1.3e-9; the paths and everything priced on them stay bit for bit. These parts get a tolerance, the rest none.
+WITHIN = {"native_gpu": {"fixed": 1e-12, "leverage": 1e-8}}
+
 GROUPS = {
     "closed_forms": ("ci", closed_forms),
     "mc_products": ("ci", mc_products),
@@ -638,6 +707,8 @@ GROUPS = {
     "presets_simulated": ("ci", presets_simulated),
     "structured_extra": ("ci", structured_extra),
     "labjs": ("ci", labjs),
+    "native_cpu": ("native", native_cpu),  # versioned (synthetic inputs), needs the compiled engine
+    "native_gpu": ("native", native_gpu),  # versioned, needs the engine and a CUDA device
     "presets_spx_numpy": ("local", presets_spx_numpy),
     "lake_derived": ("local", lake_derived),
     "pnl_cascade": ("local", pnl_cascade),
@@ -652,7 +723,7 @@ GROUPS = {
 
 def path_of(group: str) -> Path:
     where, _ = GROUPS[group]
-    return (HERE if where == "ci" else local_dir()) / f"{group}.json"
+    return (local_dir() if where == "local" else HERE) / f"{group}.json"
 
 
 def _meta(seconds: float) -> dict:
@@ -712,12 +783,56 @@ def diff(a, b, rtol: float, path: str = "") -> list[str]:
     return [] if a == b else [f"{path}: {a!r} -> {b!r}"]
 
 
+def _se_of(d: dict, key: str):
+    """The standard error recorded beside a Monte Carlo number: `x_se`, `base_price` -> `base_se`, or the `se` /
+    `stderr` of a {value | price | cost, se} record. None for a number without one (a fitted parameter, a frequency)."""
+    for cand in (f"{key}_se", key[: -len("_price")] + "_se" if key.endswith("_price") else None):
+        if cand and isinstance(d.get(cand), (int, float)) and not isinstance(d.get(cand), bool):
+            return float(d[cand])
+    if key in ("value", "price", "cost"):
+        for cand in ("se", "stderr"):
+            if isinstance(d.get(cand), (int, float)) and not isinstance(d.get(cand), bool):
+                return float(d[cand])
+    return None
+
+
+def diff_recalibrating(a, b, path: str = "", se=None, worst=None) -> list[str]:
+    """`diff` for a group that recalibrates, across machines: a number with a standard error within SE_RATIO of it,
+    any other within FIT_RTOL. `worst` collects the largest gap of each kind: {"se": ..., "rel": ...}."""
+    worst = {} if worst is None else worst
+    if isinstance(a, dict) and isinstance(b, dict) and "digest" in a and "digest" in b:
+        keep = ("shape", "sum", "samples")
+        return diff_recalibrating({k: a[k] for k in keep}, {k: b[k] for k in keep}, path, None, worst)
+    if isinstance(a, dict) and isinstance(b, dict):
+        out = [f"{path}/{k}: missing" for k in a if k not in b] + [f"{path}/{k}: new" for k in b if k not in a]
+        for k in a:
+            if k in b:
+                out += diff_recalibrating(a[k], b[k], f"{path}/{k}", _se_of(a, k), worst)
+        return out
+    if isinstance(a, list) and isinstance(b, list):
+        if len(a) != len(b):
+            return [f"{path}: length {len(a)} -> {len(b)}"]
+        return [d for i, (x, y) in enumerate(zip(a, b)) for d in diff_recalibrating(x, y, f"{path}[{i}]", None, worst)]
+    if isinstance(a, float) and isinstance(b, (float, int)) and not isinstance(b, bool):
+        if a == b or (math.isnan(a) and math.isnan(b)):
+            return []
+        if se is not None and se > 0:
+            z = abs(a - b) / se
+            worst["se"] = max(worst.get("se", 0.0), z)
+            return [] if z <= SE_RATIO else [f"{path}: {a!r} -> {b!r} ({z:.3f} SE, at most {SE_RATIO})"]
+        rel = abs(a - b) / max(abs(a), abs(b), 1e-300)
+        worst["rel"] = max(worst.get("rel", 0.0), rel)
+        return [] if rel <= FIT_RTOL else [f"{path}: {a!r} -> {b!r} (rel {rel:.2e}, at most {FIT_RTOL:g})"]
+    return [] if a == b else [f"{path}: {a!r} -> {b!r}"]
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("action", choices=("record", "check", "list"))
     ap.add_argument("--group", nargs="*", default=None, help="default: every ci group, plus local ones with --local")
-    ap.add_argument("--local", action="store_true", help="include the local groups (lake, showcase, GPU)")
+    ap.add_argument("--local", action="store_true", help="include the engine and local groups (engine, lake, showcase)")
     ap.add_argument("--rtol", type=float, default=0.0)
+    ap.add_argument("--across", action="store_true", help="the tolerance across machines of ADR-0017 (hosted runners)")
     ap.add_argument("--force", action="store_true", help="record over an existing file")
     ap.add_argument("--dump", help="check: also write the computed values to this folder (to compare platforms)")
     args = ap.parse_args(argv)
@@ -748,10 +863,26 @@ def main(argv=None) -> int:
                 (Path(args.dump) / f"{g}.json").write_text(
                     json.dumps({"meta": _meta(seconds), "values": values}, indent=1), encoding="utf-8"
                 )
-            d = diff(gold["values"], values, args.rtol)
-            rels = [float(x) for line in d for x in re.findall(r"\(rel ([0-9.e+-]+)\)", line)]
-            worst = f", max rel {max(rels):.2e}" if rels else ""
-            print(f"{g}: {'OK' if not d else f'{len(d)} differences{worst}'} ({seconds:.1f} s, rtol {args.rtol:g})")
+            if args.across and g in RECALIBRATING:
+                gaps: dict = {}
+                d = diff_recalibrating(gold["values"], values, worst=gaps)
+                rule = f"across: {gaps.get('se', 0.0):.3f} SE and rel {gaps.get('rel', 0.0):.2e} at most"
+                rule += f"; allowed {SE_RATIO} SE, rel {FIT_RTOL:g}"
+            elif g in WITHIN and not args.across and not args.rtol:
+                parts = WITHIN[g]
+                d = [
+                    x
+                    for k in gold["values"]
+                    for x in diff(gold["values"][k], values.get(k), parts.get(k, 0.0), f"/{k}")
+                ]
+                d += [f"/{k}: new" for k in values if k not in gold["values"]]
+                rule = "bit for bit but " + ", ".join(f"{k} within {r:g}" for k, r in parts.items())
+            else:
+                rtol = ACROSS_RTOL if args.across else args.rtol
+                d = diff(gold["values"], values, rtol)
+                rels = [float(x) for line in d for x in re.findall(r"\(rel ([0-9.e+-]+)\)", line)]
+                rule = (f"max rel {max(rels):.2e}, " if rels else "") + f"rtol {rtol:g}"
+            print(f"{g}: {'OK' if not d else f'{len(d)} differences'} ({seconds:.1f} s, {rule})")
             for line in d[:20]:
                 print("   ", line)
             failed += bool(d)

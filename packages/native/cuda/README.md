@@ -173,12 +173,12 @@ machine, `portable` for sm_61 to sm_120 plus PTX; `-DOPTLAB_WITH_CUDA=OFF` build
 what a machine without an NVIDIA card needs.
 
 ```bash
-cmake -S cuda -B build -G "Visual Studio 17 2022" -A x64
+cmake -S packages/native/cuda -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release
 ctest --test-dir build -C Release                     # path engine checks, validation table, 10^8-path QE bias test
 python scripts/bench_accel.py                         # NumPy, CPU engine and GPU engine on structured products
 build/Release/test_prices.exe gpu                     # one suite: cpu | gpu | double | closed | qe-bias
-python cuda/bench/bench_numpy.py                      # NumPy timings of optlab (venv), read by bench.exe
+python packages/native/cuda/bench/bench_numpy.py      # NumPy timings of optlab (venv), read by bench.exe
 build/Release/bench.exe                               # benchmark table above
 build/Release/ablation.exe                            # optimisation study (also ablation_ieee, ablation_fastmath)
 ```
@@ -186,13 +186,17 @@ build/Release/ablation.exe                            # optimisation study (also
 To profile, run `ncu --set full -k regex:mc_kernel -o build/ncu_profile build/Release/profile.exe` from an
 administrator shell, unless GPU counters are open to all users.
 
-From Python, `optlab.gpu` loads the shared library `optlab_cuda_c` (built with the rest, found in `build/Release/`
-or through `$OPTLAB_CUDA_LIB`) with `ctypes`. It takes the library's own `Model` and `Market` objects and falls
-back to the NumPy pricers when there is no library, no GPU, or a case the engine does not cover: a curved
-market, a barrier other than down-and-out, or a Heston Asian. The result says which backend ran.
+These commands build the engine alone, with its C++ tests and benchmarks. Python gets it differently: `uv sync`
+builds `optlab.native._ext`, a nanobind module over the same sources (`packages/native/CMakeLists.txt`, through
+scikit-build-core; `OPTLAB_WITH_CUDA` and `OPTLAB_CUDA_ARCHS` pass to CMake from the environment), which calls the
+checked requests of `requests.hpp`. From Python, `optlab.native.gpu` takes the library's own `Model` and `Market`
+objects and falls back to the NumPy pricers when there is no library, no GPU, or a case the engine does not cover: a curved
+market, a barrier other than down-and-out, or a Heston Asian. The result says which backend ran. An engine error
+raises `optlab.core.engines.EngineError` with the engine's message.
 
 ```python
-from optlab import HestonModel, HestonParams, Market, gpu
+from optlab.core import HestonModel, HestonParams, Market
+from optlab.native import gpu
 
 model = HestonModel(HestonParams(v0=0.0228, kappa=3.09, theta=0.0537, xi=1.31, rho=-0.688))
 res = gpu.barrier(model, Market.flat(100.0, r=0.04, q=0.01), K=100, H=80, T=1.0, n_paths=10_000_000, seed=1)
@@ -226,10 +230,11 @@ optlab::McResult r = optlab::gpu_price(rq);         // r.out[0]: barrier, r.out[
 | `include/optlab_cuda/schemes.hpp` | path schemes and payoffs, shared by CPU and GPU |
 | `src/gpu_mc.cu`, `include/optlab_cuda/gpu_mc.cuh` | kernels, reduction, launch logic, study variants |
 | `src/cpu_mc.cpp` | double-precision multithreaded reference |
-| `src/capi.cpp`, `include/optlab_cuda/capi.h` | C interface of the shared library, for `optlab/gpu.py` |
+| `src/requests.cpp`, `include/optlab_cuda/requests.hpp` | checked requests (errors as exceptions), called by the Python module and the tests |
+| `../bindings/ext.cpp` | the nanobind module `optlab.native._ext` over those requests |
 | `src/closed_forms.cpp` | Black-Scholes, geometric Asian, Reiner-Rubinstein barrier, BGK shift |
 | `include/optlab_cuda/philox.hpp` | Philox4x32-10 and Box-Muller, the same normals on CPU and GPU |
-| `include/optlab_cuda/paths.hpp`, `src/paths_cpu.cpp`, `src/paths_gpu.cu` | path engine of the Python library (`optlab/native.py`) |
+| `include/optlab_cuda/paths.hpp`, `src/paths_cpu.cpp`, `src/paths_gpu.cu` | path engine of the Python library (`optlab.native`) |
 | `include/optlab_cuda/leverage.hpp`, `src/leverage.cpp`, `src/leverage_gpu.cu` | SLV leverage by the particle method |
 | `tests/test_prices.cpp` | validation table, float against double, QE bias at 10^8 paths |
 | `tests/test_paths.cpp` | path engine: forwards, Black's formula, correlation, windows, GPU against CPU |

@@ -1,8 +1,8 @@
 """Bridge to the C++/CUDA Monte Carlo engine of `cuda/`, with a NumPy fallback.
 
-The engine is loaded through ctypes from the `optlab_cuda_c` shared library: `$OPTLAB_CUDA_LIB` if set, else
-`build/Release/` or `build/` at the repository root (`cmake --build build --config Release`). Without the library
-or without a CUDA device, every function falls back to the NumPy pricers of `products.py`.
+The engine is the compiled module `optlab.native._ext` (nanobind, built with this package by scikit-build-core, with
+CUDA when a toolkit was found). Without the module or without a CUDA device, every function falls back to the NumPy
+pricers of `products.py`.
 
 What the engine covers: Black-Scholes and Heston on a flat market (constant r and q), European calls and puts,
 Black-Scholes Asian calls and puts, down-and-out calls and puts. Heston uses Andersen's QE scheme with uniform
@@ -15,59 +15,21 @@ double-precision C++ reference, multithreaded) or "numpy". The result says which
 
 from __future__ import annotations
 
-import ctypes
 import math
-import os
 from dataclasses import dataclass
-from pathlib import Path
+from types import ModuleType
 
 import numpy as np
 
-from optlab.core.config import REPO_ROOT
 from optlab.core.engines import EngineError  # noqa: F401 (gpu.EngineError, as before)
 from optlab.core.market import Market
 from optlab.core.models import BlackScholesModel, HestonModel, Model
 from optlab.core.products import MCResult, asian_mc, barrier_mc, european_mc
 
-_ROOT = REPO_ROOT  # build/Release beside the sources (A3 ships the engine in the wheel)
-_LIB_NAME = "optlab_cuda_c.dll" if os.name == "nt" else "liboptlab_cuda_c.so"
 _LEG = {"call": 1, "put": 2}
 _MODEL_BS, _MODEL_HESTON = 0, 1
 _EUROPEAN, _ASIAN, _BARRIER = 0, 1, 2
 _BACKEND = {"cpu": 0, "gpu": 1}
-
-
-class _Request(ctypes.Structure):  # optlab_request in cuda/include/optlab_cuda/capi.h
-    _fields_ = [
-        ("model", ctypes.c_int),
-        ("product", ctypes.c_int),
-        ("legs", ctypes.c_int * 3),
-        ("strikes", ctypes.c_double * 3),
-        ("H", ctypes.c_double),
-        ("n_steps", ctypes.c_int),
-        ("S0", ctypes.c_double),
-        ("r", ctypes.c_double),
-        ("q", ctypes.c_double),
-        ("T", ctypes.c_double),
-        ("sigma", ctypes.c_double),
-        ("v0", ctypes.c_double),
-        ("kappa", ctypes.c_double),
-        ("theta", ctypes.c_double),
-        ("xi", ctypes.c_double),
-        ("rho", ctypes.c_double),
-        ("n_paths", ctypes.c_longlong),
-        ("seed", ctypes.c_ulonglong),
-    ]
-
-
-class _Result(ctypes.Structure):  # optlab_result
-    _fields_ = [
-        ("price", ctypes.c_double * 4),
-        ("se", ctypes.c_double * 4),
-        ("n_paths", ctypes.c_longlong),
-        ("kernel_ms", ctypes.c_double),
-        ("total_ms", ctypes.c_double),
-    ]
 
 
 @dataclass
@@ -78,45 +40,33 @@ class EngineResult(MCResult):
     compute_ms: float = math.nan
 
 
-_lib = None
-_lib_tried = False
+_ext_module: list = []  # [module or None] once looked up
 
 
-def _library():
-    global _lib, _lib_tried
-    if _lib_tried:
-        return _lib
-    _lib_tried = True
-    env = os.environ.get("OPTLAB_CUDA_LIB")
-    candidates = [Path(env)] if env else [_ROOT / "build" / "Release" / _LIB_NAME, _ROOT / "build" / _LIB_NAME]
-    for path in candidates:
-        if path.is_file():
-            try:
-                lib = ctypes.CDLL(str(path))
-            except OSError:
-                continue
-            lib.optlab_gpu_count.restype = ctypes.c_int
-            lib.optlab_price.argtypes = [ctypes.POINTER(_Request), ctypes.c_int, ctypes.c_int, ctypes.POINTER(_Result)]
-            lib.optlab_price.restype = ctypes.c_int
-            lib.optlab_last_error.restype = ctypes.c_char_p
-            lib.optlab_gpu_name.restype = ctypes.c_char_p
-            _lib = lib
-            break
-    return _lib
+def _ext() -> ModuleType | None:
+    """The compiled module, or None when this install has none (built without a C++ compiler, or removed)."""
+    if not _ext_module:
+        try:
+            from optlab.native import _ext as module
+        except ImportError:
+            module = None
+        _ext_module.append(module)
+    return _ext_module[0]
 
 
 def engine_available() -> bool:
-    """The shared library is found and loads (its CPU reference then works, GPU or not)."""
-    return _library() is not None
+    """The compiled module is there (its CPU reference then works, GPU or not)."""
+    return _ext() is not None
 
 
 def gpu_available() -> bool:
-    lib = _library()
-    return lib is not None and lib.optlab_gpu_count() > 0
+    ext = _ext()
+    return ext is not None and ext.gpu_count() > 0
 
 
 def gpu_name() -> str:
-    return _library().optlab_gpu_name().decode() if gpu_available() else ""
+    ext = _ext()
+    return ext.gpu_name() if ext is not None and gpu_available() else ""
 
 
 def _flat_rates(market: Market, T: float):
@@ -143,24 +93,36 @@ def _unsupported(model: Model, market: Market, T: float, cp: str, why: str | Non
     return None
 
 
-def _run(model, market, T, cp, product, n_steps, n_paths, seed, backend, K, H=0.0, threads=0) -> _Result:
+def _run(model, market, T, cp, product, n_steps, n_paths, seed, backend, K, H=0.0, threads=0) -> tuple:
+    """(price[4], se[4], n_paths, kernel_ms, total_ms) from the engine; an engine error raises EngineError."""
     r, q = _flat_rates(market, T)
-    rq = _Request()
-    rq.product, rq.n_steps, rq.H = product, n_steps, H
-    rq.legs[:] = [_LEG[cp], 0, 0]
-    rq.strikes[:] = [K, K, K]
-    rq.S0, rq.r, rq.q, rq.T = market.spot, r, q, T
+    heston = dict(v0=0.0, kappa=0.0, theta=0.0, xi=0.0, rho=0.0)
+    sigma = 0.0
     if isinstance(model, HestonModel):
         p = model.params
-        rq.model, rq.v0, rq.kappa, rq.theta, rq.xi, rq.rho = _MODEL_HESTON, p.v0, p.kappa, p.theta, p.xi, p.rho
+        kind, heston = _MODEL_HESTON, dict(v0=p.v0, kappa=p.kappa, theta=p.theta, xi=p.xi, rho=p.rho)
     else:
-        rq.model, rq.sigma = _MODEL_BS, model.vol
-    rq.n_paths = max(4, n_paths + n_paths % 2)  # antithetic pairs
-    rq.seed = seed if seed is not None else int(np.random.SeedSequence().entropy % 2**64)
-    out = _Result()
-    if _library().optlab_price(ctypes.byref(rq), _BACKEND[backend], threads, ctypes.byref(out)) != 0:
-        raise EngineError(_library().optlab_last_error().decode())
-    return out
+        kind, sigma = _MODEL_BS, model.vol
+    ext = _ext()
+    assert ext is not None  # _choose checked it
+    return ext.price(
+        model=kind,
+        product=product,
+        legs=(_LEG[cp], 0, 0),
+        strikes=(K, K, K),
+        H=float(H),
+        n_steps=int(n_steps),
+        S0=float(market.spot),
+        r=float(r),
+        q=float(q),
+        T=float(T),
+        sigma=float(sigma),
+        **{k: float(v) for k, v in heston.items()},
+        n_paths=max(4, n_paths + n_paths % 2),  # antithetic pairs
+        seed=seed if seed is not None else int(np.random.SeedSequence().entropy % 2**64),
+        backend=_BACKEND[backend],
+        n_threads=threads,
+    )
 
 
 def _choose(backend: str, reason: str | None) -> str:
@@ -173,14 +135,15 @@ def _choose(backend: str, reason: str | None) -> str:
     if reason is not None:
         raise ValueError(f"backend {backend!r}: {reason}")
     if not engine_available():
-        raise EngineError(f"{_LIB_NAME} not found: build cuda/ or set OPTLAB_CUDA_LIB")
+        raise EngineError("the compiled engine (optlab.native._ext) is not built: reinstall optlab-native")
     if backend == "gpu" and not gpu_available():
         raise EngineError("no CUDA device")
     return backend
 
 
-def _result(out: _Result, k: int, backend: str) -> EngineResult:
-    return EngineResult(out.price[k], out.se[k], int(out.n_paths), backend, out.kernel_ms)
+def _result(out: tuple, k: int, backend: str) -> EngineResult:
+    price, se, n_paths, kernel_ms, _ = out
+    return EngineResult(price[k], se[k], int(n_paths), backend, kernel_ms)
 
 
 def _numpy(res: MCResult) -> EngineResult:

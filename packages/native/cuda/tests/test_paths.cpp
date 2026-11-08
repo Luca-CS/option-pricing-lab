@@ -1,11 +1,12 @@
 // Path engine checks that need no Python: forwards matched (martingale), the Black-Scholes call by its formula, the
 // correlation of two names, and the GPU against the CPU path by path. Prints one line per check, exit code 1 on a
-// failure. The full validation against the library is tests/test_native.py.
+// failure. The full validation against the library is packages/native/tests/test_native.py.
 #include <cmath>
 #include <cstdio>
+#include <exception>
 #include <vector>
 
-#include "optlab_cuda/capi.h"
+#include "optlab_cuda/requests.hpp"
 
 namespace {
 
@@ -59,8 +60,10 @@ double call100(double x) { return x > 100 ? x - 100 : 0; }
 
 void run(Case& c, int backend, const char* label) {
     c.build();
-    if (optlab_paths(&c.rq, backend, 0) != 0) {
-        std::printf("%s: %s\n", label, optlab_last_error());
+    try {
+        optlab::api::paths(c.rq, backend, 0);
+    } catch (const std::exception& e) {
+        std::printf("%s: %s\n", label, e.what());
         ++failures;
     }
 }
@@ -120,7 +123,7 @@ int main() {
         red.col_of.assign(252, -1);
         red.col_of[251] = 0;  // keep the last date only
         red.win_lo = {0}, red.win_hi = {251};
-        for (int backend = 0; backend <= (optlab_gpu_count() > 0 ? 1 : 0); ++backend) {
+        for (int backend = 0; backend <= (optlab::api::gpu_count() > 0 ? 1 : 0); ++backend) {
             run(full, backend, "full columns");
             run(red, backend, "reduced window");
             double worst = 0;
@@ -135,7 +138,7 @@ int main() {
         }
     }
 
-    if (optlab_gpu_count() > 0) {
+    if (optlab::api::gpu_count() > 0) {
         Case g = h;
         run(g, 1, "gpu heston");
         // Same normals, so the paths agree up to float rounding. A few Heston paths do not: where the variance is near

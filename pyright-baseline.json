@@ -106,7 +106,6 @@
  "packages/native/src/optlab/native/__init__.py::reportOptionalOperand": 1,
  "packages/native/src/optlab/native/gpu.py::reportGeneralTypeIssues": 1,
  "packages/native/src/optlab/native/gpu.py::reportOperatorIssue": 1,
- "packages/native/src/optlab/native/gpu.py::reportOptionalMemberAccess": 3,
  "packages/native/tests/test_gpu.py::reportArgumentType": 5,
  "packages/native/tests/test_native.py::reportArgumentType": 63,
  "packages/native/tests/test_native.py::reportCallIssue": 1,

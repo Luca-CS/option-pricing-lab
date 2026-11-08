@@ -16,7 +16,6 @@ registered through the entry point group `optlab.engines`: the core and the prod
 
 from __future__ import annotations
 
-import ctypes
 import os
 from collections import OrderedDict
 from dataclasses import asdict, dataclass
@@ -50,113 +49,9 @@ N_X = 801  # points per table row
 MAX_NAMES = 8
 
 
-class _PathsRequest(ctypes.Structure):  # optlab_paths_request in cuda/include/optlab_cuda/capi.h
-    _fields_ = [
-        ("n_names", ctypes.c_int),
-        ("n_steps", ctypes.c_int),
-        ("n_obs", ctypes.c_int),
-        ("n_x", ctypes.c_int),
-        ("n_rows", ctypes.c_int),
-        ("n_pairs", ctypes.c_longlong),
-        ("first_pair", ctypes.c_longlong),
-        ("seed", ctypes.c_ulonglong),
-        ("dt", ctypes.c_void_p),
-        ("t0", ctypes.c_void_p),
-        ("obs_step", ctypes.c_void_p),
-        ("root", ctypes.c_void_p),
-        ("kind", ctypes.c_void_p),
-        ("cvar", ctypes.c_void_p),
-        ("heston", ctypes.c_void_p),
-        ("same", ctypes.c_int),
-        ("step_row", ctypes.c_void_p),
-        ("row_lo", ctypes.c_void_p),
-        ("row_inv_dx", ctypes.c_void_p),
-        ("table", ctypes.c_void_p),
-        ("fwd", ctypes.c_void_p),
-        ("mixer", ctypes.c_int),
-        ("mix", ctypes.c_double * 8),
-        ("low_root", ctypes.c_void_p),
-        ("n_cols", ctypes.c_int),
-        ("n_keep", ctypes.c_int),
-        ("col_of", ctypes.c_void_p),
-        ("n_windows", ctypes.c_int),
-        ("win_lo", ctypes.c_void_p),
-        ("win_hi", ctypes.c_void_p),
-        ("out", ctypes.c_void_p),
-        ("kernel_ms", ctypes.c_double),
-        ("total_ms", ctypes.c_double),
-    ]
-
-
-class _LeverageRequest(ctypes.Structure):  # optlab_leverage_request
-    _fields_ = [
-        ("n_steps", ctypes.c_int),
-        ("dt", ctypes.c_void_p),
-        ("t0", ctypes.c_void_p),
-        ("n_pairs", ctypes.c_longlong),
-        ("seed", ctypes.c_ulonglong),
-        ("v0", ctypes.c_double),
-        ("kappa", ctypes.c_double),
-        ("theta", ctypes.c_double),
-        ("xi", ctypes.c_double),
-        ("rho", ctypes.c_double),
-        ("n_x", ctypes.c_int),
-        ("n_bins", ctypes.c_int),
-        ("n_fine", ctypes.c_int),
-        ("atm_vol", ctypes.c_double),
-        ("bandwidth_scale", ctypes.c_double),
-        ("l_min", ctypes.c_double),
-        ("l_max", ctypes.c_double),
-        ("q_lo", ctypes.c_double),
-        ("q_hi", ctypes.c_double),
-        ("local_linear", ctypes.c_int),
-        ("positive_part", ctypes.c_int),
-        ("n_lv", ctypes.c_int),
-        ("lv_lo", ctypes.c_void_p),
-        ("lv_inv_dx", ctypes.c_void_p),
-        ("lv_rows", ctypes.c_void_p),
-        ("x_grids", ctypes.c_void_p),
-        ("values", ctypes.c_void_p),
-        ("total_ms", ctypes.c_double),
-    ]
-
-
-class _Device(ctypes.Structure):  # optlab_device
-    _fields_ = [
-        ("name", ctypes.c_char * 256),
-        ("major", ctypes.c_int),
-        ("minor", ctypes.c_int),
-        ("sm_count", ctypes.c_int),
-        ("clock_mhz", ctypes.c_int),
-        ("total_mem", ctypes.c_longlong),
-        ("free_mem", ctypes.c_longlong),
-        ("integrated", ctypes.c_int),
-        ("kernel_timeout", ctypes.c_int),
-    ]
-
-
-_ready = None
-
-
 def _lib():
-    """The shared library with the path engine's functions declared, or None (missing, or built before them)."""
-    global _ready
-    if _ready is not None:
-        return _ready or None
-    lib = _gpu._library()
-    if lib is None or not hasattr(lib, "optlab_paths") or not hasattr(lib, "optlab_leverage"):
-        _ready = False
-        return None
-    lib.optlab_paths.argtypes = [ctypes.POINTER(_PathsRequest), ctypes.c_int, ctypes.c_int]
-    lib.optlab_paths.restype = ctypes.c_int
-    lib.optlab_leverage.argtypes = [ctypes.POINTER(_LeverageRequest), ctypes.c_int, ctypes.c_int]
-    lib.optlab_leverage.restype = ctypes.c_int
-    lib.optlab_device_info.argtypes = [ctypes.c_int, ctypes.POINTER(_Device)]
-    lib.optlab_device_info.restype = ctypes.c_int
-    lib.optlab_has_cuda.restype = ctypes.c_int
-    lib.optlab_cpu_threads.restype = ctypes.c_int
-    _ready = lib
-    return lib
+    """The compiled module (optlab.native._ext), or None."""
+    return _gpu._ext()
 
 
 def available() -> bool:
@@ -166,7 +61,7 @@ def available() -> bool:
 
 def gpu_available() -> bool:
     lib = _lib()
-    return lib is not None and lib.optlab_has_cuda() == 1 and lib.optlab_gpu_count() > 0
+    return lib is not None and lib.has_cuda() and lib.gpu_count() > 0
 
 
 @dataclass(frozen=True)
@@ -186,19 +81,19 @@ def devices() -> list[Device]:
     if lib is None or not gpu_available():
         return []
     out = []
-    for i in range(lib.optlab_gpu_count()):
-        d = _Device()
-        if lib.optlab_device_info(i, ctypes.byref(d)):
+    for i in range(lib.gpu_count()):
+        d = lib.device_info(i)
+        if d is not None:
             out.append(
                 Device(
-                    d.name.decode(),
-                    f"{d.major}.{d.minor}",
-                    d.sm_count,
-                    d.clock_mhz,
-                    d.total_mem / 2**30,
-                    d.free_mem / 2**30,
-                    bool(d.integrated),
-                    bool(d.kernel_timeout),
+                    d["name"],
+                    f"{d['major']}.{d['minor']}",
+                    d["sm_count"],
+                    d["clock_mhz"],
+                    d["total_mem"] / 2**30,
+                    d["free_mem"] / 2**30,
+                    bool(d["integrated"]),
+                    bool(d["kernel_timeout"]),
                 )
             )
     return out
@@ -206,7 +101,7 @@ def devices() -> list[Device]:
 
 def cpu_threads() -> int:
     lib = _lib()
-    return int(lib.optlab_cpu_threads()) if lib is not None else (os.cpu_count() or 1)
+    return int(lib.cpu_threads()) if lib is not None else (os.cpu_count() or 1)
 
 
 # --- models to tables ---------------------------------------------------------------------------------------------
@@ -400,8 +295,13 @@ def plan(model, market, times, dt_max=1 / 252, dt_min=1 / 2000, n_x: int = N_X) 
     )
 
 
-def _ptr(a):
-    return None if a is None else a.ctypes.data
+_NO_INT = np.empty(0, np.int32)
+_NO_FLOAT = np.empty(0)
+
+
+def _given(a, empty):
+    """The array, or an empty one for a part the request does not use (no table, no local correlation, no window)."""
+    return empty if a is None else a
 
 
 MAX_WINDOWS = 2
@@ -416,9 +316,7 @@ def run(
     computed while simulating. timing: {"kernel_ms", "total_ms", "backend"}."""
     lib = _lib()
     if lib is None:
-        raise EngineError(
-            f"{_gpu._LIB_NAME} with the path engine not found: build cuda/ (README) or set OPTLAB_CUDA_LIB"
-        )
+        raise EngineError("the compiled engine (optlab.native._ext) is not built: reinstall optlab-native")
     if backend == "auto":
         backend = "gpu" if gpu_available() else "cpu"
     if backend not in ("cpu", "gpu"):
@@ -433,30 +331,40 @@ def run(
     win_hi = np.array([w[1] for w in windows], np.int32)
     n_cols = len(keep) + 2 * len(windows)
     out = np.empty((k, n_cols, 2 * n_pairs))
-    rq = _PathsRequest()
-    rq.n_names, rq.n_steps, rq.n_obs, rq.n_x = k, len(p.dt), p.n_obs, p.n_x
-    rq.n_rows = 0 if p.lo is None else len(p.lo)
-    rq.n_pairs, rq.first_pair, rq.seed = n_pairs, first_pair, seed
-    grid = [np.ascontiguousarray(a) for a in (p.dt, p.t0)]  # held until the call returns
-    rq.dt, rq.t0 = _ptr(grid[0]), _ptr(grid[1])
-    rq.obs_step, rq.root, rq.kind, rq.cvar, rq.heston = (
-        _ptr(p.obs_step),
-        _ptr(p.root),
-        _ptr(p.kind),
-        _ptr(p.cvar),
-        _ptr(p.heston),
+    grid = [np.ascontiguousarray(a) for a in (p.dt, p.t0)]
+    kernel_ms, total_ms = lib.paths(
+        dt=grid[0],
+        t0=grid[1],
+        obs_step=p.obs_step,
+        root=p.root,
+        kind=p.kind,
+        cvar=p.cvar,
+        heston=p.heston,
+        same=p.same,
+        step_row=_given(p.step_row, _NO_INT),
+        row_lo=_given(p.lo, _NO_FLOAT),
+        row_inv_dx=_given(p.inv_dx, _NO_FLOAT),
+        table=_given(p.table, _NO_FLOAT),
+        fwd=p.fwd,
+        mixer=p.mixer,
+        mix=p.mix,
+        low_root=_given(p.low_root, _NO_FLOAT),
+        n_x=p.n_x,
+        n_pairs=n_pairs,
+        first_pair=first_pair,
+        seed=seed,
+        col_of=col_of,
+        n_keep=len(keep),
+        win_lo=win_lo,
+        win_hi=win_hi,
+        out=out,
+        backend=1 if backend == "gpu" else 0,
+        n_threads=threads,
     )
-    rq.same, rq.step_row, rq.row_lo, rq.row_inv_dx = p.same, _ptr(p.step_row), _ptr(p.lo), _ptr(p.inv_dx)
-    rq.table, rq.fwd, rq.mixer, rq.low_root, rq.out = _ptr(p.table), _ptr(p.fwd), p.mixer, _ptr(p.low_root), _ptr(out)
-    rq.mix[:] = p.mix
-    rq.n_cols, rq.n_keep, rq.col_of, rq.n_windows = n_cols, len(keep), _ptr(col_of), len(windows)
-    rq.win_lo, rq.win_hi = (_ptr(win_lo), _ptr(win_hi)) if len(windows) else (None, None)
-    if lib.optlab_paths(ctypes.byref(rq), 1 if backend == "gpu" else 0, threads) != 0:
-        raise EngineError(lib.optlab_last_error().decode())
     m = len(keep)
     spots = [out[a, :m].T for a in range(k)]  # (rows, kept) views, Fortran order: one column per date, contiguous
     extremes = [[(out[a, m + 2 * w], out[a, m + 2 * w + 1]) for w in range(len(windows))] for a in range(k)]
-    return spots, extremes, {"kernel_ms": rq.kernel_ms, "total_ms": rq.total_ms, "backend": backend}
+    return spots, extremes, {"kernel_ms": kernel_ms, "total_ms": total_ms, "backend": backend}
 
 
 def simulate(
@@ -502,7 +410,7 @@ def calibrate_leverage(
     """`slv.calibrate_leverage` on the engine: the same algorithm (binned kernel regression on 400 bins), with the
     quantiles that bound the grid read from a histogram of 8192 bins and the local variance from uniform rows (1e-4
     relative), on Philox draws. The leverage therefore differs from NumPy's by noise and those approximations; the
-    SLV vanillas it gives are checked against the surface in tests/test_native.py."""
+    SLV vanillas it gives are checked against the surface in packages/native/tests/test_native.py."""
     from optlab.core.heston import HestonParams
 
     lib = _lib()
@@ -519,18 +427,35 @@ def calibrate_leverage(
     T1 = min(1.0, float(surface.maturities[-1]))
     atm_vol = float(np.sqrt(surface.theta(T1) / T1))
     xg, vals = np.empty((len(t0), n_x)), np.empty((len(t0), n_x))
-    rq = _LeverageRequest()
-    rq.n_steps, rq.n_pairs, rq.seed = len(t0), n_particles // 2, seed64(rng)
-    keep = [np.ascontiguousarray(a) for a in (dt, t0, lv_lo, lv_inv, lv_rows)]
-    rq.dt, rq.t0, rq.lv_lo, rq.lv_inv_dx, rq.lv_rows = (a.ctypes.data for a in keep)
-    rq.v0, rq.kappa, rq.theta, rq.xi, rq.rho = p.v0, p.kappa, p.theta, p.xi, p.rho
-    rq.n_x, rq.n_bins, rq.n_fine = n_x, 400, 8192
-    rq.atm_vol, rq.bandwidth_scale, rq.l_min, rq.l_max = atm_vol, bandwidth_scale, l_bounds[0], l_bounds[1]
-    rq.q_lo, rq.q_hi = 0.0005, 0.9995
-    rq.local_linear, rq.positive_part, rq.n_lv = int(regression == "local_linear"), int(positive_part), N_X
-    rq.x_grids, rq.values = xg.ctypes.data, vals.ctypes.data
-    if lib.optlab_leverage(ctypes.byref(rq), 1 if backend == "gpu" else 0, threads) != 0:
-        raise EngineError(lib.optlab_last_error().decode())
+    lv = [np.ascontiguousarray(a) for a in (dt, t0, lv_lo, lv_inv, lv_rows)]
+    lib.leverage(
+        dt=lv[0],
+        t0=lv[1],
+        n_pairs=n_particles // 2,
+        seed=seed64(rng),
+        v0=p.v0,
+        kappa=p.kappa,
+        theta=p.theta,
+        xi=p.xi,
+        rho=p.rho,
+        n_bins=400,
+        n_fine=8192,
+        atm_vol=atm_vol,
+        bandwidth_scale=bandwidth_scale,
+        l_min=l_bounds[0],
+        l_max=l_bounds[1],
+        q_lo=0.0005,
+        q_hi=0.9995,
+        local_linear=int(regression == "local_linear"),
+        positive_part=int(positive_part),
+        lv_lo=lv[2],
+        lv_inv_dx=lv[3],
+        lv_rows=lv[4],
+        x_grids=xg,
+        values=vals,
+        backend=1 if backend == "gpu" else 0,
+        n_threads=threads,
+    )
     return SLVModel(params, Leverage(t0, xg, vals), mix)
 
 
@@ -540,7 +465,7 @@ def summary() -> dict:
     return {
         "engine": default_engine(),
         "compiled": lib is not None,
-        "cuda_build": bool(lib and lib.optlab_has_cuda()),
+        "cuda_build": bool(lib is not None and lib.has_cuda()),
         "devices": [asdict(d) for d in devices()],
         "cpu_threads": cpu_threads(),
         "resolved": "numpy"

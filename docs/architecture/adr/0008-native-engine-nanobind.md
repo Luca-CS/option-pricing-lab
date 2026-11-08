@@ -27,6 +27,32 @@ turned into error codes, never `exit`, since the engine runs inside the Python p
 - The fallback to NumPy stays explicit, with its reason, through the engine registry (ADR-0004).
 - On Windows the scikit-build-core `build-dir` stays short: MSBuild fails above 260 characters (spike).
 
+## Implementation (A3)
+
+- `cuda/` moved to `packages/native/cuda/` (`git mv`). Its C API (`capi.h`, `capi.cpp`: error codes, a thread-local
+  message) became checked C++ requests (`requests.hpp`, `requests.cpp`) that throw; the same validations and
+  conversions, so the engines receive the same specifications. The shared library `optlab_cuda_c` is gone: a static
+  `optlab_engine` links into the module and the C++ tests.
+- `packages/native/bindings/ext.cpp` is the nanobind module `optlab.native._ext` (scikit-build-core 1.1.1, nanobind
+  3.1.0, pinned; scikit-build-core 1.1.2 was five days old). Arrays pass without a copy and their sizes are checked
+  against the request (a wrong array is now an error, not an out-of-bounds read); outputs are never converted; the
+  GIL is released while the engine runs, as ctypes did; `std::invalid_argument` and `std::runtime_error` become
+  `optlab.core.engines.EngineError` with the engine's message. `OPTLAB_WITH_CUDA` and `OPTLAB_CUDA_ARCHS` reach CMake
+  from the environment; `OPTLAB_BUILD_TOOLS=OFF` leaves the C++ tests and the ablation out of the wheel.
+- `uv sync` builds it (about 80 s on this machine with CUDA for `sm_75`; uv rebuilds only when `packages/native`
+  changes, through `cache-keys`). Editable installs go through scikit-build-core's import hook, so pyright reads
+  `packages/native/src` from `extraPaths` and the module from the versioned stub, which `test_stub.py` regenerates
+  and compares.
+- **Bit for bit**: `native_cpu`, `native_gpu` (recorded on the ctypes bridge before the change, with the GPU's
+  atomic reductions at their measured tolerance) and `presets_spx_gpu` hold on the module, run after run.
+- **Times**: in one process, the two bridges alternated case by case (the old one rebuilt from git on the old DLL),
+  medians of 5 rounds on the CPU engine: every case within 2 % (Phoenix LV +0.4 %, Phoenix SLV +0.5 %, BRC daily
+  +1.3 %, worst-of on 3 names -1.7 %, SLV leverage +0.2 %). On the GPU, quotes of 0.1 to 0.3 s move with the
+  device's clock: measured right after a warm-up, 8 rounds, the BRC takes 0.105 s on ctypes and 0.103 s on the
+  module, the Phoenix LV 0.169 s and 0.167 s, with the same kernel time and the same engine time per call.
+- CI: every `uv sync` on a runner builds the module CPU-only, so the CPU engine's Python tests join the test job;
+  the C++ tests keep their own job; CodeQL compiles the engine, its tests and the binding.
+
 ## Consequences
 
 - Prices are unchanged: the same C++ code runs; only the binding changes. Golden numbers (CPU and GPU) and times
