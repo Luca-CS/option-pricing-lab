@@ -73,9 +73,9 @@ jobs:
       - name: Install
         run: uv sync --locked --all-extras
       - name: Offline tests
-        # the native module is built by uv sync, CPU only (no CUDA toolkit here), so the CPU engine's tests run here;
-        # no real lake, no showcase, no GPU on a hosted runner: those tests are marked and run on the machine
-        run: uv run --no-sync pytest -m "not slow and not gpu and not lake" -n auto --dist loadfile -q -rs --durations=15
+        # no real lake, no showcase, no GPU on a hosted runner: those tests are marked and run on the machine; the CPU
+        # engine's own tests run in the engine job, beside this one
+        run: uv run --no-sync pytest -m "not slow and not gpu and not lake and not native" -n auto --dist loadfile -q -rs --durations=15
       - name: Machine
         # hosted runners differ by CPU from one run to the next, and NumPy picks its SIMD kernels by CPU: the last bit of
         # exp and log, and so the recalibrations, follow the machine (ADR-0017); bit for bit is checked on one machine
@@ -86,18 +86,42 @@ jobs:
           print(platform.platform(), '|', cpu); numpy.show_runtime()"
       - name: Golden numbers, across machines (ADR-0017)
         run: uv run --no-sync python tests/golden/golden.py check --across --group closed_forms mc_products labjs presets_simulated
-      - name: Golden numbers whose SLV leverage is recalibrated (reported, not blocking, ADR-0017)
-        # one SLV price each moves past 0.1 SE on Linux (0.32 and 0.13 SE); the rule stays at 0.1 SE (Luca, 8 November)
-        # and these two groups are guarded bit for bit on the machine
+
+  golden-reported:
+    name: golden numbers, reported (${{ matrix.os }})
+    # not blocking (ADR-0017): one SLV price each moves past 0.1 SE on Linux (0.32 and 0.13 SE) and the rule stays at
+    # 0.1 SE (Luca, 8 November); these groups are guarded bit for bit on the machine. Their own job, so they cost no time.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - name: Install
+        run: uv sync --locked --all-extras
+      - name: Machine
+        # hosted runners differ by CPU from one run to the next, and NumPy picks its SIMD kernels by CPU: the last bit of
+        # exp and log, and so the recalibrations, follow the machine (ADR-0017); bit for bit is checked on one machine
+        shell: bash
+        run: >-
+          uv run --no-sync python -c "import platform, numpy;
+          cpu = next((l.split(':', 1)[1].strip() for l in open('/proc/cpuinfo') if l.startswith('model name')), '') if platform.system() == 'Linux' else platform.processor();
+          print(platform.platform(), '|', cpu); numpy.show_runtime()"
+      - name: Golden numbers whose SLV leverage is recalibrated
         continue-on-error: true
         run: uv run --no-sync python tests/golden/golden.py check --across --group calibration_simulated structured_extra
-      - name: Golden numbers of the CPU engine (reported, not blocking, ADR-0017)
-        # compiled here by gcc or MSVC: another machine than the recording one, so the cross-machine rule applies
-        continue-on-error: true
-        run: uv run --no-sync python tests/golden/golden.py check --across --group native_cpu
 
   native-cpu:
-    name: C++ engine tests (${{ matrix.os }})
+    name: CPU engine (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -112,5 +136,18 @@ jobs:
         run: cmake -S packages/native/cuda -B build -DOPTLAB_WITH_CUDA=OFF -DCMAKE_BUILD_TYPE=Release
       - name: Build
         run: cmake --build build --config Release --parallel
-      - name: Engine tests
+      - name: Engine tests (C++)
         run: ctest --test-dir build -C Release --output-on-failure
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - name: Install (builds optlab.native._ext, CPU only)
+        run: uv sync --locked --all-extras
+      - name: Python against the CPU engine
+        run: uv run --no-sync pytest -m "native and not gpu and not slow" -n auto --dist loadfile -q -rs
+      - name: Golden numbers of the CPU engine (reported, not blocking, ADR-0017)
+        # compiled here by gcc or MSVC: another machine than the recording one, so the cross-machine rule applies
+        continue-on-error: true
+        run: uv run --no-sync python tests/golden/golden.py check --across --group native_cpu
