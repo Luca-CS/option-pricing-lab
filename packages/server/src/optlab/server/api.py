@@ -13,6 +13,7 @@ import json
 import re
 import time
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -105,6 +106,7 @@ class Desk:
         self.lake = Lake(lake or self.settings.lake)
         self.names = NameMarkets(self.lake)
         self.shared = False  # listening beyond this machine: raw quotes and levels stay private
+        self.risk: Any = None  # optlab.server.risk_api.RiskApi, set by create_app (it reads this desk)
         self.market_store = SnapshotRepository(self.db)
         self.calibration = Path(calibration) if calibration else self.settings.calibration
         self.ctx = PricingContext.from_calibration(self.calibration)
@@ -215,14 +217,23 @@ class Desk:
         LOG.info("desk now on market %s (valuation %s)", self.ctx.snapshot_id, self.ctx.valuation)
         return self.context()
 
-    def smile(self, T: float) -> dict:
-        ctx, T = self.ctx, float(T)
+    def _context_of(self, snapshot_id: str | None) -> PricingContext:
+        """The market in use, or another stored snapshot read without switching the desk to it."""
+        if snapshot_id in (None, "", "in-use", self.ctx.snapshot_id):
+            return self.ctx
+        try:
+            return PricingContext.from_snapshot(self.market_store.get(str(snapshot_id)))
+        except KeyError as exc:
+            raise ApiError(str(exc).strip("'\""), 404)
+
+    def smile(self, T: float, snapshot_id: str | None = None) -> dict:
+        ctx, T = self._context_of(snapshot_id), float(T)
         F = float(ctx.market.F(T))
         k = np.linspace(-0.6, 0.3, 61)
         return clean({"T": T, "forward": F, "moneyness": np.exp(k), "iv": ctx.surface.iv(k, T)})
 
-    def term_structure(self) -> dict:
-        ctx = self.ctx
+    def term_structure(self, snapshot_id: str | None = None) -> dict:
+        ctx = self._context_of(snapshot_id)
         T = np.linspace(0.05, ctx.t_max, 120)
         return clean(
             {
@@ -310,10 +321,12 @@ class Desk:
 
     def data_vol_index(self, name: str, start: str | None = None) -> dict:
         self._private("Index levels")
-        where = f"index_name = '{re.sub(r'[^A-Z0-9.]', '', name.upper())}'"
+        where, params = "index_name = ?", [name.upper()]
         if start:
-            where += f" AND obs_date >= DATE '{dt.date.fromisoformat(start)}'"
-        rows = self.lake.read("vol_indices", where=where, columns="obs_date, close, origin, source", order="obs_date")
+            where, params = where + " AND obs_date >= ?", [*params, dt.date.fromisoformat(start)]
+        rows = self.lake.read(
+            "vol_indices", where=where, columns="obs_date, close, origin, source", order="obs_date", params=params
+        )
         return clean(
             {
                 "name": name,
@@ -467,9 +480,9 @@ class Desk:
         stem, _, key = run_id.partition("/")
         if not re.fullmatch(r"[\w.-]+", stem):
             raise ApiError("unknown run", 404)
-        if key:  # a versioned file of results/ holds several runs
-            path = self.settings.results / f"{stem}.json"
-            data = json.loads(path.read_text(encoding="utf-8"))[key] if path.exists() else None
+        if key:  # a versioned file of results/ holds several runs; the id names one of those files, never a path
+            path = {f.stem: f for f in self.settings.results.glob("replay*.json")}.get(stem)
+            data = json.loads(path.read_text(encoding="utf-8")).get(key) if path is not None else None
         else:
             data = self.replays.get(stem)
         if data is None:
@@ -885,7 +898,10 @@ class Desk:
             raise ApiError(str(exc), 404)
 
     def cancel(self, job_id: str) -> dict:
-        self.jobs.cancel(job_id)
+        try:
+            self.jobs.cancel(job_id)
+        except KeyError as exc:
+            raise ApiError(str(exc), 404)
         return {"ok": True}
 
     def quotes(self) -> dict:

@@ -295,23 +295,3 @@ class RiskApi:
             return clean({"runs": out, "from": start, "to": end})
 
         return {"job": self.desk.jobs.submit("eod", job)}
-
-
-def risk_routes(desk):
-    """(method, regex, handler) of the risk routes, for `server.routes`; the RiskApi is kept on the desk as `desk.risk`."""
-    r = getattr(desk, "risk", None)
-    if r is None:
-        r = desk.risk = RiskApi(desk)
-    q1 = lambda q, k, d=None: q.get(k, [d])[0]  # noqa: E731
-    return [
-        ("POST", r"/api/risk/run", lambda m, q, b: r.run(b)),
-        ("GET", r"/api/risk/runs", lambda m, q, b: r.runs(q1(q, "kind"))),
-        ("GET", r"/api/risk/runs/([\w.-]+)", lambda m, q, b: r.run_get(m[1])),
-        ("POST", r"/api/risk/ladder", lambda m, q, b: r.ladder(b)),
-        ("GET", r"/api/risk/scenarios", lambda m, q, b: r.scenarios()),
-        ("PUT", r"/api/risk/scenarios", lambda m, q, b: r.put_scenarios(b)),
-        ("POST", r"/api/risk/scenarios/run", lambda m, q, b: r.run_scenarios(b)),
-        ("POST", r"/api/risk/var", lambda m, q, b: r.var(b)),
-        ("GET", r"/api/pnl", lambda m, q, b: r.pnl(q1(q, "from"), q1(q, "to"))),
-        ("POST", r"/api/pnl/eod", lambda m, q, b: r.pnl_eod(b)),
-    ]

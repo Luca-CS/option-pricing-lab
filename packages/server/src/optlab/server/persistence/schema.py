@@ -110,3 +110,43 @@ risk_runs = Table(
 )
 Index("risk_runs_by_day", risk_runs.c.kind, risk_runs.c.day)
 Index("risk_runs_by_key", risk_runs.c.run_key)
+
+# --- accounts (ADR-0020): users, sessions (the cookie's hash only), and the audit log, append-only from the app ------
+users = Table(
+    "users",
+    metadata,
+    Column("user_id", String, primary_key=True),
+    Column("name", String, nullable=False, unique=True),
+    Column("password_hash", String, nullable=False),  # argon2id, with its parameters
+    Column("roles", Text, nullable=False),  # JSON list
+    Column("disabled", Integer, nullable=False, server_default="0"),
+    Column("failed_logins", Integer, nullable=False, server_default="0"),
+    Column("locked_until", String),
+    Column("created_at", String, nullable=False),
+    Column("password_changed_at", String, nullable=False),
+)
+sessions = Table(
+    "sessions",
+    metadata,
+    Column("session_hash", String, primary_key=True),  # sha256 of the cookie's random 256-bit value
+    Column("user_id", String, nullable=False),
+    Column("csrf_token", String, nullable=False),
+    Column("created_at", String, nullable=False),
+    Column("last_seen", String, nullable=False),
+    Column("expires_at", String, nullable=False),  # the absolute expiry; idleness is checked against last_seen
+    Column("revoked", Integer, nullable=False, server_default="0"),
+)
+Index("sessions_by_user", sessions.c.user_id)
+audit_log = Table(
+    "audit_log",
+    metadata,
+    Column("audit_id", Integer, primary_key=True, autoincrement=True),
+    Column("at", String, nullable=False),
+    Column("user_id", String),  # None for the system (a migration, a schedule)
+    Column("action", String, nullable=False),  # the route's operation id, or a command
+    Column("target", String),
+    Column("before_hash", String),
+    Column("after_hash", String),
+    Column("detail", Text),  # JSON: what the reader of the log needs, never a password or a secret
+)
+Index("audit_by_time", audit_log.c.at)

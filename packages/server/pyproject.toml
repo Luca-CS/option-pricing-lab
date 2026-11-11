@@ -15,6 +15,9 @@ dependencies = [
     "pydantic-settings>=2.16",  # Settings (ADR-0012)
     "sqlalchemy>=2.0.55",  # SQLAlchemy Core, no ORM (ADR-0007)
     "alembic>=1.20",  # the schema's migrations
+    "fastapi>=0.162",  # API v1 (ADR-0005)
+    "uvicorn>=0.54",
+    "argon2-cffi>=25.1",  # password hashes (ADR-0020)
 ]
 
 [build-system]

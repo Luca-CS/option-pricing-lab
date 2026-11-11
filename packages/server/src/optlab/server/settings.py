@@ -82,16 +82,37 @@ class Settings(BaseSettings):
     port: int = Field(8765, ge=1, le=65535)
     lan: bool = Field(False, description="the LAN profile (ADR-0002): off unless Luca turns it on")
 
+    frontend: Path | None = Field(None, description="the front's static build, served on the same origin (session 2)")
+    docs: bool = Field(False, description="the Swagger UI page, whose script comes from a CDN: off unless asked")
+
+    # --- security (ADR-0020) ---------------------------------------------------------------------------------------
+    session_idle_minutes: int = Field(480, ge=5, le=1440, description="a session unused this long ends")
+    session_absolute_hours: int = Field(168, ge=1, le=720, description="a session ends this long after its login")
+    login_max_failures: int = Field(5, ge=3, le=20, description="failed logins of an account before it is locked")
+    login_lockout_minutes: int = Field(15, ge=1, le=1440)
+    login_per_address: int = Field(20, ge=5, le=200, description="failed logins from one address per 10 minutes")
+    max_body_bytes: int = Field(2_000_000, ge=10_000, le=50_000_000, description="largest request body accepted")
+
     # --- computing -------------------------------------------------------------------------------------------------
     engine: Literal["numpy", "cpu", "gpu", "auto"] = Field("auto", description="where Monte Carlo paths come from")
     workers: int | None = Field(None, ge=1, le=64, description="process pool of NumPy Monte Carlo batches")
 
     @field_validator(
-        "data", "store", "database", "lake", "results", "calibration", "raw", "logs", "backups", mode="after"
+        "data",
+        "store",
+        "database",
+        "lake",
+        "results",
+        "calibration",
+        "raw",
+        "logs",
+        "backups",
+        "frontend",
+        mode="after",
     )
     @classmethod
-    def _absolute(cls, v: Path) -> Path:
-        return v.expanduser().resolve()
+    def _absolute(cls, v: Path | None) -> Path | None:
+        return None if v is None else v.expanduser().resolve()
 
     @model_validator(mode="after")
     def _safety(self) -> Settings:
