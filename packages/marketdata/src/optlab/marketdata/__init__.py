@@ -1,6 +1,6 @@
-"""Market data: the lake, its sources and derivations, the point-in-time markets, and the local store of snapshots
-(the snapshot type itself is `optlab.core.snapshot`)."""
+"""Market data: the lake, its sources and derivations, the point-in-time markets, and the storage protocol of
+snapshots (the type is `optlab.core.snapshot`, the store the server's)."""
 
-from optlab.marketdata.store import MarketStore
+from optlab.marketdata.store import SnapshotStorage
 
-__all__ = ["MarketStore"]
+__all__ = ["SnapshotStorage"]

@@ -23,13 +23,15 @@ from optlab.core.instruments import _BY_ID
 from optlab.core.log import get_logger
 from optlab.core.market import Market
 from optlab.core.snapshot import MarketSnapshot
-from optlab.marketdata import MarketStore
 from optlab.marketdata.derive.correl import correlation_at
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.names import NameMarkets
 from optlab.server.fixings import parse_fixings
 from optlab.server.jobs import Jobs
-from optlab.server.repository import Repository
+from optlab.server.persistence import Database
+from optlab.server.persistence.desk import DeskRepository
+from optlab.server.persistence.replays import ReplayRepository
+from optlab.server.persistence.snapshots import SnapshotRepository
 from optlab.server.serialize import book_json, clean, events_json, quote_json, result_json, trade_json
 from optlab.server.settings import Settings
 from optlab.structured import MASKS, PRESETS, PricingContext, TermSheet, TermSheetError, describe, preset, quote
@@ -92,16 +94,18 @@ class Desk:
         settings: Settings | None = None,
     ):
         """`engine`: where Monte Carlo paths come from (numpy, cpu, gpu, auto; see optlab.core.engines), for every job of this
-        process. None keeps the library's default. `store`, `calibration` and `lake` override `settings`
-        (`Settings.load()` when not given), from which every other path comes."""
+        process. None keeps the library's default. `store` (the database file), `calibration` and `lake` override
+        `settings` (`Settings.load()` when not given), from which every other path comes."""
         if engine is not None:
             engines.set_default(engine)
         self.settings = settings or Settings.load()
-        self.repo = Repository(store or self.settings.store / "desk.sqlite")
+        self.db = Database(store or self.settings.database)
+        self.repo = DeskRepository(self.db)
+        self.replays = ReplayRepository(self.db)
         self.lake = Lake(lake or self.settings.lake)
         self.names = NameMarkets(self.lake)
         self.shared = False  # listening beyond this machine: raw quotes and levels stay private
-        self.market_store = MarketStore(self.repo.path.parent / "market")
+        self.market_store = SnapshotRepository(self.db)
         self.calibration = Path(calibration) if calibration else self.settings.calibration
         self.ctx = PricingContext.from_calibration(self.calibration)
         self.files: dict[str, Path] = {}  # snapshot id -> calibration file (its model-risk table)
@@ -139,7 +143,7 @@ class Desk:
             "origin": self._origin(self.ctx.snapshot_id),
             "workers": self.workers,
             "jobs": self.jobs.running(),
-            "store": str(self.repo.path),
+            "store": str(self.db.path),
             "started": self.started.isoformat(timespec="seconds"),
             "public_url": self.public_url,
             "lan_blockers": self.lan_blockers,
@@ -201,7 +205,7 @@ class Desk:
         }
 
     def use_snapshot(self, body: dict) -> dict:
-        sid = body.get("snapshot_id")
+        sid = str(body.get("snapshot_id") or "")
         try:
             snap = self.market_store.get(sid)
         except KeyError as exc:
@@ -436,40 +440,41 @@ class Desk:
         return {"job": self.jobs.submit("reproduce", lambda: clean(reproduce(self.lake, calibration_id)))}
 
     # --- replay ---
-    def _replay_dir(self) -> Path:
-        path = self.repo.path.parent / "replay"
-        path.mkdir(parents=True, exist_ok=True)
-        return path
-
     def replay_runs(self) -> dict:
         runs = []
-        for folder, kind in ((self._replay_dir(), "desk"), (self.settings.results, "versioned")):
-            for path in sorted(folder.glob("replay*.json")):
-                data = json.loads(path.read_text(encoding="utf-8"))
-                for key, r in data.items() if kind == "versioned" else (("run", data),):
-                    runs.append(
-                        {
-                            "id": f"{path.stem}/{key}" if kind == "versioned" else path.stem,
-                            "kind": kind,
-                            "trade_id": r.get("trade_id"),
-                            "underlyings": r.get("underlyings"),
-                            "n_valuations": r.get("n_valuations"),
-                            "strike": (r.get("inception") or {}).get("strike"),
-                            "events": len(r.get("events") or []),
-                            "seconds": (r.get("seconds") or {}).get("total"),
-                        }
-                    )
+        stored = [(stem, data, "desk") for stem, data in self.replays.all()]
+        files = [
+            (path.stem, json.loads(path.read_text(encoding="utf-8")), "versioned")
+            for path in sorted(self.settings.results.glob("replay*.json"))
+        ]
+        for stem, data, kind in stored + files:
+            for key, r in data.items() if kind == "versioned" else (("run", data),):
+                runs.append(
+                    {
+                        "id": f"{stem}/{key}" if kind == "versioned" else stem,
+                        "kind": kind,
+                        "trade_id": r.get("trade_id"),
+                        "underlyings": r.get("underlyings"),
+                        "n_valuations": r.get("n_valuations"),
+                        "strike": (r.get("inception") or {}).get("strike"),
+                        "events": len(r.get("events") or []),
+                        "seconds": (r.get("seconds") or {}).get("total"),
+                    }
+                )
         return clean({"available": self.lake.has("prices_eod"), "runs": runs, "presets": list(PRESETS)})
 
     def replay_get(self, run_id: str) -> dict:
         stem, _, key = run_id.partition("/")
         if not re.fullmatch(r"[\w.-]+", stem):
             raise ApiError("unknown run", 404)
-        path = (self.settings.results if key else self._replay_dir()) / f"{stem}.json"
-        if not path.exists():
+        if key:  # a versioned file of results/ holds several runs
+            path = self.settings.results / f"{stem}.json"
+            data = json.loads(path.read_text(encoding="utf-8"))[key] if path.exists() else None
+        else:
+            data = self.replays.get(stem)
+        if data is None:
             raise ApiError(f"no replay run {run_id}", 404)
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return clean(data[key] if key else data)
+        return clean(data)
 
     def replay_run(self, body: dict) -> dict:
         from optlab.marketdata.replay import ReplayConfig, replay, result_json, strike_trade
@@ -508,9 +513,7 @@ class Desk:
                 self.lake, trade_id, sheet, strike, float(body.get("quantity", 1.0)), cfg, costs=costs
             )
             out = result_json(replay(self.lake, trade, end, cfg, info))
-            (self._replay_dir() / f"replay-{trade_id}-{cfg.model}.json").write_text(
-                json.dumps(clean(out)), encoding="utf-8"
-            )
+            self.replays.save(f"replay-{trade_id}-{cfg.model}", clean(out))
             return clean(out)
 
         return {"job": self.jobs.submit("replay", run)}

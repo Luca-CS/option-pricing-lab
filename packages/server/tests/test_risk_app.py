@@ -15,7 +15,7 @@ QUICK = {"precision": "quick"}
 
 @pytest.fixture(scope="module")
 def desk(tmp_path_factory):
-    d = Desk(store=tmp_path_factory.mktemp("desk") / "desk.sqlite")
+    d = Desk(store=tmp_path_factory.mktemp("desk") / "optlab.sqlite")
     sheet = next(p["sheet"] for p in d.presets()["presets"] if p["name"] == "phoenix")
     d.create_trade(
         {

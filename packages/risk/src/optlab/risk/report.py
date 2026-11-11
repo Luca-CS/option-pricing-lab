@@ -1,4 +1,4 @@
-"""HTML sections of the risk and P&L report, from stored runs (dicts as `RiskStore` keeps them). Amounts in the payment
+"""HTML sections of the risk and P&L report, from stored runs (dicts as a `RiskStorage` keeps them). Amounts in the payment
 currency, desk side, each with its standard error; the origin of the market is printed with them."""
 
 from __future__ import annotations

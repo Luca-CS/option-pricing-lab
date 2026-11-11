@@ -2,7 +2,7 @@
 
 A thin adapter: it builds the risk groups the way the Book screen values the book (one group per single name and payment
 currency on that name's market, the worst-ofs together, the same seeds), runs `optlab.risk` in the desk's job pool, and keeps
-every run in the risk store beside the desk's store (`risk.sqlite`). JSON in and out; amounts in the payment currency from the
+every run in the desk's database (the risk tables). JSON in and out; amounts in the payment currency from the
 desk's side, per position also in % of its notional.
 """
 
@@ -18,8 +18,9 @@ from optlab.risk import RiskGroup, RiskSettings
 from optlab.risk import scenarios as sc
 from optlab.risk.greeks import Bumps, GreekOptions, compute
 from optlab.risk.ladder import LadderOptions, env_with_betas, ladder, stored_betas
-from optlab.risk.store import RiskStore, code_version, run_key
+from optlab.risk.store import code_version, run_key
 from optlab.server.api import PRECISION, ApiError
+from optlab.server.persistence.risk import RiskRepository
 from optlab.server.serialize import clean
 from optlab.structured.portfolio import Book
 
@@ -29,7 +30,7 @@ LOG = get_logger(__name__)
 class RiskApi:
     def __init__(self, desk):
         self.desk = desk
-        self.store = RiskStore(desk.repo.path.parent / "risk.sqlite")
+        self.store = RiskRepository(desk.db)
 
     # --- the book as risk groups ---
     def groups(self) -> list:

@@ -26,7 +26,7 @@ def desk(tmp_path_factory):
     lake = Lake(root / "lake")
     fill_observed(lake, pd.bdate_range("2019-01-01", "2020-12-31"))
     derive_all(lake, "2019-01-01", names=("SPX", "NDX", "AAPL"))
-    d = Desk(store=root / "desk.sqlite", lake=root / "lake")
+    d = Desk(store=root / "optlab.sqlite", lake=root / "lake")
     d.use_snapshot(
         {"snapshot_id": d.market_store.put(market_at(lake, "SPX", DAY, leverage="calibrate", n_particles=20_000))}
     )

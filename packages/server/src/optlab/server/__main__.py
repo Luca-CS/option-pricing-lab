@@ -30,7 +30,8 @@ def main():
         "$OPTLAB_ENGINE), gpu, cpu or numpy",
     )
     ap.add_argument(
-        "--store", help="SQLite file of trades, fixings and quotes (default <store>/desk.sqlite of the settings)"
+        "--store",
+        help="the database file: trades, fixings, quotes, snapshots, risk runs (default: the settings' database)",
     )
     ap.add_argument("--calibration", help="results/*.json calibration (default: the SPX one)")
     ap.add_argument("--market", help="start on this snapshot of the store instead of the calibration")
@@ -57,7 +58,7 @@ def main():
     shown = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host
     url = f"http://{shown}:{port}/" + (f"?token={token}" if token else "")
     print(f"optlab desk on {url}")
-    print(f"market {desk.ctx.snapshot_id}, valuation {desk.ctx.valuation}, store {desk.repo.path}")
+    print(f"market {desk.ctx.snapshot_id}, valuation {desk.ctx.valuation}, database {desk.db.path}")
     eng = desk.health()["engine"]
     gpus = ", ".join(d["name"] for d in eng["devices"]) or "no CUDA device"
     print(

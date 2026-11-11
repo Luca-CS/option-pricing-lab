@@ -243,7 +243,7 @@ def test_opposite_signs_are_measured_and_the_one_against_the_desk_stays():
 # --- the desk ---
 @pytest.fixture(scope="module")
 def desk(tmp_path_factory):
-    d = Desk(store=tmp_path_factory.mktemp("costs") / "desk.sqlite")
+    d = Desk(store=tmp_path_factory.mktemp("costs") / "optlab.sqlite")
     yield d
     d.jobs.shutdown()
 

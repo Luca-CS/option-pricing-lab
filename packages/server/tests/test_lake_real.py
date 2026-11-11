@@ -228,7 +228,7 @@ def test_dividends_give_the_forward_its_steps():
 def test_the_desk_prices_a_share_and_a_worst_of_on_their_real_surfaces(tmp_path):
     from optlab.server.api import Desk
 
-    desk = Desk(store=tmp_path / "desk.sqlite")
+    desk = Desk(store=tmp_path / "optlab.sqlite")
     try:
         day = dt.date(2026, 11, 4)
         snap = market_at(LAKE, "SPX", day, layer="reconstructed")
@@ -253,7 +253,7 @@ def test_the_desk_puts_a_name_paid_in_another_currency_on_its_quanto_market(tmp_
         pytest.skip("no FX in this lake")
     from optlab.server.api import Desk
 
-    desk = Desk(store=tmp_path / "desk.sqlite")
+    desk = Desk(store=tmp_path / "optlab.sqlite")
     try:
         day = dt.date(2022, 7, 1)
         desk.use_snapshot({"snapshot_id": desk.market_store.put(market_at(LAKE, "SPX", day))})

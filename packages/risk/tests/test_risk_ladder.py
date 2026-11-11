@@ -4,12 +4,12 @@ import numpy as np
 import pytest
 from _paths import SPX_CALIBRATION, real_lake
 from _risk_refs import S0, VOL, Q, R, book, engine_name, flat_ctx, vanilla, within
+from _stores import risk_store
 
 from optlab.core.blackscholes import bs_greeks, bs_price
 from optlab.risk import RiskGroup, RiskSettings, Shock
 from optlab.risk.ladder import POINTS, LadderOptions, ladder
 from optlab.risk.shocks import RiskEnv, name_moves
-from optlab.risk.store import RiskStore
 from optlab.structured.context import PricingContext
 
 BETAS = [-0.9, -0.8, -0.7, -0.5, -0.45, -0.4, -0.35, -0.3]  # vol per unit log return, 1m to 5y
@@ -135,7 +135,7 @@ def test_spot_vol_betas_of_spx_on_the_lake(lake, tmp_path):
     assert rec["n"] >= 450 and rec["origin"] == ["reconstructed"]
     assert np.all(b < 0) and np.all(np.abs(b) > 4 * se)  # vols rise when the index falls, at every tenor
     assert abs(b[0]) > abs(b[-1])  # more at short tenors
-    store = RiskStore(tmp_path / "risk.sqlite")
+    store = risk_store(tmp_path)
     first = stored_betas(store, lake, ["SPX"], "2026-11-04")
     again = stored_betas(store, lake, ["SPX"], "2026-11-04")
     assert first["SPX"]["version"] == again["SPX"]["version"] == 1

@@ -12,7 +12,7 @@ from optlab.server.server import cross_site_refusal, serve_in_thread
 
 @pytest.fixture(scope="module")
 def server(tmp_path_factory):
-    desk = Desk(store=tmp_path_factory.mktemp("desk-sec") / "desk.sqlite")
+    desk = Desk(store=tmp_path_factory.mktemp("desk-sec") / "optlab.sqlite")
     httpd, base = serve_in_thread(desk)
     yield desk, httpd.server_address[1]
     httpd.shutdown()

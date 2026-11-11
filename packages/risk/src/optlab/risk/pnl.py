@@ -38,7 +38,7 @@ from optlab.risk import grid
 from optlab.risk.engine import RiskGroup, RiskSettings, run_group
 from optlab.risk.greeks import Bumps, GreekOptions, compute
 from optlab.risk.shocks import RiskEnv, context_currency
-from optlab.risk.store import RiskStore, code_version, run_key
+from optlab.risk.store import RiskStorage, code_version, run_key
 from optlab.risk.surfaces import TentBumpedSurface
 from optlab.structured.calendars import CALENDARS
 from optlab.structured.multiasset import BasketContext
@@ -148,7 +148,7 @@ def eod(
     lake,
     trades,
     day,
-    store: RiskStore | None = None,
+    store: RiskStorage | None = None,
     settings: RiskSettings | None = None,
     layer: str = "reconstructed",
     greeks: bool = True,
@@ -252,7 +252,7 @@ def backfill(
     trades,
     start,
     end,
-    store: RiskStore,
+    store: RiskStorage,
     settings: RiskSettings | None = None,
     calendar: str = "nyse",
     layer: str = "reconstructed",
@@ -421,7 +421,7 @@ def explain_day(
     trades,
     a,
     b,
-    store: RiskStore | None = None,
+    store: RiskStorage | None = None,
     settings: RiskSettings | None = None,
     layer: str = "reconstructed",
     reuse: bool = True,
@@ -602,7 +602,7 @@ def explain_day(
     return payload
 
 
-def cumulative(store: RiskStore, start, end) -> dict:
+def cumulative(store: RiskStorage, start, end) -> dict:
     """Daily and cumulated explained P&L between two dates from the stored runs: per step, per trade, and the curve."""
     runs = store.runs("pnl", start, end)
     days, curve, steps, trades, pred = [], [], {s: 0.0 for s in STEPS}, {}, {s: 0.0 for s in STEPS}

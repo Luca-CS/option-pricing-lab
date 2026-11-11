@@ -215,7 +215,7 @@ def seed(desk: Desk, lake: Lake, day, deals=DEALS, n_paths: int = 20_000, log=pr
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--store", default=str(Settings.load().store.parent / "showcase" / "desk.sqlite"))
+    ap.add_argument("--store", default=str(Settings.load().data / "showcase" / "optlab.sqlite"))
     ap.add_argument("--day", default=None, help="valuation date (default: the last SPX close in the lake)")
     ap.add_argument("--n-paths", type=int, default=20_000)
     args = ap.parse_args()
@@ -237,7 +237,7 @@ def main():
     finally:
         desk.jobs.shutdown()
     print("\nOpen the desk on this book:")
-    print(f'python -m optlab.server --store "{desk.repo.path}" --market {sid} --open')
+    print(f'python -m optlab.server --store "{desk.db.path}" --market {sid} --open')
 
 
 if __name__ == "__main__":

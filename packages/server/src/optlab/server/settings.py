@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     # --- paths: each default is computed from the fields above it, once they are validated ----------------------
     data: Path = Field(default_factory=default_data, description="everything that is not code")
     store: Path = Field(default_factory=lambda f: f["data"] / "store", description="the desk's store folder")
+    database: Path = Field(
+        default_factory=lambda f: f["store"] / "optlab.sqlite", description="the operational database (ADR-0007)"
+    )
     lake: Path = Field(default_factory=lambda f: f["data"] / "lake", description="the historical lake")
     results: Path = Field(default_factory=lambda f: _in_repository("results", f["data"] / "archive"))
     calibration: Path = Field(
@@ -83,7 +86,9 @@ class Settings(BaseSettings):
     engine: Literal["numpy", "cpu", "gpu", "auto"] = Field("auto", description="where Monte Carlo paths come from")
     workers: int | None = Field(None, ge=1, le=64, description="process pool of NumPy Monte Carlo batches")
 
-    @field_validator("data", "store", "lake", "results", "calibration", "raw", "logs", "backups", mode="after")
+    @field_validator(
+        "data", "store", "database", "lake", "results", "calibration", "raw", "logs", "backups", mode="after"
+    )
     @classmethod
     def _absolute(cls, v: Path) -> Path:
         return v.expanduser().resolve()

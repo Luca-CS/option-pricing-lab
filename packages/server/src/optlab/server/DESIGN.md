@@ -95,7 +95,8 @@ packages/server/src/optlab/server/   (optlab.server; optlab/app/ before the spli
   server.py        ThreadingHTTPServer: static files + JSON API, token check, gzip off, CORS off (same origin)
   api.py           routes -> library calls, JSON in and out (no HTTP inside)
   jobs.py          background jobs (thread pool): status, progress, elapsed, result, cancel flag
-  repository.py    SQLite under data/store: trades (versioned JSON), fixings, quotes, runs
+  persistence/     one SQLite database (WAL, SQLAlchemy Core, Alembic): trades (versioned JSON), fixings, quotes,
+                   snapshots, replays, risk records and runs; migrate_v0.py imports the v0 stores (A4)
   serialize.py     Quote, BookResult, Greeks, events -> JSON
   report.py        standalone HTML report of a quote or the book (inline CSS and SVG)
   static/          index.html, app.css, js/ (main.js: router and shortcuts, api.js, state.js, ui.js, charts.js,
@@ -131,7 +132,7 @@ writes from the server); the lake is read-mostly history. Portable and serverles
 | Raw | files as downloaded, `raw/manifest.jsonl` (URL, date, sha256) | everything, replayable |
 | Curated | Parquet, `curated/<table>/[underlying=X/]year=YYYY/` | 19 normalised tables |
 | Queries | DuckDB in memory, views on the Parquet | latest versions, `as_of`, point in time |
-| Operational | SQLite (`desk.sqlite`) | trades, fixings, quotes, settings |
+| Operational | SQLite (`optlab.sqlite`, `desk.sqlite` before A4) | trades, fixings, quotes, settings, snapshots, replays, risk runs |
 
 Every curated row has `obs_date`, `ingested_at`, `source`, `run_id`, `quality` and `origin`. Loads are idempotent and
 bitemporal: the same content adds nothing, a changed value adds a version, and the old one stays readable with `as_of`.
