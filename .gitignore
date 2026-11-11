@@ -14,3 +14,7 @@ build-*/
 HANDOFF_*.md
 .coverage
 .coverage.*
+
+# the API contract's client check: its packages and the types it generates
+api/client-check/node_modules/
+api/client-check/schema.d.ts

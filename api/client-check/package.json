@@ -1,0 +1,16 @@
+{
+  "name": "optlab-api-client-check",
+  "private": true,
+  "description": "Proof that api/openapi.json makes a usable typed client (handoff 4.2): generate the types, compile a small client. Not shipped.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "generate": "openapi-typescript ../openapi.json --default-non-nullable false -o schema.d.ts",
+    "check": "tsc --noEmit -p ."
+  },
+  "devDependencies": {
+    "openapi-fetch": "0.17.0",
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  }
+}

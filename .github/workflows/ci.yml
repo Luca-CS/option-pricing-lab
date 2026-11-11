@@ -50,6 +50,28 @@ jobs:
           PYRIGHT_PYTHON_GLOBAL_NODE: "1"
         run: uv run --no-sync python tools/pyright_baseline.py
 
+  api-contract:
+    name: API contract (TypeScript client)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: "26"
+      # api/openapi.json is the code's (test_openapi.py in the tests); here it must make a typed client that compiles
+      - name: Install the generator and the compiler (lock file, no install scripts)
+        working-directory: api/client-check
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Generate the types from api/openapi.json
+        working-directory: api/client-check
+        run: npm run generate
+      - name: Compile the client
+        working-directory: api/client-check
+        run: npm run check
+
   test:
     name: tests (${{ matrix.os }})
     strategy:
