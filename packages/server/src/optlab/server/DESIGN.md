@@ -1,5 +1,11 @@
 # optlab desk: design of the user interface
 
+> **Status (A5, 12 November 2026).** This is the design of the v0 page. The page is kept in `legacy/desk-static/` and
+> no longer served; the server of §6 is replaced by API v1 (FastAPI, `docs/architecture/api.md`, ADR-0005), and
+> sharing by token or tunnel by accounts on this machine (ADR-0002, ADR-0020). Session 2 rebuilds the front on the API
+> (`HANDOFF_REFACTOR_2_UX.md`). The rules of §2 to §5 (the form is the schema, validation where the eye is, jobs that
+> never freeze the page, honest numbers) carry over; §6 and the sharing rows of §1 are history.
+
 A local web application over the whole library: price a product from its term sheet, book it, follow it through
 its life, look at the market behind every number, and share a result. This document is the plan the code follows.
 

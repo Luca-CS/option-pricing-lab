@@ -6,8 +6,14 @@ with its coupon solved on that date's market at the desk's client price, with th
 Open it from this worktree. `--workers 6` is what the times below use.
 
 ```
-..\..\..\.venv\Scripts\python.exe -m optlab.server --store "C:\Users\Luca\Code\projets\optlab-data\showcase\optlab.sqlite" --market SPX-20261104T1600-8b7fa10118 --workers 6 --open
+..\..\..\.venv\Scripts\python.exe -m optlab.server.users create <name> --roles admin --database "C:\Users\Luca\Code\projets\optlab-data\showcase\optlab.sqlite"
+..\..\..\.venv\Scripts\python.exe -m optlab.server --store "C:\Users\Luca\Code\projets\optlab-data\showcase\optlab.sqlite" --market SPX-20261104T1600-8b7fa10118 --workers 6
 ```
+
+**Since A5 (12 November 2026) the desk is API v1 only** until session 2 rebuilds the screens: the screens named below are
+those of the v0 page, kept in `legacy/desk-static/` (not served), and each of their functions is a route of
+`/api/v1` ([feature-inventory.md](../docs/architecture/feature-inventory.md)); `OPTLAB_DOCS=true` adds a page to call
+them from the browser (`/api/v1/docs`). The numbers of this guide do not change.
 
 To start over: delete the `showcase` folder and run `scripts/seed_showcase.py`, which prints this command again with the new market id.
 
@@ -112,4 +118,4 @@ Numbers and limits, including what the mix and the correlation of the variances 
   solved on them are a little high. [surface_reconstruction.md](surface_reconstruction.md).
 - **Forwards sit about 0.25 % below put-call parity at one year** on SPX in 2022: the Treasury curve is not the funding of the index.
 - **The SX5E dividend season is an assumption**, as is the yield of NDX and SX5E.
-- **A shared desk** (`--host`, `--tunnel`) hides quotes and index levels: tested at the API, not on a real tunnel.
+- **A shared desk** (the LAN profile, `OPTLAB_LAN=true`) hides quotes and index levels: tested at the API. The public tunnel of v0 is gone (ADR-0002).

@@ -163,9 +163,19 @@ against the correlation and a book (about five minutes at 200,000 paths).
 
 ## Desk
 
-`python -m optlab.server --open` starts a local web desk over the library at `http://localhost:8765`, with nothing to
-install beyond the requirements: a standard-library HTTP server, SQLite, and plain JavaScript modules with no build
-step and no CDN.
+The desk is a local API over the library (FastAPI, [docs/architecture/api.md](docs/architecture/api.md)): accounts
+with roles, every write in an audit log, quotes and book valuations as jobs, standalone HTML reports. Its web front is
+being rebuilt on that API (the v0 page is kept in `legacy/desk-static/` as the reference); until then the functions
+below are reached through `/api/v1`, its docs page or a script.
+
+```
+uv run python -m optlab.server.users create <name> --roles admin      # your account; the password is asked twice
+uv run python -m optlab.server --workers 6                             # http://127.0.0.1:8765/api/v1
+```
+
+`OPTLAB_DOCS=true` adds the interactive page `/api/v1/docs`; `--store` and `--market` choose the database and the
+starting snapshot. It listens on 127.0.0.1 only; the LAN profile (`OPTLAB_LAN=true`) is an explicit choice, and the
+real instance is never exposed to the internet (ADR-0002).
 
 - **Pricer**: presets or a blank autocall or bullet, a term-sheet form generated from the schema (levels and rates
   typed in percent, errors under the field), a quote run as a background job with progress and cancel. The result
@@ -200,17 +210,10 @@ step and no CDN.
   FX) against the prediction of the Greeks, per trade, with events and new trades. Method and measured numbers in
   [reports/risk.md](reports/risk.md); `scripts/risk_eod.py` runs the same from the console.
 
-Every table sorts by its headers. Sharing while the engine stays on this PC:
-
-| How | Start with | Notes |
-|---|---|---|
-| Your network | `python -m optlab.server --host 0.0.0.0` | prints an address with a generated token (kept in a cookie after the first visit); on Windows the firewall must let Python in, which needs the connection in the Private profile: the desk checks this at start and says what blocks other machines |
-| A public link | `python -m optlab.server --tunnel` | https through an SSH tunnel to localhost.run: no install (`ssh` ships with Windows 10 and later), the address changes at each start; a third party relays the traffic, so the token is always on |
-| A fixed result | Desk snapshot (Overview), or the report of a quote or of the book | one standalone HTML file that opens anywhere without the desk: the market in use, the book with its risk by underlying, the trades, the next observations and the recent quotes; send the file or publish it as a page |
-
-The page is served by the desk itself, not by GitHub Pages, because browsers block a public https page from calling
-a server on a private address. Trades, fixings, quotes, settings and market snapshots live under `data/store/`,
-which git ignores.
+Sharing a result while the engine stays on this PC: the desk snapshot (`GET /api/v1/trading/desk-snapshot`) and the
+reports of a quote or of the book are standalone HTML files that open anywhere without the desk. Trades, fixings,
+quotes, settings, market snapshots and the risk runs live in one SQLite database under `optlab-data/store/`, outside
+the repository.
 
 ## Method
 
@@ -329,7 +332,7 @@ A uv workspace: six distributions share the namespace `optlab`, each in `package
 | `packages/structured` | `optlab.structured`: script language, term-sheet builder, policy, pricers, desk costs, books |
 | `packages/marketdata` | `optlab.marketdata`: the historical lake, its sources and derivations, point-in-time markets, replays, the SPX chain download and cleaning |
 | `packages/risk` | `optlab.risk`: shocks and one revaluation engine, Greeks, ladder, scenarios, VaR, EOD runs and explained P&L |
-| `packages/server` | `optlab.server`: the local web desk: HTTP server, JSON API, jobs, SQLite store, reports, the page in `static/` |
+| `packages/server` | `optlab.server`: the desk's API v1 (FastAPI): accounts and roles, audit log, jobs, the SQLite database, reports |
 | `scripts/` | calibration runs, lake updates, report and charts |
 | `docs/` | demo page (GitHub Pages); `docs/architecture/` the target architecture and its decisions |
 | `space/` | Gradio app, run locally |

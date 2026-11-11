@@ -44,3 +44,30 @@ The second session builds a new front on this API and needs a contract it can ge
 - **Litestar, Starlette alone**: fine tools; FastAPI has the widest knowledge base and generates OpenAPI from the same
   models. Chosen for the showcase and for session 2.
 - **WebSockets for progress**: two-way channel not needed; SSE goes through any proxy and reconnects by itself.
+
+## Implementation (A5)
+
+- `optlab.server.app`: `api_app()` holds the routes alone (what `api/openapi.json` describes, exported by
+  `python -m optlab.server.openapi export`, checked by `test_openapi.py`); `create_app(settings, desk)` adds the
+  desk, the accounts, the audit log, the front's build when `Settings.frontend` is set, and the guard. Routers in
+  `optlab.server.routers` (`system`, `structuring`, `trading`, `market`, `risk`, `quant`, `admin`); `operationId` is the
+  route's function name; `x-roles` on every operation; the document's 422 and error responses are `Problem`
+  (`application/problem+json`), not FastAPI's default validation body.
+- `optlab.server.web`: problem handlers (a service's `KeyError` is a 404, an `ApiError` keeps its status and field, an
+  unknown exception is a 500 with no detail), the `access()` check, and `Guard`, a pure ASGI middleware: `Host`
+  allow-list without the LAN profile, same-origin rule on writes, JSON only, body limit (by `Content-Length`, and by
+  counting a chunked body), security headers and the CSPs.
+- Request models in `schemas.py` forbid unknown fields and bound what costs; the response models the server shapes
+  (`Me`, `Job`, `JobList`, `UserOut`, `AuditPage`, `Page`, `JobAccepted`) are typed. The domain payloads keep the
+  library's shapes in v1.0; the `{value, se}` shape of every Monte Carlo number and the
+  `{market, method, result}` envelope come with the job model of A6 (ADR-0006).
+- SSE: event ids are the rank of the state (queued 1, running 2, the end 3), stable across connections, so
+  `Last-Event-ID` resumes; progress events come with A6.
+- `uvicorn` serves it (`python -m optlab.server`; `optlab serve` in A7), on 127.0.0.1 unless the LAN profile is on,
+  `server_header=False`.
+- The TypeScript proof is `api/client-check` (openapi-typescript 7.13.0 with `--default-non-nullable false`,
+  openapi-fetch 0.17.0, TypeScript 5.9.3, `npm ci --ignore-scripts`), the CI job `api-contract`.
+- Tests: one file per router (`test_api_system.py`, `_structuring`, `_trading`, `_market`, `_risk`, `_quant`, `_admin`),
+  `test_api_security.py`, the matrix `test_api_matrix.py` (76 operations x 7 callers, from the OpenAPI document), and
+  `test_api_inventory.py` (every v1 route of `feature-inventory.md` exists; every route is in it or named as new). The
+  desk's services keep `test_desk.py` (the former `test_app_api.py`, without its HTTP part).

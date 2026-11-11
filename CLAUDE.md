@@ -24,11 +24,16 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
 
 - Structured products: `uv run pytest -q packages/structured/tests` (about a minute);
   `scripts/structured_examples.py [--quick]` prints the autocall model-risk table, timings and example quotes.
-- Desk (web UI): `uv run python -m optlab.server [--open] [--workers 6] [--host 0.0.0.0]` serves
-  `http://localhost:8765` (a token is generated beyond localhost; `--tunnel` gives a public link through
-  localhost.run); `--store` and `--calibration` change the database file and the calibration. `packages/server/tests/test_app_api.py`
-  (about 40 s) covers the API and the HTTP server; `test_app_js.py` runs the page's table sorting under
-  `node` (skipped without it, like `test_widget_js.py`).
+- Desk (API v1, no web front until session 2; the v0 page is in `legacy/desk-static/`, not served):
+  `uv run python -m optlab.server.users create <name> --roles admin` (password asked twice), then
+  `uv run python -m optlab.server [--port 8765] [--workers 6] [--engine auto] [--store FILE] [--market ID]` serves
+  `http://127.0.0.1:8765/api/v1` (127.0.0.1 only; another host needs `OPTLAB_LAN=true`, with Luca's agreement);
+  `OPTLAB_DOCS=true` adds the Swagger page `/api/v1/docs`. Conventions in `docs/architecture/api.md`; after changing a
+  route, `uv run python -m optlab.server.openapi export` (writes `api/openapi.json`; `test_openapi.py` fails on drift).
+  Tests: `packages/server/tests/test_api_*.py` (one per router, the security checks, the authorisation matrix, the
+  parity with `feature-inventory.md`; about 40 s), `test_desk.py` (the services). `api/client-check/` compiles a
+  TypeScript client on the document (`npm ci --ignore-scripts`, `npm run generate`, `npm run check`; CI job
+  `api-contract`).
 - `packages/core/tests/test_widget_js.py` runs `docs/lab.js` under `node` and compares it to the Python library; it is
   skipped when `node` is not on PATH.
 - Calibration pipeline: `scripts/run_calibration.py --source simulated|spx` writes `results/*.json`;
@@ -51,8 +56,8 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
 - Risk engine (`optlab.risk`): `packages/risk/tests` (about 20 minutes; `test_risk_var`, `test_risk_pnl` and the betas test need the
   lake and skip without it). `scripts/risk_eod.py eod --date D | backfill --from A --to B | pnl --from A --to B | var | ladder`
   works on a desk database (default the showcase's) and keeps every run in its risk tables; method and measured numbers in
-  `reports/risk.md`. The desk serves it on `#/risk` and `#/pnl` (`optlab.server.risk_api`, routes `/api/risk/*`, `/api/pnl*`, report
-  `/report/risk`).
+  `reports/risk.md`. The API serves it under `/api/v1/risk/*` (`optlab.server.risk_api`, router `routers/risk.py`, report
+  `/api/v1/risk/report`).
 - Data lake (`optlab.marketdata`, needs `duckdb` and `pyarrow`; data in `OPTLAB_DATA`, default `optlab-data` beside the main checkout):
   `scripts/lake_update.py` (public sources, yen and sterling rates in the steps `mof`, `boj`, `boe`; `--import-sample zip`, `--dolt default`,
   `--yahoo-chains` during US hours only: Yahoo blanks bid and ask otherwise), `scripts/lake_derive.py` (curves, carry, bank, surfaces, correlation, pairs, observed fits),
@@ -136,24 +141,27 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
   `qmc.py` (opt-in, validated within the Monte Carlo error), `units.py`; `optlab.core.config`, `optlab.core.log`, `optlab.core.snapshot` and
   `optlab.marketdata.store` (the storage protocol of snapshots; the server stores them). A script with a NaN condition or a
   non-finite payment on a live path raises `ScriptError` with its line.
-- **`optlab.server`** is the local web desk (design and status in its `DESIGN.md`). `api.py` holds a `Desk`
-  whose methods are the API routes (JSON in and out, levels as fractions; the page shows percent), `server.py` maps
-  routes to them on a stdlib `ThreadingHTTPServer` that also serves `static/` (same origin; one buffered write per
-  response and no Nagle, or Windows browsers wait ~250 ms per call), `jobs.py` runs quotes and book valuations in a
-  thread pool that the page polls, `persistence/` keeps everything in one SQLite database (WAL, SQLAlchemy Core, Alembic
+- **`optlab.server`** is the desk's API v1 (ADR-0005, ADR-0020; conventions in `docs/architecture/api.md`). `api.py`
+  holds a `Desk` whose methods are the services (JSON-ready dicts in and out, levels as fractions); `app.py` builds the
+  FastAPI application (`api_app()` the routes alone, `create_app(settings, desk)` with the desk, the accounts, the
+  audit log, `Settings.frontend` served on the same origin, and the guard); `routers/` holds one router per domain
+  (`system`, `structuring`, `trading`, `market`, `risk`, `quant`, `admin`), each route declaring its roles with
+  `**access(...)`; `schemas.py` the request models (unknown fields refused, costly fields bounded) and the response
+  models the server shapes; `web.py` the problem+json handlers, `access()` and `Guard` (Host allow-list, same-origin
+  writes, JSON only, body limit, security headers and CSPs); `security.py` accounts (argon2id) and sessions (cookie
+  `optlab_session`, `X-CSRF-Token`), `audit.py` the audit log, `users.py` the accounts command line, `openapi.py` the
+  versioned document. `jobs.py` runs quotes and book valuations in a thread pool (`/api/v1/jobs`, SSE events),
+  `persistence/` keeps everything in one SQLite database (WAL, SQLAlchemy Core, Alembic
   migrations; `Settings.database`, default `<data>/store/optlab.sqlite`): `desk.py` trades (versioned), fixings, quotes,
   desk settings and cost defaults, `snapshots.py`, `replays.py`, `risk.py` (the risk engine's records and runs);
   `migrate_v0.py` imports a v0 folder (desk.sqlite, risk.sqlite, market/, replay/) idempotently and checks every row;
   `settings.py` is the one `Settings` object (environment, then `<data>/config/optlab.env`, then the command line);
   the domain packages have no default path and receive theirs from it. `report.py` writes standalone
-  HTML reports, `tunnel.py` opens the `--tunnel` SSH link, `fixings.py` parses pasted or CSV fixings (the page sends
-  the raw text), `netcheck.py` reads what blocks LAN access on Windows (firewall, Public profile; read-only).
+  HTML reports, `fixings.py` parses pasted or CSV fixings (the client sends the raw text), `netcheck.py` reads what blocks LAN access on Windows (firewall, Public profile; read-only).
   Every name is on its own market: the one in use for its name, else the lake's at the same date (`marketdata/names.py`), else flat
   inputs (what is typed in the Market screen wins). The book is valued in independent groups (one per single name, the worst-ofs).
   Each job captures the market context when submitted, so a snapshot switch never changes
-  a run in progress. The page is plain ES modules
-  without a build: `js/main.js` routes `#/screen/arg` to `js/views/*.js`, each exporting `render(page, arg)`, and
-  makes every `table.data` sortable.
+  a run in progress.
 - **`optlab.marketdata`**: `lake.py` (raw manifest, append-only Parquet with `origin` on every row, idempotent and bitemporal loads, DuckDB
   reads), `sources/` (one pure `parse` per source, tested offline), `ingest.py` (loads; the instrument registry itself is `optlab.core.instruments`, which `structured.schema` reads),
   `derive/` (curves, carry, fictitious bank, surfaces in three layers, FX forwards, volatility and correlation, correlation and the stored pseudo CvC/PvP: option on a basket against the same option on its members, whose formulas are in `structured.localcorr`), `quotes.py` (one cleaning chain,
