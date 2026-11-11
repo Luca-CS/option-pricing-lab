@@ -1,14 +1,13 @@
-"""R7: the risk routes of the desk, their stored runs, the HTTP server and the report."""
+"""R7: the risk services of the desk (`RiskApi`), their stored runs and the report; API v1 in `test_api_risk.py`."""
 
 import json
 import time
-import urllib.request
 
 import pytest
 
 from optlab.server.api import Desk
 from optlab.server.report import risk_report
-from optlab.server.server import serve_in_thread
+from optlab.server.risk_api import RiskApi
 
 QUICK = {"precision": "quick"}
 
@@ -24,9 +23,7 @@ def desk(tmp_path_factory):
             "quantity": -1.0,
         }
     )
-    from optlab.server.risk_api import risk_routes
-
-    risk_routes(d)  # the server does this when it starts
+    d.risk = RiskApi(d)  # create_app does this
     yield d
     d.jobs.shutdown()
 
@@ -78,21 +75,3 @@ def test_ladder_and_scenarios_routes(desk):
     assert [s["name"] for s in run["scenarios"]] == ["Grind down", "Vol spike"] and run["signed_by"] == "test"
     html = risk_report(desk.risk)
     assert "<h2>Greeks</h2>" in html and "Spot ladder" in html and "Grind down" in html
-
-
-def test_http_routes(desk):
-    httpd, base = serve_in_thread(desk)
-    try:
-        with urllib.request.urlopen(base + "/api/risk/scenarios") as r:
-            # what the store holds, whatever ran before in this module (the editing test is slow, not always run)
-            assert json.loads(r.read())["version"] == desk.risk.scenarios()["version"]
-        with urllib.request.urlopen(base + "/api/pnl") as r:
-            assert "note" in json.loads(r.read())
-        with urllib.request.urlopen(base + "/report/risk") as r:
-            assert b"Risk and P&amp;L" in r.read()
-        with urllib.request.urlopen(base + "/js/views/risk.js") as r:
-            assert b"export async function render" in r.read()
-        with urllib.request.urlopen(base + "/js/views/pnl.js") as r:
-            assert b"waterfall" in r.read()
-    finally:
-        httpd.shutdown()

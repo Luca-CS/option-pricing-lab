@@ -1,107 +1,291 @@
-"""The desk refuses cross-site requests: a page open in the same browser must not drive or read it (A0 finding 1,
-docs/architecture/security.md). No market data needed: the routes used here read or write the store only."""
+"""The security of API v1 (ADR-0020, docs/architecture/security.md): the guard (cross-site requests, rebound hosts,
+content types, body size), sessions (cookie flags, CSRF, expiry, revocation, lockout and throttling), headers, and
+errors that never show a stack trace. No market data needed: the routes used here read or write the store only."""
 
-import http.client
-import json
+import datetime as dt
+import secrets
 
 import pytest
+from _api import api
 
-from optlab.server.api import Desk
-from optlab.server.server import cross_site_refusal, serve_in_thread
+from optlab.server import security
+
+FIXING = {"underlying": "SPX", "text": "2025-01-06 100"}
+PASSWORD = secrets.token_urlsafe(18)  # generated for the run, never written anywhere
 
 
 @pytest.fixture(scope="module")
-def server(tmp_path_factory):
-    desk = Desk(store=tmp_path_factory.mktemp("desk-sec") / "optlab.sqlite")
-    httpd, base = serve_in_thread(desk)
-    yield desk, httpd.server_address[1]
-    httpd.shutdown()
-    httpd.server_close()
-    desk.jobs.shutdown()
+def a(tmp_path_factory):
+    with api(tmp_path_factory.mktemp("api-sec"), login_max_failures=3, login_per_address=8) as a:
+        yield a
 
 
-def call(port, method, path, body=None, headers=None):
-    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
-    try:
-        conn.request(method, path, body=body, headers=headers or {})
-        r = conn.getresponse()
-        return r.status, r.read()
-    finally:
-        conn.close()
+@pytest.fixture(scope="module")
+def trader(a):
+    return a.client("trader")
 
 
-FIXING = json.dumps({"underlying": "SPX", "text": "2025-01-06 100"})
+def fixings(a):
+    return a.state.desk.fixings("SPX")
 
 
-def test_a_cross_site_text_plain_post_writes_nothing(server):
-    desk, port = server
-    before = desk.fixings("SPX")
-    status, _ = call(port, "POST", "/api/fixings", FIXING, {"Content-Type": "text/plain"})
-    assert status == 415
-    status, _ = call(
-        port, "POST", "/api/fixings", FIXING, {"Content-Type": "application/json", "Origin": "https://evil.example"}
+# --- the guard ------------------------------------------------------------------------------------------------------
+def test_a_cross_site_post_writes_nothing(a, trader):
+    before = fixings(a)
+    r = trader.post("/api/v1/trading/fixings", content=b'{"underlying": "SPX"}', headers={"content-type": "text/plain"})
+    assert r.status_code == 415 and r.headers["content-type"] == "application/problem+json"
+    for origin in ("https://evil.example", "null", "http://127.0.0.1.evil.example"):
+        r = trader.post("/api/v1/trading/fixings", json=FIXING, headers={"origin": origin})
+        assert r.status_code == 403, origin
+    r = trader.delete("/api/v1/trading/fixings/SPX/2025-01-06", headers={"origin": "https://evil.example"})
+    assert r.status_code == 403
+    assert fixings(a) == before
+
+
+def test_the_same_origin_and_scripts_still_write(a, trader):
+    r = trader.post("/api/v1/trading/fixings", json=FIXING, headers={"origin": "http://127.0.0.1"})
+    assert r.status_code == 200, r.text
+    r = trader.post("/api/v1/trading/fixings", json=FIXING)  # no Origin: a script, not a browser
+    assert r.status_code == 200, r.text
+    r = trader.post(
+        "/api/v1/trading/fixings",
+        content=b'{"underlying": "SPX", "text": "2025-01-07 101"}',
+        headers={"content-type": "application/json; charset=utf-8"},
     )
-    assert status == 403
-    status, _ = call(port, "POST", "/api/fixings", FIXING, {"Content-Type": "application/json", "Origin": "null"})
-    assert status == 403
-    assert desk.fixings("SPX") == before
+    assert r.status_code == 200, r.text
 
 
-def test_the_desk_s_own_page_and_scripts_still_write(server):
-    desk, port = server
-    status, body = call(
-        port, "POST", "/api/fixings", FIXING, {"Content-Type": "application/json", "Origin": f"http://127.0.0.1:{port}"}
-    )
-    assert status == 200, body
-    status, body = call(port, "POST", "/api/fixings", FIXING, {"Content-Type": "application/json; charset=utf-8"})
-    assert status == 200, body  # no Origin: a script, not a browser
+def test_a_rebound_host_cannot_read(a, trader):
+    for host in ("evil.example", "attacker.localhost.evil", "127.0.0.1.evil.example", "192.168.1.20:8765"):
+        r = trader.get("/api/v1/trading/trades", headers={"host": host})
+        assert r.status_code == 403 and "127.0.0.1" in r.json()["detail"], host
+        assert trader.get("/api/v1/health", headers={"host": host}).status_code == 403
+    for host in ("127.0.0.1:8765", "localhost:8765", "[::1]:8765", "127.0.0.1"):
+        assert trader.get("/api/v1/trading/trades", headers={"host": host}).status_code == 200, host
 
 
-def test_a_rebound_host_cannot_read(server):
-    _, port = server
-    status, body = call(port, "GET", "/api/trades", headers={"Host": f"evil.example:{port}"})
-    assert status == 403 and b"127.0.0.1" in body
-    status, _ = call(port, "GET", "/", headers={"Host": f"attacker.localhost.evil:{port}"})
-    assert status == 403
-    for host in (f"127.0.0.1:{port}", f"localhost:{port}", f"[::1]:{port}"):
-        assert call(port, "GET", "/api/trades", headers={"Host": host})[0] == 200
+def test_the_lan_profile_accepts_other_hosts_but_keeps_the_origin_rule(tmp_path):
+    with api(tmp_path, lan=True, host="0.0.0.0") as lan:
+        c = lan.client("trader")
+        h = {"host": "192.168.1.20:8765"}
+        assert c.get("/api/v1/trading/trades", headers=h).status_code == 200
+        r = c.post("/api/v1/trading/fixings", json=FIXING, headers=h | {"origin": "http://192.168.1.20:8765"})
+        assert r.status_code == 200, r.text
+        r = c.post("/api/v1/trading/fixings", json=FIXING, headers=h | {"origin": "http://other:8765"})
+        assert r.status_code == 403
 
 
-def test_the_rule_beyond_this_machine():
-    # with a token the Host may be a LAN address or a tunnel's name; the Origin and content type rules stay
-    h = {"Host": "192.168.1.20:8765"}
-    assert cross_site_refusal("GET", h, None)[0] == 403
-    assert cross_site_refusal("GET", h, "t") is None
-    assert (
-        cross_site_refusal(
-            "POST",
-            h | {"Origin": "http://192.168.1.20:8765", "Content-Type": "application/json", "Content-Length": "2"},
-            "t",
+def test_the_body_size_is_bounded(a, trader):
+    limit = a.state.settings.max_body_bytes
+    big = b'{"underlying": "SPX", "text": "' + b"x" * limit + b'"}'
+    r = trader.post("/api/v1/trading/fixings", content=big, headers={"content-type": "application/json"})
+    assert r.status_code == 413
+
+    def chunks():  # no Content-Length: the guard counts what arrives
+        yield b'{"underlying": "SPX", "text": "'
+        for _ in range(limit // 65536 + 2):
+            yield b"x" * 65536
+        yield b'"}'
+
+    r = trader.post("/api/v1/trading/fixings", content=chunks(), headers={"content-type": "application/json"})
+    assert r.status_code == 413
+    r = trader.post("/api/v1/trading/fixings", content=b"{}", headers={"content-length": "x"})
+    assert r.status_code == 400
+
+
+def test_unknown_fields_and_bounds_are_refused(trader):
+    r = trader.post("/api/v1/trading/fixings", json={**FIXING, "admin": True})
+    assert r.status_code == 422 and r.json()["errors"][0]["field"] == "admin"
+    r = trader.post("/api/v1/structuring/script/check", json={"script": "x" * 20_001})
+    assert r.status_code == 422 and r.json()["errors"][0]["field"] == "script"
+    r = trader.get("/api/v1/trading/fixings", params={"underlying": "../../etc"})
+    assert r.status_code == 422
+    r = trader.get("/api/v1/trading/trades", params={"cursor": "not base64!"})
+    assert r.status_code == 400
+
+
+# --- headers and errors ---------------------------------------------------------------------------------------------
+def test_security_headers(trader):
+    r = trader.get("/api/v1/trading/trades")
+    h = r.headers
+    assert h["x-content-type-options"] == "nosniff" and h["referrer-policy"] == "no-referrer"
+    assert h["content-security-policy"] == "default-src 'none'; frame-ancestors 'none'"
+    assert h["cache-control"] == "no-store" and h["cross-origin-opener-policy"] == "same-origin"
+    assert "server" not in h or "uvicorn" not in h["server"].lower()
+    rep = trader.get("/api/v1/trading/book/report")
+    assert rep.status_code == 200 and rep.headers["content-type"].startswith("text/html")
+    assert "script-src" not in rep.headers["content-security-policy"] and "<script" not in rep.text.lower()
+    refused = trader.get("/api/v1/health", headers={"host": "evil.example"})
+    assert refused.headers["x-content-type-options"] == "nosniff"  # on the guard's own answers too
+
+
+def test_a_crash_is_a_problem_without_a_trace(a, trader, monkeypatch):
+    def boom(*args, **kw):
+        raise RuntimeError(r"C:\Users\secret\path.py line 12")
+
+    monkeypatch.setattr(a.state.desk, "trades", boom)
+    r = trader.get("/api/v1/trading/trades")
+    assert r.status_code == 500 and r.headers["content-type"] == "application/problem+json"
+    assert r.json() == {
+        "type": "about:blank",
+        "title": "Internal error",
+        "status": 500,
+        "detail": "the server failed on this request; the log has the details",
+    }
+    assert "secret" not in r.text and "Traceback" not in r.text
+
+
+def test_unknown_routes_and_methods_are_problems(trader):
+    r = trader.get("/api/v1/nothing")
+    assert r.status_code == 404 and r.headers["content-type"] == "application/problem+json"
+    assert trader.delete("/api/v1/health").status_code == 405
+    assert trader.get("/api/v1/docs").status_code == 404  # Swagger UI loads a CDN script: off by default
+
+
+# --- sessions -------------------------------------------------------------------------------------------------------
+def _login(c, name, password=PASSWORD):
+    return c.post("/api/v1/auth/login", json={"name": name, "password": password})
+
+
+def test_login_cookie_csrf_and_logout(a):
+    a.state.accounts.create("ana", PASSWORD, ["trader"])
+    c = a.client()
+    r = _login(c, "ana")
+    assert r.status_code == 200
+    cookie = r.headers["set-cookie"]
+    assert "optlab_session=" in cookie and "HttpOnly" in cookie and "SameSite=strict" in cookie and "Path=/" in cookie
+    assert "Secure" not in cookie  # plain HTTP on 127.0.0.1; Secure under TLS (the LAN profile)
+    me = r.json()
+    assert me["name"] == "ana" and me["roles"] == ["trader"] and "create_trade" in me["permissions"]
+    assert "users" not in " ".join(me["permissions"]) and "var" not in me["permissions"]
+    assert c.post("/api/v1/trading/fixings", json=FIXING).status_code == 403  # no CSRF header
+    bad = c.post("/api/v1/trading/fixings", json=FIXING, headers={"X-CSRF-Token": "guess"})
+    assert bad.status_code == 403
+    ok = c.post("/api/v1/trading/fixings", json=FIXING, headers={"X-CSRF-Token": me["csrf_token"]})
+    assert ok.status_code == 200
+    assert c.get("/api/v1/auth/me").json()["csrf_token"] == me["csrf_token"]
+    stolen = c.cookies.get("optlab_session")
+    assert c.post("/api/v1/auth/logout", headers={"X-CSRF-Token": me["csrf_token"]}).status_code == 200
+    c.cookies.set("optlab_session", stolen)  # the old cookie, replayed after the logout
+    assert c.get("/api/v1/auth/me").status_code == 401
+
+
+def test_a_new_login_never_reuses_a_session(a):
+    a.state.accounts.create("bea", PASSWORD, ["viewer"])
+    c = a.client()
+    _login(c, "bea")
+    first = c.cookies.get("optlab_session")
+    _login(c, "bea")
+    assert c.cookies.get("optlab_session") != first
+    assert a.state.accounts.session(first) is None
+
+
+def test_wrong_passwords_lock_the_account_and_say_nothing_about_names(a):
+    a.state.accounts.create("cyd", PASSWORD, ["viewer"])
+    c = a.client()
+    unknown = _login(c, "nobody-here", "whatever-it-is")
+    wrong = _login(c, "cyd", "not-the-password")
+    assert unknown.status_code == wrong.status_code == 401 and unknown.json()["detail"] == wrong.json()["detail"]
+    _login(c, "cyd", "not-the-password-2")
+    _login(c, "cyd", "not-the-password-3")  # the third failure locks it (login_max_failures=3 here)
+    assert _login(c, "cyd").status_code == 423  # even the right password, for login_lockout_minutes
+    row = a.state.accounts.get("cyd")
+    assert row["locked_until"]
+    entries = a.state.audit.entries(50)
+    assert any(e["action"] == "login_failed" and e["target"] == "cyd" for e in entries)
+    assert all(PASSWORD not in str(e) for e in entries)
+
+
+def test_one_address_is_throttled(tmp_path):
+    with api(tmp_path, login_per_address=5) as t:
+        c = t.client()
+        codes = [_login(c, f"x{i}", "whatever-it-is").status_code for i in range(6)]
+        assert codes[:5] == [401] * 5 and codes[5] == 429
+
+
+def test_sessions_expire_when_idle_or_old(a, monkeypatch):
+    a.state.accounts.create("dan", PASSWORD, ["viewer"])
+    c = a.client()
+    _login(c, "dan")
+    assert c.get("/api/v1/auth/me").status_code == 200
+    now = dt.datetime.now(dt.timezone.utc)
+    idle = a.state.settings.session_idle_minutes
+    monkeypatch.setattr(security, "_now", lambda: now + dt.timedelta(minutes=idle + 1))
+    assert c.get("/api/v1/auth/me").status_code == 401
+    monkeypatch.setattr(security, "_now", lambda: now + dt.timedelta(hours=a.state.settings.session_absolute_hours))
+    assert c.get("/api/v1/auth/me").status_code == 401
+
+
+def test_changing_an_account_ends_its_sessions(a):
+    a.state.accounts.create("eve", PASSWORD, ["trader"])
+    c = a.client()
+    _login(c, "eve")
+    a.state.accounts.set_roles("eve", ["viewer"])
+    assert c.get("/api/v1/auth/me").status_code == 401
+    _login(c, "eve")
+    assert c.get("/api/v1/auth/me").json()["roles"] == ["viewer"]
+    a.state.accounts.set_disabled("eve", True)
+    assert c.get("/api/v1/auth/me").status_code == 401
+    assert _login(c, "eve").status_code == 401
+
+
+def test_passwords_are_argon2id_and_sessions_stored_as_hashes(a):
+    a.state.accounts.create("fay", PASSWORD, ["viewer"])
+    from sqlalchemy import select
+
+    from optlab.server.persistence.schema import sessions, users
+
+    c = a.client()
+    _login(c, "fay")
+    token = c.cookies.get("optlab_session")
+    with a.state.desk.db.read() as conn:
+        h = conn.execute(select(users.c.password_hash).where(users.c.name == "fay")).scalar_one()
+        stored = [r.session_hash for r in conn.execute(select(sessions.c.session_hash))]
+    assert h.startswith("$argon2id$") and PASSWORD not in h
+    assert token not in stored and security._digest(token) in stored
+    with pytest.raises(ValueError):
+        a.state.accounts.create("gus", "short", ["viewer"])
+
+
+def test_someone_else_s_job_does_not_exist(a):
+    alice, bob, admin = a.client("structurer"), a.client("structurer"), a.client("admin")
+    job = a.state.desk.jobs.submit("test", lambda: {"ok": True})
+    a.state.job_owner[job] = a.state.accounts.session(alice.cookies.get("optlab_session"))[0].user_id
+    assert alice.get(f"/api/v1/jobs/{job}").status_code == 200
+    assert bob.get(f"/api/v1/jobs/{job}").status_code == 404
+    assert bob.post(f"/api/v1/jobs/{job}/cancel").status_code == 404
+    assert admin.get(f"/api/v1/jobs/{job}").status_code == 200
+
+
+def test_a_frontend_folder_serves_its_files_only(tmp_path):
+    front = tmp_path / "front"
+    front.mkdir()
+    (front / "index.html").write_text("<!doctype html><html><body>front</body></html>", encoding="utf-8")
+    (tmp_path / "secret.txt").write_text("not for you", encoding="utf-8")
+    with api(tmp_path / "data", frontend=front) as f:
+        c = f.client()
+        r = c.get("/")
+        assert r.status_code == 200 and "front" in r.text
+        assert r.headers["content-security-policy"].startswith("default-src 'self'")
+        for path in ("/../secret.txt", "/%2e%2e/secret.txt", "/..%2fsecret.txt", "//secret.txt"):
+            r = c.get(path)
+            assert "not for you" not in r.text, path
+
+
+def test_the_docs_page_is_off_unless_asked_and_pinned_when_on(tmp_path):
+    import base64
+    import hashlib
+    import re
+
+    with api(tmp_path, docs=True) as d:
+        r = d.client().get("/api/v1/docs")
+        assert r.status_code == 200
+        csp = r.headers["content-security-policy"]
+        found = re.search(r"<script>(.*?)</script>", r.text, re.S)
+        assert found is not None
+        inline = found.group(1)
+        digest = base64.b64encode(hashlib.sha256(inline.encode()).digest()).decode()
+        assert (
+            f"'sha256-{digest}'" in csp and "unsafe-eval" not in csp and "script-src https://cdn.jsdelivr.net " in csp
         )
-        is None
-    )
-    assert (
-        cross_site_refusal("POST", h | {"Origin": "http://other:8765", "Content-Type": "application/json"}, "t")[0]
-        == 403
-    )
-    assert cross_site_refusal("DELETE", {"Host": "127.0.0.1:8765", "Origin": "https://evil.example"}, None)[0] == 403
-    assert cross_site_refusal("POST", {"Host": "127.0.0.1:1", "Content-Length": "x"}, None)[0] == 400
-
-
-def test_no_url_reads_a_file_outside_the_static_folder(server):
-    _, port = server
-    status, page = call(port, "GET", "/")
-    assert status == 200 and b"<html" in page.lower()
-    status, body = call(port, "GET", "/js/main.js")
-    assert status == 200 and b"import { api }" in body
-    for path in (
-        "/../server.py",
-        "/js/../../server.py",
-        "/%2e%2e/server.py",
-        "/..%2fserver.py",
-        "/C:/Windows/win.ini",
-        "//etc/passwd",
-        "/static/../../api.py",
-    ):
-        status, body = call(port, "GET", path)
-        assert status == 200 and body == page, path  # an unknown path is the page, never another file
+        assert r.text.count('integrity="sha384-') == 2 and "swagger-ui-dist@5." in r.text and "@5/" not in r.text
