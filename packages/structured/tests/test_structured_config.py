@@ -2,29 +2,32 @@
 
 import logging
 
+from _paths import SPX_CALIBRATION
+
 from optlab.core import config
 from optlab.core.log import configure, get_logger
 from optlab.structured import preset, quote
-from optlab.structured.context import DEFAULT_CALIBRATION
+from optlab.structured.context import PricingContext
 
 
-def test_paths_default_to_the_repository_and_follow_the_environment(monkeypatch, tmp_path):
-    assert DEFAULT_CALIBRATION == config.REPO_ROOT / "results" / "spx_calibration.json"
-    assert DEFAULT_CALIBRATION.exists()
-    for var in ("OPTLAB_DATA", "OPTLAB_STORE", "OPTLAB_LAKE"):  # the run's own settings must not leak in
-        monkeypatch.delenv(var, raising=False)
-    monkeypatch.setenv("OPTLAB_HOME", str(tmp_path))
-    p = config.paths()
-    assert p.results == tmp_path / "results" and p.store == tmp_path / "data" / "store"
-    monkeypatch.setenv("OPTLAB_STORE", str(tmp_path / "elsewhere"))
-    assert config.paths().store == tmp_path / "elsewhere"
+def test_the_library_has_no_default_market_or_path():
+    """ADR-0012: a quote, a book or a context names its market; paths are the server's Settings."""
+    import pytest
+
+    from optlab.structured.context import PricingContext
+
+    assert SPX_CALIBRATION.exists() and not hasattr(config, "paths") and not hasattr(config, "REPO_ROOT")
+    with pytest.raises(TypeError, match="needs a market"):
+        quote(preset("reverse_convertible"))
+    with pytest.raises(TypeError):
+        PricingContext.from_calibration()  # type: ignore[call-arg]
 
 
 def test_quotes_and_pricer_log_what_they_did(caplog):
     configure("DEBUG")
     try:
         with caplog.at_level(logging.DEBUG, logger="optlab"):
-            quote(preset("reverse_convertible"), control=None)
+            quote(preset("reverse_convertible"), PricingContext.from_calibration(SPX_CALIBRATION), control=None)
         messages = " ".join(r.getMessage() for r in caplog.records)
         assert "quote bullet SPX" in messages and "replication" in messages
         assert get_logger("structured.pricer").name == "optlab.structured.pricer"

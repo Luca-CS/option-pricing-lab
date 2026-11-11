@@ -16,9 +16,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from optlab.core.config import paths
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.replay import ReplayConfig, cost_table, replay, result_json, strike_trade
+from optlab.server.settings import Settings
 from optlab.structured import preset
 from optlab.structured.defaults import resolve
 
@@ -61,7 +61,7 @@ def main():
         help="deal at the desk's client price: the lines of the quote become the trade's reserves",
     )
     args = ap.parse_args()
-    lake = Lake()
+    lake = Lake(Settings.load().lake)
     cfg = ReplayConfig(
         model=args.model, n_paths=args.paths, batch=10_000, reval_every=args.every, leverage_every=args.leverage_every
     )
@@ -83,7 +83,7 @@ def main():
         s = result_json(r)
         results[name] = s
         print(json.dumps({k: s[k] for k in ("events", "reconciliation", "explain", "seconds")}, indent=1), flush=True)
-    path = paths().results / (args.out or "replay.json")
+    path = Settings.load().results / (args.out or "replay.json")
     existing = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     path.write_text(json.dumps({**existing, **results}, default=str), encoding="utf-8")
     print(path, flush=True)

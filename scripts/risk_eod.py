@@ -23,17 +23,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 def main():
     from optlab.core import engines
-    from optlab.core.config import paths
     from optlab.marketdata.lake import Lake
     from optlab.risk import RiskSettings
     from optlab.risk import pnl as P
     from optlab.risk.store import RiskStore
     from optlab.server.api import PRECISION
+    from optlab.server.settings import Settings
 
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=("eod", "backfill", "pnl", "var", "ladder"))
-    showcase = paths().store.parent / "showcase" / "desk.sqlite"
-    ap.add_argument("--store", default=str(showcase if showcase.exists() else paths().store / "desk.sqlite"))
+    machine = Settings.load()
+    showcase = machine.data / "showcase" / "desk.sqlite"
+    ap.add_argument("--store", default=str(showcase if showcase.exists() else machine.store / "desk.sqlite"))
     ap.add_argument("--date")
     ap.add_argument("--from", dest="start")
     ap.add_argument("--to", dest="end")
@@ -49,7 +50,7 @@ def main():
     settings = RiskSettings(n_paths=n_paths, batch=batch, engine=args.engine)
     store_path = Path(args.store)
     risk = RiskStore(store_path.parent / "risk.sqlite")
-    lake = Lake()
+    lake = Lake(machine.lake)
     t0 = time.perf_counter()
 
     if args.command in ("eod", "backfill", "pnl"):

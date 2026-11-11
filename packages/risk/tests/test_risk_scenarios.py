@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+from _paths import SPX_CALIBRATION
 from _risk_refs import S0, VOL, Q, R, book, flat_ctx, vanilla
 from _structured_refs import flat_surface
 
@@ -70,7 +71,7 @@ def test_scenarios_replayed_on_a_vanilla_match_the_closed_forms():
 
 
 def test_shocked_surfaces_are_checked_for_arbitrage():
-    spx = PricingContext.from_calibration()
+    spx = PricingContext.from_calibration(SPX_CALIBRATION)
     crash = sc.Scenario("Vol collapse", "vols -15 points", sc.Shock(vol={"*": sc.VolMove(-0.15)}))
     rep = sc.run(
         [RiskGroup("SPX", book(vanilla(100.0, 365, valuation=spx.valuation)), spx, 1)],

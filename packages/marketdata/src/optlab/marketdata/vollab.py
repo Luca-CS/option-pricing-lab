@@ -14,11 +14,11 @@ import hashlib
 import json
 import subprocess
 import time
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from optlab.core.config import REPO_ROOT
 from optlab.core.heston import calibrate_heston, heston_iv
 from optlab.core.pipeline import _thin, _weights
 from optlab.core.slv import calibrate_leverage
@@ -44,7 +44,7 @@ DEFAULTS = {
 def _code_version() -> str:
     try:
         return subprocess.run(
-            ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=5
+            ["git", "-C", str(Path(__file__).parent), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=5
         ).stdout.strip()
     except OSError, subprocess.SubprocessError:
         return ""

@@ -4,6 +4,7 @@ import json
 
 import numpy as np
 import pytest
+from _paths import SPX_CALIBRATION
 from _risk_refs import S0, VOL, Q, R, book, engine_name, flat_ctx, forward_contract, vanilla, within
 from scipy.stats import norm
 
@@ -16,7 +17,7 @@ from optlab.structured.context import PricingContext
 from optlab.structured.greeks import ShiftedSurface
 from optlab.structured.portfolio import Book, Position
 
-SPX = PricingContext.from_calibration()
+SPX = PricingContext.from_calibration(SPX_CALIBRATION)
 
 
 def test_tents_are_a_smooth_partition_of_unity():

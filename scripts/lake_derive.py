@@ -20,9 +20,10 @@ from optlab.marketdata.derive.carry import build_carry, build_parity_carry
 from optlab.marketdata.derive.correl import build_basket_quotes, build_premium, build_realized
 from optlab.marketdata.derive.curves import build_discount_curves
 from optlab.marketdata.derive.fx import build_fx_correl, build_fx_forwards, build_fx_vols
-from optlab.marketdata.derive.surfaces import build_observed, build_reconstructed
+from optlab.marketdata.derive.surfaces import build_observed, build_reconstructed, static_prior
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.quotes import quote_days
+from optlab.server.settings import Settings
 
 BASKETS = (
     ("SPX", "NDX"),
@@ -61,7 +62,9 @@ STEPS = {
     "carry": lambda lake: build_carry(lake, enabled_underlyings()),
     "bank": build_bank,
     "fx": fx,
-    "reconstructed": lambda lake: build_reconstructed(lake, enabled_names()),
+    "reconstructed": lambda lake: build_reconstructed(
+        lake, enabled_names(), prior=static_prior(Settings.load().calibration)
+    ),
     "realized": lambda lake: build_realized(lake, enabled_names()),
     "premium": build_premium,
     "baskets": lambda lake: build_basket_quotes(lake, BASKETS, spread_days(lake), log=print),

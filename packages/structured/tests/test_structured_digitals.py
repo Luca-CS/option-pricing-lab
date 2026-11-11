@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+from _paths import SPX_CALIBRATION
 from _structured_refs import flat_context
 from scipy.stats import norm
 
@@ -16,7 +17,7 @@ from optlab.structured.scenario import Scenario
 from optlab.structured.script.evaluator import Evaluator, Ramp, _ramped
 from optlab.structured.script.timeline import Clock, build_timeline
 
-SPX = PricingContext.from_calibration()
+SPX = PricingContext.from_calibration(SPX_CALIBRATION)
 BS = flat_context()
 PATHS = 20_000
 DELTA = {"coupon": 1.0, "autocall": 1.0, "barrier": 5.0, "upside": 1.0}

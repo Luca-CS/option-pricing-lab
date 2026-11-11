@@ -4,6 +4,7 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
+from _paths import SPX_CALIBRATION
 
 from optlab.core.blackscholes import black_price
 from optlab.core.market import Market
@@ -12,7 +13,7 @@ from optlab.structured import PricingContext, preset, quote
 from optlab.structured.costs import CostInputs
 from optlab.structured.multiasset import Basket, BasketContext, simulate_basket
 
-SPX = PricingContext.from_calibration()
+SPX = PricingContext.from_calibration(SPX_CALIBRATION)
 TIMES = np.array([0.25, 0.5, 1.0])
 
 

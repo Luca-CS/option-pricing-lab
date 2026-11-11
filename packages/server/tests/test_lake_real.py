@@ -6,8 +6,8 @@ import json
 import numpy as np
 import pandas as pd
 import pytest
+from _paths import RESULTS, real_lake
 
-from optlab.core.config import paths
 from optlab.core.instruments import enabled_names
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.pit import basket_at, context_at, market_at, real_close, truncated_copy
@@ -15,7 +15,7 @@ from optlab.marketdata.quality import check_splits, open_issues
 from optlab.marketdata.quotes import clean_day, quote_days
 from optlab.structured import CALENDARS, preset, quote
 
-LAKE = Lake()
+LAKE = Lake(real_lake())
 pytestmark = pytest.mark.skipif(
     not LAKE.has("prices_eod") or not LAKE.has("vol_surfaces"), reason="no data lake on this machine"
 )
@@ -28,7 +28,7 @@ TABLES = (
     "vol_surfaces",
     "correl_implied",
 )
-RESULTS = paths().results
+RESULTS = RESULTS
 
 
 def closes(name):

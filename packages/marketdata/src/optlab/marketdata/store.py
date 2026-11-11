@@ -11,7 +11,6 @@ import sqlite3
 from dataclasses import replace
 from pathlib import Path
 
-from optlab.core.config import paths
 from optlab.core.snapshot import MarketSnapshot
 
 SCHEMA = """CREATE TABLE IF NOT EXISTS snapshots (
@@ -20,8 +19,8 @@ SCHEMA = """CREATE TABLE IF NOT EXISTS snapshots (
 
 
 class MarketStore:
-    def __init__(self, root: str | Path | None = None):
-        self.root = Path(root) if root is not None else paths().store / "market"
+    def __init__(self, root: str | Path):
+        self.root = Path(root)
 
     def _db(self) -> sqlite3.Connection:
         self.root.mkdir(parents=True, exist_ok=True)

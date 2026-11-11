@@ -45,10 +45,10 @@ SPX_MARKET = "SPX-20261104T1600-8b7fa10118"  # the showcase's market in use (clo
 
 
 def local_dir() -> Path:
-    from optlab.core.config import paths
+    from optlab.server.settings import Settings
 
     base = os.environ.get("OPTLAB_DATA")
-    return (Path(base) if base else paths().lake.parent) / "golden"
+    return (Path(base) if base else Settings.load().data) / "golden"
 
 
 # ---------------------------------------------------------------------------------------------------------- helpers
@@ -548,8 +548,9 @@ def presets_spx_gpu() -> dict:
 
 def _lake():
     from optlab.marketdata.lake import Lake
+    from optlab.server.settings import Settings
 
-    return Lake()
+    return Lake(Settings.load().lake)
 
 
 def lake_derived() -> dict:

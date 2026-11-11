@@ -28,7 +28,6 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from optlab.core.config import paths
 from optlab.core.log import get_logger
 
 LOG = get_logger(__name__)
@@ -158,8 +157,8 @@ class RawFile:
 
 
 class Lake:
-    def __init__(self, root: str | Path | None = None):
-        self.root = Path(root) if root is not None else paths().lake
+    def __init__(self, root: str | Path):
+        self.root = Path(root)
         self.raw = self.root / "raw"
         self.curated = self.root / "curated"
         self._manifest = self.raw / "manifest.jsonl"

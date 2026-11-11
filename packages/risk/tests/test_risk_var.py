@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+from _paths import real_lake
 from _risk_refs import book, flat_ctx, forward_contract, vanilla
 
 from optlab.risk import RiskGroup
@@ -13,7 +14,7 @@ from optlab.risk.greeks import GreekOptions, compute
 def lake():
     from optlab.marketdata.lake import Lake
 
-    lk = Lake()
+    lk = Lake(real_lake())
     try:
         if (
             lk.read("vol_surfaces", where="underlying = 'SPX' AND layer = 'reconstructed'", columns="count(*) AS n")[

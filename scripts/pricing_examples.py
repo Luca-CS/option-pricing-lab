@@ -17,10 +17,10 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from optlab.core.config import paths
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.names import NameMarkets
 from optlab.marketdata.pit import basket_at
+from optlab.server.settings import Settings
 from optlab.structured import preset, quote
 from optlab.structured.compiler import compile_sheet
 from optlab.structured.defaults import resolve
@@ -142,7 +142,7 @@ def main():
     ap.add_argument("--paths", type=int, default=100_000)
     ap.add_argument("--workers", type=int, default=6)
     args = ap.parse_args()
-    lake = Lake()
+    lake = Lake(Settings.load().lake)
     names = NameMarkets(lake)
     out = {
         "day": args.day,
@@ -188,7 +188,7 @@ def main():
             "fit": fit,
             "slv_gap": gap_table(ctx, members, args.paths, args.workers),
         }
-    path = paths().results / "pricing_examples.json"
+    path = Settings.load().results / "pricing_examples.json"
     path.write_text(json.dumps(out, indent=1, default=float), encoding="utf-8")
     print(path, flush=True)
 

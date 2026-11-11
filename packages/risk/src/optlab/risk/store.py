@@ -16,8 +16,6 @@ import sqlite3
 import subprocess
 from pathlib import Path
 
-from optlab.core.config import REPO_ROOT, paths
-
 SCHEMA = (
     """CREATE TABLE IF NOT EXISTS records (kind TEXT, key TEXT, version INTEGER, payload TEXT, meta TEXT, created_at TEXT,
        PRIMARY KEY (kind, key, version))""",
@@ -32,14 +30,19 @@ def _now() -> str:
 
 
 def code_version() -> str:
-    """The commit of the code, with "+dirty" when the working tree has changes under packages/."""
+    """The commit of the code, with "+dirty" when the working tree has changes under packages/ (git is asked from this
+    file's folder, so it finds the repository the code runs from)."""
     try:
         head = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"], cwd=REPO_ROOT, capture_output=True, text=True, timeout=10
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=Path(__file__).parent,
+            capture_output=True,
+            text=True,
+            timeout=10,
         ).stdout.strip()
         dirty = subprocess.run(
-            ["git", "status", "--porcelain", "--", "packages"],
-            cwd=REPO_ROOT,
+            ["git", "status", "--porcelain", "--", ":/packages"],
+            cwd=Path(__file__).parent,
             capture_output=True,
             text=True,
             timeout=10,
@@ -54,8 +57,8 @@ def run_key(**parts) -> str:
 
 
 class RiskStore:
-    def __init__(self, path: str | Path | None = None):
-        self.path = Path(path) if path else paths().store / "risk.sqlite"
+    def __init__(self, path: str | Path):
+        self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._db() as db:
             for stmt in SCHEMA:

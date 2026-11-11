@@ -4,6 +4,7 @@ import datetime as dt
 
 import numpy as np
 import pytest
+from _paths import real_lake
 
 from optlab.marketdata.replay import struck_sheet
 from optlab.risk import RiskSettings
@@ -19,7 +20,7 @@ SETTINGS = RiskSettings(n_paths=20_000, batch=10_000, engine="numpy")
 def lake():
     from optlab.marketdata.lake import Lake
 
-    lk = Lake()
+    lk = Lake(real_lake())
     try:
         if (
             lk.read("vol_surfaces", where="underlying = 'SPX' AND layer = 'reconstructed'", columns="count(*) AS n")[

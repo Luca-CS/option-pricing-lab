@@ -1,6 +1,7 @@
 """Independent references for the structured pricer: Black-Scholes closed forms and a flat SVI surface."""
 
 import numpy as np
+from _paths import SPX_CALIBRATION
 from scipy.stats import norm
 
 from optlab.core import BlackScholesModel, Market, SVISurface
@@ -20,7 +21,7 @@ def flat_context(valuation="2026-10-27", vol=VOL) -> PricingContext:
     """Black-Scholes world: flat market, flat surface; Heston and SLV taken from the SPX calibration (unused)."""
     import datetime as dt
 
-    spx = PricingContext.from_calibration()
+    spx = PricingContext.from_calibration(SPX_CALIBRATION)
     ctx = PricingContext(FLAT, flat_surface(vol), spx.heston, spx.slv, dt.date.fromisoformat(valuation))
     ctx.model = lambda name, T=1.0: BlackScholesModel(vol) if name in ("bs", "lv") else spx.model(name, T)
     return ctx

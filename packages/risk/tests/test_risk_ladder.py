@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+from _paths import SPX_CALIBRATION, real_lake
 from _risk_refs import S0, VOL, Q, R, book, engine_name, flat_ctx, vanilla, within
 
 from optlab.core.blackscholes import bs_greeks, bs_price
@@ -37,7 +38,7 @@ def test_every_point_of_a_replicated_vanilla_is_the_closed_form_at_the_shocked_m
 
 
 def test_sticky_strike_ladder_keeps_the_implied_vol_at_the_strike_on_a_smile():
-    spx = PricingContext.from_calibration()
+    spx = PricingContext.from_calibration(SPX_CALIBRATION)
     K, days = 95.0, 365
     T = days / 365
     b = book(vanilla(K, days, "put", valuation=spx.valuation))
@@ -111,7 +112,7 @@ def test_the_rule_applies_to_the_ladder_point_only():
 def lake():
     from optlab.marketdata.lake import Lake
 
-    lk = Lake()
+    lk = Lake(real_lake())
     try:
         if (
             lk.read("vol_surfaces", where="underlying = 'SPX' AND layer = 'reconstructed'", columns="count(*) AS n")[
@@ -142,7 +143,7 @@ def test_spot_vol_betas_of_spx_on_the_lake(lake, tmp_path):
 
 
 def test_a_sticky_strike_crash_point_in_arbitrage_is_reported_and_valued_by_monte_carlo():
-    spx = PricingContext.from_calibration()
+    spx = PricingContext.from_calibration(SPX_CALIBRATION)
     b = book(vanilla(95.0, 365, "put", valuation=spx.valuation))
     rep = ladder(
         [RiskGroup("SPX", b, spx, 1)],

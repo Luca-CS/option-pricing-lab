@@ -27,7 +27,8 @@ def test_paths_default_under_the_data_folder(data):
     s = Settings.load()
     assert s.data == data.resolve() and s.store == data.resolve() / "store" and s.lake == data.resolve() / "lake"
     assert s.logs == data.resolve() / "logs" and s.backups == data.resolve() / "backups"
-    assert s.results == repository_root() / "results"
+    repo = repository_root()
+    assert repo is not None and s.results == repo / "results"
     assert s.host == "127.0.0.1" and s.port == 8765 and not s.lan and s.engine == "auto"
 
 

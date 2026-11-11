@@ -19,12 +19,12 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from optlab.core.config import paths
 from optlab.marketdata.derive.bank import wrapper_spreads
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.pit import market_at, real_close
 from optlab.marketdata.replay import ReplayConfig, filled_fixings, strike_trade
 from optlab.server.api import Desk
+from optlab.server.settings import Settings
 from optlab.structured import preset
 from optlab.structured.defaults import resolve
 
@@ -215,11 +215,11 @@ def seed(desk: Desk, lake: Lake, day, deals=DEALS, n_paths: int = 20_000, log=pr
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--store", default=str(paths().store.parent / "showcase" / "desk.sqlite"))
+    ap.add_argument("--store", default=str(Settings.load().store.parent / "showcase" / "desk.sqlite"))
     ap.add_argument("--day", default=None, help="valuation date (default: the last SPX close in the lake)")
     ap.add_argument("--n-paths", type=int, default=20_000)
     args = ap.parse_args()
-    lake = Lake()
+    lake = Lake(Settings.load().lake)
     last = lake.read("prices_eod", where="instrument = 'SPX'", columns="max(obs_date) AS d")["d"].iloc[0]
     day = pd.Timestamp(args.day or last).date()
     desk = Desk(args.store)

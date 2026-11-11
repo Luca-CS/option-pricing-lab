@@ -184,7 +184,10 @@ class Book:
         batches on a process pool (same numbers bit for bit). With `spot_factors` (Monte Carlo only), a list of
         BookResult is returned, one per factor (a float, or {name: factor} for a basket), all on one simulation."""
         t0 = time.perf_counter()
-        ctx = ctx or PricingContext.from_calibration()
+        if ctx is None:
+            raise TypeError(
+                "a book needs a market: a PricingContext (from_calibration(path), or the lake's context_at)"
+            )
         basket = isinstance(ctx, BasketContext)
         if basket and (market is not None or surface is not None):
             raise ValueError("bump a basket book through BasketContext.bumped")
@@ -315,7 +318,10 @@ class Book:
     ) -> dict:
         """Book delta (currency per +1 % spot) and vega (per +1 vol point) by central bumps of the shared
         simulation, per position and in total, with standard errors. Products keep their initial fixing."""
-        ctx = ctx or PricingContext.from_calibration()
+        if ctx is None:
+            raise TypeError(
+                "a book needs a market: a PricingContext (from_calibration(path), or the lake's context_at)"
+            )
         if isinstance(ctx, BasketContext):
             return self._basket_greeks(ctx, model, n_paths, seed, batch, smoothing, h_spot, h_vol, workers)
         items = self._prepare(ctx)

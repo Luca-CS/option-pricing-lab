@@ -24,6 +24,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 from dataclasses import asdict, dataclass, replace
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -209,11 +210,9 @@ def reconstruct(levels: dict, prior: ShapePrior, skew: float | None = None, scal
     )
 
 
-def static_prior(path=None) -> ShapePrior:
-    """The shape of the versioned SPX calibration (27/10/2026)."""
-    from optlab.core.config import paths
-
-    cal = json.loads((path or paths().results / "spx_calibration.json").read_text(encoding="utf-8"))
+def static_prior(path) -> ShapePrior:
+    """The shape of a calibration file: the versioned SPX one (27/10/2026) is `Settings.calibration`."""
+    cal = json.loads(Path(path).read_text(encoding="utf-8"))
     shape = fit_shape(
         SVISurface.from_dict(cal["surface"]), source=f"calibration of {cal['meta'].get('snapshot', '')[:10]}"
     )
@@ -270,8 +269,9 @@ def build_reconstructed(
     step: int = 1,
     use_skew: bool = False,
 ) -> list[dict]:
-    """Daily reconstructed surfaces, stored with their inputs."""
-    prior = prior or static_prior()
+    """Daily reconstructed surfaces, stored with their inputs, on the shape `prior` (static_prior of a calibration)."""
+    if prior is None:
+        raise TypeError("build_reconstructed needs its prior: static_prior(the calibration file)")
     panel = index_panel(lake, start, end)
     out = []
     run = new_run_id("reconstruct")

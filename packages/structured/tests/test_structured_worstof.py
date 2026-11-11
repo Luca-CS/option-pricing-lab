@@ -4,10 +4,12 @@ import datetime as dt
 
 import numpy as np
 import pytest
+from _paths import SPX_CALIBRATION
 from _structured_refs import FLAT, VOL, R, autocall_reference, flat_context, worst_digital, worst_put
 
 from optlab.core import BlackScholesModel, Market, european_mc
 from optlab.structured.compiler import compile_sheet
+from optlab.structured.context import PricingContext
 from optlab.structured.multiasset import Basket, BasketContext, correlation_root, simulate_basket
 from optlab.structured.presets import preset
 from optlab.structured.pricer import price
@@ -156,7 +158,9 @@ def test_worst_of_fields_and_script():
 
 @pytest.mark.slow
 def test_worst_of_quote_uses_the_basket_policy():
-    spx = BasketContext.with_spx({"SX5E": (100.0, 0.03, 0.03, 0.22)}, [[1, 0.7], [0.7, 1]])
+    spx = BasketContext.with_spx(
+        {"SX5E": (100.0, 0.03, 0.03, 0.22)}, [[1, 0.7], [0.7, 1]], PricingContext.from_calibration(SPX_CALIBRATION)
+    )
     q = quote(worst("phoenix", **{"wrapper.solve": "coupon"}), spx, n_paths=20_000, batch=10_000)
     assert (q.decision.model, q.decision.control, q.decision.provisions) == ("lv", "slv", ("slv", "local_corr"))
     assert "measured correlation" in q.decision.reason

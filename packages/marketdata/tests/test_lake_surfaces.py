@@ -6,6 +6,7 @@ import json
 import numpy as np
 import pandas as pd
 import pytest
+from _paths import SPX_CALIBRATION
 
 from optlab.core.svi import SVISurface, svi_arbitrage_report
 from optlab.marketdata.derive.surfaces import (
@@ -100,7 +101,7 @@ def test_scale_multiplies_the_level_and_other_names_use_their_index():
 
 
 def test_static_prior_is_the_versioned_calibration_shape():
-    p = static_prior()
+    p = static_prior(SPX_CALIBRATION)
     assert -0.99 < p.rho < -0.3 and p.eta * (1 + abs(p.rho)) <= 2.0 + 1e-9 and 0 < p.v_inf < 0.2
     assert "2026-10-27" in p.source
 

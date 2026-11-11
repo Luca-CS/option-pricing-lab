@@ -2,11 +2,12 @@
 
 import numpy as np
 import pytest
+from _paths import SPX_CALIBRATION
 
 from optlab.core import BlackScholesModel, HestonModel, HestonParams, Market, simulate
 from optlab.structured import PricingContext
 
-SPX = PricingContext.from_calibration()
+SPX = PricingContext.from_calibration(SPX_CALIBRATION)
 MODELS = {
     "bs": BlackScholesModel(0.2),
     "heston": HestonModel(HestonParams(0.04, 1.5, 0.04, 0.5, -0.7)),

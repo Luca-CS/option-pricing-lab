@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+from _paths import SPX_CALIBRATION
 from _structured_refs import flat_context
 
 from optlab.structured.compiler import compile_sheet
@@ -12,7 +13,7 @@ from optlab.structured.pricer import price
 from optlab.structured.quote import quote
 
 BS_CTX = flat_context()
-SPX = PricingContext.from_calibration()
+SPX = PricingContext.from_calibration(SPX_CALIBRATION)
 N = 40_000
 
 PUT = """underlying SPX

@@ -5,6 +5,7 @@ import time
 
 import numpy as np
 import pytest
+from _paths import SPX_CALIBRATION
 from scipy.stats import multivariate_normal, norm
 
 from optlab.core.instruments import UNIVERSE, instrument
@@ -16,7 +17,7 @@ from optlab.structured.costs import CostInputs
 from optlab.structured.defaults import STARTING, merged, resolve, validate_table
 from optlab.structured.multiasset import BasketContext, moved_correlation
 
-SPX = PricingContext.from_calibration()
+SPX = PricingContext.from_calibration(SPX_CALIBRATION)
 PATHS = 20_000
 
 

@@ -24,14 +24,12 @@ import numpy as np
 import pandas as pd
 
 from optlab.core.blackscholes import implied_vol
-from optlab.core.config import REPO_ROOT
 from optlab.core.market import Market
 
 NY = ZoneInfo("America/New_York")
-RAW_DIR = REPO_ROOT / "data" / "raw"  # personal-use snapshots, git-ignored
 
 
-def download_chain(ticker="^SPX", min_days=7, max_days=800, out_dir=RAW_DIR) -> Path:
+def download_chain(ticker="^SPX", min_days=7, max_days=800, *, out_dir) -> Path:
     """Download every expiry between min_days and max_days and save one CSV snapshot."""
     import yfinance as yf
 
@@ -62,7 +60,7 @@ def download_chain(ticker="^SPX", min_days=7, max_days=800, out_dir=RAW_DIR) -> 
     return path
 
 
-def latest_snapshot(out_dir=RAW_DIR) -> Path:
+def latest_snapshot(out_dir) -> Path:
     files = sorted(Path(out_dir).glob("spx_*.csv"))
     if not files:
         raise FileNotFoundError(f"no snapshot in {out_dir}: run scripts/download_spx.py first")

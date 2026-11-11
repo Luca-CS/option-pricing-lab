@@ -259,9 +259,11 @@ class BasketContext:
     @classmethod
     def with_spx(cls, others: dict, corr, spx=None) -> "BasketContext":
         """SPX from the calibration plus other names given as {name: (spot, r, q, vol)} on flat markets."""
-        from optlab.structured.context import PricingContext
 
-        spx = spx or PricingContext.from_calibration()
+        if spx is None:
+            raise TypeError(
+                "with_spx needs a market: a PricingContext (from_calibration(path), or the lake's context_at)"
+            )
         names = ("SPX", *others)
         markets = {"SPX": spx.market, **{n: Market.flat(s, r, q) for n, (s, r, q, _) in others.items()}}
         vols = {"SPX": spx.surface, **{n: v for n, (_, _, _, v) in others.items()}}

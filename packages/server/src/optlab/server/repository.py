@@ -11,7 +11,6 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
-from optlab.core.config import paths
 from optlab.structured.trade import Trade
 
 SCHEMA = (
@@ -30,8 +29,8 @@ def _now() -> str:
 
 
 class Repository:
-    def __init__(self, path: str | Path | None = None):
-        self.path = Path(path) if path is not None else paths().store / "desk.sqlite"
+    def __init__(self, path: str | Path):
+        self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         with self._db() as con:

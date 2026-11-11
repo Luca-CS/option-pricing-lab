@@ -18,7 +18,7 @@ import numpy as np
 
 from optlab import native
 from optlab.core import engines
-from optlab.core.config import DEFAULT_SEED, paths
+from optlab.core.config import DEFAULT_SEED
 from optlab.core.instruments import _BY_ID
 from optlab.core.log import get_logger
 from optlab.core.market import Market
@@ -31,9 +31,9 @@ from optlab.server.fixings import parse_fixings
 from optlab.server.jobs import Jobs
 from optlab.server.repository import Repository
 from optlab.server.serialize import book_json, clean, events_json, quote_json, result_json, trade_json
+from optlab.server.settings import Settings
 from optlab.structured import MASKS, PRESETS, PricingContext, TermSheet, TermSheetError, describe, preset, quote
 from optlab.structured.compiler import compile_sheet
-from optlab.structured.context import DEFAULT_CALIBRATION
 from optlab.structured.defaults import STARTING, merged, parameters, resolve, validate_table
 from optlab.structured.lifecycle import events
 from optlab.structured.multiasset import BasketContext
@@ -89,21 +89,24 @@ class Desk:
         max_jobs: int = 2,
         lake=None,
         engine: str | None = None,
+        settings: Settings | None = None,
     ):
         """`engine`: where Monte Carlo paths come from (numpy, cpu, gpu, auto; see optlab.core.engines), for every job of this
-        process. None keeps the library's default."""
+        process. None keeps the library's default. `store`, `calibration` and `lake` override `settings`
+        (`Settings.load()` when not given), from which every other path comes."""
         if engine is not None:
             engines.set_default(engine)
-        self.repo = Repository(store)
-        self.lake = Lake(lake)
+        self.settings = settings or Settings.load()
+        self.repo = Repository(store or self.settings.store / "desk.sqlite")
+        self.lake = Lake(lake or self.settings.lake)
         self.names = NameMarkets(self.lake)
         self.shared = False  # listening beyond this machine: raw quotes and levels stay private
         self.market_store = MarketStore(self.repo.path.parent / "market")
-        self.calibration = Path(calibration) if calibration else DEFAULT_CALIBRATION
+        self.calibration = Path(calibration) if calibration else self.settings.calibration
         self.ctx = PricingContext.from_calibration(self.calibration)
         self.files: dict[str, Path] = {}  # snapshot id -> calibration file (its model-risk table)
         self._register(self.calibration)
-        for path in sorted(paths().results.glob("*_calibration.json")):
+        for path in sorted(self.settings.results.glob("*_calibration.json")):
             if path.resolve() != self.calibration.resolve():
                 self._register(path)
         self.jobs = Jobs(max_jobs)
@@ -440,7 +443,7 @@ class Desk:
 
     def replay_runs(self) -> dict:
         runs = []
-        for folder, kind in ((self._replay_dir(), "desk"), (paths().results, "versioned")):
+        for folder, kind in ((self._replay_dir(), "desk"), (self.settings.results, "versioned")):
             for path in sorted(folder.glob("replay*.json")):
                 data = json.loads(path.read_text(encoding="utf-8"))
                 for key, r in data.items() if kind == "versioned" else (("run", data),):
@@ -462,7 +465,7 @@ class Desk:
         stem, _, key = run_id.partition("/")
         if not re.fullmatch(r"[\w.-]+", stem):
             raise ApiError("unknown run", 404)
-        path = (paths().results if key else self._replay_dir()) / f"{stem}.json"
+        path = (self.settings.results if key else self._replay_dir()) / f"{stem}.json"
         if not path.exists():
             raise ApiError(f"no replay run {run_id}", 404)
         data = json.loads(path.read_text(encoding="utf-8"))

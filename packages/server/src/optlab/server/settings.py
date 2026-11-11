@@ -44,6 +44,12 @@ def default_data() -> Path:
     return sibling if sibling.is_dir() else repo / "data"
 
 
+def _in_repository(relative: str, otherwise: Path) -> Path:
+    """A folder of the repository the code runs from, or `otherwise` for an installed wheel."""
+    repo = repository_root()
+    return repo / relative if repo is not None else otherwise
+
+
 def env_file(data: Path) -> Path:
     return data / "config" / "optlab.env"
 
@@ -53,13 +59,20 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix=ENV_PREFIX, extra="forbid", validate_default=True, frozen=True)
 
-    # --- paths ---------------------------------------------------------------------------------------------------
+    # --- paths: each default is computed from the fields above it, once they are validated ----------------------
     data: Path = Field(default_factory=default_data, description="everything that is not code")
-    store: Path | None = Field(None, description="the desk's store folder (default <data>/store)")
-    lake: Path | None = Field(None, description="the historical lake (default <data>/lake)")
-    results: Path | None = Field(None, description="versioned calibrations (default <repository>/results)")
-    logs: Path | None = Field(None, description="default <data>/logs")
-    backups: Path | None = Field(None, description="default <data>/backups")
+    store: Path = Field(default_factory=lambda f: f["data"] / "store", description="the desk's store folder")
+    lake: Path = Field(default_factory=lambda f: f["data"] / "lake", description="the historical lake")
+    results: Path = Field(default_factory=lambda f: _in_repository("results", f["data"] / "archive"))
+    calibration: Path = Field(
+        default_factory=lambda f: f["results"] / "spx_calibration.json", description="the desk's starting market"
+    )
+    raw: Path = Field(
+        default_factory=lambda f: _in_repository("data/raw", f["data"] / "raw"),
+        description="personal-use option chain snapshots",
+    )
+    logs: Path = Field(default_factory=lambda f: f["data"] / "logs")
+    backups: Path = Field(default_factory=lambda f: f["data"] / "backups")
 
     # --- network ---------------------------------------------------------------------------------------------------
     host: str = Field("127.0.0.1", description="where the server listens; beyond this machine only with lan")
@@ -70,24 +83,13 @@ class Settings(BaseSettings):
     engine: Literal["numpy", "cpu", "gpu", "auto"] = Field("auto", description="where Monte Carlo paths come from")
     workers: int | None = Field(None, ge=1, le=64, description="process pool of NumPy Monte Carlo batches")
 
-    @field_validator("data", "store", "lake", "results", "logs", "backups", mode="after")
+    @field_validator("data", "store", "lake", "results", "calibration", "raw", "logs", "backups", mode="after")
     @classmethod
-    def _absolute(cls, v: Path | None) -> Path | None:
-        return None if v is None else v.expanduser().resolve()
+    def _absolute(cls, v: Path) -> Path:
+        return v.expanduser().resolve()
 
     @model_validator(mode="after")
-    def _defaults_and_safety(self) -> Settings:
-        repo = repository_root()
-        defaults = {
-            "store": self.data / "store",
-            "lake": self.data / "lake",
-            "results": (repo / "results") if repo is not None else self.data / "archive",
-            "logs": self.data / "logs",
-            "backups": self.data / "backups",
-        }
-        for name, value in defaults.items():
-            if getattr(self, name) is None:
-                object.__setattr__(self, name, value)
+    def _safety(self) -> Settings:
         if not self.lan and not _is_loopback(self.host):
             raise ValueError(
                 f"host {self.host!r} listens beyond this machine: set OPTLAB_LAN=true only with Luca's agreement "
@@ -102,7 +104,7 @@ class Settings(BaseSettings):
         data = Path(os.environ.get(f"{ENV_PREFIX}DATA") or overrides.get("data") or default_data())
         file = env_file(data)
         given = {k: v for k, v in overrides.items() if v is not None}
-        return cls(_env_file=file if file.is_file() else None, **given)
+        return cls(_env_file=file if file.is_file() else None, **given)  # pyright: ignore[reportCallIssue] (a pydantic-settings init option)
 
     def describe(self) -> dict:
         """Where everything is, for a start-up line or a health check (no secret in here)."""

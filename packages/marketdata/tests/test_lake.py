@@ -6,8 +6,8 @@ import time
 import numpy as np
 import pandas as pd
 import pytest
+from _paths import SPX_CALIBRATION
 
-from optlab.core import config
 from optlab.marketdata.ingest import (
     load_cboe,
     load_ecb,
@@ -40,16 +40,13 @@ def vol_rows(values=(20.0, 21.0)):
     )
 
 
-def test_lake_paths_follow_the_environment(monkeypatch, tmp_path):
-    monkeypatch.setenv("OPTLAB_HOME", str(tmp_path))
-    monkeypatch.delenv("OPTLAB_DATA", raising=False)
-    monkeypatch.delenv("OPTLAB_LAKE", raising=False)
-    assert config.paths().lake == tmp_path / "data" / "lake"
-    monkeypatch.setenv("OPTLAB_DATA", str(tmp_path / "stable"))
-    p = config.paths()
-    assert p.lake == tmp_path / "stable" / "lake" and p.store == tmp_path / "stable" / "store"
-    monkeypatch.setenv("OPTLAB_LAKE", str(tmp_path / "other"))
-    assert config.paths().lake == tmp_path / "other"
+def test_the_lake_is_given_its_folder(tmp_path):
+    """ADR-0012: the lake has no default folder (Settings.lake gives it, packages/server/tests/test_settings.py)."""
+    import pytest
+
+    with pytest.raises(TypeError):
+        Lake()  # type: ignore[call-arg]
+    assert Lake(tmp_path / "lake").root == tmp_path / "lake"
 
 
 def test_loading_twice_adds_nothing(lake):
@@ -322,7 +319,7 @@ def test_term_sheet_underlyings_come_from_the_registry_and_need_their_own_market
     assert instrument("NVDA").enabled is False
     sheet = TermSheet.from_dict({"type": "autocall", "general": {"underlying": "NDX"}})
     with pytest.raises(ValueError, match="the market in use is SPX"):
-        quote(sheet, PricingContext.from_calibration(), n_paths=2000)
+        quote(sheet, PricingContext.from_calibration(SPX_CALIBRATION), n_paths=2000)
 
 
 def test_rule_calendars_know_the_special_closures_and_eurex():
