@@ -26,7 +26,7 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
   `scripts/structured_examples.py [--quick]` prints the autocall model-risk table, timings and example quotes.
 - Desk (web UI): `uv run python -m optlab.server [--open] [--workers 6] [--host 0.0.0.0]` serves
   `http://localhost:8765` (a token is generated beyond localhost; `--tunnel` gives a public link through
-  localhost.run); `--store` and `--calibration` change the SQLite file and the calibration. `packages/server/tests/test_app_api.py`
+  localhost.run); `--store` and `--calibration` change the database file and the calibration. `packages/server/tests/test_app_api.py`
   (about 40 s) covers the API and the HTTP server; `test_app_js.py` runs the page's table sorting under
   `node` (skipped without it, like `test_widget_js.py`).
 - `packages/core/tests/test_widget_js.py` runs `docs/lab.js` under `node` and compares it to the Python library; it is
@@ -50,7 +50,7 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
   `ncu -i build/ncu_profile.ncu-rep --page raw --csv --metrics ...` (`--page details` fails under the French locale).
 - Risk engine (`optlab.risk`): `packages/risk/tests` (about 20 minutes; `test_risk_var`, `test_risk_pnl` and the betas test need the
   lake and skip without it). `scripts/risk_eod.py eod --date D | backfill --from A --to B | pnl --from A --to B | var | ladder`
-  works on a desk store (default the showcase's) and keeps every run in `risk.sqlite` beside it; method and measured numbers in
+  works on a desk database (default the showcase's) and keeps every run in its risk tables; method and measured numbers in
   `reports/risk.md`. The desk serves it on `#/risk` and `#/pnl` (`optlab.server.risk_api`, routes `/api/risk/*`, `/api/pnl*`, report
   `/report/risk`).
 - Data lake (`optlab.marketdata`, needs `duckdb` and `pyarrow`; data in `OPTLAB_DATA`, default `optlab-data` beside the main checkout):
@@ -134,14 +134,18 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
   spawn process pool, same numbers bit for bit; spot factors scale the paths for the Greeks). Also `trade.py`,
   `calendars.py` (NYSE), `lifecycle.py`, `surfaces.py` (`FastSVISurface`, bit-identical), `fastmodels.py` and
   `qmc.py` (opt-in, validated within the Monte Carlo error), `units.py`; `optlab.core.config`, `optlab.core.log`, `optlab.core.snapshot` and
-  `optlab.marketdata.store` (snapshots and their local store under `data/store`). A script with a NaN condition or a
+  `optlab.marketdata.store` (the storage protocol of snapshots; the server stores them). A script with a NaN condition or a
   non-finite payment on a live path raises `ScriptError` with its line.
 - **`optlab.server`** is the local web desk (design and status in its `DESIGN.md`). `api.py` holds a `Desk`
   whose methods are the API routes (JSON in and out, levels as fractions; the page shows percent), `server.py` maps
   routes to them on a stdlib `ThreadingHTTPServer` that also serves `static/` (same origin; one buffered write per
   response and no Nagle, or Windows browsers wait ~250 ms per call), `jobs.py` runs quotes and book valuations in a
-  thread pool that the page polls, `repository.py` keeps trades (versioned), fixings and quotes in SQLite under
-  `data/store` with the basket settings (market snapshots go to `data/store/market`), `report.py` writes standalone
+  thread pool that the page polls, `persistence/` keeps everything in one SQLite database (WAL, SQLAlchemy Core, Alembic
+  migrations; `Settings.database`, default `<data>/store/optlab.sqlite`): `desk.py` trades (versioned), fixings, quotes,
+  desk settings and cost defaults, `snapshots.py`, `replays.py`, `risk.py` (the risk engine's records and runs);
+  `migrate_v0.py` imports a v0 folder (desk.sqlite, risk.sqlite, market/, replay/) idempotently and checks every row;
+  `settings.py` is the one `Settings` object (environment, then `<data>/config/optlab.env`, then the command line);
+  the domain packages have no default path and receive theirs from it. `report.py` writes standalone
   HTML reports, `tunnel.py` opens the `--tunnel` SSH link, `fixings.py` parses pasted or CSV fixings (the page sends
   the raw text), `netcheck.py` reads what blocks LAN access on Windows (firewall, Public profile; read-only).
   Every name is on its own market: the one in use for its name, else the lake's at the same date (`marketdata/names.py`), else flat

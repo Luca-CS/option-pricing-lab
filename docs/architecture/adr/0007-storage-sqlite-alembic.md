@@ -30,6 +30,22 @@ works and is out of scope.
   needs shared memory that the 9P mount does not provide reliably.
 - Postgres only if a need is measured (several machines, concurrent heavy writers). Not today.
 
+## Implementation (A4)
+
+- `optlab.server.persistence`: `database.py` (one file, WAL, `synchronous=NORMAL`, foreign keys, a 30 s busy
+  timeout; reads `BEGIN`, writes `BEGIN IMMEDIATE`, so two writers that read a version and insert the next one wait
+  for each other: a test runs four threads on one key), `schema.py` (SQLAlchemy Core), `migrations/` (Alembic, the
+  first revision written by hand; a test checks it builds exactly the declared metadata), and the repositories:
+  `desk.py`, `snapshots.py`, `replays.py`, `risk.py`, with the methods of the v0 stores they replace.
+- The domain packages declare protocols (`risk.store.RiskStorage`, `marketdata.store.SnapshotStorage`) and hold no SQL;
+  the risk engine keeps its code version and run keys.
+- Users, sessions, audit, jobs and schedules arrive with their steps (A5, A6) as new revisions.
+- A v0 store file is refused as a database, with the command that imports it; `migrate_v0` reads a v0 folder
+  read-only, copies rows and JSON payloads as text (bit for bit), inserts only new keys (idempotent), and checks every
+  source row against the target. Tested on synthetic v0 folders, then on copies of the real showcase and desk stores,
+  then through the showcase's golden numbers, which now run on a migrated copy.
+- Migrations run when the desk opens its database, until the worker (A6) and `optlab deploy` (A9) take that over.
+
 ## Consequences
 
 - Backups are one file: `VACUUM INTO` nightly, 14 days kept (ADR-0006 schedules it); restore is tested (`optlab

@@ -6,7 +6,7 @@ with its coupon solved on that date's market at the desk's client price, with th
 Open it from this worktree. `--workers 6` is what the times below use.
 
 ```
-..\..\..\.venv\Scripts\python.exe -m optlab.server --store "C:\Users\Luca\Code\projets\optlab-data\showcase\desk.sqlite" --market SPX-20261104T1600-8b7fa10118 --workers 6 --open
+..\..\..\.venv\Scripts\python.exe -m optlab.server --store "C:\Users\Luca\Code\projets\optlab-data\showcase\optlab.sqlite" --market SPX-20261104T1600-8b7fa10118 --workers 6 --open
 ```
 
 To start over: delete the `showcase` folder and run `scripts/seed_showcase.py`, which prints this command again with the new market id.
