@@ -73,7 +73,7 @@ def test_a_trade_keeps_its_reserves_through_json_and_old_trades_have_none():
 # --- the desk ---
 @pytest.fixture(scope="module")
 def desk(tmp_path_factory):
-    d = Desk(store=tmp_path_factory.mktemp("res") / "desk.sqlite")
+    d = Desk(store=tmp_path_factory.mktemp("res") / "optlab.sqlite")
     yield d
     d.jobs.shutdown()
 

@@ -12,6 +12,7 @@ from optlab.core.log import configure
 from optlab.server.api import Desk
 from optlab.server.netcheck import lan_blockers
 from optlab.server.server import serve
+from optlab.server.settings import Settings
 from optlab.server.tunnel import open_tunnel
 
 
@@ -23,11 +24,15 @@ def main():
     ap.add_argument("--workers", type=int, default=None, help="process pool for Monte Carlo batches on NumPy (e.g. 6)")
     ap.add_argument(
         "--engine",
-        default="auto",
+        default=None,
         choices=("auto", "gpu", "cpu", "numpy"),
-        help="Monte Carlo paths: auto (the GPU if any, else every CPU thread, else NumPy), gpu, cpu or numpy",
+        help="Monte Carlo paths: auto (the GPU if any, else every CPU thread, else NumPy; the default, or "
+        "$OPTLAB_ENGINE), gpu, cpu or numpy",
     )
-    ap.add_argument("--store", help="SQLite file of trades, fixings and quotes (default data/store/desk.sqlite)")
+    ap.add_argument(
+        "--store",
+        help="the database file: trades, fixings, quotes, snapshots, risk runs (default: the settings' database)",
+    )
     ap.add_argument("--calibration", help="results/*.json calibration (default: the SPX one)")
     ap.add_argument("--market", help="start on this snapshot of the store instead of the calibration")
     ap.add_argument(
@@ -42,7 +47,9 @@ def main():
     token = args.token
     if (args.tunnel or args.host not in ("127.0.0.1", "localhost", "::1")) and not token:
         token = secrets.token_urlsafe(16)
-    desk = Desk(args.store, args.calibration, args.workers, engine=args.engine)
+    settings = Settings.load(workers=args.workers, engine=args.engine, calibration=args.calibration)
+    print(f"data {settings.data}, lake {settings.lake}")
+    desk = Desk(args.store, args.calibration, settings.workers, engine=settings.engine, settings=settings)
     desk.shared = bool(args.tunnel or args.host not in ("127.0.0.1", "localhost", "::1"))
     if args.market:
         desk.use_snapshot({"snapshot_id": args.market})
@@ -51,12 +58,12 @@ def main():
     shown = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host
     url = f"http://{shown}:{port}/" + (f"?token={token}" if token else "")
     print(f"optlab desk on {url}")
-    print(f"market {desk.ctx.snapshot_id}, valuation {desk.ctx.valuation}, store {desk.repo.path}")
+    print(f"market {desk.ctx.snapshot_id}, valuation {desk.ctx.valuation}, database {desk.db.path}")
     eng = desk.health()["engine"]
     gpus = ", ".join(d["name"] for d in eng["devices"]) or "no CUDA device"
     print(
         f"Monte Carlo engine: {eng['resolved']} ({gpus}; {eng['cpu_threads']} CPU threads"
-        f"{'' if eng['compiled'] else '; compiled engine not built, see cuda/README.md'})"
+        f"{'' if eng['compiled'] else '; compiled engine not built, see packages/native/cuda/README.md'})"
     )
     if args.host not in ("127.0.0.1", "localhost", "::1"):
         print(f"listening on the network: share http://<this-pc-address>:{port}/?token={token}")

@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 @pytest.fixture(scope="module")
 def desk(tmp_path_factory):
-    d = Desk(store=tmp_path_factory.mktemp("desk") / "desk.sqlite")
+    d = Desk(store=tmp_path_factory.mktemp("desk") / "optlab.sqlite")
     yield d
     d.jobs.shutdown()
 

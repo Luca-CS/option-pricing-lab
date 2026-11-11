@@ -15,7 +15,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from optlab.core.config import paths
 from optlab.marketdata.lake import Lake, new_run_id
 
 SOURCE = "dolthub"
@@ -77,8 +76,9 @@ class Dolt:
     home: Path | None = None
 
     @classmethod
-    def from_environment(cls, database=None) -> "Dolt":
-        root = paths().lake.parent
+    def from_environment(cls, data, database=None) -> "Dolt":
+        """The Dolt binary and the options database under the data folder `data` (`Settings.data`)."""
+        root = Path(data)
         db = Path(database) if database and database != "default" else root / "dolt" / "options"
         return cls(
             root / "tools" / "dolt" / "dolt-windows-amd64" / "bin" / "dolt.exe", db, root / "tools" / "dolt-home"

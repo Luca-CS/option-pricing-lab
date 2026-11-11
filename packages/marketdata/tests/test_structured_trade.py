@@ -4,12 +4,12 @@ import datetime as dt
 import json
 
 import pytest
+from _paths import SIMULATED_CALIBRATION, SPX_CALIBRATION
+from _stores import snapshot_store
 from _structured_refs import flat_context
 
 from optlab.core.snapshot import MarketSnapshot, to_model_scale
-from optlab.marketdata import MarketStore
 from optlab.structured import PRESETS, PricingContext, TermSheet, TermSheetError, compile_sheet, preset, quote
-from optlab.structured.context import DEFAULT_CALIBRATION
 from optlab.structured.portfolio import Book
 from optlab.structured.schema import json_schema
 from optlab.structured.trade import Trade
@@ -85,11 +85,11 @@ def test_a_script_trade():
 
 
 def test_snapshot_ids_are_stable_and_the_context_is_unchanged():
-    a = MarketSnapshot.from_calibration_file(DEFAULT_CALIBRATION)
-    b = MarketSnapshot.from_calibration_file(DEFAULT_CALIBRATION, provenance=False)
+    a = MarketSnapshot.from_calibration_file(SPX_CALIBRATION)
+    b = MarketSnapshot.from_calibration_file(SPX_CALIBRATION, provenance=False)
     assert a.snapshot_id == b.snapshot_id and a.snapshot_id.startswith("SPX-20261027T")
     assert a.provenance["file_sha256"] and "spot_scale" not in a.to_json()
-    ctx = PricingContext.from_calibration()
+    ctx = PricingContext.from_calibration(SPX_CALIBRATION)
     assert ctx.snapshot_id == a.snapshot_id
     q1 = quote(preset("phoenix", **{"general.maturity_months": 12}), ctx, control=None, n_paths=20_000, batch=10_000)
     q2 = quote(
@@ -103,7 +103,7 @@ def test_snapshot_ids_are_stable_and_the_context_is_unchanged():
 
 
 def test_the_simulated_calibration_loads_with_a_valuation_date():
-    path = DEFAULT_CALIBRATION.parent / "simulated_calibration.json"
+    path = SIMULATED_CALIBRATION
     with pytest.raises(ValueError, match="give the valuation date"):
         PricingContext.from_calibration(path)
     ctx = PricingContext.from_calibration(path, valuation="2026-10-27")
@@ -111,27 +111,32 @@ def test_the_simulated_calibration_loads_with_a_valuation_date():
 
 
 def test_the_store_is_immutable_and_finds_the_latest(tmp_path):
-    store = MarketStore(tmp_path)
-    snap = MarketSnapshot.from_calibration_file(DEFAULT_CALIBRATION)
+    store = snapshot_store(tmp_path)
+    snap = MarketSnapshot.from_calibration_file(SPX_CALIBRATION)
     sid = store.put(snap)
     assert store.put(snap) == sid  # idempotent
     assert store.get(sid) == snap
     assert store.latest("SPX", dt.date(2026, 10, 28)).snapshot_id == sid
     with pytest.raises(KeyError):
         store.latest("SPX", dt.date(2026, 10, 26))
-    # the local spot scale is kept in the index, not in the snapshot file, and does not change the id
+    # the local spot scale is kept beside the snapshot, not in its stored content, and does not change the id
     assert store.put(snap.with_spot_scale(5800.0)) == sid
     assert store.get(sid).spot_scale == pytest.approx(58.0)
-    assert "spot_scale" not in next(tmp_path.rglob(f"{sid}.json")).read_text()
-    path = next(tmp_path.rglob(f"{sid}.json"))
-    path.write_text(path.read_text().replace('"source": "spx"', '"source": "edited"'))
+    with store.db.read() as c:
+        stored = c.exec_driver_sql("SELECT payload FROM snapshots WHERE snapshot_id = ?", (sid,)).scalar()
+    assert "spot_scale" not in stored
+    with store.db.write() as c:  # someone edits the stored content behind the store's back
+        c.exec_driver_sql(
+            "UPDATE snapshots SET payload = ? WHERE snapshot_id = ?",
+            (stored.replace('"source": "spx"', '"source": "edited"'), sid),
+        )
     with pytest.raises(ValueError, match="different content"):
         store.put(snap)
 
 
 def test_real_fixings_against_a_rescaled_market_are_refused_until_converted():
     sheet = preset("reverse_convertible", **{"general.strike_date": STRIKE, "wrapper.solve": "upfront"})
-    spx = PricingContext.from_calibration()
+    spx = PricingContext.from_calibration(SPX_CALIBRATION)
     with pytest.raises(ValueError, match="convert them with optlab.core.snapshot.to_model_scale"):
         quote(sheet, spx, control=None, fixings={"SPX": {STRIKE: 5800.0}})
     converted = to_model_scale({"SPX": {STRIKE: 5800.0}}, 58.0)

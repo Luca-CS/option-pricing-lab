@@ -19,11 +19,11 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from optlab.core.config import paths
 from optlab.core.svi import SVISurface, svi_arbitrage_report
 from optlab.marketdata.derive.surfaces import fit_observed, fit_shape, index_panel, reconstruct_on, static_prior
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.quotes import clean_day, quote_days
+from optlab.server.settings import Settings
 
 MONEYNESS = [0, 0.7, 0.8, 0.9, 0.95, 1.0, 1.05, 1.1, 1.2, 10]
 MATURITY = [0, 1 / 12, 0.25, 0.5, 1.0, 2.0, 3.0, 6.0]
@@ -77,7 +77,7 @@ def main():
     ap.add_argument("--lake", default=None)
     args = ap.parse_args()
     lake = Lake(args.lake)
-    prior = static_prior()
+    prior = static_prior(Settings.load().calibration)
     days = quote_days(lake, "SPX", "historicaldata")[:: args.step]
     print(f"{len(days)} days, {days[0]} to {days[-1]}, prior {prior}", flush=True)
     panel = index_panel(lake, days[0], days[-1])
@@ -134,7 +134,7 @@ def main():
                 str(f["day"].iloc[0]): round(float(np.sqrt((f["err"] ** 2).mean())), 2) for f in frames[name]
             },
         }
-    path = paths().results / "surface_reconstruction.json"
+    path = Settings.load().results / "surface_reconstruction.json"
     path.write_text(json.dumps(result, indent=1), encoding="utf-8")
     print(json.dumps({k: v["all"] for k, v in result["variants"].items()}, indent=1), flush=True)
     print(path, flush=True)

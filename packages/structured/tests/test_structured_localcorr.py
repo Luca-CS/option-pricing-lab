@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+from _paths import SPX_CALIBRATION
 from scipy.stats import multivariate_normal, norm
 
 from optlab.core.blackscholes import black_price
@@ -22,7 +23,7 @@ from optlab.structured.localcorr import (
 )
 from optlab.structured.multiasset import Basket, BasketContext, simulate_basket
 
-SPX = PricingContext.from_calibration()
+SPX = PricingContext.from_calibration(SPX_CALIBRATION)
 RHO = 0.7
 
 

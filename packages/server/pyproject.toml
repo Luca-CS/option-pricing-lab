@@ -11,6 +11,10 @@ dependencies = [
     "optlab-marketdata",
     "optlab-risk",
     "numpy>=2.5",
+    "pydantic>=2.14",
+    "pydantic-settings>=2.16",  # Settings (ADR-0012)
+    "sqlalchemy>=2.0.55",  # SQLAlchemy Core, no ORM (ADR-0007)
+    "alembic>=1.20",  # the schema's migrations
 ]
 
 [build-system]

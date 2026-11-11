@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+from _paths import SPX_CALIBRATION
 from scipy.stats import norm
 
 from optlab.core.models import LocalVolModel, simulate
@@ -13,7 +14,7 @@ from optlab.structured.quote import wrapper
 from optlab.structured.script.timeline import Clock, build_timeline
 from optlab.structured.surfaces import BumpedSurface, surface_arbitrage
 
-SPX = PricingContext.from_calibration()
+SPX = PricingContext.from_calibration(SPX_CALIBRATION)
 PATHS = 40_000
 SKEW = 0.01
 

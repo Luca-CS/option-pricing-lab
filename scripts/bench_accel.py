@@ -19,6 +19,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from optlab.core.slv import calibrate_leverage  # noqa: E402
+from optlab.server.settings import Settings  # noqa: E402
 from optlab.structured import PricingContext, compile_sheet, preset, price_many  # noqa: E402
 from optlab.structured.multiasset import Basket  # noqa: E402
 
@@ -90,7 +91,7 @@ def desk_quote(engine, precision):
     from optlab.server.api import Desk
 
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-        desk = Desk(store=Path(tmp) / "desk.sqlite", engine=engine)
+        desk = Desk(store=Path(tmp) / "optlab.sqlite", engine=engine)
         try:
             s = preset("phoenix").to_dict(json_safe=True)
             kind = s.pop("type")
@@ -131,7 +132,7 @@ def main():
     ap.add_argument("--desk", help="precisions of a full desk quote to time, e.g. standard,precise")
     ap.add_argument("--out")
     args = ap.parse_args()
-    ctx = PricingContext.from_calibration()
+    ctx = PricingContext.from_calibration(Settings.load().calibration)
     rows = []
     print(f"cpu count {os.cpu_count()}, paths {args.paths:,}, batch {args.batch:,}")
     runs = [(e, int(w)) for e in args.engines.split(",") for w in (args.workers.split(",") if e == "numpy" else ["1"])]

@@ -5,6 +5,7 @@ import json
 
 import numpy as np
 import pytest
+from _paths import SPX_CALIBRATION
 from _risk_refs import (
     FLAT,
     S0,
@@ -92,7 +93,7 @@ def test_book_greeks_add_up_and_serialise(vanillas):
 
 def test_sticky_strike_and_moneyness_deltas_on_a_smile():
     """Replicated vanilla on the SPX smile: sticky strike keeps the implied vol at K, sticky moneyness reads it at K / F'."""
-    spx = PricingContext.from_calibration()
+    spx = PricingContext.from_calibration(SPX_CALIBRATION)
     days, K = 365, 95.0
     T = days / 365
     b = book(vanilla(K, days, "put", valuation=spx.valuation))

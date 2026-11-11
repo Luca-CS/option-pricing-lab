@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+from _paths import SPX_CALIBRATION
 
 from optlab.core import asian_mc, barrier_mc, european_mc
 from optlab.core.products import fixing_dates
@@ -9,7 +10,7 @@ from optlab.structured.context import PricingContext
 from optlab.structured.pricer import price
 from optlab.structured.script.printer import number
 
-CTX = PricingContext.from_calibration()
+CTX = PricingContext.from_calibration(SPX_CALIBRATION)
 MODELS = ["bs", "heston", "lv", "slv"]
 N_REPRO = 20_000
 

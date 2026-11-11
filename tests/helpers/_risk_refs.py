@@ -3,6 +3,7 @@
 import datetime as dt
 
 import numpy as np
+from _paths import SPX_CALIBRATION
 from _structured_refs import FLAT, S0, VOL, Q, R, flat_surface
 
 from optlab.core import engines
@@ -13,7 +14,7 @@ VALUATION = dt.date(2026, 10, 27)
 
 
 def flat_ctx(vol=VOL, valuation=VALUATION, market=FLAT) -> PricingContext:
-    spx = PricingContext.from_calibration()
+    spx = PricingContext.from_calibration(SPX_CALIBRATION)
     return PricingContext(
         market,
         flat_surface(vol, (0.05, 0.1, 0.25, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0)),

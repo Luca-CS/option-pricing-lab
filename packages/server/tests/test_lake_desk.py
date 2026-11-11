@@ -28,7 +28,7 @@ def desk(tmp_path_factory):
     lake.ingest("instruments", as_rows(dt.date(2018, 1, 1)), "registry", "observed")
     lake.ingest("discount_curves", curve_rows(), "test", "derived")
     lake.ingest("option_quotes", synthetic_rows(EXPIRIES), "archive", "observed")
-    d = Desk(store=root / "desk.sqlite", lake=root / "lake")
+    d = Desk(store=root / "optlab.sqlite", lake=root / "lake")
     yield d
     d.jobs.shutdown()
 
@@ -58,7 +58,7 @@ def test_overview_gives_coverage_with_origins_and_the_universe(desk):
 
 
 def test_an_empty_lake_says_so(tmp_path):
-    d = Desk(store=tmp_path / "desk.sqlite", lake=tmp_path / "none")
+    d = Desk(store=tmp_path / "optlab.sqlite", lake=tmp_path / "none")
     try:
         assert d.data_overview()["available"] is False
         assert d.lab_days()["available"] is False
@@ -203,7 +203,7 @@ def test_showcase_seed_fills_a_store_with_trades_struck_on_their_own_markets(tmp
     sys.modules["seed_showcase"] = mod
     spec.loader.exec_module(mod)
     lake, days, _ = synthetic_lake(tmp_path / "lake", "2019-01-01", "2021-06-30")
-    desk = Desk(tmp_path / "store" / "desk.sqlite", lake=tmp_path / "lake")
+    desk = Desk(tmp_path / "store" / "optlab.sqlite", lake=tmp_path / "lake")
     try:
         deals = (
             mod.Deal("SHOW-A", "phoenix", ("SPX",), "2020-06-15", 24, 1e6, "Client", {"coupon.barrier": 0.8}),
@@ -253,7 +253,7 @@ def test_data_screen_shows_the_latest_basket_spreads_as_synthetic(tmp_path):
     from optlab.marketdata.lake import Lake
     from optlab.server.api import Desk
 
-    desk = Desk(tmp_path / "store" / "desk.sqlite", lake=tmp_path / "lake")
+    desk = Desk(tmp_path / "store" / "optlab.sqlite", lake=tmp_path / "lake")
     try:
         assert desk.data_baskets() == {"rows": [], "day": None}
         row = {

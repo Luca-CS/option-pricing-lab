@@ -279,7 +279,8 @@ def quote(
     mix is not calibrated, and for autocalls it moves the coupon more than the SLV - LV gap. `costs` (costs.CostInputs) adds the desk's
     lines to the base price: the coupon is solved on the client price, or the upfront is that price, and `result` stays the base."""
     t0 = time.perf_counter()
-    ctx = ctx or PricingContext.from_calibration()
+    if ctx is None:
+        raise TypeError("quote needs a market: a PricingContext (from_calibration(path), or the lake's context_at)")
     product = compile_sheet(sheet, ctx.valuation)
     if product.strike_date < product.valuation and sheet.get("wrapper.solve") == "coupon":
         raise ValueError("a running product has a fixed coupon: price it with wrapper.solve = 'upfront'")

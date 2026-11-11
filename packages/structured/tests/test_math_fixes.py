@@ -3,6 +3,7 @@ maturities, SLV leverage and its regression, delta conventions."""
 
 import numpy as np
 import pytest
+from _paths import SPX_CALIBRATION
 from scipy.integrate import quad
 
 from optlab.core import BlackScholesModel, HestonParams, Market, asian_mc, geometric_asian_price, heston_price
@@ -82,7 +83,7 @@ def test_local_linear_leverage_removes_the_atm_bias_on_spx():
     from optlab.core.validation import mc_smile
     from optlab.structured import PricingContext
 
-    ctx = PricingContext.from_calibration(slv_regression="local_linear")
+    ctx = PricingContext.from_calibration(SPX_CALIBRATION, slv_regression="local_linear")
     for T in (1.0, 2.0):
         F = float(ctx.market.F(T))
         iv, _ = mc_smile(ctx.slv, ctx.market, T, [F], n_paths=1_000_000, rng=777)
@@ -172,7 +173,7 @@ def test_sticky_strike_delta_matches_black_prices_at_fixed_strike_vols():
     from optlab.structured.greeks import greeks
     from optlab.structured.script.timeline import Clock, build_timeline
 
-    ctx = PricingContext.from_calibration()
+    ctx = PricingContext.from_calibration(SPX_CALIBRATION)
     p = compile_sheet(
         preset("reverse_convertible", **{"downside.barrier": 0.7, "wrapper.solve": "upfront"}), ctx.valuation
     )
@@ -191,7 +192,7 @@ def test_local_vol_model_delta_is_far_from_the_sticky_moneyness_delta():
     from optlab.structured import PricingContext, compile_sheet, preset
     from optlab.structured.greeks import greeks
 
-    ctx = PricingContext.from_calibration()
+    ctx = PricingContext.from_calibration(SPX_CALIBRATION)
     p = compile_sheet(preset("phoenix"), ctx.valuation)
     model = greeks(p.program, ctx, "lv", n_paths=100_000, params={"cpn": 0.02}, sticky="model")
     moneyness = greeks(p.program, ctx, "lv", n_paths=100_000, params={"cpn": 0.02})
@@ -205,7 +206,7 @@ def test_local_vol_model_delta_is_far_from_the_sticky_moneyness_delta():
 def test_mix_band_moves_the_autocall_coupon_and_starts_at_local_vol():
     from optlab.structured import PricingContext, preset, quote
 
-    ctx = PricingContext.from_calibration()
+    ctx = PricingContext.from_calibration(SPX_CALIBRATION)
     sheet = preset("phoenix", **{"coupon.memory": False, "general.maturity_months": 12})
     q = quote(sheet, ctx, control=None, n_paths=40_000, batch=10_000, mix_band=(0.0, 0.25, 0.5, 0.75))
     band = q.mix_band

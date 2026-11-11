@@ -129,7 +129,6 @@
  "packages/risk/src/optlab/risk/pnl.py::reportOptionalIterable": 2,
  "packages/risk/src/optlab/risk/pnl.py::reportOptionalSubscript": 2,
  "packages/risk/src/optlab/risk/scenarios.py::reportAttributeAccessIssue": 1,
- "packages/risk/src/optlab/risk/store.py::reportReturnType": 1,
  "packages/risk/src/optlab/risk/surfaces.py::reportArgumentType": 3,
  "packages/risk/src/optlab/risk/surfaces.py::reportCallIssue": 1,
  "packages/risk/src/optlab/risk/var.py::reportArgumentType": 23,

@@ -5,15 +5,15 @@ import json
 
 import numpy as np
 import pytest
+from _paths import SPX_CALIBRATION
 
 from optlab.core.models import LocalVolModel
 from optlab.core.svi import SVISurface
 from optlab.structured import PricingContext, compile_sheet, preset, price
-from optlab.structured.context import DEFAULT_CALIBRATION
 from optlab.structured.surfaces import FastSVISurface
 
-SPX = PricingContext.from_calibration()
-SURFACE = json.loads(DEFAULT_CALIBRATION.read_text())["surface"]
+SPX = PricingContext.from_calibration(SPX_CALIBRATION)
+SURFACE = json.loads(SPX_CALIBRATION.read_text())["surface"]
 
 
 def test_fast_surface_derivatives_are_bit_identical():

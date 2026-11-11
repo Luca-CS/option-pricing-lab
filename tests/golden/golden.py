@@ -45,10 +45,10 @@ SPX_MARKET = "SPX-20261104T1600-8b7fa10118"  # the showcase's market in use (clo
 
 
 def local_dir() -> Path:
-    from optlab.core.config import paths
+    from optlab.server.settings import Settings
 
     base = os.environ.get("OPTLAB_DATA")
-    return (Path(base) if base else paths().lake.parent) / "golden"
+    return (Path(base) if base else Settings.load().data) / "golden"
 
 
 # ---------------------------------------------------------------------------------------------------------- helpers
@@ -548,8 +548,9 @@ def presets_spx_gpu() -> dict:
 
 def _lake():
     from optlab.marketdata.lake import Lake
+    from optlab.server.settings import Settings
 
-    return Lake()
+    return Lake(Settings.load().lake)
 
 
 def lake_derived() -> dict:
@@ -634,7 +635,12 @@ class _ShowcaseCopy:
         from optlab.server.api import Desk
 
         shutil.copytree(local_dir().parent / "showcase", self.dir / "showcase")
-        self.desk = Desk(self.dir / "showcase" / "desk.sqlite", engine="gpu", workers=6)
+        database = self.dir / "showcase" / "optlab.sqlite"
+        if not database.exists():  # a v0 showcase: imported into a database, which the golden numbers then check
+            from optlab.server.persistence.migrate_v0 import migrate
+
+            migrate(self.dir / "showcase", database)
+        self.desk = Desk(database, engine="gpu", workers=6)
         self.desk.use_snapshot({"snapshot_id": SPX_MARKET})
         return self.desk
 
@@ -644,6 +650,7 @@ class _ShowcaseCopy:
         from optlab.core import engines
 
         self.desk.jobs.shutdown()
+        self.desk.db.close()
         engines.set_default("numpy")
         del self.desk
         gc.collect()

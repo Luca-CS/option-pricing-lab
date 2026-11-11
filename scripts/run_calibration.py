@@ -25,6 +25,7 @@ from plots import plot_errors, plot_mix_sweep, plot_smiles, plot_surfaces  # noq
 
 from optlab.core import HestonParams, Leverage, Market, SVISurface, heston_iv  # noqa: E402
 from optlab.core.pipeline import calibrate_all, exotics_table, fit_errors, mix_sweep  # noqa: E402
+from optlab.server.settings import Settings  # noqa: E402
 
 RESULTS = ROOT / "results"
 FIGURES = ROOT / "reports" / "figures"
@@ -69,7 +70,7 @@ def simulated_market(noise_bp=15, seed=1):
 def spx_market():
     from optlab.marketdata.chains import build_iv_table, latest_snapshot, select_maturities
 
-    market, slices, _, meta = build_iv_table(latest_snapshot())
+    market, slices, _, meta = build_iv_table(latest_snapshot(Settings.load().raw))
     slices = select_maturities(slices)
     scale = 100.0 / market.spot
     market = market.scaled(100.0)

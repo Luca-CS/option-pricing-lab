@@ -18,6 +18,7 @@ from optlab.marketdata.lake import Lake
 from optlab.marketdata.quality import report_text, run_report
 from optlab.marketdata.sources.archives import import_historicaldata
 from optlab.marketdata.sources.dolthub import Dolt, load_dolthub
+from optlab.server.settings import Settings
 
 
 def main():
@@ -39,7 +40,7 @@ def main():
         for r in import_historicaldata(lake, args.import_sample):
             print(r, flush=True)
     if args.dolt:
-        for r in load_dolthub(lake, Dolt.from_environment(args.dolt)):
+        for r in load_dolthub(lake, Dolt.from_environment(Settings.load().data, args.dolt)):
             print(r, flush=True)
     print(report_text(lake, run_report(lake)))
 

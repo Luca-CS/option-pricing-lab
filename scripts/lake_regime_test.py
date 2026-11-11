@@ -20,11 +20,11 @@ from scipy.optimize import least_squares
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from optlab.core.config import paths
 from optlab.marketdata.derive.surfaces import LEVEL_REF, index_panel, reconstruct_on, static_prior
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.pit import real_close
 from optlab.marketdata.quotes import clean_day, quote_days
+from optlab.server.settings import Settings
 
 CRASH = (pd.Timestamp("2020-02-20"), pd.Timestamp("2020-05-15"))
 BUCKETS = [0, 20, 30, 40, 60, 100]
@@ -130,13 +130,13 @@ def main():
     ap.add_argument("--step", type=int, default=8)
     args = ap.parse_args()
     t0 = time.perf_counter()
-    lake = Lake()
+    lake = Lake(Settings.load().lake)
     panel = index_panel(lake, "2018-06-01")
     days = sample(lake, panel, args.step)
     crash = [d for d in days if CRASH[0] <= d["day"] <= CRASH[1]]
     rest = [d for d in days if not CRASH[0] <= d["day"] <= CRASH[1]]
     print(f"{len(days)} days, {len(crash)} in the crash, {time.perf_counter() - t0:.0f} s", flush=True)
-    current = static_prior()
+    current = static_prior(Settings.load().calibration)
     flat = dataclasses.replace(current, level_power=0.0)
     power = fit_power(flat, rest, panel)
     print(f"slope power fitted away from the crash: {power:.3f}", flush=True)
@@ -154,7 +154,7 @@ def main():
         },
         "seconds": round(time.perf_counter() - t0, 1),
     }
-    path = paths().results / "surface_regimes.json"
+    path = Settings.load().results / "surface_regimes.json"
     path.write_text(json.dumps(out, indent=1), encoding="utf-8")
     print(json.dumps(out, indent=1))
     print(path)

@@ -2,14 +2,15 @@
 
 import numpy as np
 import pytest
+from _paths import SPX_CALIBRATION
 from _risk_refs import S0, VOL, Q, R, book, flat_ctx, vanilla
+from _stores import risk_store
 from _structured_refs import flat_surface
 
 from optlab.core.blackscholes import bs_price
 from optlab.risk import RiskGroup
 from optlab.risk import scenarios as sc
 from optlab.risk.shocks import RiskEnv
-from optlab.risk.store import RiskStore
 from optlab.structured.context import PricingContext
 from optlab.structured.surfaces import BumpedSurface
 
@@ -18,7 +19,7 @@ BETAS = [-1.5, -0.96, -0.69, BETA_1Y, -0.37, -0.31, -0.24, -0.16]
 
 
 def test_defaults_are_starting_values_saved_edited_and_signed(tmp_path):
-    store = RiskStore(tmp_path / "risk.sqlite")
+    store = risk_store(tmp_path)
     first = sc.load(store)
     assert first["starting"] and first["version"] is None
     assert [s.name for s in first["scenarios"]] == [
@@ -70,7 +71,7 @@ def test_scenarios_replayed_on_a_vanilla_match_the_closed_forms():
 
 
 def test_shocked_surfaces_are_checked_for_arbitrage():
-    spx = PricingContext.from_calibration()
+    spx = PricingContext.from_calibration(SPX_CALIBRATION)
     crash = sc.Scenario("Vol collapse", "vols -15 points", sc.Shock(vol={"*": sc.VolMove(-0.15)}))
     rep = sc.run(
         [RiskGroup("SPX", book(vanilla(100.0, 365, valuation=spx.valuation)), spx, 1)],

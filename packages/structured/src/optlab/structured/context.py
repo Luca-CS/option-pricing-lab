@@ -1,4 +1,4 @@
-"""Pricing context: the calibrated market and models, loaded once from results/spx_calibration.json."""
+"""Pricing context: the calibrated market and models of one name, from a calibration file or the lake."""
 
 from __future__ import annotations
 
@@ -6,14 +6,12 @@ import datetime as dt
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from optlab.core.config import paths
 from optlab.core.heston import HestonParams
 from optlab.core.market import Market
 from optlab.core.models import BlackScholesModel, HestonModel, Leverage, LocalVolModel, SLVModel
 from optlab.core.svi import SVISurface
 from optlab.structured.surfaces import FastSVISurface
 
-DEFAULT_CALIBRATION = paths().results / "spx_calibration.json"
 LEVERAGE_HORIZONS = (
     1.0,
     2.0,
@@ -57,7 +55,7 @@ class PricingContext:
     @classmethod
     def from_calibration(
         cls,
-        path: str | Path | None = None,
+        path: str | Path,
         underlying: str = "SPX",
         valuation: dt.date | str | None = None,
         slv_regression: str | None = None,
@@ -67,9 +65,7 @@ class PricingContext:
         regression of max(v, 0), which removes most of the ATM vanilla bias left by the stored leverage."""
         from optlab.core.snapshot import MarketSnapshot
 
-        snap = MarketSnapshot.from_calibration_file(
-            path or DEFAULT_CALIBRATION, underlying, valuation, provenance=False
-        )
+        snap = MarketSnapshot.from_calibration_file(path, underlying, valuation, provenance=False)
         ctx = cls.from_snapshot(snap)
         if slv_regression:
             from optlab.core.slv import calibrate_leverage

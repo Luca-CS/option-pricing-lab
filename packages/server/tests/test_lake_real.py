@@ -6,8 +6,8 @@ import json
 import numpy as np
 import pandas as pd
 import pytest
+from _paths import RESULTS, real_lake
 
-from optlab.core.config import paths
 from optlab.core.instruments import enabled_names
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.pit import basket_at, context_at, market_at, real_close, truncated_copy
@@ -15,7 +15,7 @@ from optlab.marketdata.quality import check_splits, open_issues
 from optlab.marketdata.quotes import clean_day, quote_days
 from optlab.structured import CALENDARS, preset, quote
 
-LAKE = Lake()
+LAKE = Lake(real_lake())
 pytestmark = pytest.mark.skipif(
     not LAKE.has("prices_eod") or not LAKE.has("vol_surfaces"), reason="no data lake on this machine"
 )
@@ -28,7 +28,7 @@ TABLES = (
     "vol_surfaces",
     "correl_implied",
 )
-RESULTS = paths().results
+RESULTS = RESULTS
 
 
 def closes(name):
@@ -228,7 +228,7 @@ def test_dividends_give_the_forward_its_steps():
 def test_the_desk_prices_a_share_and_a_worst_of_on_their_real_surfaces(tmp_path):
     from optlab.server.api import Desk
 
-    desk = Desk(store=tmp_path / "desk.sqlite")
+    desk = Desk(store=tmp_path / "optlab.sqlite")
     try:
         day = dt.date(2026, 11, 4)
         snap = market_at(LAKE, "SPX", day, layer="reconstructed")
@@ -253,7 +253,7 @@ def test_the_desk_puts_a_name_paid_in_another_currency_on_its_quanto_market(tmp_
         pytest.skip("no FX in this lake")
     from optlab.server.api import Desk
 
-    desk = Desk(store=tmp_path / "desk.sqlite")
+    desk = Desk(store=tmp_path / "optlab.sqlite")
     try:
         day = dt.date(2022, 7, 1)
         desk.use_snapshot({"snapshot_id": desk.market_store.put(market_at(LAKE, "SPX", day))})

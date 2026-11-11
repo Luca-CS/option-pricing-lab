@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+from _paths import SPX_CALIBRATION
 from _structured_refs import S0, VOL, flat_context, rc_european
 
 from optlab.core.blackscholes import black_price
@@ -14,7 +15,7 @@ from optlab.structured.replication import nodes, quadrature, replication_result
 from optlab.structured.script.timeline import Clock, build_timeline
 
 BS_CTX = flat_context()
-SPX = PricingContext.from_calibration()
+SPX = PricingContext.from_calibration(SPX_CALIBRATION)
 N_MC = 100_000
 
 

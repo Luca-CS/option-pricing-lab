@@ -19,6 +19,19 @@ elsewhere, and command-line options in each script. `REPO_ROOT` is used to find 
 - Validation at start: an unknown key, a host other than `127.0.0.1` without the `lan` flag, or a missing folder stops
   the process with a clear message.
 
+## Implementation (A4)
+
+- `optlab.server.settings.Settings` (pydantic-settings): paths (`data`, `store`, `database`, `lake`, `results`,
+  `calibration`, `raw`, `logs`, `backups`), network (`host`, `port`, `lan`), computing (`engine`, `workers`). Each path
+  defaults from the fields validated before it; `data` is `OPTLAB_DATA`, else the development default kept from v0
+  (`optlab-data` beside the main checkout), else the repository's `data/`. Security knobs join with A5.
+- Order: the environment, then `<data>/config/optlab.env`, then the command line (options left at their default
+  change nothing). An unknown key in the env file stops the start; so does a host beyond this machine without
+  `OPTLAB_LAN=true`.
+- The domain packages lost every default path and default market: `Lake(root)`, `PricingContext.from_calibration(path)`,
+  `static_prior(path)`, the stores, `Dolt.from_environment(data)`; `quote`, `Book.price` and `BasketContext.with_spx`
+  need a context. `optlab.core.config` keeps only `DEFAULT_SEED`. Tests take their paths from `tests/helpers/_paths.py`.
+
 ## Consequences
 
 - The worktree guess of `config.py` disappears; `OPTLAB_DATA` is set explicitly (the dev default stays the sibling

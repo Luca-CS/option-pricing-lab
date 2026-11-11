@@ -6,7 +6,7 @@
     python scripts/risk_eod.py var [--workers 5] [--days 500]
     python scripts/risk_eod.py ladder
 
-Runs go to `risk.sqlite` beside the desk store (by default the showcase's when it exists); `--precision max` takes 2 million
+Runs go to the risk tables of the desk's database (by default the showcase's when it exists); `--precision max` takes 2 million
 paths on the engine. Every run is stored with its code version and parameters, and a run asked again with the same key is read
 back: a backfill started twice computes nothing the second time.
 """
@@ -23,17 +23,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 def main():
     from optlab.core import engines
-    from optlab.core.config import paths
     from optlab.marketdata.lake import Lake
     from optlab.risk import RiskSettings
     from optlab.risk import pnl as P
-    from optlab.risk.store import RiskStore
     from optlab.server.api import PRECISION
+    from optlab.server.persistence import Database
+    from optlab.server.persistence.desk import DeskRepository
+    from optlab.server.persistence.risk import RiskRepository
+    from optlab.server.settings import Settings
 
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=("eod", "backfill", "pnl", "var", "ladder"))
-    showcase = paths().store.parent / "showcase" / "desk.sqlite"
-    ap.add_argument("--store", default=str(showcase if showcase.exists() else paths().store / "desk.sqlite"))
+    machine = Settings.load()
+    showcase = machine.data / "showcase" / "optlab.sqlite"
+    ap.add_argument("--store", default=str(showcase if showcase.exists() else machine.database))
     ap.add_argument("--date")
     ap.add_argument("--from", dest="start")
     ap.add_argument("--to", dest="end")
@@ -47,15 +50,13 @@ def main():
     engines.set_default(args.engine)
     n_paths, batch = PRECISION[args.precision]
     settings = RiskSettings(n_paths=n_paths, batch=batch, engine=args.engine)
-    store_path = Path(args.store)
-    risk = RiskStore(store_path.parent / "risk.sqlite")
-    lake = Lake()
+    db = Database(Path(args.store))
+    risk = RiskRepository(db)
+    lake = Lake(machine.lake)
     t0 = time.perf_counter()
 
     if args.command in ("eod", "backfill", "pnl"):
-        from optlab.server.repository import Repository
-
-        trades = Repository(store_path).trades()
+        trades = DeskRepository(db).trades()
         if args.command == "eod":
             r = P.eod(lake, trades, args.date, risk, settings, greeks=not args.no_greeks)
             print(
@@ -75,7 +76,7 @@ def main():
         from optlab.server.api import Desk
         from optlab.server.risk_api import RiskApi
 
-        desk = Desk(store_path, engine=args.engine)
+        desk = Desk(db.path, engine=args.engine)
         try:
             if args.market:
                 desk.use_snapshot({"snapshot_id": args.market})

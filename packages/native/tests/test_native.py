@@ -4,6 +4,7 @@ Skipped without the library (cuda/, cmake), the GPU checks without a CUDA device
 
 import numpy as np
 import pytest
+from _paths import SPX_CALIBRATION
 
 from optlab import native
 from optlab.core import engines
@@ -35,7 +36,7 @@ def _marked(marks):
 needs_engine = _marked(ENGINE_MARKS)
 needs_gpu = _marked(GPU_MARKS)
 BACKENDS = [pytest.param("cpu", marks=ENGINE_MARKS), pytest.param("gpu", marks=GPU_MARKS)]
-CTX = PricingContext.from_calibration()
+CTX = PricingContext.from_calibration(SPX_CALIBRATION)
 K = np.array([80.0, 90.0, 100.0, 110.0, 120.0])
 
 

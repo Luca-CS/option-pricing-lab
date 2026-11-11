@@ -15,6 +15,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from optlab.core.validation import mc_smile  # noqa: E402
+from optlab.server.settings import Settings  # noqa: E402
 from optlab.structured import Book, Position, PricingContext, compile_sheet, preset, price_many, quote  # noqa: E402
 from optlab.structured.greeks import greeks  # noqa: E402
 from optlab.structured.multiasset import BasketContext  # noqa: E402
@@ -178,7 +179,7 @@ def main():
     ap.add_argument("--quick", action="store_true", help="20 000 paths, for a smoke run")
     args = ap.parse_args()
     n = 20_000 if args.quick else args.paths
-    ctx = PricingContext.from_calibration()
+    ctx = PricingContext.from_calibration(Settings.load().calibration)
     print(
         f"SPX calibration of {ctx.valuation}, spot rescaled to {ctx.market.spot:g}; last calibrated maturity "
         f"{ctx.t_max:.2f}y"

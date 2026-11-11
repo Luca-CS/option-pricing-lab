@@ -4,6 +4,7 @@ import datetime as dt
 
 import numpy as np
 import pytest
+from _paths import SPX_CALIBRATION
 from _structured_refs import (
     flat_surface,
     quanto_call_by_change_of_measure,
@@ -41,7 +42,7 @@ def sx5e_in_usd(rho, vol=VOL_S):
 
 def single_context(rho):
     """SX5E paid in dollars in a Black-Scholes world."""
-    spx = PricingContext.from_calibration()
+    spx = PricingContext.from_calibration(SPX_CALIBRATION)
     ctx = PricingContext(
         sx5e_in_usd(rho), flat_surface(VOL_S), spx.heston, spx.slv, VAL, "SX5E", payment_currency="USD"
     )

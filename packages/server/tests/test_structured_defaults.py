@@ -5,6 +5,7 @@ import time
 
 import numpy as np
 import pytest
+from _paths import SPX_CALIBRATION
 from scipy.stats import multivariate_normal, norm
 
 from optlab.core.instruments import UNIVERSE, instrument
@@ -16,7 +17,7 @@ from optlab.structured.costs import CostInputs
 from optlab.structured.defaults import STARTING, merged, resolve, validate_table
 from optlab.structured.multiasset import BasketContext, moved_correlation
 
-SPX = PricingContext.from_calibration()
+SPX = PricingContext.from_calibration(SPX_CALIBRATION)
 PATHS = 20_000
 
 
@@ -242,7 +243,7 @@ def test_opposite_signs_are_measured_and_the_one_against_the_desk_stays():
 # --- the desk ---
 @pytest.fixture(scope="module")
 def desk(tmp_path_factory):
-    d = Desk(store=tmp_path_factory.mktemp("costs") / "desk.sqlite")
+    d = Desk(store=tmp_path_factory.mktemp("costs") / "optlab.sqlite")
     yield d
     d.jobs.shutdown()
 

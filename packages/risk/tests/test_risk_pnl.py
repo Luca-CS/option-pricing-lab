@@ -4,11 +4,12 @@ import datetime as dt
 
 import numpy as np
 import pytest
+from _paths import real_lake
+from _stores import risk_store
 
 from optlab.marketdata.replay import struck_sheet
 from optlab.risk import RiskSettings
 from optlab.risk import pnl as P
-from optlab.risk.store import RiskStore
 from optlab.structured import preset
 from optlab.structured.trade import Trade
 
@@ -19,7 +20,7 @@ SETTINGS = RiskSettings(n_paths=20_000, batch=10_000, engine="numpy")
 def lake():
     from optlab.marketdata.lake import Lake
 
-    lk = Lake()
+    lk = Lake(real_lake())
     try:
         if (
             lk.read("vol_surfaces", where="underlying = 'SPX' AND layer = 'reconstructed'", columns="count(*) AS n")[
@@ -85,7 +86,7 @@ def brc_2026():
 
 @pytest.mark.lake
 def test_the_cascade_adds_up_to_the_total_pnl_to_the_cent_on_the_crash_day(lake, tmp_path):
-    store = RiskStore(tmp_path / "risk.sqlite")
+    store = risk_store(tmp_path)
     t = brc_2020()
     out = P.explain_day(lake, [t], "2020-03-12", "2020-03-13", store, SETTINGS)
     steps = sum(v[0] for v in out["steps"].values())
@@ -103,7 +104,7 @@ def test_the_cascade_adds_up_to_the_total_pnl_to_the_cent_on_the_crash_day(lake,
 
 @pytest.mark.lake
 def test_eod_is_stored_replayed_bit_for_bit_and_the_backfill_is_idempotent(lake, tmp_path):
-    store = RiskStore(tmp_path / "risk.sqlite")
+    store = risk_store(tmp_path)
     trades = [brc_2026(), phoenix_2026()]
     first = P.eod(lake, trades, "2026-11-04", store, SETTINGS)
     again = P.eod(lake, trades, "2026-11-04", store, SETTINGS)
@@ -123,7 +124,7 @@ def test_eod_is_stored_replayed_bit_for_bit_and_the_backfill_is_idempotent(lake,
 
 @pytest.mark.lake
 def test_on_a_quiet_day_the_greeks_explain_most_of_the_pnl(lake, tmp_path):
-    store = RiskStore(tmp_path / "risk.sqlite")
+    store = risk_store(tmp_path)
     out = P.explain_day(lake, [brc_2026()], "2026-11-03", "2026-11-04", store, SETTINGS)
     total, unexplained = out["total"], sum(out["unexplained"].values())
     share = 1 - abs(unexplained) / abs(total)
