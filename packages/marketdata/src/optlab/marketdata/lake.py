@@ -348,15 +348,18 @@ class Lake:
             f"hive_partitioning=true, union_by_name=true, hive_types_autocast=false) {clause}) WHERE _rn = 1)"
         )
 
-    def read(self, table: str, where: str = "", as_of=None, columns: str = "*", order: str = "") -> pd.DataFrame:
-        """Latest rows of a table as a DataFrame (empty, with the right columns, while it has no file)."""
+    def read(
+        self, table: str, where: str = "", as_of=None, columns: str = "*", order: str = "", params=()
+    ) -> pd.DataFrame:
+        """Latest rows of a table as a DataFrame (empty, with the right columns, while it has no file). A value that
+        comes from a request goes in `params`, bound to the `?` of `where`, never into the SQL text."""
         spec = TABLES[table]
         if not self.has(table):
             return pd.DataFrame(columns=[*spec.keys, *spec.values, *STANDARD])
         con = duckdb.connect()
         try:
             sql = f"SELECT {columns} FROM {self.sql_source(table, as_of, where)}"
-            return con.execute(sql + (f" ORDER BY {order}" if order else "")).df()
+            return con.execute(sql + (f" ORDER BY {order}" if order else ""), list(params)).df()
         finally:
             con.close()
 

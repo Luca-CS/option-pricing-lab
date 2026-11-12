@@ -57,15 +57,28 @@ safety above all; between a nicer option and a safer one, the safer one, written
 | # | Finding | Severity | Fate |
 |---|---|---|---|
 | 1 | **No `Host` or `Origin` check, and the body is parsed as JSON whatever its content type**: while the desk runs, any web page open in Luca's browser can send a simple cross-site `POST` (`Content-Type: text/plain`) to `127.0.0.1:8765` and create, edit or delete trades, fixings, scenarios, cost tables, or switch the market in use; with DNS rebinding it can also read the responses (book, quotes, levels on the owner's machine). Chrome's Private Network Access blocks part of this, not every browser | High | fixed in v0 right away (Host allow-list, `Origin` check on writes, `application/json` required), with tests; v1 adds CSRF tokens and sessions |
-| 2 | Shared token accepted in the query string (`?token=`) and kept in a cookie without `Secure` | Medium | removed with accounts (A5) |
+| 2 | Shared token accepted in the query string (`?token=`) and kept in a cookie without `Secure` | Medium | removed with accounts (A5, done: `server.py` deleted, `test_api_security.py`) |
 | 3 | Public tunnel through localhost.run (`--tunnel`) | High when used | removed (ADR-0002) |
-| 4 | A 500 returns `f"{type(exc).__name__}: {exc}"`, which can carry paths and SQL | Low | `problem+json` without details (A5) |
-| 5 | No bound on the request body (`Content-Length` read in full) nor on `n_paths` and other costly fields (`replay_run` takes any `n_paths`) | Medium (local DoS) | bounds and a body limit (A5) |
+| 4 | A 500 returns `f"{type(exc).__name__}: {exc}"`, which can carry paths and SQL | Low | `problem+json` without details (A5, done; a job's error keeps the library's message for its submitter) |
+| 5 | No bound on the request body (`Content-Length` read in full) nor on `n_paths` and other costly fields (`replay_run` takes any `n_paths`) | Medium (local DoS) | bounds and a body limit (A5, done: `api.md` §4) |
 | 6 | `subprocess` calls: `git rev-parse` for the code version (`marketdata/snapshot.py`), PowerShell with a fixed script (`netcheck.py`) | Info | fixed arguments confirmed; kept |
 | 7 | Static files: resolved and checked with `is_relative_to` | Info | no traversal; kept in spirit (served by Starlette's `StaticFiles` in v1) |
-| 8 | Replay run ids: `[\w.-]+` without separators | Info | no traversal; v1 looks ids up in the database |
+| 8 | Replay run ids: `[\w.-]+` without separators | Info | no traversal; v1 checks the id's pattern and looks it up among the stored runs and the `results/replay*.json` files (A5) |
 | 9 | HTML reports escape every value (`html.escape`) | Info | kept; CSP added |
 | 10 | Process pools (spawn) pickle internal objects | Info | internal only; kept |
+
+### Found in A5
+
+| # | Finding | Severity | Fate |
+|---|---|---|---|
+| 11 | `data_vol_index` put the index name into the SQL text (after stripping it to `[A-Z0-9.]`) | Low | bound as a parameter (`Lake.read(params=...)`), the route checks the name's pattern |
+| 12 | The per-address login throttle counted successful logins: users behind one address (everyone on 127.0.0.1) would lock each other out | Low | only failures count |
+| 13 | A body sent without `Content-Length` (chunked) over the limit turned into a 400 inside FastAPI | Info | the guard's limit is an HTTP 413 FastAPI passes on |
+| 14 | FastAPI's docs page loads `swagger-ui-dist@5` (a floating version) from a CDN | Medium when on | off by default; when on, pinned, integrity-checked, and its CSP allows only that script and its init by hash |
+| 15 | A 500 was answered by Starlette's outermost error middleware, outside the guard: no security headers on it | Info | the guard answers it (problem+json, headers), test |
+| 16 | The 404 of an unknown snapshot named the database file's local path | Low | the message names the id only |
+| 17 | With the LAN profile on, any `Host` is accepted (this table says "the LAN name") | Low (cookies stay tied to the real name, so a rebound page has no session) | an allow-list of the LAN names with Caddy's profile (A7) |
+| 18 | The lockout answers 423 for an existing account only, which tells that the name exists once it is locked | Low | kept: the owner must know the account is locked; the CLI unlocks it (A9 review) |
 
 ## 6. Secrets
 

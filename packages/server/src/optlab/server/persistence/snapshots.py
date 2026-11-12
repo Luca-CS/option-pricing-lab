@@ -48,7 +48,7 @@ class SnapshotRepository:
                 select(snapshots.c.payload, snapshots.c.spot_scale).where(snapshots.c.snapshot_id == snapshot_id)
             ).first()
         if row is None:
-            raise KeyError(f"no snapshot {snapshot_id!r} in {self.db.path}")
+            raise KeyError(f"no snapshot {snapshot_id!r}")  # the message reaches the API: no local path in it
         snap = MarketSnapshot.from_json(row.payload)
         return snap if row.spot_scale is None else replace(snap, spot_scale=row.spot_scale)
 

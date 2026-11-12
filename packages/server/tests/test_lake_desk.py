@@ -13,7 +13,6 @@ from _quote_fixture import DAY, curve_rows, synthetic_rows
 from optlab.marketdata.ingest import as_rows
 from optlab.marketdata.lake import Lake
 from optlab.server.api import ApiError, Desk
-from optlab.server.server import STATIC, routes
 
 EXPIRIES = tuple(DAY + dt.timedelta(days=d) for d in (36, 110, 256, 400))
 
@@ -171,20 +170,6 @@ def test_replay_runs_as_a_job_and_is_kept_without_real_levels(desk):
         desk.replay_run({"preset": "phoenix", "strike": "soon"})
     with pytest.raises(ApiError):
         desk.replay_run({"preset": "phoenix", "strike": "2020-01-15", "model": "bs"})
-
-
-def test_routes_and_screens_are_wired(desk):
-    table = routes(desk)
-    paths = {p for _, p, _ in table}
-    for path in ("/api/data/overview", "/api/vollab/days", "/api/vollab/fit", "/api/replay/run"):
-        assert path in paths
-    index = (STATIC / "index.html").read_text(encoding="utf-8")
-    main = (STATIC / "js" / "main.js").read_text(encoding="utf-8")
-    for view in ("vollab", "replay", "data"):
-        assert (STATIC / "js" / "views" / f"{view}.js").exists()
-        assert f'data-route="{view}"' in index and f"{view}: () => import" in main
-    for view in ("vollab", "replay", "data", "overview"):
-        assert "originBadge" in (STATIC / "js" / "views" / f"{view}.js").read_text(encoding="utf-8")
 
 
 @pytest.mark.slow

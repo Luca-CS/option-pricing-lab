@@ -1,5 +1,6 @@
 # Updates come as pull requests, reviewed and merged by hand, never automatically (docs/architecture/security.md).
-# A cooldown lets a new release age two weeks before it is proposed. Docker images join in A7, npm in session 2.
+# A cooldown lets a new release age two weeks before it is proposed. Docker images join in A7, the front's npm in
+# session 2; npm here is the API contract's client check (api/client-check).
 version: 2
 updates:
   - package-ecosystem: uv
@@ -25,3 +26,16 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "CI"
+  - package-ecosystem: npm
+    directory: /api/client-check
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 14
+    open-pull-requests-limit: 3
+    groups:
+      client-check:
+        patterns: ["*"]
+    commit-message:
+      prefix: "Deps"

@@ -30,6 +30,7 @@ dev = [
     "import-linter==2.15",
     "pre-commit>=4.7",
     "nanobind==3.1.0",  # stubgen: the versioned stub of optlab.native._ext (its test compares)
+    "httpx2>=2.16",  # the API tests' client (starlette TestClient; httpx is deprecated there)
 ]
 
 [tool.uv]

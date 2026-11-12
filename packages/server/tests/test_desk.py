@@ -1,21 +1,17 @@
-"""The desk API and its HTTP server: term-sheet forms, quote and book jobs, trades, fixings, events, script lab,
-reports, the static page and the token. Quotes run at the quick precision (20,000 paths) on the SPX calibration."""
+"""The desk's services (`optlab.server.api.Desk`, behind API v1): term-sheet forms, quote and book jobs, trades, fixings,
+events, script lab, reports. Quotes run at the quick precision (20,000 paths) on the SPX calibration. The HTTP layer is
+tested in `test_api_*.py`."""
 
-import json
-import re
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 import pytest
+from _api import SCRIPT_EXAMPLE
 
 from optlab.server.api import ApiError, Desk
 from optlab.server.fixings import parse_fixings
 from optlab.server.netcheck import interpret
 from optlab.server.report import book_report, desk_snapshot, quote_report
-from optlab.server.server import STATIC, serve, serve_in_thread
-from optlab.server.tunnel import public_url
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -288,21 +284,8 @@ def test_snapshots_switch_the_market(desk):
     assert exc.value.status == 404
 
 
-def test_tunnel_address_is_read_from_the_relay_output():
-    line = "abc123.lhr.life tunneled with tls termination, https://abc123.lhr.life"
-    assert public_url(line) == "https://abc123.lhr.life"
-    assert public_url("** your connection id is 1f2e, please mention it if you send me a message **") is None
-    # the welcome banner prints the service's own pages: they are not the tunnel (seen on the first real start)
-    assert public_url("To set up and manage custom domains go to https://admin.localhost.run/") is None
-    assert (
-        public_url("More details on custom domains (and how to enable subdomains) at https://localhost.run/docs/")
-        is None
-    )
-
-
 def test_script_lab(desk):
-    src = (STATIC / "js/views/script.js").read_text(encoding="utf-8")
-    example = re.search(r"const EXAMPLE = `(.*?)`;", src, re.S)[1]  # the page's example must stay valid
+    example = SCRIPT_EXAMPLE
     ok = desk.script_check({"script": example})
     assert ok["ok"] and list(ok["underlyings"]) == ["SPX"]
     bad = desk.script_check({"script": "underlying SPX\nevent 2027-10-27\n  pay (SPX as redemption\nend\n"})
@@ -325,52 +308,3 @@ def test_jobs_report_errors_and_cancel(desk):
     with pytest.raises(ApiError) as exc:
         desk.job("missing")
     assert exc.value.status == 404
-
-
-def _get(url, headers=None, data=None, method=None):
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(data).encode() if data is not None else None,
-        headers={"Content-Type": "application/json", **(headers or {})},
-        method=method,
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            return r.status, dict(r.headers), r.read()
-    except urllib.error.HTTPError as e:
-        return e.code, dict(e.headers), e.read()
-
-
-def test_http_server_token_static_and_api(desk):
-    httpd, base = serve_in_thread(desk, token="s3cret")
-    try:
-        assert _get(base + "/api/health")[0] == 401
-        status, headers, body = _get(base + "/?token=s3cret")
-        assert status == 200 and b"<!doctype html>" in body.lower() and "optlab_token=s3cret" in headers["Set-Cookie"]
-        auth = {"X-Optlab-Token": "s3cret"}
-        status, _, body = _get(base + "/api/health", auth)
-        assert status == 200 and json.loads(body)["ok"]
-        assert _get(base + "/api/health", {"Cookie": "optlab_token=s3cret"})[0] == 200
-        assert _get(base + "/api/health", {"X-Optlab-Token": "wrong"})[0] == 401
-        status, headers, _ = _get(base + "/js/main.js", auth)
-        assert status == 200 and headers["Content-Type"].startswith("text/javascript")
-        status, _, body = _get(base + "/../../api.py", auth)  # outside the static folder: the page, not the file
-        assert status == 200 and b"class Desk" not in body
-        status, _, body = _get(base + "/api/termsheet/form", auth, {"type": "nope"}, "POST")
-        assert status == 422 and "unknown product type" in json.loads(body)["error"]
-        status, _, body = _get(base + "/api/trades/NOPE-1/events", auth)
-        assert status == 404
-        status, _, body = _get(base + "/api/nothing", auth)
-        assert status == 404
-        status, _, body = _get(base + "/api/fixings", auth, method="POST", data=None)
-        assert status == 422 and "no line" in json.loads(body)["error"]  # an empty body stores nothing
-        status, headers, body = _get(base + "/report/book", auth)
-        assert status == 200 and headers["Content-Type"].startswith("text/html")
-    finally:
-        httpd.shutdown()
-        httpd.server_close()
-
-
-def test_serve_refuses_the_network_without_a_token(desk):
-    with pytest.raises(ValueError, match="token"):
-        serve(desk, host="0.0.0.0", port=0)

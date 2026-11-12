@@ -1,97 +1,65 @@
-"""Start the desk: python -m optlab.server [--port 8765] [--host 127.0.0.1] [--token TOKEN] [--workers N] [--open]
-[--tunnel]"""
+"""Start the API: python -m optlab.server [--port 8765] [--workers N] [--engine auto] [--store FILE] [--market ID]
+
+It listens on 127.0.0.1 (`Settings.host`); another host needs the LAN profile (`OPTLAB_LAN=true`, with Luca's
+agreement, ADR-0002). The shared token and the `--tunnel` link of v0 are gone: accounts and sessions replace them
+(`python -m optlab.server.users create <name> --roles admin`). `optlab serve` in A7.
+"""
 
 from __future__ import annotations
 
 import argparse
-import secrets
-import threading
-import webbrowser
+
+import uvicorn
 
 from optlab.core.log import configure
 from optlab.server.api import Desk
-from optlab.server.netcheck import lan_blockers
-from optlab.server.server import serve
+from optlab.server.app import create_app
 from optlab.server.settings import Settings
-from optlab.server.tunnel import open_tunnel
 
 
-def main():
-    ap = argparse.ArgumentParser(prog="python -m optlab.server", description="optlab desk: pricing, book and lifecycle")
-    ap.add_argument("--host", default="127.0.0.1", help="127.0.0.1 (this machine only) or 0.0.0.0 (the LAN)")
-    ap.add_argument("--port", type=int, default=8765)
-    ap.add_argument("--token", help="access token; generated when listening beyond this machine")
+def main(argv=None) -> None:
+    ap = argparse.ArgumentParser(
+        prog="python -m optlab.server", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument("--host", default=None, help="default 127.0.0.1; beyond this machine only with OPTLAB_LAN=true")
+    ap.add_argument("--port", type=int, default=None, help="default 8765")
     ap.add_argument("--workers", type=int, default=None, help="process pool for Monte Carlo batches on NumPy (e.g. 6)")
     ap.add_argument(
         "--engine",
         default=None,
         choices=("auto", "gpu", "cpu", "numpy"),
-        help="Monte Carlo paths: auto (the GPU if any, else every CPU thread, else NumPy; the default, or "
-        "$OPTLAB_ENGINE), gpu, cpu or numpy",
+        help="Monte Carlo paths: auto (the GPU if any, else every CPU thread, else NumPy) is the default",
     )
-    ap.add_argument(
-        "--store",
-        help="the database file: trades, fixings, quotes, snapshots, risk runs (default: the settings' database)",
-    )
-    ap.add_argument("--calibration", help="results/*.json calibration (default: the SPX one)")
-    ap.add_argument("--market", help="start on this snapshot of the store instead of the calibration")
-    ap.add_argument(
-        "--tunnel",
-        action="store_true",
-        help="public https address through an SSH tunnel to localhost.run (third-party relay, token on)",
-    )
-    ap.add_argument("--open", action="store_true", help="open the page in the default browser")
+    ap.add_argument("--store", help="the database file (default: the settings' database)")
+    ap.add_argument("--calibration", help="the starting market's calibration file (default: the settings')")
+    ap.add_argument("--market", help="start on this stored snapshot instead of the calibration")
     ap.add_argument("--log", default="INFO")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     configure(args.log)
-    token = args.token
-    if (args.tunnel or args.host not in ("127.0.0.1", "localhost", "::1")) and not token:
-        token = secrets.token_urlsafe(16)
-    settings = Settings.load(workers=args.workers, engine=args.engine, calibration=args.calibration)
-    print(f"data {settings.data}, lake {settings.lake}")
-    desk = Desk(args.store, args.calibration, settings.workers, engine=settings.engine, settings=settings)
-    desk.shared = bool(args.tunnel or args.host not in ("127.0.0.1", "localhost", "::1"))
+    settings = Settings.load(
+        host=args.host,
+        port=args.port,
+        workers=args.workers,
+        engine=args.engine,
+        calibration=args.calibration,
+        database=args.store,
+    )
+    desk = Desk(settings=settings, engine=settings.engine, workers=settings.workers)
     if args.market:
         desk.use_snapshot({"snapshot_id": args.market})
-    httpd = serve(desk, args.host, args.port, token)
-    port = httpd.server_address[1]
-    shown = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host
-    url = f"http://{shown}:{port}/" + (f"?token={token}" if token else "")
-    print(f"optlab desk on {url}")
-    print(f"market {desk.ctx.snapshot_id}, valuation {desk.ctx.valuation}, database {desk.db.path}")
     eng = desk.health()["engine"]
     gpus = ", ".join(d["name"] for d in eng["devices"]) or "no CUDA device"
-    print(
-        f"Monte Carlo engine: {eng['resolved']} ({gpus}; {eng['cpu_threads']} CPU threads"
-        f"{'' if eng['compiled'] else '; compiled engine not built, see packages/native/cuda/README.md'})"
+    print(f"data {settings.data}; database {desk.db.path}; market {desk.ctx.snapshot_id}")
+    print(f"Monte Carlo engine: {eng['resolved']} ({gpus}; {eng['cpu_threads']} CPU threads)")
+    print(f"API on http://{settings.host}:{settings.port}/api/v1 (OpenAPI: /api/v1/openapi.json)")
+    uvicorn.run(
+        create_app(settings, desk),
+        host=settings.host,
+        port=settings.port,
+        log_level=args.log.lower(),
+        proxy_headers=settings.lan,
+        server_header=False,
     )
-    if args.host not in ("127.0.0.1", "localhost", "::1"):
-        print(f"listening on the network: share http://<this-pc-address>:{port}/?token={token}")
-        desk.lan_blockers = lan_blockers()
-        for reason in desk.lan_blockers:
-            print(f"  other machines cannot connect yet: {reason}")
-    tunnel = None
-    if args.tunnel:
-        threading.Thread(target=httpd.serve_forever, daemon=True).start()
-        try:
-            tunnel, public = open_tunnel(port)
-            desk.public_url = public
-            print(f"public address (through localhost.run): {public}/?token={token}")
-        except RuntimeError as exc:
-            print(f"no tunnel: {exc}")
-    if args.open:
-        webbrowser.open(url)
-    try:
-        if args.tunnel:
-            threading.Event().wait()
-        else:
-            httpd.serve_forever()
-    except KeyboardInterrupt:
-        print("stopped")
-    finally:
-        if tunnel is not None:
-            tunnel.terminate()
-        desk.jobs.shutdown()
 
 
 if __name__ == "__main__":
