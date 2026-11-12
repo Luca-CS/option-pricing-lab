@@ -75,6 +75,10 @@ safety above all; between a nicer option and a safer one, the safer one, written
 | 12 | The per-address login throttle counted successful logins: users behind one address (everyone on 127.0.0.1) would lock each other out | Low | only failures count |
 | 13 | A body sent without `Content-Length` (chunked) over the limit turned into a 400 inside FastAPI | Info | the guard's limit is an HTTP 413 FastAPI passes on |
 | 14 | FastAPI's docs page loads `swagger-ui-dist@5` (a floating version) from a CDN | Medium when on | off by default; when on, pinned, integrity-checked, and its CSP allows only that script and its init by hash |
+| 15 | A 500 was answered by Starlette's outermost error middleware, outside the guard: no security headers on it | Info | the guard answers it (problem+json, headers), test |
+| 16 | The 404 of an unknown snapshot named the database file's local path | Low | the message names the id only |
+| 17 | With the LAN profile on, any `Host` is accepted (this table says "the LAN name") | Low (cookies stay tied to the real name, so a rebound page has no session) | an allow-list of the LAN names with Caddy's profile (A7) |
+| 18 | The lockout answers 423 for an existing account only, which tells that the name exists once it is locked | Low | kept: the owner must know the account is locked; the CLI unlocks it (A9 review) |
 
 ## 6. Secrets
 

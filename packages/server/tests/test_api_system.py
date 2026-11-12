@@ -88,3 +88,13 @@ def test_cancel_and_the_list_of_running_jobs(a):
     gate.set()
     assert c.get(f"/api/v1/jobs/{queued}").json()["state"] == "cancelled"
     assert any(e["action"] == "cancel_job" and e["target"] == queued for e in a.state.audit.entries(20))
+
+
+def test_the_app_leaves_the_process_engine_as_it_found_it(tmp_path):
+    """The Desk sets the process-wide engine; the bit-for-bit tests of the other packages run after these ones."""
+    from optlab.core import engines
+
+    before = engines.default_engine()
+    with api(tmp_path, engine="cpu"):
+        assert engines.default_engine() == "cpu"
+    assert engines.default_engine() == before

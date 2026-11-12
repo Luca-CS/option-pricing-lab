@@ -201,8 +201,12 @@ class Guard:
                     raise _TooLarge(413, f"the body exceeds {limit} bytes")
             return message
 
+        started = False
+
         async def send_with_headers(message: Message) -> None:
+            nonlocal started
             if message["type"] == "http.response.start":
+                started = True
                 present = {k.decode("latin-1").lower() for k, _ in message.get("headers", [])}
                 extra = [(k.encode(), v.encode()) for k, v in HEADERS.items() if k not in present]
                 if "content-security-policy" not in present:
@@ -219,6 +223,13 @@ class Guard:
             await self.app(scope, receive_limited, send_with_headers)
         except _TooLarge:
             await self._send_problem(scope, receive, send, 413, f"the body exceeds {limit} bytes")
+        except Exception:  # the 500 is answered here, inside the guard, so it carries the security headers too
+            LOG.exception("unhandled error on %s %s", scope.get("method"), scope.get("path"))
+            if started:
+                raise
+            await self._send_problem(
+                scope, receive, send, 500, "the server failed on this request; the log has the details"
+            )
 
     def _refusal(self, method: str, host: str, headers: dict) -> tuple[int, str] | None:
         if not self.settings.lan and _host(host) not in LOOPBACK:

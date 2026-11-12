@@ -133,6 +133,7 @@ def test_a_crash_is_a_problem_without_a_trace(a, trader, monkeypatch):
         "detail": "the server failed on this request; the log has the details",
     }
     assert "secret" not in r.text and "Traceback" not in r.text
+    assert r.headers["x-content-type-options"] == "nosniff" and "content-security-policy" in r.headers
 
 
 def test_unknown_routes_and_methods_are_problems(trader):

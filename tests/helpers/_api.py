@@ -80,12 +80,16 @@ class Api:
 
 @contextmanager
 def api(folder, **settings):
-    """The app on `folder` (a store, an empty lake); `settings` override Settings fields."""
+    """The app on `folder` (a store, an empty lake); `settings` override Settings fields. The engine is NumPy unless
+    asked (the Desk sets the process-wide default, which the bit-for-bit tests of the other packages read): the
+    default in force before is restored on exit."""
+    from optlab.core import engines
     from optlab.server.app import create_app
     from optlab.server.settings import Settings
 
     folder = Path(folder)
-    s = Settings(data=folder, lake=folder / "lake", **settings)
+    before = engines._DEFAULT
+    s = Settings(data=folder, lake=folder / "lake", **{"engine": "numpy", **settings})
     app = create_app(s)
     a = Api(app)
     try:
@@ -94,6 +98,7 @@ def api(folder, **settings):
         a.close()
         app.state.optlab.desk.jobs.shutdown()
         app.state.optlab.desk.db.close()
+        engines.set_default(before)
 
 
 def preset_sheet(client, name: str) -> dict:
