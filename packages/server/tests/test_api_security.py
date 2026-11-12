@@ -4,6 +4,7 @@ errors that never show a stack trace. No market data needed: the routes used her
 
 import datetime as dt
 import secrets
+from html.parser import HTMLParser
 
 import pytest
 from _api import api
@@ -273,18 +274,40 @@ def test_a_frontend_folder_serves_its_files_only(tmp_path):
             assert "not for you" not in r.text, path
 
 
+class _Scripts(HTMLParser):
+    """The text of every inline script of a page (an HTML parser, not a pattern: tags in any case or spacing)."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=False)
+        self.inline: list[str] = []
+        self._open = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "script" and not dict(attrs).get("src"):
+            self._open = True
+            self.inline.append("")
+
+    def handle_endtag(self, tag):
+        if tag == "script":
+            self._open = False
+
+    def handle_data(self, data):
+        if self._open:
+            self.inline[-1] += data
+
+
 def test_the_docs_page_is_off_unless_asked_and_pinned_when_on(tmp_path):
     import base64
     import hashlib
-    import re
 
     with api(tmp_path, docs=True) as d:
         r = d.client().get("/api/v1/docs")
         assert r.status_code == 200
         csp = r.headers["content-security-policy"]
-        found = re.search(r"<script>(.*?)</script>", r.text, re.S)
-        assert found is not None
-        inline = found.group(1)
+        scripts = _Scripts()
+        scripts.feed(r.text)
+        assert len(scripts.inline) == 1
+        inline = scripts.inline[0]
         digest = base64.b64encode(hashlib.sha256(inline.encode()).digest()).decode()
         assert (
             f"'sha256-{digest}'" in csp and "unsafe-eval" not in csp and "script-src https://cdn.jsdelivr.net " in csp
