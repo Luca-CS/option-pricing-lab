@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 
@@ -93,7 +94,7 @@ def _book_greeks(
     )
     scale = 100 / sheet.get("general.notional")
 
-    def one(d):
+    def one(d) -> tuple[Any, Any]:
         return (scale * d["positions"][0], scale * d["positions_se"][0]) if d is not None else (None, None)
 
     if isinstance(ctx, BasketContext):
@@ -193,7 +194,7 @@ def _mix_band(mixes, product, ctx, fmt, decision, prof, fixings, workers, margin
 
 def _pricer(
     product: CompiledProduct,
-    ctx: PricingContext,
+    ctx: PricingContext | BasketContext,
     fmt,
     decision: PricingDecision,
     prof: ProductProfile,
@@ -216,6 +217,7 @@ def _pricer(
 
     def run(param_sets):
         if method == "replication":
+            assert not isinstance(ctx, BasketContext)  # noqa: S101 (narrows the type for pyright: replication prices one name)
             T_obs = prof.observation_times[-1] if prof.observation_times else timeline.horizon
             return [
                 replication_result(program, timeline, ctx.surface, ctx.market, T_obs, fmt, p, history=history)
@@ -357,6 +359,7 @@ def quote(
         if aim is not None:
             target = aim
             result = base.at(x)
+            assert x is not None and x_se is not None  # noqa: S101 (narrows the type for pyright: desk_price solves the coupon it aims at)
             rate, rate_se = product.coupon_rate(x), x_se / product.coupon_scale
             params = {cpn: x}
         else:

@@ -41,6 +41,7 @@ class Clock:
     def window_times(self, w: Window) -> np.ndarray:
         if not isinstance(w.start, DateLit):
             a, b = float(w.start.value), float(w.end.value)
+            assert w.n is not None  # noqa: S101 (narrows the type for pyright: the parser gives n to a window in time mode)
             return np.linspace(a + (b - a) / w.n, b, w.n)
         if self.valuation is None:
             raise ValueError("the script uses calendar dates: give a valuation date")

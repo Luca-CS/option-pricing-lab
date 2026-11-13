@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from optlab.core.instruments import _BY_ID, enabled_names
 
@@ -423,9 +423,9 @@ def _coerce(f: Field, value, path: str):
         if not all(isinstance(n, str) and n.isidentifier() for n in value):
             raise TermSheetError(f"{path}: names must be identifiers (letters, digits, _), got {value!r}")
         return value
-    if f.minimum is not None and value < f.minimum:
+    if f.minimum is not None and cast(float, value) < f.minimum:
         raise TermSheetError(f"{path} = {value} is below the minimum {f.minimum}" + _hint(f))
-    if f.maximum is not None and value > f.maximum:
+    if f.maximum is not None and cast(float, value) > f.maximum:
         raise TermSheetError(f"{path} = {value} is above the maximum {f.maximum}" + _hint(f))
     return value
 

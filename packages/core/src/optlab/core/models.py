@@ -12,12 +12,29 @@ discretisation error is in the path law. Variance follows a full-truncation Eule
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, Literal, Protocol, overload
 
 import numpy as np
 
 from optlab.core.heston import HestonParams
 from optlab.core.market import Market
-from optlab.core.ssvi import SSVI
+
+
+class LocalVarSurface(Protocol):
+    """What a local volatility model reads of a surface: the Dupire local variance at log-moneyness k and maturity T.
+    SSVI, SVISurface, and the bumped, shifted and tabulated views of structured and risk."""
+
+    def local_var(self, k, T, /) -> Any: ...
+
+
+class LeverageFunction(Protocol):
+    """L(t, x) of an SLV model on its time rows: `Leverage`, its uniform tabulation (structured.fastmodels) or its
+    shift after a spot move (structured.greeks)."""
+
+    @property
+    def times(self) -> np.ndarray: ...
+
+    def __call__(self, t, x, /) -> Any: ...
 
 
 class Model:
@@ -50,7 +67,7 @@ class HestonModel(Model):
 
 @dataclass
 class LocalVolModel(Model):
-    surface: SSVI
+    surface: LocalVarSurface
 
     def inst_var(self, t, x, v):
         return self.surface.local_var(x, max(t, 1.0 / 365))
@@ -83,7 +100,7 @@ class SLVModel(Model):
     same law, and a local vol price on the same seed is on common random numbers with this one."""
 
     params: HestonParams
-    leverage: Leverage
+    leverage: LeverageFunction
     mix: float = 1.0
     spot_driven: bool = False
     has_variance = True
@@ -116,6 +133,37 @@ def time_grid(times, dt_max, dt_min=None):
         n = max(1, int(np.ceil((t - grid[-1]) / dt_max - 1e-9)))
         grid.extend(np.linspace(grid[-1], t, n + 1)[1:])
     return np.array(grid)
+
+
+@overload
+def simulate(
+    model: Model,
+    market: Market,
+    times,
+    n_paths: int,
+    rng=...,
+    dt_max=...,
+    antithetic=...,
+    return_variance: Literal[False] = ...,
+    dt_min=...,
+    tile: int | None = ...,
+) -> np.ndarray: ...
+
+
+@overload
+def simulate(
+    model: Model,
+    market: Market,
+    times,
+    n_paths: int,
+    rng=...,
+    dt_max=...,
+    antithetic=...,
+    *,
+    return_variance: Literal[True],
+    dt_min=...,
+    tile: int | None = ...,
+) -> tuple[np.ndarray, np.ndarray]: ...
 
 
 def simulate(
@@ -181,7 +229,7 @@ def simulate(
             x[s] = x[s] - 0.5 * av * dt + np.sqrt(av * dt) * zx
         while j < len(obs) and obs[j] == i:
             out_x[:, j] = x
-            if return_variance:
+            if out_v is not None:  # return_variance
                 out_v[:, j] = np.maximum(v, 0.0)
             j += 1
     paths = market.F(times)[None, :] * np.exp(out_x)

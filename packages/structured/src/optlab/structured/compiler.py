@@ -156,15 +156,16 @@ def compile_sheet(sheet: TermSheet, valuation, calendar=None) -> CompiledProduct
         return f"trigger - {j} * step_down" if j and "step_down" in params else "trigger"
 
     names = sheet.underlyings
+    first = names[0]
     basket = len(names) > 1
     lines = [f"underlying {n}" for n in names]
     lines += [f"param {k} = {number(v)}" for k, v in params.items()]
     lines += ["", f"event {strike}"]
-    lines += [f"  S0_{n} = {n}" for n in names] if basket else [f"  S0 = {names[0]}"]
+    lines += [f"  S0_{n} = {n}" for n in names] if basket else [f"  S0 = {first}"]
     if memory:
         lines.append("  missed = 0")
     lines.append("end")
-    perf_expr = f"worst({', '.join(f'{n} / S0_{n}' for n in names)})" if basket else f"{names[0]} / S0"
+    perf_expr = f"worst({', '.join(f'{n} / S0_{n}' for n in names)})" if basket else f"{first} / S0"
     for o, role in obs.items():
         final, call = role.get("final", False), role.get("call")
         needs_perf = coupon == "conditional" and role.get("coupon") or call is not None or final
