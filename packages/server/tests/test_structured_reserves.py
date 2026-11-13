@@ -75,7 +75,7 @@ def test_a_trade_keeps_its_reserves_through_json_and_old_trades_have_none():
 def desk(tmp_path_factory):
     d = Desk(store=tmp_path_factory.mktemp("res") / "optlab.sqlite")
     yield d
-    d.jobs.shutdown()
+    d.close()
 
 
 def wait(desk, job_id, timeout=300):

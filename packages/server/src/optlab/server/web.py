@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import hmac
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -50,14 +50,13 @@ HEADERS = {
 
 @dataclass
 class State:
-    """What the routes share: the settings, the desk (the services), the accounts and the audit log, and who
-    submitted each job (until the job table of A6 keeps it)."""
+    """What the routes share: the settings, the desk (the services, and the job queue), the accounts and the audit
+    log."""
 
     settings: Settings
     desk: Any
     accounts: Accounts
     audit: Audit
-    job_owner: dict[str, str] = field(default_factory=dict)
 
 
 def state(request: Request) -> State:

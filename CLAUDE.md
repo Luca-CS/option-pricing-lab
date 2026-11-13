@@ -30,8 +30,12 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
   `http://127.0.0.1:8765/api/v1` (127.0.0.1 only; another host needs `OPTLAB_LAN=true`, with Luca's agreement);
   `OPTLAB_DOCS=true` adds the Swagger page `/api/v1/docs`. Conventions in `docs/architecture/api.md`; after changing a
   route, `uv run python -m optlab.server.openapi export` (writes `api/openapi.json`; `test_openapi.py` fails on drift).
-  Tests: `packages/server/tests/test_api_*.py` (one per router, the security checks, the authorisation matrix, the
-  parity with `feature-inventory.md`; about 40 s), `test_desk.py` (the services). `api/client-check/` compiles a
+  Jobs run in the api's process unless `OPTLAB_WORKER=external`, then `uv run python -m optlab.server.worker
+  [--concurrency 2] [--engine auto]` serves the queue (one worker per database). Logs: `<data>/logs/api.log`,
+  `worker.log` (JSON lines). Tests: `packages/server/tests/test_api_*.py` (one per router, the security checks, the
+  authorisation matrix, the parity with `feature-inventory.md`; about 40 s), `test_jobs.py` (the queue),
+  `test_worker.py` (a worker process, killed mid-job, and the next one), `test_schedules.py`, `test_desk.py` (the
+  services); job kinds for tests in `tests/helpers/_tasks.py`. `api/client-check/` compiles a
   TypeScript client on the document (`npm ci --ignore-scripts`, `npm run generate`, `npm run check`; CI job
   `api-contract`).
 - `packages/core/tests/test_widget_js.py` runs `docs/lab.js` under `node` and compares it to the Python library; it is
@@ -150,7 +154,14 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
   models the server shapes; `web.py` the problem+json handlers, `access()` and `Guard` (Host allow-list, same-origin
   writes, JSON only, body limit, security headers and CSPs); `security.py` accounts (argon2id) and sessions (cookie
   `optlab_session`, `X-CSRF-Token`), `audit.py` the audit log, `users.py` the accounts command line, `openapi.py` the
-  versioned document. `jobs.py` runs quotes and book valuations in a thread pool (`/api/v1/jobs`, SSE events),
+  versioned document. Jobs (ADR-0006): `jobs.py` the persistent queue (`JobQueue`: submit with idempotency, claim,
+  progress, cancel, the sweep of a dead worker's jobs; `Workers`: the one-worker lease), `tasks.py` what a job carries
+  (`Frozen`: the market in use by snapshot id, the basket settings, the cost table's version, trades by version, their
+  fixings) and the registry of kinds, `worker.py` the loop (claims, runs with a `optlab.core.progress` reporter, beats,
+  fires the schedules; embedded in the api or `python -m optlab.server.worker`), `schedules.py` (backup, housekeeping,
+  lake, EOD), `present.py` the `{value, se}` shape at the API's boundary, `logs.py` the JSON log files. Each `Desk`
+  method that submits has a `run_<kind>` twin the worker calls (`risk_api.py` the same); the API's job result is
+  `{market, method, result}` (`/api/v1/jobs`, SSE events with progress).
   `persistence/` keeps everything in one SQLite database (WAL, SQLAlchemy Core, Alembic
   migrations; `Settings.database`, default `<data>/store/optlab.sqlite`): `desk.py` trades (versioned), fixings, quotes,
   desk settings and cost defaults, `snapshots.py`, `replays.py`, `risk.py` (the risk engine's records and runs);
@@ -160,8 +171,8 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
   HTML reports, `fixings.py` parses pasted or CSV fixings (the client sends the raw text), `netcheck.py` reads what blocks LAN access on Windows (firewall, Public profile; read-only).
   Every name is on its own market: the one in use for its name, else the lake's at the same date (`marketdata/names.py`), else flat
   inputs (what is typed in the Market screen wins). The book is valued in independent groups (one per single name, the worst-ofs).
-  Each job captures the market context when submitted, so a snapshot switch never changes
-  a run in progress.
+  Each job freezes the desk's state when submitted, so a snapshot switch never changes
+  a run in progress, and a restart forgets no job (a job a crash interrupted ends `error`, never resumed).
 - **`optlab.marketdata`**: `lake.py` (raw manifest, append-only Parquet with `origin` on every row, idempotent and bitemporal loads, DuckDB
   reads), `sources/` (one pure `parse` per source, tested offline), `ingest.py` (loads; the instrument registry itself is `optlab.core.instruments`, which `structured.schema` reads),
   `derive/` (curves, carry, fictitious bank, surfaces in three layers, FX forwards, volatility and correlation, correlation and the stored pseudo CvC/PvP: option on a basket against the same option on its members, whose formulas are in `structured.localcorr`), `quotes.py` (one cleaning chain,

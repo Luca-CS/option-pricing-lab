@@ -2,7 +2,7 @@
 
 import pytest
 from _api import SCRIPT_EXAMPLE as EXAMPLE
-from _api import api, preset_sheet
+from _api import api, preset_sheet, raw_errors
 
 
 @pytest.fixture(scope="module")
@@ -59,8 +59,11 @@ def test_script_check_and_price(a, structurer):
     assert not bad["ok"] and bad["line"] == 3
     r = structurer.post("/api/v1/structuring/script/price", json={"script": EXAMPLE, "model": "lv", "n_paths": 4_000})
     assert r.status_code == 202, r.text
-    res = a.wait(structurer, r.json()["job_id"])
-    assert 50 < res["price"] < 130 and res["stderr"] > 0
+    env = a.wait(structurer, r.json()["job_id"])
+    price = env["result"]["price"]
+    assert 50 < price["value"] < 130 and price["se"] > 0 and raw_errors(env) == []
+    assert env["method"] == {"name": "monte_carlo", "model": "lv", "n_paths": 4000, "seed": 2026}
+    assert env["market"]["snapshot_id"] == a.state.desk.ctx.snapshot_id and env["market"]["as_of"]
     viewer = a.client("viewer")
     assert viewer.post("/api/v1/structuring/script/check", json={"script": EXAMPLE}).status_code == 200
     assert viewer.post("/api/v1/structuring/script/price", json={"script": EXAMPLE}).status_code == 403
@@ -77,12 +80,15 @@ def test_a_quote_end_to_end(a, structurer):
     sheet = preset_sheet(structurer, "phoenix")
     r = structurer.post("/api/v1/structuring/quotes", json={"sheet": sheet, "options": {"precision": "quick"}})
     assert r.status_code == 202
-    q = a.wait(structurer, r.json()["job_id"])
+    env = a.wait(structurer, r.json()["job_id"])
+    q = env["result"]
     assert q["headline"]["kind"] == "coupon" and 0 < q["headline"]["value"] < 30 and q["headline"]["se"] > 0
+    assert q["coupon_rate"]["se"] > 0 and q["result"]["price"]["se"] > 0 and raw_errors(env) == []
+    assert env["method"]["name"] == q["policy"]["method"] and env["market"]["snapshot_id"] == q["snapshot_id"]
     listed = structurer.get("/api/v1/structuring/quotes").json()["items"]
     assert listed[0]["quote_id"] == q["quote_id"]
     saved = structurer.get(f"/api/v1/structuring/quotes/{q['quote_id']}").json()
-    assert saved["result"]["headline"] == q["headline"]
+    assert saved["result"]["headline"] == q["headline"] and saved["result"]["coupon_rate"] == q["coupon_rate"]
     rep = structurer.get(f"/api/v1/structuring/quotes/{q['quote_id']}/report")
     assert rep.status_code == 200 and "<svg" in rep.text and "script-src" not in rep.headers["content-security-policy"]
     assert any(e["action"] == "create_quote" for e in a.state.audit.entries(20))

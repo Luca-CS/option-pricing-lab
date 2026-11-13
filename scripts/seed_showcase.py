@@ -235,7 +235,7 @@ def main():
                 + (f", missing: {events['missing']}" if events["missing"] else "")
             )
     finally:
-        desk.jobs.shutdown()
+        desk.close()
     print("\nOpen the desk on this book:")
     print(f'python -m optlab.server --store "{desk.db.path}" --market {sid} --open')
 

@@ -35,7 +35,7 @@ safety above all; between a nicer option and a safer one, the safer one, written
 | Tampering with trades or scenarios | a viewer edits the book | RBAC on every route, authorisation matrix test, audit log of every write | A5 |
 | Repudiation | "I did not sign this scenario" | `signed_by` = the authenticated user; audit log append-only from the app | A5 |
 | Information disclosure | stack traces, raw quotes, levels in a report, data in an image | `problem+json` without traces, `desk.shared` rule for raw quotes beyond localhost, data never in images (test), gitleaks | A5, A7 |
-| Denial of service | `n_paths = 10^12`, a 1 GB body, a script of a million lines | bounds on every costly parameter, body size limit, job concurrency, worker timeouts | A5, A6 |
+| Denial of service | `n_paths = 10^12`, a 1 GB body, a script of a million lines | bounds on every costly parameter (schedules' parameters too), body size limit, two jobs at a time, a double submission computed once, cooperative cancellation; no per-job timeout (the bounds keep every job finite) | A5, A6 |
 | Elevation of privilege | code execution through the API | no `eval`/`exec` (the script language is a hand-written parser, size-bounded); `pickle` only between internal processes, never on network data; `subprocess` with fixed arguments only; no file path from the API (ids checked against a registry) | A5 |
 | Container escape or reach | a compromised api reaches the host | non-root, read-only root filesystem, `cap_drop: ALL`, `no-new-privileges`, no Docker socket mounted, minimal volumes (lake read-only for api), resource limits | A7 |
 | Network exposure | a port opened on every interface by Docker | `127.0.0.1:` on every published port, daemon on its unix socket only, WSL in NAT, `docker inspect` and `netstat` checks | A7, A9 |
@@ -79,6 +79,26 @@ safety above all; between a nicer option and a safer one, the safer one, written
 | 16 | The 404 of an unknown snapshot named the database file's local path | Low | the message names the id only |
 | 17 | With the LAN profile on, any `Host` is accepted (this table says "the LAN name") | Low (cookies stay tied to the real name, so a rebound page has no session) | an allow-list of the LAN names with Caddy's profile (A7) |
 | 18 | The lockout answers 423 for an existing account only, which tells that the name exists once it is locked | Low | kept: the owner must know the account is locked; the CLI unlocks it (A9 review) |
+
+### Found in A6 (the `security-review` pass on the job queue: nothing above its bar)
+
+Checked and sound: a job's owner is in its row from the first write, and another user's job or a system job is a 404
+on read, cancel and stream; idempotency (key or identical request) never crosses users; job kinds are fixed strings
+and a schedule's kind cannot be changed; no request reaches a file path (backup and log names are fixed patterns);
+every query is bound; the queue holds JSON only, nothing is unpickled; SSE data is JSON-encoded, so a name cannot
+inject an event. `GET /jobs` lists the caller's jobs only (v0's status bar showed everyone's).
+
+| # | Finding | Severity | Fate |
+|---|---|---|---|
+| 19 | `nvidia-smi` found with `shutil.which`, which on Windows looks in the working folder before the PATH: a planted `nvidia-smi.exe` would run every minute | Low (needs local write access) | the driver's own path only (System32, NVSMI; `/usr/bin` on Linux), test |
+| 20 | The `eod` schedule took any `options`, without the bounds of `POST /risk/eod-runs` | Low (admin only) | validated by the same `RiskOptions`, test |
+| 21 | The SSE stream checked the session at its start only, then followed the job for up to an hour after a logout or a revocation | Low | the session is checked again at every keepalive (15 s): `event: unauthorized` and the end, test |
+| 22 | Running a schedule now dropped the admin's `Idempotency-Key` (the schedule's own context replaced it) | Info | kept through, test |
+| 23 | The housekeeping removed every `*.log.*` of the logs folder | Info (the folder is the settings') | our own rotated files only (`api.log.*`, `worker.log.*`) |
+| 24 | The external worker's desk did not carry the LAN rule (`desk.shared`) | Info (no job reads it) | set from the settings as in the api |
+| 25 | A job's error is the library's message (it may name a local path), kept in the row and listed in `/admin/jobs` | Info | kept as finding 4 accepted it: shown to its submitter and to admins only |
+| 26 | The book report reads the newest book valuation of anyone on the market in use | Info (v0 shared it the same way) | kept: the book is the desk's, not a user's |
+| 27 | The public `/ready` says whether a worker is alive (503 when none) | Info | kept: a readiness probe must say it |
 
 ## 6. Secrets
 

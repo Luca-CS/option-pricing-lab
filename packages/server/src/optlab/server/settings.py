@@ -97,6 +97,17 @@ class Settings(BaseSettings):
     engine: Literal["numpy", "cpu", "gpu", "auto"] = Field("auto", description="where Monte Carlo paths come from")
     workers: int | None = Field(None, ge=1, le=64, description="process pool of NumPy Monte Carlo batches")
 
+    # --- jobs and schedules (ADR-0006) -----------------------------------------------------------------------------
+    worker: Literal["embedded", "external"] = Field(
+        "embedded",
+        description="the job worker runs in the api process (embedded), or as python -m optlab.server.worker",
+    )
+    job_concurrency: int = Field(2, ge=1, le=8, description="jobs a worker runs at a time")
+    job_keep_days: int = Field(30, ge=1, le=3650, description="finished jobs older than this are removed")
+    backup_keep_days: int = Field(14, ge=1, le=365, description="nightly database copies kept")
+    log_keep_days: int = Field(14, ge=1, le=365, description="daily log files kept")
+    timezone: str = Field("Europe/Paris", description="the local time of the schedules")
+
     @field_validator(
         "data",
         "store",

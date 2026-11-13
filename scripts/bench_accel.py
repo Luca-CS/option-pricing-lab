@@ -117,7 +117,7 @@ def desk_quote(engine, precision):
                 "coupon_se": res.get("coupon_rate_se"),
             }
         finally:
-            desk.jobs.shutdown()
+            desk.close()
             engines.set_default(None)
 
 

@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
+from optlab.core import progress
 from optlab.risk import grid
 from optlab.risk.curves import CurveMove
 from optlab.risk.engine import RiskSettings, run_group_safe
@@ -198,16 +199,22 @@ def revalue_many(
         with ProcessPoolExecutor(
             max_workers=workers, mp_context=mp.get_context("spawn"), initializer=_init, initargs=(groups, env)
         ) as pool:
-            for k, res in enumerate(pool.map(_chunk, jobs)):
-                results.append(res)
-                if log:
-                    log(f"chunk {k + 1}/{len(jobs)} ({time.perf_counter() - t0:.0f} s)")
+            try:
+                for k, res in enumerate(pool.map(_chunk, jobs)):
+                    results.append(res)
+                    if log:
+                        log(f"chunk {k + 1}/{len(jobs)} ({time.perf_counter() - t0:.0f} s)")
+                    progress.tick(k + 1, len(jobs), "chunks")
+            except BaseException:  # a cancelled job: the chunks not started are dropped, not waited for
+                pool.shutdown(wait=False, cancel_futures=True)
+                raise
     else:
         _init(groups, env)
         for k, job in enumerate(jobs):
             results.append(_chunk(job))
             if log:
                 log(f"chunk {k + 1}/{len(jobs)} ({time.perf_counter() - t0:.0f} s)")
+            progress.tick(k + 1, len(jobs), "chunks")
     book = {k: [0.0, 0.0] for k in names}
     per_pos: dict = {k: {} for k in names}
     warnings = []

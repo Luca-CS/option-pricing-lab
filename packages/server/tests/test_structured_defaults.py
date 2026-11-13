@@ -245,7 +245,7 @@ def test_opposite_signs_are_measured_and_the_one_against_the_desk_stays():
 def desk(tmp_path_factory):
     d = Desk(store=tmp_path_factory.mktemp("costs") / "optlab.sqlite")
     yield d
-    d.jobs.shutdown()
+    d.close()
 
 
 def wait(desk, job_id, timeout=300):

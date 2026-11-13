@@ -58,9 +58,12 @@ class Api:
             c.user_name = name  # type: ignore[attr-defined]
         return c
 
+    def user_id(self, client) -> str:
+        return self.state.accounts.session(client.cookies.get("optlab_session"))[0].user_id
+
     @staticmethod
     def wait(client, job_id: str, timeout: float = 300.0) -> dict:
-        """The job's result once it is done (the job polled as the page would)."""
+        """The job's envelope {market, method, result} once it is done (the job polled as the page would)."""
         t0 = time.perf_counter()
         while True:
             r = client.get(f"/api/v1/jobs/{job_id}")
@@ -96,9 +99,25 @@ def api(folder, **settings):
         yield a
     finally:
         a.close()
-        app.state.optlab.desk.jobs.shutdown()
-        app.state.optlab.desk.db.close()
+        app.state.optlab.desk.close()
         engines.set_default(before)
+
+
+NOT_ERRORS = {"control_gap_se", "independent_stderr"}  # errors that stand alone (optlab.server.present)
+
+
+def raw_errors(x, path: str = "") -> list[str]:
+    """The keys of a payload that still hold a Monte Carlo error beside its number (api.md §5 says {value, se})."""
+    out = []
+    if isinstance(x, dict):
+        for k, v in x.items():
+            if (k == "stderr" or k.endswith(("_se", "_stderr"))) and k not in NOT_ERRORS:
+                out.append(f"{path}.{k}")
+            out += raw_errors(v, f"{path}.{k}")
+    elif isinstance(x, list):
+        for i, v in enumerate(x[:50]):
+            out += raw_errors(v, f"{path}[{i}]")
+    return out
 
 
 def preset_sheet(client, name: str) -> dict:

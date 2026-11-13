@@ -11,8 +11,10 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
+from optlab.server import present
+from optlab.server.jobs import FINAL, Workers
 from optlab.server.routers._common import Id, desk
-from optlab.server.schemas import Job, JobList, LoginIn, Ok
+from optlab.server.schemas import CancelOut, Job, JobList, LoginIn, Ok
 from optlab.server.security import COOKIE, LoginError
 from optlab.server.web import Problem, access, current_user, state
 
@@ -31,12 +33,22 @@ def health():
 
 
 @router.get("/ready", **access(public=True))
-def ready(request: Request):
-    """The database answers and the lake folder is there (a readiness probe)."""
+def ready(request: Request, response: Response):
+    """The database answers, the lake folder is there and a worker serves the queue (a readiness probe: 503 when
+    there is no worker, since every computation waits for one)."""
     st = state(request)
     with st.desk.db.read() as c:
         c.execute(text("SELECT 1"))
-    return {"ok": True, "database": True, "lake": st.desk.lake.root.is_dir(), "revision": st.desk.db.revision()}
+    worker = bool(Workers(st.desk.db).alive())
+    if not worker:
+        response.status_code = 503
+    return {
+        "ok": worker,
+        "database": True,
+        "lake": st.desk.lake.root.is_dir(),
+        "worker": worker,
+        "revision": st.desk.db.revision(),
+    }
 
 
 # --- auth -----------------------------------------------------------------------------------------------------------
@@ -123,66 +135,92 @@ def me(request: Request):
 
 # --- jobs -----------------------------------------------------------------------------------------------------------
 def _own(request: Request, job_id: str) -> None:
-    user, owner = current_user(request), state(request).job_owner.get(job_id)
-    if "admin" not in user.roles and owner != user.user_id:
-        raise Problem(404, f"no job {job_id!r}")  # someone else's job is not even said to exist
+    user = current_user(request)
+    try:
+        owner = desk(request).jobs.owner(job_id)
+    except KeyError:
+        owner = None
+    if "admin" not in user.roles and (owner is None or owner != user.user_id):
+        raise Problem(404, f"no job {job_id!r}")  # someone else's job (or the system's) is not even said to exist
+
+
+def shown(j: dict) -> dict:
+    """A job as the API shows it: its envelope with every Monte Carlo number as {value, se} (api.md §5)."""
+    return {**j, "result": present.result(j["kind"], j.get("result"))}
 
 
 @router.get("/jobs", **access(), response_model=JobList)
 def jobs(request: Request):
-    """The jobs queued or running, without their results (the status bar)."""
-    return {"jobs": desk(request).jobs.running()}
+    """The caller's jobs queued or running (an admin's: everyone's), with their progress, without results (the
+    status bar)."""
+    user = current_user(request)
+    return {"jobs": desk(request).jobs.active(user.user_id, everyone="admin" in user.roles)}
 
 
 @router.get("/jobs/{job_id}", **access(), response_model=Job)
 def job(job_id: Id, request: Request):
-    """State, elapsed time, and the result or the error (the submitter or an admin)."""
+    """State, progress, step, ETA, and the result {market, method, result} or the error (the submitter or an
+    admin)."""
     _own(request, job_id)
-    return desk(request).job(job_id)
+    return shown(desk(request).jobs.get(job_id))
 
 
-@router.post("/jobs/{job_id}/cancel", **access(), response_model=Ok)
+@router.post("/jobs/{job_id}/cancel", **access(), response_model=CancelOut)
 def cancel(job_id: Id, request: Request):
-    """A queued job is dropped; a running one cannot be interrupted, its result is dropped when it ends."""
+    """A queued job ends `cancelled` at once; a running one stops at its next batch and ends `cancelled`."""
     _own(request, job_id)
     out = desk(request).cancel(job_id)
-    state(request).audit.record(current_user(request).user_id, "cancel_job", job_id)
+    state(request).audit.record(current_user(request).user_id, "cancel_job", job_id, detail={"state": out["state"]})
     return out
 
 
-RANK = {"queued": 1, "running": 2}  # the end of a job is 3
+EVENT_FIELDS = ("id", "kind", "state", "progress", "step", "eta", "elapsed")
+KEEPALIVE_SECONDS = 15.0
 
 
 @router.get("/jobs/{job_id}/events", **access(), response_class=StreamingResponse)
 async def job_events(job_id: Id, request: Request):
-    """Server-Sent Events: `state` on every change (queued, running), then `done`, `error` or `cancelled` with the
-    job, and the stream ends. An event's id is the rank of its state (queued 1, running 2, the end 3), the same on
-    every connection, so a reconnect with Last-Event-ID gets only what it missed."""
+    """Server-Sent Events: `state` when the job is queued or starts, `progress` while it runs (fraction, step, ETA),
+    then `done`, `error` or `cancelled` with the whole job, and the stream ends (or `unauthorized` when the session
+    ends meanwhile, checked every 15 s). An event's id is the job's version
+    (+1 at every change of its row), so a reconnect with Last-Event-ID gets the job's latest state only if it changed
+    since; the last event always comes."""
     _own(request, job_id)
-    d = desk(request)
+    queue = desk(request).jobs
+    accounts, token = state(request).accounts, request.cookies.get(COOKIE)
     try:
         last_seen = int(request.headers.get("last-event-id") or 0)
     except ValueError:
         last_seen = 0
 
     async def stream():
-        previous, started = None, time.monotonic()
+        seen, started, quiet = last_seen, time.monotonic(), time.monotonic()
+        previous_state = None
         while True:
-            j = d.job(job_id)
-            if j["state"] != previous:
-                previous = j["state"]
-                final = j["state"] in ("done", "error", "cancelled")
-                n = 3 if final else RANK.get(j["state"], 1)
-                if n > last_seen:
-                    payload = j if final else {k: j[k] for k in ("id", "kind", "state", "elapsed")}
-                    yield f"id: {n}\nevent: {j['state'] if final else 'state'}\ndata: {json.dumps(payload)}\n\n"
+            j = await asyncio.to_thread(queue.get, job_id)
+            final = j["state"] in FINAL
+            if j["version"] > seen:
+                seen = j["version"]
                 if final:
+                    yield f"id: {seen}\nevent: {j['state']}\ndata: {json.dumps(shown(j))}\n\n"
                     return
+                kind = "state" if j["state"] != previous_state else "progress"
+                previous_state = j["state"]
+                yield f"id: {seen}\nevent: {kind}\ndata: {json.dumps({k: j[k] for k in EVENT_FIELDS})}\n\n"
+                quiet = time.monotonic()
+            elif final:  # the client had the end already (Last-Event-ID at the last version)
+                return
             if await request.is_disconnected():
                 return
             if time.monotonic() - started > 3600:
                 yield "event: timeout\ndata: {}\n\n"
                 return
+            if time.monotonic() - quiet > KEEPALIVE_SECONDS:  # a comment, so that proxies keep the stream open
+                if await asyncio.to_thread(accounts.session, token) is None:  # logged out or revoked meanwhile
+                    yield "event: unauthorized\ndata: {}\n\n"
+                    return
+                yield ": keepalive\n\n"
+                quiet = time.monotonic()
             await asyncio.sleep(0.25)
 
     return StreamingResponse(stream(), media_type="text/event-stream", headers={"cache-control": "no-store"})

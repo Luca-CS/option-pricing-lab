@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 from optlab.server.api import Desk
 from optlab.server.audit import Audit
-from optlab.server.risk_api import RiskApi
+from optlab.server.logs import attach_server_logs
 from optlab.server.routers import admin, market, quant, risk, structuring, system, trading
 from optlab.server.security import COOKIE, CSRF_HEADER, Accounts
 from optlab.server.settings import Settings
@@ -46,11 +46,11 @@ ROUTERS = (system, structuring, trading, market, risk, quant, admin)
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
+    attach_server_logs()  # the requests into <data>/logs/api.log when the server writes its log file
     yield
     st = getattr(app.state, "optlab", None)
-    if st is not None:  # the job threads, then the database file
-        st.desk.jobs.shutdown()
-        st.desk.db.close()
+    if st is not None:  # the embedded worker (its running jobs end interrupted), then the database file
+        st.desk.close()
 
 
 def api_app(docs: bool = False) -> FastAPI:
@@ -120,6 +120,14 @@ def docs_page() -> HTMLResponse:
 
 
 PROBLEM_REF = {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
+IDEMPOTENCY_PARAMETER = {
+    "name": "Idempotency-Key",
+    "in": "header",
+    "required": False,
+    "description": "the same key from the same user gives back the job it first created (another request under it is "
+    "refused, 422); without one, the same request still queued or running is given back",
+    "schema": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$"},
+}
 
 
 def describe_problems(doc: dict) -> None:
@@ -149,6 +157,13 @@ def describe_problems(doc: dict) -> None:
         },
         "additionalProperties": True,
     }
+    schemas["Estimate"] = {
+        "type": "object",
+        "required": ["value", "se"],
+        "description": "every Monte Carlo number of a job result: its value and its standard error (null when the "
+        "library gives none)",
+        "properties": {"value": {"type": "number"}, "se": {"type": ["number", "null"]}},
+    }
     doc["components"]["securitySchemes"] = {
         "session": {"type": "apiKey", "in": "cookie", "name": COOKIE, "description": "set by POST /auth/login"},
         "csrf": {
@@ -166,6 +181,8 @@ def describe_problems(doc: dict) -> None:
             if "public" not in (op.get("x-roles") or []):
                 op["security"] = [{"session": []}] if method == "get" else [{"session": [], "csrf": []}]
             responses = op.setdefault("responses", {})
+            if "202" in responses:  # a route that submits a job takes an idempotency key
+                op.setdefault("parameters", []).append(IDEMPOTENCY_PARAMETER)
             if "422" in responses:
                 responses["422"] = {
                     "description": "invalid input: the fields at fault in `errors`",
@@ -184,10 +201,13 @@ def create_app(settings: Settings | None = None, desk: Desk | None = None) -> Fa
     the guard around everything."""
     settings = settings or Settings.load()
     if desk is None:
-        desk = Desk(settings=settings, engine=settings.engine, workers=settings.workers)
+        desk = Desk(
+            settings=settings,
+            engine=settings.engine,
+            workers=settings.workers,
+            run_jobs=settings.worker == "embedded",
+        )
     desk.shared = settings.lan  # raw quotes and index levels stay on this machine when the LAN profile is on
-    if getattr(desk, "risk", None) is None:
-        desk.risk = RiskApi(desk)
     app = api_app(docs=settings.docs)
     app.state.optlab = State(settings, desk, Accounts(desk.db, settings), Audit(desk.db))
     if settings.frontend is not None:

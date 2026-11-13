@@ -25,7 +25,7 @@ def desk(tmp_path_factory):
     )
     d.risk = RiskApi(d)  # create_app does this
     yield d
-    d.jobs.shutdown()
+    d.close()
 
 
 def wait(desk, job_id, timeout=900):

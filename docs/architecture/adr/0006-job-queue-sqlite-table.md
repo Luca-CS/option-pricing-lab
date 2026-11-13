@@ -46,6 +46,40 @@ never unpickles anything from the table. Results are JSON (or a reference to a s
   read during them.
 - If one day several machines run workers, a server database would be needed; a new ADR then.
 
+## Implementation (A6, 13 November 2026)
+
+- Tables `jobs`, `workers`, `schedules` (Alembic `0003`, tables added only). `optlab.server.jobs.JobQueue` (submit,
+  claim, report, finish, cancel, sweep, prune) and `Workers` (the lease): about 450 lines with the worker loop
+  (`worker.py`), the schedules (`schedules.py`) and what a job carries (`tasks.py`), close to the estimate.
+- **A job is JSON**: its validated parameters and `tasks.Frozen`, what the desk held at submission (the snapshot id
+  of the market in use, the typed basket settings, the version of the cost table, the trades by id and version, their
+  fixings). Each desk method that submitted a closure in v0 is now a pair: the method validates and freezes, its
+  `run_<kind>` twin rebuilds the same objects in the worker. The same bits come out: the showcase golden values the
+  book through this path, bit for bit.
+- **One worker per database**: a lease row renewed every 5 s; a worker that has been silent for 15 s is gone. The
+  worker runs in the api's process by default (`Settings.worker = "embedded"`, one command to start the desk on
+  Windows) or alone (`python -m optlab.server.worker`, `OPTLAB_WORKER=external`, the container of A7); a second one
+  waits for the lease (`--wait-lease`) instead of sharing the GPU. At start the lease holder marks every `running` row
+  `error` (Interrupted).
+- **Progress and cancellation** come from `optlab.core.progress`, a context variable that is silent unless the worker
+  sets a reporter: the batch loop of `structured.engine`, the chunks of the VaR and the days of the EOD backfill tick
+  it, the desk names its steps. The reporter writes the fraction (never backwards), the step and an ETA at most twice a
+  second, and the same write reads the cancel flag: a cancelled job stops at its next batch (the batches not started
+  are dropped, the VaR's pool cancels its pending chunks). A stopping worker interrupts its jobs the same way and marks
+  them `error` (Interrupted), not `cancelled`.
+- **Idempotency**: the fingerprint of a job is the sha256 of its kind, parameters and frozen context; the same user's
+  identical job still queued or running is given back, and an `Idempotency-Key` gives back its job for good (the same
+  principle as the risk store's run keys: a run is keyed by what determines it).
+- **Results** are the envelope `{market, method, result}`, stored as computed (the library's shapes); the API shows
+  every Monte Carlo number as `{value, se}` (`optlab.server.present`, api.md §5).
+- **Schedules**: `backup` (03:00, `VACUUM INTO` in `<backups>/nightly`, 14 days kept; on), `housekeeping` (03:30: jobs
+  over 30 days, sessions a week past their expiry, log files; on), `lake` (Mon-Fri 22:30, the public sources; off),
+  `eod` (Mon-Fri 23:00, the risk EOD of the day; off). Local time of `Settings.timezone`; a time missed while no worker
+  ran fires once at the next start. Edited and run by admins (`/api/v1/admin/pipelines`), every change audited.
+- Log files: JSON lines in `<data>/logs/api.log` and `worker.log`, rotated at midnight, 14 kept (`optlab.server.logs`).
+- Not here: the weekly copy of the lake and `optlab backup|restore` come with the CLI (A7); the Yahoo option chains
+  stay a manual step (US hours only, see `schedules.py`).
+
 ## Alternatives considered
 
 - huey on SQLite: compared above.
