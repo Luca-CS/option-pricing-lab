@@ -58,6 +58,10 @@ def test_an_admin_turns_a_schedule_on_moves_it_and_is_audited(a):
     assert admin.patch("/api/v1/admin/pipelines/eod", json={"at": "25:00"}).status_code == 422
     assert admin.patch("/api/v1/admin/pipelines/eod", json={"params": {"shell": "rm"}}).status_code == 422
     assert admin.patch("/api/v1/admin/pipelines/backup", json={"params": {"keep_days": 0}}).status_code == 422
+    huge = {"params": {"options": {"n_paths": 10**9}}}  # the bounds of POST /risk/eod-runs hold here too
+    assert admin.patch("/api/v1/admin/pipelines/eod", json=huge).status_code == 422
+    fine = {"params": {"greeks": False, "options": {"precision": "quick"}}}
+    assert admin.patch("/api/v1/admin/pipelines/eod", json=fine).status_code == 200
     assert admin.patch("/api/v1/admin/pipelines/nothing", json={"enabled": True}).status_code == 404
     admin.patch("/api/v1/admin/pipelines/eod", json={"enabled": False})
 
@@ -70,8 +74,10 @@ def test_the_nightly_backup_and_its_retention(a):
     month_ago = time.time() - 30 * 86400
     os.utime(stale, (month_ago, month_ago))
     admin = a.client("admin")
-    r = admin.post("/api/v1/admin/pipelines/backup/run")
+    r = admin.post("/api/v1/admin/pipelines/backup/run", headers={"Idempotency-Key": "backup-now"})
     assert r.status_code == 202
+    again = admin.post("/api/v1/admin/pipelines/backup/run", headers={"Idempotency-Key": "backup-now"})
+    assert again.json() == {"job_id": r.json()["job_id"], "reused": True}  # a retried click backs up once
     out = a.wait(admin, r.json()["job_id"])["result"]
     copy = folder / out["file"]
     assert copy.is_file() and out["bytes"] == copy.stat().st_size > 0 and out["removed"] == [stale.name]

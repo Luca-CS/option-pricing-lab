@@ -17,13 +17,13 @@ from __future__ import annotations
 import argparse
 import os
 import secrets
-import shutil
 import socket
 import subprocess
 import threading
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 from optlab.core import engines, progress
 from optlab.core.log import get_logger
@@ -81,15 +81,29 @@ class Reporter:
             raise progress.Cancelled(f"job {self.job_id} cancelled")
 
 
+def nvidia_smi() -> Path | None:
+    """nvidia-smi where the driver installs it, never from the current folder or the PATH (where Windows would look in
+    the working directory first, so a planted nvidia-smi.exe there would run)."""
+    if os.name == "nt":
+        root = Path(os.environ.get("SystemRoot", r"C:\Windows"))
+        places = [root / "System32" / "nvidia-smi.exe"]
+        places.append(
+            Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "NVIDIA Corporation/NVSMI/nvidia-smi.exe"
+        )
+    else:
+        places = [Path("/usr/bin/nvidia-smi"), Path("/usr/local/bin/nvidia-smi")]
+    return next((p for p in places if p.is_file()), None)
+
+
 def gpu_status() -> list[dict] | None:
     """The GPUs as nvidia-smi reports them (fixed arguments, no shell); None without nvidia-smi."""
-    exe = shutil.which("nvidia-smi")
+    exe = nvidia_smi()
     if exe is None:
         return None
     fields = "name,utilization.gpu,memory.used,memory.total,temperature.gpu,clocks.sm"
     try:
-        out = subprocess.run(  # noqa: S603 (a fixed program found on PATH, fixed arguments, no shell)
-            [exe, f"--query-gpu={fields}", "--format=csv,noheader,nounits"],
+        out = subprocess.run(  # noqa: S603 (the driver's own program by its full path, fixed arguments, no shell)
+            [str(exe), f"--query-gpu={fields}", "--format=csv,noheader,nounits"],
             capture_output=True,
             text=True,
             timeout=5,
@@ -269,6 +283,7 @@ def main(argv=None) -> None:
     )
     to_files(settings, "worker", args.log)
     desk = Desk(settings=settings, engine=settings.engine, workers=settings.workers, run_jobs=False)
+    desk.shared = settings.lan  # the same rule as the api's for raw quotes and levels (none of its jobs reads it today)
     worker = Worker(desk, role="external", concurrency=settings.job_concurrency)
     deadline = time.monotonic() + args.wait_lease
     while not worker.start():

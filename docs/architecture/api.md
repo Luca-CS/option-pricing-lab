@@ -125,7 +125,8 @@ crash interrupted ends `error` with `{"type": "Interrupted", ...}` (never resume
   once done; `error` `{type, message}` (the library's message).
 - `GET /jobs/{job_id}/events`: Server-Sent Events, for `EventSource`. `state` when the job is queued or starts,
   `progress` while it runs (at most two a second), then `done`, `error` or `cancelled` with the whole job, and the
-  stream ends; a comment line every 15 s keeps it open. An event's id is the job's `version` (+1 at every change of
+  stream ends; a comment line every 15 s keeps it open, and the session is checked then (`unauthorized` and the end
+  once it is over: sign in again). An event's id is the job's `version` (+1 at every change of
   its row), so a reconnect with `Last-Event-ID` gets the latest state only if it changed since, and always the last
   event:
 

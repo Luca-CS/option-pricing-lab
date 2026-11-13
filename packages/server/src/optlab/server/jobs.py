@@ -66,6 +66,10 @@ def submitting(user_id: str | None, idem_key: str | None = None, schedule: str |
         _SUBMITTER.reset(token)
 
 
+def current_submitter() -> Submitter | None:
+    return _SUBMITTER.get()
+
+
 def canonical(x) -> str:
     return json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
 

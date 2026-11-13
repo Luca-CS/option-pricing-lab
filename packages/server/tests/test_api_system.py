@@ -89,6 +89,33 @@ def test_the_event_stream_shows_progress_and_resumes(a):
     assert _events(c.get(f"/api/v1/jobs/{job}/events", headers={"Last-Event-ID": str(ids[-1])}).text) == []
 
 
+def test_the_event_stream_ends_with_the_session(a, monkeypatch):
+    import threading
+
+    from optlab.server.routers import system
+
+    monkeypatch.setattr(system, "KEEPALIVE_SECONDS", 0.3)  # the session is checked at every keepalive (15 s)
+    c = a.client("viewer")
+    gate("session-ends").clear()
+    job = _own_job(a, c, "test_gate", {"gate": "session-ends", "timeout": 30})
+    threading.Timer(0.8, a.state.accounts.close_all, args=(a.user_id(c),)).start()
+    r = c.get(f"/api/v1/jobs/{job}/events")
+    assert _events(r.text)[-1]["event"] == "unauthorized"  # nothing more after a logout, even of one's own job
+    gate("session-ends").set()
+    wait_state(a.state.desk, job)
+
+
+def test_nvidia_smi_is_never_taken_from_the_working_folder(tmp_path, monkeypatch):
+    from optlab.server.worker import nvidia_smi
+
+    (tmp_path / "nvidia-smi.exe").write_bytes(b"planted")
+    (tmp_path / "nvidia-smi").write_bytes(b"planted")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    found = nvidia_smi()
+    assert found is None or tmp_path not in found.parents
+
+
 def test_cancel_a_queued_and_a_running_job_and_the_list(a):
     c = a.client("viewer")
     gate("cancel-list").clear()

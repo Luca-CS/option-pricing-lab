@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import delete, insert, select, update
 
 from optlab.core.log import get_logger
-from optlab.server.jobs import canonical, submitting
+from optlab.server.jobs import canonical, current_submitter, submitting
 from optlab.server.persistence.schema import schedules, sessions
 from optlab.server.tasks import Frozen, envelope, register
 
@@ -44,6 +44,18 @@ PARAMS = {  # what an admin may set per kind
     "lake": {"only"},
     "eod_today": {"greeks", "options"},
 }
+
+
+def _risk_options(v) -> bool:
+    from pydantic import ValidationError
+
+    from optlab.server.schemas import RiskOptions
+
+    try:
+        RiskOptions.model_validate(v)
+    except ValidationError:
+        return False
+    return True
 
 
 def parse_days(days: str) -> tuple[int, ...]:
@@ -153,7 +165,7 @@ class Schedules:
                 "log_keep_days": lambda v: isinstance(v, int) and 1 <= v <= 365,
                 "only": lambda v: isinstance(v, list) and len(v) <= 50 and all(isinstance(x, str) for x in v),
                 "greeks": lambda v: isinstance(v, bool),
-                "options": lambda v: isinstance(v, dict),
+                "options": _risk_options,  # the bounds of POST /risk/eod-runs
             }[key](value)
             if not ok:
                 raise ValueError(f"params.{key}: {value!r} is not a valid value")
@@ -175,9 +187,11 @@ class Schedules:
         return self.get(name)
 
     def submit(self, name: str, user_id: str | None = None) -> dict:
-        """Submit the job of a schedule now: by the worker when it is due (the system), or by an admin."""
+        """Submit the job of a schedule now: by the worker when it is due (the system), or by an admin (whose
+        Idempotency-Key, if any, still holds)."""
         s = self.get(name)
-        with submitting(user_id, schedule=name):
+        outer = current_submitter()
+        with submitting(user_id, outer.idem_key if outer and user_id else None, schedule=name):
             out = SUBMIT[s["kind"]](self.desk, s["params"])
         with self.db.write() as c:
             c.execute(
@@ -241,7 +255,8 @@ def run_housekeeping(desk, p: dict, f: Frozen) -> dict:
     with desk.db.write() as c:  # sessions over a week past their expiry, or revoked a week ago
         res = c.execute(delete(sessions).where(sessions.c.expires_at < old_sessions.isoformat(timespec="seconds")))
     logs, cutoff = [], time.time() - int(p.get("log_keep_days", s.log_keep_days)) * 86400
-    for old in Path(s.logs).glob("*.log.*"):
+    rotated = [*Path(s.logs).glob("api.log.*"), *Path(s.logs).glob("worker.log.*")]  # ours only (logs.py)
+    for old in rotated:
         if old.stat().st_mtime < cutoff:
             old.unlink()
             logs.append(old.name)

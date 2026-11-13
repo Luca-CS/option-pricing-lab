@@ -181,11 +181,13 @@ KEEPALIVE_SECONDS = 15.0
 @router.get("/jobs/{job_id}/events", **access(), response_class=StreamingResponse)
 async def job_events(job_id: Id, request: Request):
     """Server-Sent Events: `state` when the job is queued or starts, `progress` while it runs (fraction, step, ETA),
-    then `done`, `error` or `cancelled` with the whole job, and the stream ends. An event's id is the job's version
+    then `done`, `error` or `cancelled` with the whole job, and the stream ends (or `unauthorized` when the session
+    ends meanwhile, checked every 15 s). An event's id is the job's version
     (+1 at every change of its row), so a reconnect with Last-Event-ID gets the job's latest state only if it changed
     since; the last event always comes."""
     _own(request, job_id)
     queue = desk(request).jobs
+    accounts, token = state(request).accounts, request.cookies.get(COOKIE)
     try:
         last_seen = int(request.headers.get("last-event-id") or 0)
     except ValueError:
@@ -214,6 +216,9 @@ async def job_events(job_id: Id, request: Request):
                 yield "event: timeout\ndata: {}\n\n"
                 return
             if time.monotonic() - quiet > KEEPALIVE_SECONDS:  # a comment, so that proxies keep the stream open
+                if await asyncio.to_thread(accounts.session, token) is None:  # logged out or revoked meanwhile
+                    yield "event: unauthorized\ndata: {}\n\n"
+                    return
                 yield ": keepalive\n\n"
                 quiet = time.monotonic()
             await asyncio.sleep(0.25)
