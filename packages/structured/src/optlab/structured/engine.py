@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from optlab.core import engines
+from optlab.core import engines, progress
 from optlab.core.models import simulate
 from optlab.structured.cashflows import pair_averages
 from optlab.structured.multiasset import Basket, BasketScenario, simulate_basket
@@ -274,6 +274,7 @@ def _run_native(backend, model, market, name, times, n_paths, seed, spot0, histo
             t_eval += te
             for tot, summary in zip(totals, summaries):
                 tot.add(summary)
+            progress.tick(j + 1, n, "batches")  # a reporter may stop here: the pools finish their few batches first
 
         for k in range(n):
             scenario, ts, km = sims.pop(k).result()
@@ -327,11 +328,22 @@ def run(
         (model, market, name, times, size, s, spot0, history, evaluations, sim_kwargs) for size, s in zip(sizes, seeds)
     ]
     t0 = time.perf_counter()
+    results = []
     if workers and workers > 1 and len(jobs) > 1:
-        results = list(process_pool(workers).map(run_batch, jobs))
+        futures = [process_pool(workers).submit(run_batch, job) for job in jobs]  # in order, as map would
+        try:
+            for k, f in enumerate(futures):
+                results.append(f.result())
+                progress.tick(k + 1, len(jobs), "batches")
+        except BaseException:  # a failed batch or a cancelled job: the batches not started are dropped
+            for f in futures:
+                f.cancel()
+            raise
     else:
         workers = 1
-        results = [run_batch(job) for job in jobs]
+        for k, job in enumerate(jobs):
+            results.append(run_batch(job))
+            progress.tick(k + 1, len(jobs), "batches")
     totals = [Totals() for _ in evaluations]
     t_sim = t_eval = 0.0
     for summaries, ts, te in results:

@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
+from optlab.core import progress
 from optlab.core.config import DEFAULT_SEED
 from optlab.risk import grid
 from optlab.risk.engine import RiskGroup, RiskSettings, run_group
@@ -264,18 +265,21 @@ def backfill(
     reused."""
     days = CALENDARS[calendar].business_days(pd.Timestamp(start).date(), pd.Timestamp(end).date())
     out = []
-    for d in days:
+    steps = len(days) + (max(len(days) - 1, 0) if explain else 0)
+    for k, d in enumerate(days):
         r = eod(lake, trades, d, store, settings, layer, greeks)
         out.append(
             {"day": d.isoformat(), "run_id": r.get("run_id"), "reused": r.get("reused", False), "value": r["value"]}
         )
         if log:
             log(f"EOD {d}: {'reused' if r.get('reused') else 'computed'} {r.get('run_id')}")
+        progress.tick(k + 1, steps, "days")
     if explain:
-        for a, b in zip(days, days[1:]):
+        for k, (a, b) in enumerate(zip(days, days[1:])):
             p = explain_day(lake, trades, a, b, store, settings, layer)
             if log:
                 log(f"P&L {a} -> {b}: {'reused' if p.get('reused') else 'computed'} total {p['total']:.2f}")
+            progress.tick(len(days) + k + 1, steps, "days")
     return out
 
 
