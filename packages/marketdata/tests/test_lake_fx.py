@@ -5,7 +5,6 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 import pytest
-from _lake_fixture import synthetic_lake
 
 from optlab.core.instruments import enabled, enabled_names, instrument, pair_currencies
 from optlab.marketdata.derive.carry import build_carry, cip_forward
@@ -30,6 +29,7 @@ from optlab.marketdata.pit import basket_at, market_at, truncated_copy
 from optlab.marketdata.quality import check_fx
 from optlab.marketdata.quotes import discount_function
 from optlab.marketdata.sources.fx import ecb_pairs, parse_ecb_fx, parse_fred_fx
+from optlab.marketdata.synthetic import synthetic_lake
 from optlab.structured import preset, quote
 from optlab.structured.context import PricingContext
 
