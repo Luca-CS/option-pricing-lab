@@ -483,7 +483,7 @@
     "/api/v1/jobs/{job_id}/events": {
       "get": {
         "summary": "Job Events",
-        "description": "Server-Sent Events: `state` when the job is queued or starts, `progress` while it runs (fraction, step, ETA),\nthen `done`, `error` or `cancelled` with the whole job, and the stream ends. An event's id is the job's version\n(+1 at every change of its row), so a reconnect with Last-Event-ID gets the job's latest state only if it changed\nsince; the last event always comes.",
+        "description": "Server-Sent Events: `state` when the job is queued or starts, `progress` while it runs (fraction, step, ETA),\nthen `done`, `error` or `cancelled` with the whole job, and the stream ends (or `unauthorized` when the session\nends meanwhile, checked every 15 s). An event's id is the job's version\n(+1 at every change of its row), so a reconnect with Last-Event-ID gets the job's latest state only if it changed\nsince; the last event always comes.",
         "operationId": "job_events",
         "parameters": [
           {
