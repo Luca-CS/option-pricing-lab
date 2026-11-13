@@ -16,7 +16,7 @@ are in [`feature-inventory.md`](feature-inventory.md); roles in [`security.md`](
   such as `["risk", "trader"]`). `admin` may call everything. `GET /auth/me` returns the caller's `permissions`: the
   operation ids it may call, read from the same document, so the front hides what the server would refuse.
 - `securitySchemes`: `session` (the cookie) on every non-public operation, plus `csrf` (the header) on every one that
-  is not a `GET`.
+  is not a `GET`. Every operation that answers 202 (it submits a job) takes the `Idempotency-Key` header (§7).
 - The interactive page `GET /api/v1/docs` is off by default (`OPTLAB_DOCS=true` turns it on): Swagger UI runs a
   third-party script on the desk's origin, pinned (5.34.0) and checked by its integrity, under a CSP that allows only
   that script and the page's own init (ADR-0021). Sign in with `POST /auth/login` (Try it out), then paste its
@@ -83,12 +83,28 @@ Every error is `application/problem+json` (RFC 9457), never a stack trace:
 - The model works at a spot of 100: fixings, smiles and the market context are in that scale; a real level is
   converted with the real spot of the market (`real_spot` on `POST /trading/fixings`).
 - Ids are stable strings: `trade_id`, `quote_id`, `run_id`, `snapshot_id`, `job_id`.
-- Monte Carlo values carry their standard error. In v1.0 the shapes are the library's: a quote's `headline` is
-  `{kind, value, se}`; a price is `price` and `stderr` (`unit_price`, `unit_stderr` and `value`, `stderr` for a
-  valuation); risk measures are `[value, se]` pairs under keys `"greek|name|bucket"` (`"delta|SPX|"`). Results name
-  their market (`snapshot_id`, `valuation`) and their `method`. **A6** gives every job result one envelope,
-  `{market: {snapshot_id, origin, as_of}, method, result}`, and every Monte Carlo number the shape `{value, se}`, with
-  the job model of ADR-0006; the routes and ids do not change.
+- Every job result is one envelope (A6):
+
+  ```json
+  {
+    "market": {"snapshot_id": "SPX-20261104T1600-8b7fa10118", "origin": {"surface": "observed", "...": "..."}, "as_of": "2026-11-04"},
+    "method": {"name": "monte_carlo", "model": "slv", "n_paths": 100000},
+    "result": {"...": "the kind's payload"}
+  }
+  ```
+
+  `market` is the market the job priced on (the one in use when it was submitted; `snapshot_id` null when a job prices
+  none, such as a fit or a backup), `method.name` how it was computed (`monte_carlo`, `replication`,
+  `full_revaluation`, `historical_full_revaluation`, `point_in_time`, `fit`, `replay`, `eod_backfill`, ...) with its
+  parameters beside it.
+- **Every Monte Carlo number is `{"value": v, "se": s}`** (the `Estimate` schema): a quote's `result.price`,
+  `coupon_rate`, a valuation's `unit_price` and `value`, a book's `value`, its positions and its groups, the Greeks
+  (`delta`, `vega`, per name), the risk measures under keys `"greek|name|bucket"` (`book["delta|SPX|"]`), the VaR's
+  factors, a script's `price`. `se` is null where the library has no error (a replication, a factor's interaction); a
+  closed-form number stays a plain number. A quote's `headline` keeps `{kind, value, se, unit, label}`. The same shape
+  comes back from the stored copies (`GET /structuring/quotes/{id}`, `GET /risk/runs/{id}`, `GET /quant/replay/runs/{id}`,
+  `GET /risk/pnl`, `GET /quant/model-risk`). Rule of the conversion, and why the stores keep the library's shapes:
+  `optlab.server.present`.
 
 ## 6. Pages
 
@@ -98,30 +114,54 @@ Every error is `application/problem+json` (RFC 9457), never a stack trace:
 
 ## 7. Jobs
 
-A route that computes answers `202 {"job_id": "..."}`. Then:
+A route that computes answers `202 {"job_id": "...", "reused": false}`. Jobs are rows of the database (ADR-0006), run
+by the worker; a restart of the api or of the worker forgets nothing: queued jobs run when a worker is back, a job a
+crash interrupted ends `error` with `{"type": "Interrupted", ...}` (never resumed: submit it again). Then:
 
-- `GET /jobs/{job_id}`: `{id, kind, state, elapsed, result, error}`, `state` among `queued`, `running`, `done`,
-  `error`, `cancelled`; `error` is `{type, message}` (the library's message).
-- `GET /jobs/{job_id}/events`: Server-Sent Events, for `EventSource`. One event per change of state, then the last one
-  with the whole job, and the stream ends. An event's id is the rank of its state, the same on every connection, so a
-  reconnect with `Last-Event-ID` gets only what it missed:
+- `GET /jobs/{job_id}`: `{id, kind, state, progress, step, eta, elapsed, submitted_at, started_at, finished_at,
+  engine, version, cancel_requested, result, error}`. `state` among `queued`, `running`, `done`, `error`,
+  `cancelled`; `progress` the fraction done (0 to 1, never backwards), `step` what the job is doing ("price SPX",
+  "VaR: revaluations"), `eta` seconds left once the progress says enough (null early on); `result` the envelope of §5
+  once done; `error` `{type, message}` (the library's message).
+- `GET /jobs/{job_id}/events`: Server-Sent Events, for `EventSource`. `state` when the job is queued or starts,
+  `progress` while it runs (at most two a second), then `done`, `error` or `cancelled` with the whole job, and the
+  stream ends; a comment line every 15 s keeps it open. An event's id is the job's `version` (+1 at every change of
+  its row), so a reconnect with `Last-Event-ID` gets the latest state only if it changed since, and always the last
+  event:
 
   ```
   id: 2
   event: state
-  data: {"id": "7145cd4beef9", "kind": "quote", "state": "running", "elapsed": 0.01}
+  data: {"id": "7145cd4beef91a2c", "kind": "quote", "state": "running", "progress": 0.0, "step": null, "eta": null, "elapsed": 0.0}
 
-  id: 3
+  id: 9
+  event: progress
+  data: {"id": "7145cd4beef91a2c", "kind": "quote", "state": "running", "progress": 0.42, "step": "quote of a Phoenix", "eta": 2.6, "elapsed": 1.9}
+
+  id: 14
   event: done
-  data: {"id": "7145cd4beef9", "kind": "quote", "state": "done", "result": {...}, "error": null, "elapsed": 1.84}
+  data: {"id": "7145cd4beef91a2c", "kind": "quote", "state": "done", "progress": 1.0, "result": {"market": {...}, "method": {...}, "result": {...}}, ...}
   ```
 
-  The last event is `done`, `error` or `cancelled`. **A6** adds `progress` events (step, fraction, ETA) between them,
-  persistent jobs (a restart forgets nothing; a job cut by a crash ends `error`) and idempotent submission by key.
-- `POST /jobs/{job_id}/cancel`: a queued job is dropped; a running one cannot be interrupted, its result is dropped.
-- `GET /jobs`: the jobs queued or running, for the status bar.
-- A job is visible to the user who submitted it and to admins; to anyone else it does not exist (404).
-- Each job keeps the market in use when it was submitted: switching the market never changes a run in progress.
+- `POST /jobs/{job_id}/cancel` → `{ok, state}`: a queued job ends `cancelled` at once; a running one stops at its next
+  batch of paths (or chunk of VaR days) and ends `cancelled` (`state` is still `running` in the answer until then).
+- `GET /jobs`: the caller's jobs queued or running, with their progress (an admin's: everyone's), for the status bar.
+  `GET /admin/jobs`: every job, newest first, paged (admin).
+- **Idempotency.** Send `Idempotency-Key: <1 to 128 of A-Z a-z 0-9 . _ : ->` on a submission: the same key from the
+  same user gives back the job it first created (`reused: true`), even once done; the same key with another request is
+  refused (422). Without a key, the same request (same parameters, same market, same book) from the same user while
+  the first is still queued or running is given back too (a double click computes once); once it is done, asking again
+  computes again.
+- A job is visible to the user who submitted it and to admins; to anyone else it does not exist (404). Jobs of a
+  schedule (the backup, the EOD) belong to the system: admins only.
+- Each job freezes what the desk held when it was submitted (the market in use, the typed basket settings, the cost
+  table's version, the trades by version and their fixings): switching the market, editing a trade or a setting
+  never changes a run in progress.
+- The worker runs in the api's process by default; `OPTLAB_WORKER=external` leaves the queue to
+  `python -m optlab.server.worker` (the container of A7). `GET /ready` answers 503 while no worker serves the queue.
+- Schedules (`GET /admin/pipelines`, `PATCH /admin/pipelines/{name}`, `POST /admin/pipelines/{name}/run`, admin and
+  audited): `backup` (nightly copy of the database, 14 days kept, on), `housekeeping` (old jobs, sessions and logs, on),
+  `lake` (public sources, off), `eod` (the risk EOD of the day, off).
 
 ## 8. Reports
 
@@ -163,9 +203,11 @@ npx openapi-typescript api/openapi.json --default-non-nullable false -o src/api/
   get it.
 - `api/client-check/` is the proof CI runs on every push (`npm ci --ignore-scripts`, generate, `tsc --noEmit`): a small
   client signing in, quoting, polling a job, reading a page of trades and adding fixings.
-- Domain payloads (a quote, a book valuation, a risk run) are described in prose and by the library's tests in v1.0;
-  their response models come with the A6 envelope. The models the server shapes itself are typed now: `Me`, `Job`,
-  `JobList`, `JobAccepted`, `Page`, `UserOut`, `AuditPage`, `Problem`.
+- Typed: the models the server shapes itself (`Me`, `Job`, `JobList`, `JobAccepted`, `JobResult` with `MarketRef` and
+  `Method`, `CancelOut`, `Pipeline`, `Page`, `UserOut`, `AuditPage`, `Problem`) and `Estimate`. The domain payload
+  inside `JobResult.result` (a quote, a book valuation, a risk run) is an object whose fields are described here and
+  by the routers' tests (`packages/server/tests/test_api_*.py` read them field by field); session 2 may add response
+  models for the ones its screens read, without changing a field.
 
 ## 11. Adding a route (session 2 may)
 
