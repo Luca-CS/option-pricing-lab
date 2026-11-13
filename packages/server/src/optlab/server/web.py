@@ -2,7 +2,8 @@
 what. Routers live in `optlab.server.routers`; `optlab.server.app.create_app` puts them together.
 
 The guard refuses, before any route runs:
-- a `Host` that is not this machine when the LAN profile is off (a page that rebinds its name to 127.0.0.1);
+- a `Host` that is not this machine when the LAN profile is off, nor one of its LAN names when it is on (a page
+  that rebinds its name to the desk's address);
 - a state-changing request whose `Origin` is another site (`null` included);
 - a body that is not `application/json`, and a body larger than `Settings.max_body_bytes`.
 Every route then declares who may call it with `access(...)`: a session cookie, the CSRF token in `X-CSRF-Token` on
@@ -231,8 +232,11 @@ class Guard:
             )
 
     def _refusal(self, method: str, host: str, headers: dict) -> tuple[int, str] | None:
-        if not self.settings.lan and _host(host) not in LOOPBACK:
+        name = _host(host)
+        if not self.settings.lan and name not in LOOPBACK:
             return 403, "this server answers on 127.0.0.1 or localhost only"
+        if self.settings.lan and name not in LOOPBACK and name not in self.settings.lan_hosts:
+            return 403, "this server answers on its LAN names only"  # a rebound name (security.md, finding 17)
         if method in SAFE:
             return None
         origin = headers.get("origin")
