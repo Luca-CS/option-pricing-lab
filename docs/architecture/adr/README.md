@@ -31,6 +31,7 @@ item: the tolerance across platforms.
 | [0019](0019-cd-ghcr-manual-deploy.md) | Images on GHCR at each semver tag; a manual `optlab deploy` with rollback | CD |
 | [0020](0020-accounts-roles-audit.md) | Local accounts (argon2id), cookie sessions, CSRF, roles checked on the server, audit log | Sécurité |
 | [0021](0021-old-front-during-session-1.md) | The v0 front may break during session 1; it is kept, not served, in `legacy/` | Front pendant cette session |
+| [0022](0022-lake-in-a-wsl-volume.md) | The containers' lake lives in a WSL volume (9P is 19 to 49 times slower); proposed in A7 | Exécution (ADR-0009's measurement) |
 
 The pace (steps A0 to A9, one pull request each, Luca merges) is a process rule, not an architecture decision: it is in
 the handoff, not here.
