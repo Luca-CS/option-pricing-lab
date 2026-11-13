@@ -4,6 +4,7 @@
 |---|---|---|
 | `backup` | a consistent copy of the database (`VACUUM INTO`) in `<backups>/nightly`, the last 14 days kept | on, 03:00 |
 | `housekeeping` | finished jobs older than 30 days, expired sessions, old log files | on, 03:30 |
+| `lake_backup` | a copy of the lake in `<backups>/lake` (unchanged files linked to the last copy), 4 kept | on, Sun 04:00 |
 | `lake` | the lake's public sources (`marketdata.ingest.update_all`) | off, Mon-Fri 22:30 |
 | `eod` | the risk EOD of the day on the book (`risk.pnl.backfill`) | off, Mon-Fri 23:00 |
 
@@ -35,12 +36,14 @@ WEEK, WEEKDAYS = ",".join(DAYS), ",".join(DAYS[:5])
 DEFAULTS = {
     "backup": {"kind": "backup", "days": WEEK, "at": "03:00", "enabled": True, "params": {}},
     "housekeeping": {"kind": "housekeeping", "days": WEEK, "at": "03:30", "enabled": True, "params": {}},
+    "lake_backup": {"kind": "lake_backup", "days": "sun", "at": "04:00", "enabled": True, "params": {}},
     "lake": {"kind": "lake", "days": WEEKDAYS, "at": "22:30", "enabled": False, "params": {}},
     "eod": {"kind": "eod_today", "days": WEEKDAYS, "at": "23:00", "enabled": False, "params": {"greeks": True}},
 }
 PARAMS = {  # what an admin may set per kind
     "backup": {"keep_days"},
     "housekeeping": {"job_keep_days", "log_keep_days"},
+    "lake_backup": {"keep"},
     "lake": {"only"},
     "eod_today": {"greeks", "options"},
 }
@@ -161,6 +164,7 @@ class Schedules:
         for key, value in (new["params"] or {}).items():
             ok = {
                 "keep_days": lambda v: isinstance(v, int) and 1 <= v <= 365,
+                "keep": lambda v: isinstance(v, int) and 1 <= v <= 52,
                 "job_keep_days": lambda v: isinstance(v, int) and 1 <= v <= 3650,
                 "log_keep_days": lambda v: isinstance(v, int) and 1 <= v <= 365,
                 "only": lambda v: isinstance(v, list) and len(v) <= 50 and all(isinstance(x, str) for x in v),
@@ -233,19 +237,27 @@ def _system_market(as_of=None) -> dict:
 
 def run_backup(desk, p: dict, f: Frozen) -> dict:
     """A consistent copy of the database, then the copies older than the retention removed."""
+    from optlab.server.backups import database_copy, prune_files
+
     folder = Path(desk.settings.backups) / "nightly"
-    now = dt.datetime.now(dt.timezone.utc)
-    stamp = f"{now:%Y%m%d-%H%M%S}-{now.microsecond // 1000:03d}"  # two copies in one second do not collide
-    target = desk.db.backup(folder / f"optlab-{stamp}.sqlite")
+    target = database_copy(desk.db, folder)
     keep = int(p.get("keep_days", desk.settings.backup_keep_days))
-    cutoff = time.time() - keep * 86400
-    removed = []
-    for old in sorted(folder.glob("optlab-*.sqlite")):
-        if old != target and old.stat().st_mtime < cutoff:
-            old.unlink()
-            removed.append(old.name)
+    removed = prune_files(folder, "optlab-*.sqlite", keep, keep=target)
     out = {"file": target.name, "bytes": target.stat().st_size, "removed": removed, "keep_days": keep}
     return envelope(_system_market(), {"name": "vacuum_into"}, out)
+
+
+def run_lake_backup(desk, p: dict, f: Frozen) -> dict:
+    """A copy of the lake (`backups.lake_snapshot`), unless the lake is being updated right now."""
+    from optlab.core import progress
+    from optlab.server.backups import lake_snapshot
+
+    if any(j["kind"] == "lake" and j["state"] == "running" for j in desk.jobs.active(everyone=True)):
+        raise RuntimeError("the lake is being updated: its copy waits for the next time")
+    progress.step("lake: copy", 0, 1)
+    keep = int(p.get("keep", desk.settings.lake_backup_keep))
+    out = lake_snapshot(desk.lake.root, Path(desk.settings.backups) / "lake", keep=keep, log=LOG.info)
+    return envelope(_system_market(), {"name": "lake_copy", "linked": "unchanged files"}, out)
 
 
 def run_housekeeping(desk, p: dict, f: Frozen) -> dict:
@@ -286,9 +298,11 @@ def submit_eod_today(desk, params: dict) -> dict:
 SUBMIT = {
     "backup": submit_system("backup"),
     "housekeeping": submit_system("housekeeping"),
+    "lake_backup": submit_system("lake_backup"),
     "lake": submit_system("lake"),
     "eod_today": submit_eod_today,
 }
 register("backup", run_backup)
 register("housekeeping", run_housekeeping)
+register("lake_backup", run_lake_backup)
 register("lake", run_lake)

@@ -1,6 +1,6 @@
 """The worker (ADR-0006): claims the queue's jobs, runs them, writes their progress and results; runs the schedules.
 
-    python -m optlab.server.worker [--concurrency 2] [--engine auto] [--workers N] [--store FILE]
+    optlab worker [--concurrency 2] [--engine auto] [--workers N] [--store FILE]   (or python -m optlab.server.worker)
 
 One worker serves a database (it holds a lease, renewed every few seconds), so one process owns the GPU. By default
 the api runs it in its own process (`Settings.worker = "embedded"`); `OPTLAB_WORKER=external` leaves the queue to this
@@ -14,11 +14,11 @@ reads the cancel flag, so a cancelled job stops at its next batch.
 
 from __future__ import annotations
 
-import argparse
 import os
 import secrets
 import socket
 import subprocess
+import sys
 import threading
 import time
 import traceback
@@ -257,51 +257,12 @@ class Worker:
             LOG.debug("lease not released", exc_info=True)
 
 
-def main(argv=None) -> None:
-    from optlab.core.log import configure
-    from optlab.server.api import Desk
-    from optlab.server.logs import to_files
-    from optlab.server.settings import Settings
+def main(argv=None) -> int:
+    """`python -m optlab.server.worker [options]` is `optlab worker [options]`."""
+    from optlab.server.cli import run
 
-    ap = argparse.ArgumentParser(prog="python -m optlab.server.worker", description=__doc__)
-    ap.add_argument("--concurrency", type=int, default=None, help="jobs at a time (default: the settings', 2)")
-    ap.add_argument("--engine", default=None, choices=("auto", "gpu", "cpu", "numpy"))
-    ap.add_argument("--workers", type=int, default=None, help="process pool for Monte Carlo batches on NumPy")
-    ap.add_argument("--store", help="the database file (default: the settings')")
-    ap.add_argument(
-        "--wait-lease",
-        type=float,
-        default=30.0,
-        help="seconds to wait for the lease of a worker that stopped without releasing it (a crash: its lease expires "
-        "after 15 s of silence)",
-    )
-    ap.add_argument("--log", default="INFO")
-    args = ap.parse_args(argv)
-    configure(args.log)
-    settings = Settings.load(
-        engine=args.engine, workers=args.workers, database=args.store, job_concurrency=args.concurrency
-    )
-    to_files(settings, "worker", args.log)
-    desk = Desk(settings=settings, engine=settings.engine, workers=settings.workers, run_jobs=False)
-    desk.shared = settings.lan  # the same rule as the api's for raw quotes and levels (none of its jobs reads it today)
-    worker = Worker(desk, role="external", concurrency=settings.job_concurrency)
-    deadline = time.monotonic() + args.wait_lease
-    while not worker.start():
-        if time.monotonic() > deadline:
-            desk.close()
-            raise SystemExit("another worker serves this database: stop it first")
-        print("another worker holds the lease: waiting for it to expire", flush=True)
-        time.sleep(2)
-    print(f"worker {worker.worker_id} on {desk.db.path}: {worker.concurrency} job(s) at a time, Ctrl+C to stop")
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("stopping: running jobs are asked to stop")
-    finally:
-        worker.stop()
-        desk.close()
+    return run(["worker", *(sys.argv[1:] if argv is None else argv)])
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

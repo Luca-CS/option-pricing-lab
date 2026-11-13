@@ -1,25 +1,21 @@
 """Structured products on the calibrated SPX: example quotes, the autocall model-risk table and timings.
 
-Console output only. Usage: python scripts/structured_examples.py [--paths 200000] [--quick]
+Console output only. Usage: optlab structured examples [--paths 200000] [--batch 25000] [--quick]
 """
 
 from __future__ import annotations
 
-import argparse
-import sys
 import time
-from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from optlab.core.validation import mc_smile  # noqa: E402
-from optlab.server.settings import Settings  # noqa: E402
-from optlab.structured import Book, Position, PricingContext, compile_sheet, preset, price_many, quote  # noqa: E402
-from optlab.structured.greeks import greeks  # noqa: E402
-from optlab.structured.multiasset import BasketContext  # noqa: E402
-from optlab.structured.solve import combine, solve_affine  # noqa: E402
+from optlab.core.validation import mc_smile
+from optlab.server.settings import Settings
+from optlab.server.tools import say
+from optlab.structured import Book, Position, PricingContext, compile_sheet, preset, price_many, quote
+from optlab.structured.greeks import greeks
+from optlab.structured.multiasset import BasketContext
+from optlab.structured.solve import combine, solve_affine
 
 MODELS = {"bs": "Black-Scholes (ATM vol)", "lv": "Local vol (Dupire)", "heston": "Heston", "slv": "SLV"}
 
@@ -172,28 +168,20 @@ def book(ctx, n_paths, batch):
     )
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--paths", type=int, default=200_000)
-    ap.add_argument("--batch", type=int, default=25_000)
-    ap.add_argument("--quick", action="store_true", help="20 000 paths, for a smoke run")
-    args = ap.parse_args()
-    n = 20_000 if args.quick else args.paths
+def main(paths: int = 200_000, batch: int = 25_000, quick: bool = False, log=say) -> None:
+    """`quick`: 20 000 paths, for a smoke run."""
+    n = 20_000 if quick else paths
     ctx = PricingContext.from_calibration(Settings.load().calibration)
-    print(
+    log(
         f"SPX calibration of {ctx.valuation}, spot rescaled to {ctx.market.spot:g}; last calibrated maturity "
         f"{ctx.t_max:.2f}y"
     )
     t0 = time.perf_counter()
     smile_check(ctx, n)
-    model_risk_table(ctx, n, args.batch)
-    timings(ctx, n, args.batch)
-    phoenix_greeks(ctx, n, args.batch)
-    example_quotes(ctx, n, args.batch)
-    worst_of(ctx, n, args.batch)
-    book(ctx, n, args.batch)
-    print(f"\ntotal {time.perf_counter() - t0:.0f} s")
-
-
-if __name__ == "__main__":
-    main()
+    model_risk_table(ctx, n, batch)
+    timings(ctx, n, batch)
+    phoenix_greeks(ctx, n, batch)
+    example_quotes(ctx, n, batch)
+    worst_of(ctx, n, batch)
+    book(ctx, n, batch)
+    log(f"\ntotal {time.perf_counter() - t0:.0f} s")

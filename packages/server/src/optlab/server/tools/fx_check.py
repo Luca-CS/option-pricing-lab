@@ -1,21 +1,17 @@
-"""Check the lake's FX against what it can be compared with, and measure what the quanto adjustment does: reports/fx_check.md.
+"""Check the lake's FX against what it can be compared with, and measure what the quanto adjustment does: <reports>/fx_check.md.
 
-    python scripts/lake_fx_check.py [--lake PATH] [--n-paths 100000]
+    optlab lake fx-check [--lake PATH] [--n-paths 100000]
 
 Yahoo's futures and spot are read for this comparison only, never stored. The report holds gaps and statistics, not their levels.
 """
 
 from __future__ import annotations
 
-import argparse
 import datetime as dt
-import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from optlab.core.instruments import pair_currencies
 from optlab.core.market import Market
@@ -37,13 +33,14 @@ from optlab.marketdata.quality import open_issues
 from optlab.marketdata.quotes import discount_function
 from optlab.marketdata.sources import curl_get
 from optlab.marketdata.sources.simple import fred_url, parse_fred
+from optlab.server.settings import Settings
+from optlab.server.tools import say
 from optlab.structured.context import PricingContext
 from optlab.structured.multiasset import BasketContext
 from optlab.structured.presets import preset
 from optlab.structured.quanto import integrated_vol
 from optlab.structured.quote import quote
 
-REPORT = Path(__file__).resolve().parents[1] / "reports" / "fx_check.md"
 DATES = ("2020-03-23", "2022-07-01", "2026-11-04")
 SEEDS = (2026, 2027, 2028, 2029, 2030)
 FUTURES = {
@@ -385,17 +382,15 @@ def worst_of_effect(lake: Lake, day: str, n_paths: int) -> tuple[str, str]:
     return table(("Paid in", "Coupon (bp p.a.)", "SE (bp)"), rows), note
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--lake", default=None)
-    ap.add_argument("--n-paths", type=int, default=100_000)
-    args = ap.parse_args()
-    lake = Lake(args.lake)
+def main(lake_root: str | Path | None = None, n_paths: int = 100_000, log=say) -> Path:
+    settings = Settings.load()
+    lake = Lake(lake_root or settings.lake)
+    report = settings.reports / "fx_check.md"
     day = DATES[-1]
     by_t, by_year, futures_notes = cip_against_futures(lake)
     curve_table = new_curves(lake)
     adjust, vol_line = links(lake)
-    effect, effect_note = worst_of_effect(lake, day, args.n_paths)
+    effect, effect_note = worst_of_effect(lake, day, n_paths)
     lv = "\n\n".join(lv_error(lake, d) for d in ("2022-07-01", day))
     last_forwards = "; ".join(
         f"{p} {pd.to_datetime(lake.read('fx_forwards', where=f'pair = {sql_str(p)}', columns='obs_date')['obs_date']).max().date()}"
@@ -406,10 +401,11 @@ def main():
     rho, rho_origin = fx_correlation_at(lake, "SX5E", "EURUSD", day)
     surface = surface_at(lake, "SX5E", day)
     link = quanto_link_at(lake, "SX5E", "USD", day)
-    REPORT.write_text(
+    report.parent.mkdir(parents=True, exist_ok=True)
+    report.write_text(
         f"""# FX in the lake and the quanto adjustment
 
-Written by `scripts/lake_fx_check.py`, {dt.date.today().isoformat()}. Gaps and statistics only: no vendor's levels.
+Written by `optlab lake fx-check`, {dt.date.today().isoformat()}. Gaps and statistics only: no vendor's levels.
 
 ## What is loaded
 
@@ -470,7 +466,7 @@ A positive shift means a negative correlation between the name and X, the domest
 
 ## A Phoenix on SPX and SX5E, {day}
 
-Local vol, {args.n_paths:,} paths for each of {len(SEEDS)} seeds, each name on its own surface. SE is that of the mean.
+Local vol, {n_paths:,} paths for each of {len(SEEDS)} seeds, each name on its own surface. SE is that of the mean.
 
 {effect}
 
@@ -494,8 +490,5 @@ Read the two middle columns together. In absolute terms the term left out is sma
 """,
         encoding="utf-8",
     )
-    print(f"written {REPORT}")
-
-
-if __name__ == "__main__":
-    main()
+    log(f"written {report}")
+    return report

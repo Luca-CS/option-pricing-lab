@@ -2,26 +2,23 @@
 per number of workers, and the cost of an SLV leverage calibration. It decides what an accelerator can gain.
 
 Console output, plus a JSON summary with --out. Run it on an idle machine: other jobs slow the CPU and drop the GPU
-clock. Usage: python scripts/bench_accel.py [--paths 1000000] [--workers 1,6] [--engines numpy,cpu,gpu] [--out file.json]
+clock. Usage: optlab bench accel [--paths 1000000] [--workers 1,6] [--engines numpy,cpu,gpu] [--out file.json]
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
-import sys
 import time
 from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from optlab.core.slv import calibrate_leverage  # noqa: E402
-from optlab.server.settings import Settings  # noqa: E402
-from optlab.structured import PricingContext, compile_sheet, preset, price_many  # noqa: E402
-from optlab.structured.multiasset import Basket  # noqa: E402
+from optlab.core.slv import calibrate_leverage
+from optlab.server.settings import Settings
+from optlab.server.tools import say
+from optlab.structured import PricingContext, compile_sheet, preset, price_many
+from optlab.structured.multiasset import Basket
 
 CASES = {
     "phoenix_2y_lv": ("phoenix", {}, "lv"),
@@ -121,52 +118,50 @@ def desk_quote(engine, precision):
             engines.set_default(None)
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--paths", type=int, default=1_000_000)
-    ap.add_argument("--batch", type=int, default=50_000)
-    ap.add_argument("--workers", default="1,6")
-    ap.add_argument("--cases", default=",".join(CASES))
-    ap.add_argument("--engines", default="numpy,cpu,gpu")
-    ap.add_argument("--no-leverage", action="store_true")
-    ap.add_argument("--desk", help="precisions of a full desk quote to time, e.g. standard,precise")
-    ap.add_argument("--out")
-    args = ap.parse_args()
+def main(
+    paths: int = 1_000_000,
+    batch: int = 50_000,
+    workers: str = "1,6",
+    cases: str = ",".join(CASES),
+    engines: str = "numpy,cpu,gpu",
+    no_leverage: bool = False,
+    desk: str | None = None,
+    out: str | None = None,
+    log=say,
+) -> None:
+    """`desk`: precisions of a full desk quote to time, e.g. standard,precise."""
+    unknown = sorted(set(c for c in cases.split(",") if c) - set(CASES))
+    if unknown:
+        raise ValueError(f"--cases: {', '.join(unknown)} not a case ({', '.join(CASES)})")
     ctx = PricingContext.from_calibration(Settings.load().calibration)
     rows = []
-    print(f"cpu count {os.cpu_count()}, paths {args.paths:,}, batch {args.batch:,}")
-    runs = [(e, int(w)) for e in args.engines.split(",") for w in (args.workers.split(",") if e == "numpy" else ["1"])]
-    for key in [c for c in args.cases.split(",") if c]:
-        run_case(
-            ctx, key, 20_000, 1, args.batch, "gpu" if "gpu" in args.engines else "numpy"
-        )  # warm-up: tables, CUDA context
+    log(f"cpu count {os.cpu_count()}, paths {paths:,}, batch {batch:,}")
+    runs = [(e, int(w)) for e in engines.split(",") for w in (workers.split(",") if e == "numpy" else ["1"])]
+    for key in [c for c in cases.split(",") if c]:
+        run_case(ctx, key, 20_000, 1, batch, "gpu" if "gpu" in engines else "numpy")  # warm-up: tables, CUDA context
         for e, w in runs:
-            r = run_case(ctx, key, args.paths, w, args.batch, e)
+            r = run_case(ctx, key, paths, w, batch, e)
             rows.append(r)
-            print(
+            log(
                 f"{key:28s} {e:5s} workers {w:2d}  wall {r['wall']:7.2f} s  simulation {r['simulation_cpu']:7.2f} s  "
                 f"evaluation {r['evaluation_cpu']:7.2f} s  share {100 * r['simulation_share']:5.1f} %  "
                 f"price {r['price']:.4f} ± {r['stderr']:.4f}"
             )
-    for e in () if args.no_leverage else args.engines.split(","):
+    for e in () if no_leverage else engines.split(","):
         for n in (100_000, 200_000):
             t0 = time.perf_counter()
             calibrate_leverage(ctx.heston, ctx.surface, ctx.market, 1.0, mix=0.5, n_particles=n, rng=1, engine=e)
             dt_ = time.perf_counter() - t0
             rows.append({"case": "slv_leverage_1y", "engine": e, "particles": n, "wall": dt_})
-            print(f"slv leverage 1y {e:5s} {n:,} particles: {dt_:.2f} s")
-    if args.desk:
-        for e in args.engines.split(","):
-            for precision in args.desk.split(","):
+            log(f"slv leverage 1y {e:5s} {n:,} particles: {dt_:.2f} s")
+    if desk:
+        for e in engines.split(","):
+            for precision in desk.split(","):
                 r = desk_quote(e, precision)
                 rows.append(r)
-                print(
+                log(
                     f"desk quote {e:5s} {precision:9s} ({r['paths']:,} paths, greeks, SLV vega, mix band, costs): "
                     f"{r['wall']:6.1f} s, coupon {100 * r['coupon']:.3f} % ± {100 * r['coupon_se']:.3f}"
                 )
-    if args.out:
-        Path(args.out).write_text(json.dumps(rows, indent=1))
-
-
-if __name__ == "__main__":
-    main()
+    if out:
+        Path(out).write_text(json.dumps(rows, indent=1))

@@ -3,15 +3,14 @@
 import datetime as dt
 import json
 import time
-from pathlib import Path
 
 import pandas as pd
 import pytest
-from _lake_fixture import derive_all, fill_observed
 from _quote_fixture import DAY, curve_rows, synthetic_rows
 
 from optlab.marketdata.ingest import as_rows
 from optlab.marketdata.lake import Lake
+from optlab.marketdata.synthetic import derive_all, fill_observed
 from optlab.server.api import ApiError, Desk
 
 EXPIRIES = tuple(DAY + dt.timedelta(days=d) for d in (36, 110, 256, 400))
@@ -174,19 +173,10 @@ def test_replay_runs_as_a_job_and_is_kept_without_real_levels(desk):
 
 @pytest.mark.slow
 def test_showcase_seed_fills_a_store_with_trades_struck_on_their_own_markets(tmp_path):
-    import importlib.util
-
-    from _lake_fixture import synthetic_lake
-
+    from optlab.marketdata.synthetic import synthetic_lake
     from optlab.server.api import Desk
+    from optlab.server.tools import showcase as mod
 
-    path = Path(__file__).resolve().parents[3] / "scripts" / "seed_showcase.py"
-    spec = importlib.util.spec_from_file_location("seed_showcase", path)
-    mod = importlib.util.module_from_spec(spec)
-    import sys
-
-    sys.modules["seed_showcase"] = mod
-    spec.loader.exec_module(mod)
     lake, days, _ = synthetic_lake(tmp_path / "lake", "2019-01-01", "2021-06-30")
     desk = Desk(tmp_path / "store" / "optlab.sqlite", lake=tmp_path / "lake")
     try:

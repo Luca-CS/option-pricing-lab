@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, Query, Request
 from fastapi import Path as PathParam
 
+from optlab.server.backups import lake_snapshots
 from optlab.server.jobs import Workers, iso
 from optlab.server.netcheck import lan_blockers
 from optlab.server.routers._common import ACCEPTED, Page, audited, desk, page, submit
@@ -34,10 +35,15 @@ def _backups(folder: Path) -> list[dict]:
     return [{"file": f.name, "bytes": f.stat().st_size, "at": iso(f.stat().st_mtime)} for f in files[:30]]
 
 
+def _lake_backups(folder: Path) -> list[dict]:
+    copies = lake_snapshots(folder / "lake")[::-1]
+    return [{"folder": c.name, "at": iso((c / "MANIFEST.json").stat().st_mtime)} for c in copies[:10]]
+
+
 @router.get("/system", **access("admin"))
 def system(request: Request):
     """Version, market in use, the workers (with the engine and the GPU as each sees them), the jobs by state, the
-    last backups, the paths of the settings."""
+    last backups of the database and of the lake, the paths of the settings."""
     st = state(request)
     d = desk(request)
     return {
@@ -48,6 +54,7 @@ def system(request: Request):
         "workers": Workers(d.db).recent(),
         "job_counts": d.jobs.counts(),
         "backups": _backups(Path(st.settings.backups)),
+        "lake_backups": _lake_backups(Path(st.settings.backups)),
     }
 
 

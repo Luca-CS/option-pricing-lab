@@ -18,7 +18,7 @@ dependencies = [
 
 [project.optional-dependencies]
 yahoo = ["optlab-marketdata[yahoo]"]
-reports = ["matplotlib>=3.11"]  # scripts/make_report.py
+reports = ["matplotlib>=3.11"]  # the charts of optlab calib run (optlab.server.tools.plots)
 
 [dependency-groups]
 dev = [
@@ -79,7 +79,7 @@ known-first-party = ["optlab"]  # a namespace spread over packages/*/src, which 
 ban-relative-imports = "all"  # absolute `optlab.<package>` imports only (ADR-0003): a move never changes their meaning
 
 [tool.pyright]
-include = ["packages", "scripts", "tests"]
+include = ["packages", "tests"]
 extraPaths = ["tests/helpers", "packages/native/src"]  # optlab.native installs through an import hook (scikit-build-core), which pyright does not run
 pythonVersion = "3.14"
 pythonPlatform = "All"  # the same counts on the Windows and Linux runners
