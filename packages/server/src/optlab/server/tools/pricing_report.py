@@ -1,26 +1,22 @@
 """The desk price on the real lake: the summary of each family, what the assumptions move, the fit of the correlation skew, and what it costs.
 
-    python scripts/pricing_examples.py [--day 2026-11-04] [--paths 100000] [--workers 6]
+    optlab structured pricing-report [--day 2026-11-04] [--paths 100000] [--workers 6]
 
-Writes results/pricing_examples.json: prices and costs in % of notional, never a level. Reads the lake, so it does not run without it.
+Writes <results>/pricing_examples.json: prices and costs in % of notional, never a level. Reads the lake, so it does not run without it.
 """
 
 from __future__ import annotations
 
-import argparse
 import json
-import sys
 import time
-from pathlib import Path
 
 import numpy as np
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.names import NameMarkets
 from optlab.marketdata.pit import basket_at
 from optlab.server.settings import Settings
+from optlab.server.tools import say
 from optlab.structured import preset, quote
 from optlab.structured.compiler import compile_sheet
 from optlab.structured.defaults import resolve
@@ -136,62 +132,52 @@ def fit_table(ctx, names) -> dict:
     return out
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--day", default="2026-11-04")
-    ap.add_argument("--paths", type=int, default=100_000)
-    ap.add_argument("--workers", type=int, default=6)
-    args = ap.parse_args()
-    lake = Lake(Settings.load().lake)
+def main(day: str = "2026-11-04", paths: int = 100_000, workers: int = 6, log=say) -> None:
+    settings = Settings.load()
+    lake = Lake(settings.lake)
     names = NameMarkets(lake)
     out = {
-        "day": args.day,
-        "n_paths": args.paths,
-        "workers": args.workers,
+        "day": day,
+        "n_paths": paths,
+        "workers": workers,
         "defaults": "starting values, first tier",
         "products": {},
         "baskets": {},
     }
     for label, (name, changes) in SINGLE.items():
         sheet = preset(name, **changes)
-        ctx, _ = names.context(sheet.underlyings[0], args.day)
+        ctx, _ = names.context(sheet.underlyings[0], day)
         q = quote(
             sheet,
             ctx,
             control=None,
-            n_paths=args.paths,
+            n_paths=paths,
             batch=25_000,
-            workers=args.workers,
+            workers=workers,
             costs=resolve(None, sheet).inputs(),
         )
         out["products"][label] = summary(q)
-        print(label, f"{q.seconds:.1f} s", flush=True)
-        print(q.desk.table(), flush=True)
+        log(label, f"{q.seconds:.1f} s")
+        log(q.desk.table())
     for label, members in BASKETS.items():
-        ctx, _, meta = basket_at(lake, members, args.day, layer="reconstructed")
+        ctx, _, meta = basket_at(lake, members, day, layer="reconstructed")
         t0 = time.perf_counter()
         ctx.model("slv", 2.0, mix=0.5)
         leverage = time.perf_counter() - t0
         fit = fit_table(ctx, tuple(members))
-        print(label, json.dumps(fit, indent=0, default=float)[:2000], flush=True)
+        log(label, json.dumps(fit, indent=0, default=float)[:2000])
         sheet = preset(
             "phoenix", **{"general.basket": "worst_of", "general.underlyings": members, "general.notional": 5e6}
         )
-        q = quote(
-            sheet, ctx, n_paths=args.paths, batch=25_000, workers=args.workers, costs=resolve(None, sheet).inputs()
-        )
-        print(q.desk.table(), flush=True)
+        q = quote(sheet, ctx, n_paths=paths, batch=25_000, workers=workers, costs=resolve(None, sheet).inputs())
+        log(q.desk.table())
         out["baskets"][label] = {
             **summary(q),
             "correlation": {"matrix": np.round(ctx.corr, 3).tolist(), **meta},
             "leverages_seconds": leverage,
             "fit": fit,
-            "slv_gap": gap_table(ctx, members, args.paths, args.workers),
+            "slv_gap": gap_table(ctx, members, paths, workers),
         }
-    path = Settings.load().results / "pricing_examples.json"
+    path = settings.results / "pricing_examples.json"
     path.write_text(json.dumps(out, indent=1, default=float), encoding="utf-8")
-    print(path, flush=True)
-
-
-if __name__ == "__main__":
-    main()
+    log(path)

@@ -6,12 +6,12 @@ import time
 import numpy as np
 import pandas as pd
 import pytest
-from _lake_fixture import derive_all, fill_observed
 
 from optlab.marketdata.derive.correl import correlation_at
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.names import NameMarkets
 from optlab.marketdata.pit import context_at, market_at
+from optlab.marketdata.synthetic import derive_all, fill_observed
 from optlab.server.api import ApiError, Desk
 from optlab.structured import preset, quote
 from optlab.structured.multiasset import BasketContext

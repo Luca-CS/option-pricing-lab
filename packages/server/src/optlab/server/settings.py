@@ -67,8 +67,15 @@ class Settings(BaseSettings):
     )
     lake: Path = Field(default_factory=lambda f: f["data"] / "lake", description="the historical lake")
     results: Path = Field(default_factory=lambda f: _in_repository("results", f["data"] / "archive"))
+    reports: Path = Field(
+        default_factory=lambda f: _in_repository("reports", f["data"] / "reports"),
+        description="where the report commands write (optlab calib report, lake fx-check, ...)",
+    )
     calibration: Path = Field(
         default_factory=lambda f: f["results"] / "spx_calibration.json", description="the desk's starting market"
+    )
+    market: str | None = Field(
+        None, description="the stored snapshot `optlab serve` starts on (default: the calibration's market)"
     )
     raw: Path = Field(
         default_factory=lambda f: _in_repository("data/raw", f["data"] / "raw"),
@@ -105,6 +112,7 @@ class Settings(BaseSettings):
     job_concurrency: int = Field(2, ge=1, le=8, description="jobs a worker runs at a time")
     job_keep_days: int = Field(30, ge=1, le=3650, description="finished jobs older than this are removed")
     backup_keep_days: int = Field(14, ge=1, le=365, description="nightly database copies kept")
+    lake_backup_keep: int = Field(4, ge=1, le=52, description="weekly lake copies kept")
     log_keep_days: int = Field(14, ge=1, le=365, description="daily log files kept")
     timezone: str = Field("Europe/Paris", description="the local time of the schedules")
 
@@ -114,6 +122,7 @@ class Settings(BaseSettings):
         "database",
         "lake",
         "results",
+        "reports",
         "calibration",
         "raw",
         "logs",

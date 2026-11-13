@@ -155,18 +155,21 @@ Shell functions of the old front, for parity: status bar (connection, snapshot, 
 
 ## 3. Scripts (19 in `scripts/`, 1 in `cuda/bench/`) -> `optlab` CLI
 
-Every option is kept unless the row says otherwise. Each script is deleted once its subcommand exists (A7).
+Every option is kept unless the row says otherwise. **Done in A7**: every script below is a command of `optlab`
+(`optlab.server.cli`, its body in `optlab.server.tools`), `scripts/` is gone, and `test_cli.py` checks this table
+against the command tree. One change for all: a list option (`--only`) is comma-separated or repeated
+(`--only curves,fx`), where v0 took space-separated values.
 
 | Script | Does | Subcommand | Options | Status |
 |---|---|---|---|---|
-| `run_calibration.py` | SSVI -> SVI -> Heston -> SLV on the simulated market or the latest SPX snapshot, writes `results/<source>_calibration.json` and figures | `optlab calib run` | `--source simulated\|spx`, `--mix`, `--particles`, `--paths`, `--skip-sweep`, `--replot`; the output goes to `optlab-data/archive/` (decision §1: the JSON leaves the repo) | kept |
+| `run_calibration.py` | SSVI -> SVI -> Heston -> SLV on the simulated market or the latest SPX snapshot, writes `results/<source>_calibration.json` and figures | `optlab calib run` | `--source simulated\|spx`, `--mix`, `--particles`, `--paths`, `--skip-sweep`, `--replot`; the output goes to the settings' `results` (`results/` of a checkout, `optlab-data/archive/` for an installed wheel; the versioned JSON leaves the repo in A8, decision §1) and the charts to `<reports>/figures` | kept |
 | `make_report.py` | `reports/calibration.md` from the calibrations | `optlab calib report` | none | kept |
 | `plots.py` | report charts (matplotlib, site palette) | library module of `calib report` (extra `[reports]`) | — | merged |
 | `build_widget_data.py` | `docs/pricer-data.js` from the SPX calibration | `optlab demo widget-data` | none | kept until session 2 replaces `docs/lab.js` |
 | `download_spx.py` | SPX chain snapshot to `data/raw/` | `optlab calib download-spx` | none | kept |
 | `fix_asian_exotic.py` | one-off recomputation of the Asian cell in `results/*.json` | — | `--source` | **dropped** (agreed at A0): a migration already applied to the versioned results |
 | `rewrite_leverage.py` | one-off rewrite of the stored SLV leverage at every time step | — | `--source`, `--dry-run` | **dropped** (agreed at A0): already applied |
-| `lake_update.py` | update the lake from public sources, quality report | `optlab lake update` | `--only`, `--lake`, `--yahoo-chains`, `--import-sample`, `--dolt` | kept (and a planned job of the worker, off by default) |
+| `lake_update.py` | update the lake from public sources, quality report | `optlab lake update` | `--only`, `--lake`, `--yahoo-chains`, `--import-sample`, `--dolt`; new `--as-job` (the public sources, left to the worker) | kept (and the `lake` schedule of the worker, off by default) |
 | `lake_derive.py` | derived tables: curves, carry, bank, FX, surfaces, correlation, pairs, observed fits | `optlab lake derive` | `--only`, `--lake` | kept |
 | `lake_fx_check.py` | FX against H.10 and CME, quanto size: `reports/fx_check.md` | `optlab lake fx-check` | `--lake`, `--n-paths` | kept |
 | `lake_surface_test.py` | reconstruction against real chains: `reports/surface_reconstruction.md` | `optlab lake surface-test` | `--step`, `--lake` | kept |
@@ -175,9 +178,24 @@ Every option is kept unless the row says otherwise. Each script is deleted once 
 | `pricing_examples.py` | the desk price on the real lake: `reports/pricing.md` | `optlab structured pricing-report` | `--day`, `--paths`, `--workers` | kept |
 | `structured_examples.py` | example quotes, autocall model-risk table, timings | `optlab structured examples` | `--paths`, `--batch`, `--quick` | kept |
 | `seed_showcase.py` | the showcase store (a dozen trades on real history) | `optlab demo seed-showcase` | `--store`, `--day`, `--n-paths` | kept |
-| `risk_eod.py` | EOD, backfill, P&L, VaR, ladder from the console | `optlab risk eod\|backfill\|pnl\|var\|ladder` | `--store`, `--date`, `--from`, `--to`, `--precision`, `--engine`, `--workers`, `--days`, `--no-greeks`, `--market` | kept |
+| `risk_eod.py` | EOD, backfill, P&L, VaR, ladder from the console | `optlab risk eod\|backfill\|pnl\|var\|ladder` | `--store`, `--date`, `--from`, `--to`, `--precision`, `--engine`, `--workers`, `--days`, `--no-greeks`, `--market`, each on the subcommands it concerns; new `--as-job` (all but `pnl`) | kept |
 | `bench_accel.py` | NumPy against the CPU and GPU engines | `optlab bench accel` | `--paths`, `--batch`, `--workers`, `--cases`, `--engines`, `--no-leverage`, `--desk`, `--out` | kept |
-| `cuda/bench/bench_numpy.py` | NumPy timings for the CUDA benchmark table | `optlab bench numpy` | none | kept |
+| `cuda/bench/bench_numpy.py` | NumPy timings for the CUDA benchmark table | `optlab bench numpy` | new `--out` (default: beside `bench.exe`'s sources) | kept |
+
+Commands with no v0 script (A6, A7):
+
+| Command | Does |
+|---|---|
+| `optlab serve [--open] [--demo-data]` | the API (was `python -m optlab.app`, then `python -m optlab.server`, still an alias) |
+| `optlab worker` | the job queue's worker alone (`OPTLAB_WORKER=external`; was `python -m optlab.server.worker`) |
+| `optlab users create\|list\|roles\|password\|disable\|enable` | accounts (was `python -m optlab.server.users`) |
+| `optlab backup [--lake]`, `optlab restore PATH\|latest [--lake]` | a copy of the database (and of the lake) now; a checked restoration that keeps what it replaces |
+| `optlab migrate [--v0 FOLDER]` | the schema to this code's revision; a v0 store imported |
+| `optlab jobs list\|show\|wait\|cancel` | the job queue from the console |
+| `optlab api export\|check` | the OpenAPI document (was `python -m optlab.server.openapi`) |
+| `optlab check fast\|full\|gpu\|golden` | the test suites and the golden numbers, from a checkout |
+| `optlab demo data` | the demo folder of made-up numbers (handoff §7.7) |
+| `optlab version` | the packages' versions and the engines of the machine |
 
 ## 4. Desk command line (`python -m optlab.app`)
 
@@ -186,14 +204,14 @@ Every option is kept unless the row says otherwise. Each script is deleted once 
 | `--host` (default `127.0.0.1`) | `OPTLAB_HOST`, `optlab serve --host`; beyond `127.0.0.1` only through the `lan` profile (Caddy, TLS) with Luca's agreement | kept |
 | `--port` (8765) | `OPTLAB_PORT`, `optlab serve --port` | kept |
 | `--token` | replaced by accounts | **dropped** (decided) |
-| `--workers` | `OPTLAB_WORKERS` (worker process) | kept |
-| `--engine auto\|gpu\|cpu\|numpy` | `OPTLAB_ENGINE` (worker process) | kept |
-| `--store` | `OPTLAB_STORE` (the SQLite database) | kept |
+| `--workers` | `OPTLAB_WORKERS`, `optlab serve --workers`, `optlab worker --workers` | kept |
+| `--engine auto\|gpu\|cpu\|numpy` | `OPTLAB_ENGINE`, `optlab serve --engine`, `optlab worker --engine` | kept |
+| `--store` | `OPTLAB_DATABASE` (the SQLite database), `optlab serve --store` | kept |
 | `--calibration` | `OPTLAB_CALIBRATION` (default: the SPX calibration in `optlab-data/archive/`) | kept |
-| `--market` | `optlab serve --market` (initial market in use) | kept |
+| `--market` | `OPTLAB_MARKET`, `optlab serve --market` (initial market in use) | kept |
 | `--tunnel` | none | **dropped** (decided) |
 | `--open` | `optlab serve --open` | kept |
-| `--log` | `OPTLAB_LOG_LEVEL` | kept |
+| `--log` | `optlab serve --log`, `optlab worker --log` | kept |
 
 ## 5. Reports and published outputs
 
@@ -205,7 +223,7 @@ Every option is kept unless the row says otherwise. Each script is deleted once 
 | `reports/risk.md` | measured runs of `optlab risk ...` (written by hand from them) | kept |
 | `reports/fx_check.md` | `optlab lake fx-check` | kept |
 | `reports/surface_reconstruction.md` | `optlab lake surface-test`, `regime-test` | kept |
-| `reports/showcase.md` | guide of the showcase (commands updated in A7) | kept |
+| `reports/showcase.md` | guide of the showcase (its commands are `optlab` ones since A7) | kept |
 | `results/spx_calibration.json`, `results/simulated_calibration.json` (112,000 lines) | `optlab calib run` | **moved out of the repo** (decided): release asset and `optlab-data/archive/` |
 | `results/pricing_examples.json`, `replay_*.json`, `surface_*.json` (small) | their subcommands | kept in the repo |
 | `docs/` (GitHub Pages: `index.html`, `lab.js`, `pricer-data.js`) | by hand, `demo widget-data` | frozen; replaced by the demo build in session 2 |

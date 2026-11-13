@@ -39,7 +39,8 @@ def a(tmp_path_factory):
 def test_the_pipelines_and_their_defaults(a):
     admin = a.client("admin")
     rows = {p["name"]: p for p in admin.get("/api/v1/admin/pipelines").json()["pipelines"]}
-    assert set(rows) == {"backup", "housekeeping", "lake", "eod"}
+    assert set(rows) == {"backup", "housekeeping", "lake_backup", "lake", "eod"}
+    assert rows["lake_backup"]["enabled"] and rows["lake_backup"]["days"] == "sun"
     assert rows["backup"]["enabled"] and rows["backup"]["next_run_at"] and rows["housekeeping"]["enabled"]
     assert not rows["eod"]["enabled"] and rows["eod"]["next_run_at"] is None and not rows["lake"]["enabled"]
     assert a.client("risk").get("/api/v1/admin/pipelines").status_code == 403
@@ -95,9 +96,9 @@ def test_the_nightly_backup_and_its_retention(a):
 
 def test_a_due_schedule_fires_once_as_the_system(a):
     desk = a.state.desk
-    sch = Schedules(desk, clock=lambda: time.time() + 2 * 86400)  # two days later: every enabled one is due
+    sch = Schedules(desk, clock=lambda: time.time() + 8 * 86400)  # eight days later: every enabled one is due
     fired = sch.fire()
-    assert set(fired) == {"backup", "housekeeping"}  # the ones on by default
+    assert set(fired) == {"backup", "housekeeping", "lake_backup"}  # the ones on by default
     assert sch.fire() == []  # moved to their next time: once only
     row = sch.get("housekeeping")
     j = wait_state(desk, row["last_job_id"])
@@ -106,5 +107,7 @@ def test_a_due_schedule_fires_once_as_the_system(a):
     assert a.client("viewer").get(f"/api/v1/jobs/{row['last_job_id']}").status_code == 404
     assert a.client("admin").get(f"/api/v1/jobs/{row['last_job_id']}").status_code == 200
     wait_state(desk, sch.get("backup")["last_job_id"])
+    copy = wait_state(desk, sch.get("lake_backup")["last_job_id"])  # this test's lake is empty or missing
+    assert copy["state"] in ("done", "error") and (copy["state"] == "done" or "no lake" in copy["error"]["message"])
     listed = a.client("admin").get("/api/v1/admin/jobs", params={"kind": "housekeeping"}).json()["items"]
     assert listed[0]["schedule"] == "housekeeping" and listed[0]["user_id"] is None

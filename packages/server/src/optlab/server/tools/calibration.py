@@ -1,8 +1,9 @@
 """Calibrate the implied surface (SSVI, then raw SVI) -> Heston -> SLV leverage, on the latest SPX
-snapshot or on a simulated market, and write results/<source>_calibration.json and reports/figures/<source>_*.png.
+snapshot or on a simulated market, and write <results>/<source>_calibration.json and
+<reports>/figures/<source>_*.png (`optlab calib run`).
 
-    python scripts/run_calibration.py --source simulated
-    python scripts/run_calibration.py --source spx        # needs scripts/download_spx.py first
+    optlab calib run --source simulated
+    optlab calib run --source spx        # needs `optlab calib download-spx` first (US hours)
 
 Only derived quantities are written (parameters, curves rescaled to a spot of 100, model
 repricing errors, charts): the raw Yahoo quotes never leave data/raw/.
@@ -10,25 +11,16 @@ repricing errors, charts): the raw Yahoo quotes never leave data/raw/.
 
 from __future__ import annotations
 
-import argparse
 import json
-import sys
 import time
 from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
-
-from plots import plot_errors, plot_mix_sweep, plot_smiles, plot_surfaces  # noqa: E402
-
-from optlab.core import HestonParams, Leverage, Market, SVISurface, heston_iv  # noqa: E402
-from optlab.core.pipeline import calibrate_all, exotics_table, fit_errors, mix_sweep  # noqa: E402
-from optlab.server.settings import Settings  # noqa: E402
-
-RESULTS = ROOT / "results"
-FIGURES = ROOT / "reports" / "figures"
+from optlab.core import HestonParams, Leverage, Market, SVISurface, heston_iv
+from optlab.core.pipeline import calibrate_all, exotics_table, fit_errors, mix_sweep
+from optlab.server.settings import Settings
+from optlab.server.tools import say
 
 # simulated market: a known Heston model plus noise in the quotes
 TRUE_HESTON = HestonParams(v0=0.025, kappa=1.8, theta=0.04, xi=0.75, rho=-0.75)
@@ -91,18 +83,22 @@ def _round(x, nd=6):
     return np.round(np.asarray(x, dtype=float), nd).tolist()
 
 
-def _plot_all(source, slices, surface, heston, errors, leverage, sweep, exotics):
-    plot_smiles(slices, surface, heston, errors, FIGURES / f"{source}_smiles.png")
-    plot_errors(errors, FIGURES / f"{source}_errors.png")
-    plot_surfaces(surface, leverage, FIGURES / f"{source}_surfaces.png")
+def _plot_all(figures: Path, source, slices, surface, heston, errors, leverage, sweep, exotics):
+    from optlab.server.tools.plots import plot_errors, plot_mix_sweep, plot_smiles, plot_surfaces  # matplotlib
+
+    figures.mkdir(parents=True, exist_ok=True)
+    plot_smiles(slices, surface, heston, errors, figures / f"{source}_smiles.png")
+    plot_errors(errors, figures / f"{source}_errors.png")
+    plot_surfaces(surface, leverage, figures / f"{source}_surfaces.png")
     if sweep:
-        plot_mix_sweep(sweep, exotics, FIGURES / f"{source}_mix.png")
+        plot_mix_sweep(sweep, exotics, figures / f"{source}_mix.png")
 
 
-def replot(source):
-    res = json.loads((RESULTS / f"{source}_calibration.json").read_text())
+def replot(source, results: Path, figures: Path, log=say):
+    res = json.loads((results / f"{source}_calibration.json").read_text())
     _, slices, _ = spx_market() if source == "spx" else simulated_market()
     _plot_all(
+        figures,
         source,
         slices,
         SVISurface.from_dict(res["surface"]),
@@ -112,29 +108,41 @@ def replot(source):
         res.get("mix_sweep"),
         res["exotics"],
     )
-    print("charts redrawn for", source)
+    log("charts redrawn for", source)
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--source", choices=["spx", "simulated"], default="simulated")
-    ap.add_argument("--mix", type=float, default=0.5)
-    ap.add_argument("--particles", type=int, default=200_000)
-    ap.add_argument("--paths", type=int, default=400_000)
-    ap.add_argument("--skip-sweep", action="store_true")
-    ap.add_argument("--replot", action="store_true", help="redraw the charts from the saved JSON only")
-    args = ap.parse_args()
-    if args.replot:
-        replot(args.source)
-        return
+def main(
+    source: str = "simulated",
+    mix: float = 0.5,
+    particles: int = 200_000,
+    paths: int = 400_000,
+    skip_sweep: bool = False,
+    replot_only: bool = False,
+    results: Path | None = None,
+    figures: Path | None = None,
+    plots: bool = True,
+    exotic_paths: int = 200_000,
+    log=say,
+) -> Path:
+    """Calibrate, write `<results>/<source>_calibration.json` and the charts (`plots`, needs the `reports` extra);
+    `replot_only` redraws the charts from the saved JSON. `paths` validate the fit, `exotic_paths` price the
+    model-risk table. Returns the JSON's path."""
+    if source not in ("spx", "simulated"):
+        raise ValueError(f"--source: {source!r} is not spx or simulated")
+    settings = Settings.load()
+    results = Path(results or settings.results)
+    figures = Path(figures or settings.reports / "figures")
+    if replot_only:
+        replot(source, results, figures, log)
+        return results / f"{source}_calibration.json"
 
     t0 = time.time()
-    market, slices, meta = spx_market() if args.source == "spx" else simulated_market()
-    print(f"{args.source}: {len(slices)} maturities, {sum(len(s['k']) for s in slices)} quotes")
-    fit = calibrate_all(market, slices, mix=args.mix, n_particles=args.particles)
-    errors = fit_errors(fit, market, slices, n_paths=args.paths)
-    exotics = exotics_table(fit, market)
-    sweep = [] if args.skip_sweep else mix_sweep(fit, market, n_particles=args.particles)
+    market, slices, meta = spx_market() if source == "spx" else simulated_market()
+    log(f"{source}: {len(slices)} maturities, {sum(len(s['k']) for s in slices)} quotes")
+    fit = calibrate_all(market, slices, mix=mix, n_particles=particles)
+    errors = fit_errors(fit, market, slices, n_paths=paths, log=log)
+    exotics = exotics_table(fit, market, n_paths=exotic_paths)
+    sweep = [] if skip_sweep else mix_sweep(fit, market, n_particles=particles)
 
     lev = fit["slv"].leverage
     keep = np.arange(len(lev.times))  # every step: the leverage is piecewise constant in time
@@ -148,28 +156,25 @@ def main():
         "feller": fit["heston"].feller(),
         "slv": {
             "mix": fit["slv"].mix,
-            "particles": args.particles,
+            "particles": particles,
             "leverage": {
                 "times": _round(lev.times[keep]),
                 "x_grids": _round(lev.x_grids[keep], 5),
                 "values": _round(lev.values[keep], 5),
             },
         },
-        "validation_paths": args.paths,
+        "validation_paths": paths,
         "errors": errors,
         "exotics": exotics,
         "mix_sweep": sweep,
         "timings": fit["timings"] | {"total_s": time.time() - t0},
     }
-    RESULTS.mkdir(exist_ok=True)
-    FIGURES.mkdir(parents=True, exist_ok=True)
-    path = RESULTS / f"{args.source}_calibration.json"
+    results.mkdir(parents=True, exist_ok=True)
+    path = results / f"{source}_calibration.json"
     path.write_text(json.dumps(result, indent=1))
-    print("wrote", path)
+    log("wrote", path)
 
-    _plot_all(args.source, slices, fit["surface"], fit["heston"], errors, lev, sweep, exotics)
-    print(f"done in {time.time() - t0:.0f} s")
-
-
-if __name__ == "__main__":
-    main()
+    if plots:
+        _plot_all(figures, source, slices, fit["surface"], fit["heston"], errors, lev, sweep, exotics)
+    log(f"done in {time.time() - t0:.0f} s")
+    return path

@@ -5491,7 +5491,7 @@
           "admin"
         ],
         "summary": "System",
-        "description": "Version, market in use, the workers (with the engine and the GPU as each sees them), the jobs by state, the\nlast backups, the paths of the settings.",
+        "description": "Version, market in use, the workers (with the engine and the GPU as each sees them), the jobs by state, the\nlast backups of the database and of the lake, the paths of the settings.",
         "operationId": "system",
         "responses": {
           "200": {

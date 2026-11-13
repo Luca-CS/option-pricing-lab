@@ -1,12 +1,11 @@
 """Replay of a book on fixings. Offline, the fixings are built so that the knock-in and the call have known dates, which an
-independent reading of the levels confirms. The same checks on real closes run in scripts/lake_replay.py."""
+independent reading of the levels confirms. The same checks on real closes run in `optlab lake replay run`."""
 
 import datetime as dt
 
 import numpy as np
 import pandas as pd
 import pytest
-from _lake_fixture import derive_all, fill_observed, price_paths
 
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.replay import (
@@ -18,6 +17,7 @@ from optlab.marketdata.replay import (
     strike_trade,
     struck_sheet,
 )
+from optlab.marketdata.synthetic import derive_all, fill_observed, price_paths
 from optlab.structured import CALENDARS, preset
 
 STRIKE = dt.date(2020, 1, 15)

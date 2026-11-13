@@ -1,23 +1,19 @@
 """Fill a separate desk store with a realistic book: a dozen products sold on past dates, each solved on the market of its own
 strike date, with real closes as fixings and the market of the last date in the lake. Nothing touches the default store.
 
-    python scripts/seed_showcase.py [--store PATH] [--day 2026-11-04] [--n-paths 20000]
+    optlab demo seed-showcase [--store PATH] [--day 2026-11-04] [--n-paths 20000]
 
 It prints the command that opens the desk on this book. Trades already in the store are kept as they are.
 """
 
 from __future__ import annotations
 
-import argparse
 import dataclasses
-import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import pandas as pd
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from optlab.marketdata.derive.bank import wrapper_spreads
 from optlab.marketdata.lake import Lake
@@ -25,6 +21,7 @@ from optlab.marketdata.pit import market_at, real_close
 from optlab.marketdata.replay import ReplayConfig, filled_fixings, strike_trade
 from optlab.server.api import Desk
 from optlab.server.settings import Settings
+from optlab.server.tools import say
 from optlab.structured import preset
 from optlab.structured.defaults import resolve
 
@@ -172,7 +169,7 @@ def store_fixings(desk: Desk, lake: Lake, start, day, names) -> tuple[int, int]:
     return stored, len(filled)
 
 
-def seed(desk: Desk, lake: Lake, day, deals=DEALS, n_paths: int = 20_000, log=print, look_back=LOOK_BACK) -> list:
+def seed(desk: Desk, lake: Lake, day, deals=DEALS, n_paths: int = 20_000, log=say, look_back=LOOK_BACK) -> list:
     """Markets, fixings, basket settings and trades. Returns the ids of the trades added."""
     day = pd.Timestamp(day).date()
     sid = store_markets(desk, lake, day, look_back)
@@ -213,32 +210,30 @@ def seed(desk: Desk, lake: Lake, day, deals=DEALS, n_paths: int = 20_000, log=pr
     return added
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--store", default=str(Settings.load().data / "showcase" / "optlab.sqlite"))
-    ap.add_argument("--day", default=None, help="valuation date (default: the last SPX close in the lake)")
-    ap.add_argument("--n-paths", type=int, default=20_000)
-    args = ap.parse_args()
-    lake = Lake(Settings.load().lake)
+def default_store() -> Path:
+    return Settings.load().data / "showcase" / "optlab.sqlite"
+
+
+def main(store: str | Path | None = None, day: str | None = None, n_paths: int = 20_000, log=say) -> str:
+    """Seed the showcase's database (`store`, by default `<data>/showcase/optlab.sqlite`) on the lake's market of `day`
+    (by default its last SPX close); returns the snapshot left in use."""
+    settings = Settings.load()
+    lake = Lake(settings.lake)
     last = lake.read("prices_eod", where="instrument = 'SPX'", columns="max(obs_date) AS d")["d"].iloc[0]
-    day = pd.Timestamp(args.day or last).date()
-    desk = Desk(args.store)
+    when = pd.Timestamp(day or last).date()
+    desk = Desk(Path(store or default_store()), settings=settings, run_jobs=False)
     try:
-        seed(desk, lake, day, n_paths=args.n_paths)
+        seed(desk, lake, when, n_paths=n_paths, log=log)
         sid = desk.ctx.snapshot_id
-        trades = desk.repo.trades()
-        for t in trades:
+        for t in desk.repo.trades():
             events = desk.trade_events(t.trade_id)
             kinds = pd.Series([e["kind"] for e in events["past"]], dtype=str).value_counts().to_dict()
-            print(
+            log(
                 f"{t.trade_id}: {t.counterparty}, past events {kinds}, {len(events['upcoming'])} to come"
                 + (f", missing: {events['missing']}" if events["missing"] else "")
             )
     finally:
         desk.close()
-    print("\nOpen the desk on this book:")
-    print(f'python -m optlab.server --store "{desk.db.path}" --market {sid} --open')
-
-
-if __name__ == "__main__":
-    main()
+    log("\nOpen the desk on this book:")
+    log(f'optlab serve --store "{desk.db.path}" --market {sid} --open')
+    return str(sid)

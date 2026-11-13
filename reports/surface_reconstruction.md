@@ -4,7 +4,7 @@
 December 2022, without reading a single option quote. They were then compared with real end-of-day SPX and SPXW chains
 for those days (the free historicaldata.net sample): 157,016 quotes, with maturities up to 5 years.
 
-Figures come from `scripts/lake_surface_test.py` and are stored in `results/surface_reconstruction.json`. Only statistics
+Figures come from `optlab lake surface-test` and are stored in `results/surface_reconstruction.json`. Only statistics
 are published here, never a quote.
 
 ## Result
@@ -50,7 +50,7 @@ An SVI fit on the same days, for scale: 21 bp RMSE, butterfly-free on every day,
 
 ## By level of the VIX, and the crash of 2020
 
-The test above covers one orderly period, so `scripts/lake_regime_test.py` adds real SPY chains from DoltHub (2019-2026, up to about 2
+The test above covers one orderly period, so `optlab lake regime-test` adds real SPY chains from DoltHub (2019-2026, up to about 2
 months) and one SPX day in three of 2022: 333 days, 35 of them between 20 February and 15 May 2020.
 
 It found a real error. The shape comes from a calm day, and its slope grew too fast with the level: above a VIX of 60 it

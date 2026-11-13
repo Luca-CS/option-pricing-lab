@@ -8,7 +8,7 @@ are in [`feature-inventory.md`](feature-inventory.md); roles in [`security.md`](
 ## 1. The document
 
 - Base path `/api/v1`. The live document is `GET /api/v1/openapi.json` (public, like `health` and `ready`); the versioned
-  copy is `api/openapi.json`, written by `uv run python -m optlab.server.openapi export` (`optlab api export` in A7).
+  copy is `api/openapi.json`, written by `uv run optlab api export`.
   `packages/server/tests/test_openapi.py` fails when the copy drifts from the routes.
 - `operationId` is the route's function name (`create_trade`, `get_quote`), unique. Tags are the domains: `structuring`,
   `trading`, `market`, `risk`, `quant`, `admin`; the system routes (health, auth, jobs) have none.
@@ -37,7 +37,7 @@ POST /api/v1/auth/login   {"name": "...", "password": "..."}
   password or state. A new login always opens a new session.
 - Wrong name or wrong password give the same 401. After `login_max_failures` (5) the account is locked for
   `login_lockout_minutes` (15): 423. After `login_per_address` (20) failed logins in 10 minutes from one address: 429.
-- Accounts are created on the machine (`uv run python -m optlab.server.users create <name> --roles admin`, the password
+- Accounts are created on the machine (`uv run optlab users create <name> --roles admin`, the password
   asked twice, never an argument) or by an admin (`POST /admin/users`). Passwords are 12 characters at least.
 
 ## 3. Errors
@@ -159,7 +159,7 @@ crash interrupted ends `error` with `{"type": "Interrupted", ...}` (never resume
   table's version, the trades by version and their fixings): switching the market, editing a trade or a setting
   never changes a run in progress.
 - The worker runs in the api's process by default; `OPTLAB_WORKER=external` leaves the queue to
-  `python -m optlab.server.worker` (the container of A7). `GET /ready` answers 503 while no worker serves the queue.
+  `optlab worker` (the `worker` container). `GET /ready` answers 503 while no worker serves the queue.
 - Schedules (`GET /admin/pipelines`, `PATCH /admin/pipelines/{name}`, `POST /admin/pipelines/{name}/run`, admin and
   audited): `backup` (nightly copy of the database, 14 days kept, on), `housekeeping` (old jobs, sessions and logs, on),
   `lake` (public sources, off), `eod` (the risk EOD of the day, off).
@@ -189,7 +189,12 @@ crash interrupted ends `error` with `{"type": "Interrupted", ...}` (never resume
   Keep `changeOrigin: false` (Vite's default): the API compares the browser's `Origin` (`http://127.0.0.1:5173`)
   with the `Host` the proxy forwards, and refuses a write when they differ. The session cookie is set for the Vite
   origin and sent back through the proxy.
-- A quick start without real data: `optlab serve --demo-data` on the synthetic mini-lake and an example book (A7).
+- A quick start without real data: `optlab serve --demo-data`. The first time it builds `~/.cache/optlab/demo`
+  (about two minutes): the synthetic mini-lake (`optlab.marketdata.synthetic`, seven names, 2019-01-01 to
+  2021-06-30), the simulated calibration, the market of 30 June 2021 in use and four trades struck on their own past
+  markets (`DEMO-01` to `DEMO-04`), and an admin account `demo` whose password is printed once. For a CI job or a
+  fixed folder: `printf '%s\n' "$PASSWORD" | optlab demo data --to DIR --password-stdin`, then
+  `optlab --data DIR serve`. The folder holds made-up numbers only (`docs/architecture/operations.md`).
 
 ## 10. Types for the front
 

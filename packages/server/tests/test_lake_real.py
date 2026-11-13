@@ -47,7 +47,7 @@ def test_splits_are_continuous_in_the_real_closes():
 @pytest.mark.lake
 def test_a_worst_of_spx_sx5e_on_the_real_lake_is_quanto_with_its_labels():
     if not LAKE.has("fx_vols"):
-        pytest.skip("no FX in this lake: scripts/lake_update.py --only fx, then scripts/lake_derive.py --only fx")
+        pytest.skip("no FX in this lake: optlab lake update --only fx, then optlab lake derive --only fx")
     day = dt.date(2022, 7, 1)
     ctx, snaps, meta = basket_at(LAKE, ["SPX", "SX5E"], day)
     link = meta["quanto"]["SX5E"]
@@ -74,7 +74,7 @@ def test_every_pair_has_forwards_at_covered_parity_on_the_real_lake(pair, base, 
         rows = LAKE.read("fx_forwards", where=f"pair = '{pair}' AND obs_date = DATE '{day}'", order="tenor")
         if rows.empty:
             pytest.skip(
-                f"no {pair} forward: scripts/lake_update.py --only mof boj boe, then scripts/lake_derive.py --only curves fx"
+                f"no {pair} forward: optlab lake update --only mof,boj,boe, then optlab lake derive --only curves,fx"
             )
         T = rows["tenor"].to_numpy()
         expected = cip_forward(
@@ -153,7 +153,7 @@ REPLAYS = {"BRC-2020": "replay_brc_lv.json", "PHX-2022": "replay_phx_lv.json"}
 def replayed(name):
     path = RESULTS / REPLAYS[name]
     if not path.exists():
-        pytest.skip(f"{path.name} not produced yet: scripts/lake_replay.py run")
+        pytest.skip(f"{path.name} not produced yet: optlab lake replay run")
     return json.loads(path.read_text(encoding="utf-8"))[name]
 
 

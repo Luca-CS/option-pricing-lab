@@ -1,18 +1,15 @@
-"""Compute the derived and synthetic tables of the lake from what it holds: curves, carry, bank, surfaces, correlation.
+"""Compute the derived and synthetic tables of the lake from what it holds: curves, carry, bank, surfaces, correlation
+(`optlab lake derive`).
 
-python scripts/lake_derive.py [--only curves carry bank fx ...] [--lake PATH]
+    optlab lake derive [--only curves,carry,bank,fx,reconstructed,realized,premium,baskets,observed,parity] [--lake PATH]
 """
 
 from __future__ import annotations
 
-import argparse
-import sys
 import time
 from pathlib import Path
 
 import pandas as pd
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from optlab.core.instruments import enabled_names, enabled_underlyings
 from optlab.marketdata.derive.bank import build_bank
@@ -24,6 +21,7 @@ from optlab.marketdata.derive.surfaces import build_observed, build_reconstructe
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.quotes import quote_days
 from optlab.server.settings import Settings
+from optlab.server.tools import say
 
 BASKETS = (
     ("SPX", "NDX"),
@@ -46,9 +44,9 @@ def spread_days(lake):
 
 def observed(lake):
     """Fits on every day of the archives, and on the Yahoo snapshots with long enough chains."""
-    out = [build_observed(lake, "SPX", quote_days(lake, "SPX", "historicaldata"), "historicaldata", log=print)]
+    out = [build_observed(lake, "SPX", quote_days(lake, "SPX", "historicaldata"), "historicaldata", log=say)]
     for name in ("SPX", "NDX", "RUT"):
-        out.append(build_observed(lake, name, quote_days(lake, name, "yahoo"), "yahoo", log=print))
+        out.append(build_observed(lake, name, quote_days(lake, name, "yahoo"), "yahoo", log=say))
     return out
 
 
@@ -67,30 +65,24 @@ STEPS = {
     ),
     "realized": lambda lake: build_realized(lake, enabled_names()),
     "premium": build_premium,
-    "baskets": lambda lake: build_basket_quotes(lake, BASKETS, spread_days(lake), log=print),
+    "baskets": lambda lake: build_basket_quotes(lake, BASKETS, spread_days(lake), log=say),
     "observed": observed,
     "parity": lambda lake: build_parity_carry(lake, "SPX", "historicaldata"),
 }
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--only", nargs="*", default=None)
-    ap.add_argument("--lake", default=None)
-    args = ap.parse_args()
-    lake = Lake(args.lake)
+def main(only: list[str] | None = None, lake: str | Path | None = None, log=say) -> None:
+    unknown = sorted(set(only or ()) - set(STEPS))
+    if unknown:
+        raise ValueError(f"--only: {', '.join(unknown)} not a step ({', '.join(STEPS)})")
+    store = Lake(lake or Settings.load().lake)
     for name, step in STEPS.items():
-        if args.only and name not in args.only:
+        if only and name not in only:
             continue
         t0 = time.perf_counter()
-        result = step(lake)
+        result = step(store)
         rows = result if isinstance(result, list) else [result]
-        print(
+        log(
             f"{name}: {sum(r['n_new'] for r in rows)} new, {sum(r['n_changed'] for r in rows)} changed, "
-            f"{time.perf_counter() - t0:.1f} s",
-            flush=True,
+            f"{time.perf_counter() - t0:.1f} s"
         )
-
-
-if __name__ == "__main__":
-    main()

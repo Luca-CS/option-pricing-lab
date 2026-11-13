@@ -6,9 +6,9 @@ import time
 
 import pandas as pd
 import pytest
-from _lake_fixture import synthetic_lake
 
 from optlab.marketdata.replay import ReplayConfig, replay, result_json, strike_trade
+from optlab.marketdata.synthetic import synthetic_lake
 from optlab.server.api import Desk
 from optlab.server.report import book_report
 from optlab.structured import Trade, preset

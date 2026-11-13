@@ -9,7 +9,6 @@ import zipfile
 import numpy as np
 import pandas as pd
 import pytest
-from _lake_fixture import synthetic_lake
 
 from optlab.marketdata.derive.carry import cip_forward
 from optlab.marketdata.derive.curves import (
@@ -33,6 +32,7 @@ from optlab.marketdata.sources.rates import (
     parse_glc_workbook,
     parse_mof_jgb,
 )
+from optlab.marketdata.synthetic import synthetic_lake
 from optlab.structured import preset
 from optlab.structured.context import PricingContext
 from optlab.structured.schema import TermSheetError

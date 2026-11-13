@@ -19,7 +19,11 @@ dependencies = [
     "uvicorn>=0.54",
     "argon2-cffi>=25.1",  # password hashes (ADR-0020)
     "tzdata>=2025.2",  # the schedules' time zone (zoneinfo has no database of its own on Windows or a slim image)
+    "typer>=0.27.3",  # the `optlab` command line (ADR-0010)
 ]
+
+[project.scripts]
+optlab = "optlab.server.cli:main"
 
 [build-system]
 requires = ["hatchling==1.32.4"]

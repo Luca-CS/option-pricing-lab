@@ -331,23 +331,3 @@ def test_rule_calendars_know_the_special_closures_and_eurex():
     assert not eurex.is_business_day(dt.date(2020, 4, 13))  # Easter Monday
     assert not eurex.is_business_day(dt.date(2020, 5, 1))
     assert eurex.is_business_day(dt.date(2020, 7, 3))  # a US holiday
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("script", ["lake_update", "lake_derive", "lake_surface_test", "lake_replay"])
-def test_lake_scripts_start_from_their_path_alone(script):
-    import os
-    import subprocess
-    import sys
-    from pathlib import Path
-
-    root = Path(__file__).resolve().parents[3]
-    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
-    done = subprocess.run(
-        [sys.executable, str(root / "scripts" / f"{script}.py"), "--help"],
-        cwd=root,
-        env=env,
-        capture_output=True,
-        text=True,
-    )
-    assert done.returncode == 0, done.stderr

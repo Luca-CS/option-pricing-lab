@@ -1,6 +1,6 @@
 # Risk engine: Greeks, ladders, scenarios, historical VaR and the explained P&L
 
-Run on 6 and 7 November 2026 on the showcase book (`scripts/seed_showcase.py`: twelve live trades, plus one quoted on the
+Run on 6 and 7 November 2026 on the showcase book (`optlab demo seed-showcase`: twelve live trades, plus one quoted on the
 desk, on the market `SPX-20261104T1600-8b7fa10118`), on the RTX 2070 Super at Standard precision (100,000 paths) unless
 said otherwise. Amounts are in the payment currency (USD) from the desk's side; the notes of the book are sold, so the
 desk is short their coupons and long their puts. Every number of a Monte Carlo revaluation carries its standard error, of

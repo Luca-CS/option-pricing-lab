@@ -14,7 +14,7 @@ its life, look at the market behind every number, and share a result. This docum
 | Constraint | Consequence |
 |---|---|
 | The engine runs on Luca's PC (NumPy, SciPy, optional GPU), calibrations and Yahoo data are local | The browser talks to a **local Python server**; nothing is computed in the browser except formatting and charts |
-| A public https page cannot call `localhost` (Chrome Private Network Access) | The **server serves the UI itself** (same origin): `python -m optlab.server` then open the printed address |
+| A public https page cannot call `localhost` (Chrome Private Network Access) | The **server serves the UI itself** (same origin): `optlab serve` then open the printed address |
 | Portable, easy to set up, no installation without approval | **Zero new dependency**: standard-library HTTP server and SQLite; the front is plain HTML, CSS and JavaScript modules, no build step, no CDN (works offline) |
 | Shareable while the back stays on the PC | (1) LAN: `--host 0.0.0.0` with an access token; (2) any tunnel Luca chooses (Tailscale, Cloudflare Tunnel) pointed at the port, same token; (3) **standalone HTML reports** of a quote or a book, one file that opens anywhere without the server |
 | Honest numbers | Every price shows its standard error and method, every time is measured, every result names its market snapshot |
@@ -220,7 +220,7 @@ every call).
 
 Limits that remain, from the library rather than the page:
 
-- A market snapshot is a calibration: a new market needs `scripts/run_calibration.py`, or the Data screen for a market from the lake.
+- A market snapshot is a calibration: a new market needs `optlab calib run`, or the Data screen for a market from the lake.
   Names other than the one in use come from the lake at the same date (`marketdata/names.py`, surface layer `reconstructed`, kept
   per name and date, leverage calibrated on first SLV use). A name typed in Market > Other underlyings wins over the lake; a name the
   lake cannot give is a flat Black-Scholes market, and the result says so.

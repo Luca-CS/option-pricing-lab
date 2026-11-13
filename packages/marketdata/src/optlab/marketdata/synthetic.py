@@ -1,4 +1,6 @@
-"""A small synthetic lake with every table the point-in-time market reads, for offline tests. All levels are made up."""
+"""A small synthetic lake with every table the point-in-time market reads: the offline tests' lake, the CI's, and the
+demo data of `optlab demo data` (`optlab serve --demo-data`). Every level is made up, from a fixed seed: no vendor's
+data, so it may go anywhere (fixtures, CI artefacts, a demo build)."""
 
 from __future__ import annotations
 

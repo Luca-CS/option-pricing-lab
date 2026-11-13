@@ -1,30 +1,26 @@
 """Does the reconstruction hold when the VIX is high? Reconstruct SPX from volatility indices only, compare with real SPY chains
 (DoltHub, up to about 2 months, 2019-2026) and SPX chains (2022) by level of the VIX. The crash of February to May 2020 is kept out
-of the fit of the slope, so the figures on it are out of sample. Statistics only: results/surface_regimes.json.
+of the fit of the slope, so the figures on it are out of sample. Statistics only: <results>/surface_regimes.json.
 
-    python scripts/lake_regime_test.py [--step 8]
+    optlab lake regime-test [--step 8]
 """
 
 from __future__ import annotations
 
-import argparse
 import dataclasses
 import json
-import sys
 import time
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from scipy.optimize import least_squares
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from optlab.marketdata.derive.surfaces import LEVEL_REF, index_panel, reconstruct_on, static_prior
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.pit import real_close
 from optlab.marketdata.quotes import clean_day, quote_days
 from optlab.server.settings import Settings
+from optlab.server.tools import say
 
 CRASH = (pd.Timestamp("2020-02-20"), pd.Timestamp("2020-05-15"))
 BUCKETS = [0, 20, 30, 40, 60, 100]
@@ -125,21 +121,19 @@ def fit_power(prior, days: list, panel: pd.DataFrame) -> float:
     return float(least_squares(residuals, [0.1], bounds=([0.0], [1.0]), diff_step=0.05, max_nfev=12).x[0])
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--step", type=int, default=8)
-    args = ap.parse_args()
+def main(step: int = 8, log=say) -> None:
     t0 = time.perf_counter()
-    lake = Lake(Settings.load().lake)
+    settings = Settings.load()
+    lake = Lake(settings.lake)
     panel = index_panel(lake, "2018-06-01")
-    days = sample(lake, panel, args.step)
+    days = sample(lake, panel, step)
     crash = [d for d in days if CRASH[0] <= d["day"] <= CRASH[1]]
     rest = [d for d in days if not CRASH[0] <= d["day"] <= CRASH[1]]
-    print(f"{len(days)} days, {len(crash)} in the crash, {time.perf_counter() - t0:.0f} s", flush=True)
-    current = static_prior(Settings.load().calibration)
+    log(f"{len(days)} days, {len(crash)} in the crash, {time.perf_counter() - t0:.0f} s")
+    current = static_prior(settings.calibration)
     flat = dataclasses.replace(current, level_power=0.0)
     power = fit_power(flat, rest, panel)
-    print(f"slope power fitted away from the crash: {power:.3f}", flush=True)
+    log(f"slope power fitted away from the crash: {power:.3f}")
     out = {
         "run_at": pd.Timestamp.now(tz="UTC").isoformat(timespec="seconds"),
         "n_days": len(days),
@@ -154,11 +148,7 @@ def main():
         },
         "seconds": round(time.perf_counter() - t0, 1),
     }
-    path = Settings.load().results / "surface_regimes.json"
+    path = settings.results / "surface_regimes.json"
     path.write_text(json.dumps(out, indent=1), encoding="utf-8")
-    print(json.dumps(out, indent=1))
-    print(path)
-
-
-if __name__ == "__main__":
-    main()
+    log(json.dumps(out, indent=1))
+    log(path)

@@ -3,11 +3,11 @@
 A book of twelve trades is ready in its own store (`optlab-data/showcase`), so your own trades stay out of it. Each trade was dealt on a past date,
 with its coupon solved on that date's market at the desk's client price, with the lines of that quote kept as its reserve, and real closes are loaded as fixings. The market in use is the close of 4 November 2026.
 
-Open it from this worktree. `--workers 6` is what the times below use.
+Open it from the checkout. `--workers 6` is what the times below use.
 
 ```
-..\..\..\.venv\Scripts\python.exe -m optlab.server.users create <name> --roles admin --database "C:\Users\Luca\Code\projets\optlab-data\showcase\optlab.sqlite"
-..\..\..\.venv\Scripts\python.exe -m optlab.server --store "C:\Users\Luca\Code\projets\optlab-data\showcase\optlab.sqlite" --market SPX-20261104T1600-8b7fa10118 --workers 6
+uv run optlab users create <name> --roles admin --database "C:\Users\Luca\Code\projets\optlab-data\showcase\optlab.sqlite"
+uv run optlab serve --store "C:\Users\Luca\Code\projets\optlab-data\showcase\optlab.sqlite" --market SPX-20261104T1600-8b7fa10118 --workers 6
 ```
 
 **Since A5 (12 November 2026) the desk is API v1 only** until session 2 rebuilds the screens: the screens named below are
@@ -15,7 +15,7 @@ those of the v0 page, kept in `legacy/desk-static/` (not served), and each of th
 `/api/v1` ([feature-inventory.md](../docs/architecture/feature-inventory.md)); `OPTLAB_DOCS=true` adds a page to call
 them from the browser (`/api/v1/docs`). The numbers of this guide do not change.
 
-To start over: delete the `showcase` folder and run `scripts/seed_showcase.py`, which prints this command again with the new market id.
+To start over: delete the `showcase` folder and run `optlab demo seed-showcase`, which prints this command again with the new market id.
 
 ## 1. Overview: where every number comes from
 

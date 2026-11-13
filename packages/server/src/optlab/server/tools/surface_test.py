@@ -1,29 +1,26 @@
 """The decisive test of the data plan: reconstruct SPX from volatility indices only, on days where real chains exist, and
 compare with those chains. Publishes errors in volatility points per moneyness and per maturity (statistics only, never a
-quote): results/surface_reconstruction.json, read by reports/surface_reconstruction.md.
+quote): <results>/surface_reconstruction.json, read by reports/surface_reconstruction.md.
 
-    python scripts/lake_surface_test.py [--step 5]
+    optlab lake surface-test [--step 5] [--lake PATH]
 """
 
 from __future__ import annotations
 
-import argparse
 import datetime as dt
 import json
-import sys
 import time
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
 from optlab.core.svi import SVISurface, svi_arbitrage_report
 from optlab.marketdata.derive.surfaces import fit_observed, fit_shape, index_panel, reconstruct_on, static_prior
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.quotes import clean_day, quote_days
 from optlab.server.settings import Settings
+from optlab.server.tools import say
 
 MONEYNESS = [0, 0.7, 0.8, 0.9, 0.95, 1.0, 1.05, 1.1, 1.2, 10]
 MATURITY = [0, 1 / 12, 0.25, 0.5, 1.0, 2.0, 3.0, 6.0]
@@ -71,15 +68,12 @@ def summarise(frame: pd.DataFrame) -> dict:
     return out
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--step", type=int, default=5)
-    ap.add_argument("--lake", default=None)
-    args = ap.parse_args()
-    lake = Lake(args.lake)
-    prior = static_prior(Settings.load().calibration)
-    days = quote_days(lake, "SPX", "historicaldata")[:: args.step]
-    print(f"{len(days)} days, {days[0]} to {days[-1]}, prior {prior}", flush=True)
+def main(step: int = 5, lake_root: str | Path | None = None, log=say) -> None:
+    settings = Settings.load()
+    lake = Lake(lake_root or settings.lake)
+    prior = static_prior(settings.calibration)
+    days = quote_days(lake, "SPX", "historicaldata")[::step]
+    log(f"{len(days)} days, {days[0]} to {days[-1]}, prior {prior}")
     panel = index_panel(lake, days[0], days[-1])
     first = fit_observed(lake, "SPX", days[0], "historicaldata")
     stale = fit_shape(SVISurface.from_dict(json.loads(first["surface"])), source=f"observed {days[0]}")
@@ -103,10 +97,9 @@ def main():
             arbitrage[name].append(rep["butterfly_free"] and rep["calendar_free"])
         fit = json.loads(fit_observed(lake, "SPX", day, "historicaldata")["fit"])
         observed_fit.append(fit)
-        print(
+        log(
             f"{i + 1}/{len(days)} {day}: SVI fit {fit['rmse_bp']:.0f} bp, "
-            f"static RMSE {np.sqrt((frames['static_prior'][-1]['err'] ** 2).mean()):.2f} pt",
-            flush=True,
+            f"static RMSE {np.sqrt((frames['static_prior'][-1]['err'] ** 2).mean()):.2f} pt"
         )
     result = {
         "source": "historicaldata.net sample, SPX and SPXW",
@@ -134,11 +127,7 @@ def main():
                 str(f["day"].iloc[0]): round(float(np.sqrt((f["err"] ** 2).mean())), 2) for f in frames[name]
             },
         }
-    path = Settings.load().results / "surface_reconstruction.json"
+    path = settings.results / "surface_reconstruction.json"
     path.write_text(json.dumps(result, indent=1), encoding="utf-8")
-    print(json.dumps({k: v["all"] for k, v in result["variants"].items()}, indent=1), flush=True)
-    print(path, flush=True)
-
-
-if __name__ == "__main__":
-    main()
+    log(json.dumps({k: v["all"] for k, v in result["variants"].items()}, indent=1))
+    log(path)
