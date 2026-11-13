@@ -31,8 +31,8 @@ echo "  $(( $(date +%s) - start )) s"
 
 if [ -n "$DATABASE" ]; then
   echo "store <- $DATABASE (through optlab restore)"
-  run -v optlab_backups:/data/backups -v "$(dirname "$DATABASE"):/seed:ro" "$IMAGE" \
-    -c "mkdir -p /data/backups/manual && cp '/seed/$(basename "$DATABASE")' /data/backups/manual/optlab-seed.sqlite"
+  run -v optlab_backups:/data/backups -v "$(dirname "$DATABASE"):/seed:ro" -e "SEED=$(basename "$DATABASE")" "$IMAGE" \
+    -c 'mkdir -p /data/backups/manual && cp "/seed/$SEED" /data/backups/manual/optlab-seed.sqlite'
   docker run --rm --network none --user 10001:10001 -v optlab_store:/data/store -v optlab_backups:/data/backups \
     -v optlab_archive:/data/archive:ro -e OPTLAB_DATA=/data "$IMAGE" \
     restore /data/backups/manual/optlab-seed.sqlite --yes

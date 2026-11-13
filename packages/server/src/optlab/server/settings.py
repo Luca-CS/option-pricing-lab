@@ -146,8 +146,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _safety(self) -> Settings:
-        in_container = self.container and self.host == "0.0.0.0"  # the container's own interface (ADR-0009)
-        if not self.lan and not _is_loopback(self.host) and not in_container:
+        if self.container and not in_container():
+            raise ValueError("OPTLAB_CONTAINER is for deploy/'s containers: this process does not run in one")
+        in_container_interface = self.container and self.host == "0.0.0.0"  # the container's own interface (ADR-0009)
+        if not self.lan and not _is_loopback(self.host) and not in_container_interface:
             raise ValueError(
                 f"host {self.host!r} listens beyond this machine: set OPTLAB_LAN=true only with Luca's agreement "
                 "(ADR-0002), or keep 127.0.0.1"
@@ -173,6 +175,11 @@ class Settings(BaseSettings):
     def describe(self) -> dict:
         """Where everything is, for a start-up line or a health check (no secret in here)."""
         return {k: str(v) if isinstance(v, Path) else v for k, v in self.model_dump().items()}
+
+
+def in_container() -> bool:
+    """Docker writes /.dockerenv in every container it starts (Podman /run/.containerenv): a native process has none."""
+    return Path("/.dockerenv").exists() or Path("/run/.containerenv").exists()
 
 
 def _is_loopback(host: str) -> bool:

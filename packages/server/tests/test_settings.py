@@ -57,6 +57,9 @@ def test_listening_beyond_this_machine_needs_the_lan_flag(data, monkeypatch):
     for host in ("0.0.0.0", "192.168.1.20", "optlab.local"):
         with pytest.raises(ValidationError, match="beyond this machine"):
             Settings.load(host=host)
+    with pytest.raises(ValidationError, match="does not run in one"):
+        Settings.load(host="0.0.0.0", container=True)  # a native process that claims to be a container
+    monkeypatch.setattr("optlab.server.settings.in_container", lambda: True)
     assert Settings.load(host="0.0.0.0", container=True).host == "0.0.0.0"  # a container's own interface
     with pytest.raises(ValidationError, match="beyond this machine"):
         Settings.load(host="192.168.1.20", container=True)  # a container may not name another address

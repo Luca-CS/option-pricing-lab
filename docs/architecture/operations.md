@@ -196,7 +196,10 @@ OPTLAB_LAN=true OPTLAB_LAN_NAMES="optlab.home.arpa, 192.168.1.198" OPTLAB_LAN_AD
 ```
 
 `GET /api/v1/admin/network` (netcheck) reads what still blocks it on Windows. Never a router port forward, UPnP or a
-tunnel to this instance.
+tunnel to this instance. Behind `netsh portproxy`, every LAN client reaches Caddy from the Windows host's
+address: the login throttle by address and the audit log then see one address (the per-account lockout still holds;
+security.md, finding 42). Run the images through compose only: a bare `docker run -p` would ignore its 127.0.0.1
+publishing (finding 38).
 
 ## When something goes wrong
 

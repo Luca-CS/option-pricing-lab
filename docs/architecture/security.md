@@ -117,6 +117,33 @@ from `secrets` and is printed once, never logged or written; no pickle, `eval` o
 | 32 | `restore latest` takes the copy whose name sorts last, so a planted far-future name wins; a copy's schema is not compared with its revision's (extra triggers or views would come with it) | Info (same condition as 28: write access to the backups) | kept: the backups folder is as trusted as the data; the containers' part keeps it out of reach of what they run |
 | 33 | An admin may set the lake copy's `keep` to 1 and run it, which removes the older copies | Info (as `keep_days` of the nightly copy) | kept: admin only, audited, and the newest copy stays complete |
 
+### Found in A7, the containers (the `security-review` pass: nothing above its bar)
+
+Checked and sound:
+- **The Host allow-list (finding 17, fixed here).** With the LAN profile on, only a loopback name or one of
+  `OPTLAB_LAN_NAMES` passes. A missing `Host`, a suffix, another address or a trailing dot is refused, and the profile
+  will not start without its names.
+- **The `container` flag** allows the exact string `0.0.0.0` only.
+- **Uvicorn's proxy headers** are trusted under the LAN profile only, and from the proxy's fixed address only. Caddy
+  replaces any `X-Forwarded-*` a client sends.
+- **The images.** The `.dockerignore` is an allow-list, the final stages hold the installed packages only, base
+  images are pinned by digest, the lock is installed with its hashes, and the processes run as uid 10001.
+- **`images.yml`.** It runs on `pull_request` (never `_target`) with `contents: read`; event fields reach the shell
+  through `env:`.
+
+| # | Finding | Severity | Fate |
+|---|---|---|---|
+| 34 | `OPTLAB_CONTAINER=true` was an ordinary setting: a native process given it with `OPTLAB_HOST=0.0.0.0` would listen on every interface without the LAN profile | Low (the environment is trusted) | refused unless the process runs in a container (`/.dockerenv`, `/run/.containerenv`); test |
+| 35 | The `desk` network had no `ip_range`: after recreations a container could take the proxy's address, which the api trusts for `X-Forwarded-For` | Low | dynamic addresses in 172.30.0.128/25, away from the fixed .10 and .20 |
+| 36 | The worker did not get the LAN profile's settings, so `desk.shared` stayed False in its jobs | Info (no job reads it today, finding 24) | the same `OPTLAB_LAN` and `OPTLAB_LAN_NAMES` as the api |
+| 37 | `seed-volumes.sh` put a file name inside single quotes of a `sh -c` string | Info (the operator's own argument, in a container without network) | passed as an environment variable |
+| 38 | The api image sets `OPTLAB_CONTAINER` and `OPTLAB_HOST=0.0.0.0`: `docker run -p 8765:8765` on a Docker whose `daemon.json` lacks `"ip": "127.0.0.1"` would publish the login over plain HTTP on every interface | Low | kept: compose publishes on 127.0.0.1 explicitly and this machine's daemon defaults to it; operations.md says to run the images through compose only |
+| 39 | One network, not `internal`: the api can reach the internet and the WSL host's other listeners, which it does not need | Low | kept for now: Docker publishes no port of a container that is only on an internal network; an egress filter is for A9's review |
+| 40 | Caddy's image runs as root inside its container (read-only, no capability, no new privileges), the one process facing the LAN | Low (the LAN profile is off) | kept until the profile is turned on: a non-root Caddy then, with its volumes owned by its user |
+| 41 | Each LAN device is told to trust Caddy's internal root CA: no name constraints, 10 years, its key in a container that has internet access | Low (off) | kept: operations.md will add the root's fingerprint, and the advice to trust it on the desk's devices only, when the profile is turned on |
+| 42 | Behind `netsh portproxy`, every LAN client reaches Caddy from the Windows host's address: the login throttle by address and the audit log's addresses collapse into one | Info (off; the per-account lockout still holds) | kept, written in operations.md's LAN section |
+| 43 | Docker's and NVIDIA's signing keys are fetched over HTTPS without a fingerprint check, as their documentation does | Info | kept: the apt repositories then check every package against them |
+
 ## 6. Secrets
 
 None today (checked in A0: no key, token or password in the tree; gitleaks in A1 checks the history). Future secrets
