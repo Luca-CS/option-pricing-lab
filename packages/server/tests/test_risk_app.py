@@ -1,8 +1,8 @@
 """R7: the risk services of the desk (`RiskApi`), their stored runs and the report; API v1 in `test_api_risk.py`."""
 
 import json
-import time
 
+import _desk
 import pytest
 
 from optlab.server.api import Desk
@@ -28,13 +28,8 @@ def desk(tmp_path_factory):
     d.close()
 
 
-def wait(desk, job_id, timeout=900):
-    t0 = time.perf_counter()
-    while (j := desk.job(job_id))["state"] in ("queued", "running"):
-        assert time.perf_counter() - t0 < timeout, "job did not finish"
-        time.sleep(0.2)
-    assert j["state"] == "done", j.get("error")
-    return j["result"]
+def wait(desk, job_id):
+    return _desk.wait(desk, job_id, timeout=900, poll=0.2)
 
 
 @pytest.mark.slow

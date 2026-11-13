@@ -2,10 +2,10 @@
 
 import datetime as dt
 import json
-import time
 
 import pandas as pd
 import pytest
+from _desk import wait
 from _quote_fixture import DAY, curve_rows, synthetic_rows
 
 from optlab.marketdata.ingest import as_rows
@@ -29,15 +29,6 @@ def desk(tmp_path_factory):
     d = Desk(store=root / "optlab.sqlite", lake=root / "lake")
     yield d
     d.close()
-
-
-def wait(desk, job_id, timeout=300):
-    t0 = time.perf_counter()
-    while (j := desk.job(job_id))["state"] in ("queued", "running"):
-        assert time.perf_counter() - t0 < timeout
-        time.sleep(0.05)
-    assert j["state"] == "done", j.get("error")
-    return j["result"]
 
 
 @pytest.mark.slow

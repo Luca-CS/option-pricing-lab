@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from _paths import real_lake
+from _paths import spx_lake
 from _risk_refs import book, flat_ctx, forward_contract, vanilla
 
 from optlab.risk import RiskGroup
@@ -12,20 +12,7 @@ from optlab.risk.greeks import GreekOptions, compute
 
 @pytest.fixture(scope="module")
 def lake():
-    from optlab.marketdata.lake import Lake
-
-    lk = Lake(real_lake())
-    try:
-        if (
-            lk.read("vol_surfaces", where="underlying = 'SPX' AND layer = 'reconstructed'", columns="count(*) AS n")[
-                "n"
-            ].iloc[0]
-            < 600
-        ):
-            pytest.skip("no reconstructed SPX surfaces in the lake")
-    except Exception:  # noqa: BLE001
-        pytest.skip("no lake")
-    return lk
+    return spx_lake()
 
 
 def test_var_and_es_statistics():

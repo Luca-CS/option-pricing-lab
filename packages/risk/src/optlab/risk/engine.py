@@ -48,8 +48,7 @@ from optlab.structured.cashflows import FundedSwap, Swap
 from optlab.structured.dates import year_fraction
 from optlab.structured.engine import Evaluation
 from optlab.structured.multiasset import BasketContext
-from optlab.structured.portfolio import Book
-from optlab.structured.pricer import check_fixing_scale
+from optlab.structured.portfolio import Book, merged_history
 from optlab.structured.replication import replication_result
 
 
@@ -142,20 +141,6 @@ def rolled_book(book: Book, items, old: dt.date, new: dt.date, spot0) -> Book:
                 fix[n].setdefault(d, float(level))
         out.append(dataclasses.replace(pos, fixings=fix))
     return Book(out)
-
-
-def _merged_history(items, basket: bool, ctx):
-    history: dict = {}
-    for it in items:
-        for name, h in it["history"].items():
-            merged = history.setdefault(name, {})
-            for t, v in h.items():
-                if t in merged and merged[t] != v:
-                    raise ValueError(f"two positions give different fixings of {name} at t = {t:.6f}")
-                merged[t] = v
-    for name, h in history.items():
-        check_fixing_scale(h, (ctx.markets[name] if basket else ctx.market).spot, name)
-    return history
 
 
 @dataclass
@@ -538,7 +523,7 @@ def _simulate(g: _Group, members: list, sim_ctx, items: list, since, fx: dict) -
     times = np.unique(np.concatenate([it["timeline"].sim_times for it in items]))
     sim_ctx, moved_markets, sim_markets = _moved_markets(g, members, sim_ctx)
     model = _sim_model(g.decision.model, ctx, sim_ctx, horizon, settings, g.group.seed, g.slv_cache, names)
-    history = _merged_history(items, g.basket, ctx)
+    history = merged_history(items, ctx)
     hist = history if g.basket else history.get(names[0], {})
     market = sim_ctx.market
     evaluations, layout = _evaluations(g, members, items, since, market, times, moved_markets, sim_markets)
