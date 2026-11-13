@@ -1,0 +1,13 @@
+# The images get the packages and the lock, nothing else (ADR-0009): no data, no results, no history, no secrets.
+*
+!pyproject.toml
+!uv.lock
+!packages/
+packages/**/tests/
+packages/**/__pycache__/
+packages/**/*.pyc
+packages/native/cuda/bench/
+packages/native/build/
+**/*.csv
+**/*.sqlite
+**/*.parquet

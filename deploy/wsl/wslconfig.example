@@ -1,0 +1,10 @@
+# An example for %UserProfile%\.wslconfig (WSL's VM, all distributions): Luca's to set, never written by a script.
+# Without it WSL takes half the RAM (12 GB of 24 here) and every processor, which the measurements of A7 found enough;
+# the lines below are what to change if the VaR's processes need more. `wsl --shutdown` applies a change.
+[wsl2]
+# memory=16GB
+# processors=12
+# NAT stays (the default): `networkingMode=mirrored` would put WSL's ports on the LAN (ADR-0009)
+# networkingMode=nat
+# the VM stays up while a container runs; a value in ms stops it that long after the last process
+# vmIdleTimeout=-1

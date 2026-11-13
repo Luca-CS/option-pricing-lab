@@ -1,0 +1,120 @@
+# The desk in containers, in WSL's Docker Engine (ADR-0009, docs/architecture/operations.md):
+#
+#     docker compose -f deploy/compose.yaml up -d --build          # api on http://127.0.0.1:8765, its worker on the GPU
+#     docker compose -f deploy/compose.yaml --profile lan up -d    # + Caddy with TLS for the LAN: Luca's agreement first
+#
+# Safety (security.md §3): every port is published on 127.0.0.1 explicitly (Docker writes its own firewall rules, so a
+# bare "8765:8765" would listen on every interface); no container sees the Docker socket; read-only root file
+# systems, a tmpfs for /tmp, no capability, no new privileges, an unprivileged user, bounded memory and processes.
+# The data lives in named volumes (ext4 in WSL): SQLite's WAL needs a real file system, never /mnt/c (9P).
+name: optlab
+
+x-hardened: &hardened
+  read_only: true
+  tmpfs:
+    - /tmp:size=1g,mode=1777
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  init: true
+  restart: unless-stopped
+  logging:
+    driver: local
+    options:
+      max-size: 20m
+      max-file: "3"
+
+services:
+  api:
+    <<: *hardened
+    image: optlab-api:${OPTLAB_TAG:-dev}
+    build:
+      context: ..
+      dockerfile: deploy/api.Dockerfile
+    environment:
+      OPTLAB_WORKER: external  # the jobs belong to the worker, the only process with the GPU
+      OPTLAB_LAN: ${OPTLAB_LAN:-false}
+      OPTLAB_LAN_NAMES: ${OPTLAB_LAN_NAMES:-}
+      FORWARDED_ALLOW_IPS: 172.30.0.10  # uvicorn trusts the proxy's X-Forwarded-For, nobody else's
+    ports:
+      - 127.0.0.1:${OPTLAB_PORT:-8765}:8765
+    volumes:
+      - store:/data/store
+      - logs:/data/logs
+      - lake:/data/lake:ro
+      - archive:/data/archive:ro
+      - config:/data/config:ro
+      - backups:/data/backups:ro
+    networks:
+      desk:
+        ipv4_address: 172.30.0.20
+    mem_limit: 4g
+    cpus: 4
+    pids_limit: 512
+    depends_on:
+      - worker
+
+  worker:
+    <<: *hardened
+    image: optlab-worker:${OPTLAB_TAG:-dev}
+    build:
+      context: ..
+      dockerfile: deploy/worker.Dockerfile
+    command: ["worker", "--engine", "auto", "--concurrency", "2", "--wait-lease", "60"]
+    gpus: all
+    shm_size: 1g  # the process pools of the VaR (spawn) and their semaphores
+    volumes:
+      - store:/data/store
+      - logs:/data/logs
+      - lake:/data/lake
+      - archive:/data/archive
+      - config:/data/config:ro
+      - backups:/data/backups
+    networks:
+      - desk
+    mem_limit: 10g
+    pids_limit: 1024
+
+  proxy:  # the LAN profile only (ADR-0002): TLS by Caddy's internal CA, the LAN names of OPTLAB_LAN_NAMES
+    profiles: ["lan"]
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    environment:
+      OPTLAB_LAN_NAMES: ${OPTLAB_LAN_NAMES:-}  # empty: Caddy refuses to start, as the api does with OPTLAB_LAN=true
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+    ports:
+      - ${OPTLAB_LAN_ADDRESS:-127.0.0.1}:8443:8443  # where the LAN reaches it: an address given on purpose
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    tmpfs:
+      - /tmp
+    networks:
+      desk:
+        ipv4_address: 172.30.0.10
+    mem_limit: 256m
+    depends_on:
+      - api
+
+networks:
+  desk:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  store:
+  logs:
+  lake:
+  archive:
+  config:
+  backups:
+  caddy-data:
+  caddy-config:
