@@ -14,7 +14,6 @@ With one name and Black-Scholes, the draws are those of `simulate`, so prices ma
 from __future__ import annotations
 
 import datetime as dt
-from collections.abc import Iterator
 from dataclasses import dataclass, field, replace
 
 import numpy as np
@@ -22,7 +21,6 @@ import numpy as np
 from optlab.core.heston import HestonParams
 from optlab.core.market import Market
 from optlab.core.models import BlackScholesModel, Leverage, LocalVolModel, Model, SLVModel, time_grid
-from optlab.structured.scenario import batch_sizes
 
 
 def correlation_root(corr) -> np.ndarray:
@@ -70,10 +68,6 @@ class Basket:
         if self.corr.shape != (len(self.names),) * 2:
             raise ValueError(f"the correlation matrix must be {len(self.names)}x{len(self.names)}")
         self.root = correlation_root(self.corr)
-
-    @property
-    def discount_market(self) -> Market:
-        return self.markets[self.names[0]]
 
 
 def simulate_basket(
@@ -206,34 +200,6 @@ class BasketScenario:
         return out
 
 
-def basket_scenarios(
-    basket: Basket,
-    times,
-    n_paths: int,
-    seed=None,
-    batch: int | None = None,
-    history: dict | None = None,
-    initial_fixings: dict | None = None,
-    **sim_kwargs,
-) -> Iterator[BasketScenario]:
-    """Batches of correlated paths, with the seed convention of `scenario.simulated_scenarios`.
-    `initial_fixings` replaces the spots read on the valuation date (struck products on bumped markets)."""
-    sizes = batch_sizes(n_paths, batch)
-    if len(sizes) == 1:
-        rngs = [np.random.default_rng(seed)]
-    else:
-        rngs = [np.random.default_rng(s) for s in np.random.SeedSequence(seed).spawn(len(sizes))]
-    times = np.asarray(times, dtype=float)
-    spot0 = {n: (initial_fixings or {}).get(n, basket.markets[n].spot) for n in basket.names}
-    for size, rng in zip(sizes, rngs):
-        paths = (
-            simulate_basket(basket, times, size, rng, **sim_kwargs)
-            if len(times)
-            else {n: np.empty((size, 0)) for n in basket.names}
-        )
-        yield BasketScenario(times, paths, spot0, history)
-
-
 @dataclass
 class BasketContext:
     """Markets, volatilities (a surface, or a flat vol) and correlation of several names, for worst-of products.
@@ -257,7 +223,7 @@ class BasketContext:
         correlation_root(self.corr)
 
     @classmethod
-    def with_spx(cls, others: dict, corr, spx=None) -> "BasketContext":
+    def with_spx(cls, others: dict, corr, spx=None) -> BasketContext:
         """SPX from the calibration plus other names given as {name: (spot, r, q, vol)} on flat markets."""
 
         if spx is None:
@@ -273,7 +239,7 @@ class BasketContext:
     def market(self) -> Market:
         return self.markets[self.names[0]]
 
-    def bumped(self, name: str, spot_factor: float = 1.0, vol_shift: float = 0.0) -> "BasketContext":
+    def bumped(self, name: str, spot_factor: float = 1.0, vol_shift: float = 0.0) -> BasketContext:
         """The same context with one name's spot scaled (sticky moneyness) or its implied vols shifted."""
         from optlab.structured.greeks import ShiftedSurface
 
@@ -294,7 +260,7 @@ class BasketContext:
             self.payment_currency,
         )
 
-    def with_bumps(self, vol: float = 0.0, skew: float = 0.0, corr: float = 0.0) -> "BasketContext":
+    def with_bumps(self, vol: float = 0.0, skew: float = 0.0, corr: float = 0.0) -> BasketContext:
         """The same context with every name's implied vols moved, and every pair's correlation, the matrix repaired if needed."""
         from optlab.structured.surfaces import BumpedSurface
 

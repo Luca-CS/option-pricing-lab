@@ -514,7 +514,7 @@ class TermSheet:
                     f"first_call = {self.get('autocall.first_call')} is after the last observation ({n_calls})"
                 )
 
-    def replace(self, **changes) -> "TermSheet":
+    def replace(self, **changes) -> TermSheet:
         """Copy with dotted-path changes, e.g. replace(**{"coupon.rate": 0.1}). Fields that the changes hide are
         dropped; changing a field that ends up hidden is an error."""
         values = {s: dict(v) for s, v in self.values.items()}
@@ -553,7 +553,7 @@ class TermSheet:
         return out
 
     @classmethod
-    def from_dict(cls, d: dict, strict: bool = True) -> "TermSheet":
+    def from_dict(cls, d: dict, strict: bool = True) -> TermSheet:
         """Inverse of to_dict: computed fields (the gearing) are dropped, ISO dates and lists are accepted."""
         d = dict(d)
         if "type" not in d:

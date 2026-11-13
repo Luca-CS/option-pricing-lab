@@ -6,7 +6,7 @@ in the lake. Eurex: the days the Euro Stoxx 50 is computed and traded (TARGET ho
 from __future__ import annotations
 
 import datetime as dt
-from functools import lru_cache
+from functools import cache
 
 from optlab.structured.dates import CONVENTIONS, WeekendCalendar, as_date
 
@@ -53,7 +53,7 @@ class NYSECalendar(WeekendCalendar):
     """New York Stock Exchange: Monday to Friday minus the regular holidays and the special closures."""
 
     @staticmethod
-    @lru_cache(maxsize=None)
+    @cache
     def holidays(year: int) -> tuple:
         days = []
         new_year = dt.date(year, 1, 1)
@@ -114,7 +114,7 @@ class EurexCalendar(NYSECalendar):
     """Eurex: Monday to Friday minus New Year's Day, Good Friday, Easter Monday, 1 May and 24, 25, 26, 31 December."""
 
     @staticmethod
-    @lru_cache(maxsize=None)
+    @cache
     def holidays(year: int) -> tuple:
         e = easter(year)
         return (
@@ -140,5 +140,5 @@ def calendar(name_or_calendar=None):
         try:
             return CALENDARS[name_or_calendar]
         except KeyError:
-            raise ValueError(f"unknown calendar {name_or_calendar!r}, expected one of {', '.join(CALENDARS)}")
+            raise ValueError(f"unknown calendar {name_or_calendar!r}, expected one of {', '.join(CALENDARS)}") from None
     return name_or_calendar

@@ -152,7 +152,7 @@ def build(
     )
     cal = json.loads(calib.read_text(encoding="utf-8"))  # the simulated market has no date: the lake's last day
     cal["meta"].update(snapshot=f"{END}T16:00:00", note="demo data: a simulated Heston market plus noise")
-    calib.write_text(json.dumps(cal, indent=1), encoding="utf-8")
+    calib.write_text(calibration.compact_json(cal), encoding="utf-8")
     log(f"simulated calibration: {time.perf_counter() - t1:.0f} s")
     # built here, not by Settings.load: an OPTLAB_DATA of the environment would bring the real folder's optlab.env
     settings = Settings(_env_file=None, **{**paths(folder), "calibration": calib})  # pyright: ignore[reportCallIssue]
@@ -191,7 +191,7 @@ def build(
         "market": sid,
         "trades": added,
         "account": "demo",
-        "built_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        "built_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
         "seconds": round(time.perf_counter() - t0, 1),
     }
     (folder / READY).write_text(json.dumps(out, indent=1), encoding="utf-8")

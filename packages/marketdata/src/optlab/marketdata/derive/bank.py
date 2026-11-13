@@ -29,7 +29,10 @@ class BankParams:
     start: str = "2015-01-01"  # the noise starts here, whatever the requested dates
 
 
-def bank_spreads(credit_index: pd.Series, params: BankParams = BankParams()) -> pd.DataFrame:
+DEFAULT_BANK = BankParams()  # a frozen default, shared by the functions that take one
+
+
+def bank_spreads(credit_index: pd.Series, params: BankParams = DEFAULT_BANK) -> pd.DataFrame:
     """credit_index: BAA minus 10-year Treasury in fractions, indexed by date. obs_date, tenor, spread (fractions)."""
     index = credit_index.sort_index()
     index.index = pd.to_datetime(index.index)
@@ -57,7 +60,7 @@ def credit_index(lake: Lake) -> pd.Series:
     return pd.Series((both["rate_b"] - both["rate_t"]).to_numpy() / 100, index=pd.to_datetime(both["obs_date"]))
 
 
-def build_bank(lake: Lake, params: BankParams = BankParams()) -> dict:
+def build_bank(lake: Lake, params: BankParams = DEFAULT_BANK) -> dict:
     return lake.ingest(
         "credit_spreads",
         bank_spreads(credit_index(lake), params),

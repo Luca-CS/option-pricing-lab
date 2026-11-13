@@ -76,7 +76,7 @@ class VolMove:
             or any(self.term.values())
         )
 
-    def __add__(self, o: "VolMove") -> "VolMove":
+    def __add__(self, o: VolMove) -> VolMove:
         f = lambda a, b: a + b  # noqa: E731
         return VolMove(
             self.parallel + o.parallel,
@@ -113,7 +113,7 @@ class VolMove:
         }
 
     @classmethod
-    def from_dict(cls, d) -> "VolMove":
+    def from_dict(cls, d) -> VolMove:
         if isinstance(d, (int, float)):
             return cls(float(d))
         d = d or {}
@@ -167,7 +167,7 @@ class Shock:
                 {k: v if isinstance(v, CurveMove) else CurveMove.from_dict(v) for k, v in getattr(self, name).items()},
             )
 
-    def __add__(self, o: "Shock") -> "Shock":
+    def __add__(self, o: Shock) -> Shock:
         if self.rule != o.rule and "sticky_moneyness" not in (self.rule, o.rule):
             raise ValueError(f"cannot add shocks under {self.rule} and {o.rule}")
         rule = o.rule if self.rule == "sticky_moneyness" else self.rule
@@ -219,7 +219,7 @@ class Shock:
         return {k: v for k, v in d.items() if v or k == "rule"}
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Shock":
+    def from_dict(cls, d: dict) -> Shock:
         d = dict(d or {})
         known = {f.name for f in dataclasses.fields(cls)}
         unknown = set(d) - known

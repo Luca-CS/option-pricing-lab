@@ -48,8 +48,8 @@ from optlab.structured.cashflows import FundedSwap, Swap
 from optlab.structured.dates import year_fraction
 from optlab.structured.engine import Evaluation
 from optlab.structured.multiasset import BasketContext
-from optlab.structured.portfolio import Book
-from optlab.structured.pricer import check_fixing_scale
+from optlab.structured.policy import PricingDecision
+from optlab.structured.portfolio import Book, merged_history
 from optlab.structured.replication import replication_result
 
 
@@ -142,20 +142,6 @@ def rolled_book(book: Book, items, old: dt.date, new: dt.date, spot0) -> Book:
                 fix[n].setdefault(d, float(level))
         out.append(dataclasses.replace(pos, fixings=fix))
     return Book(out)
-
-
-def _merged_history(items, basket: bool, ctx):
-    history: dict = {}
-    for it in items:
-        for name, h in it["history"].items():
-            merged = history.setdefault(name, {})
-            for t, v in h.items():
-                if t in merged and merged[t] != v:
-                    raise ValueError(f"two positions give different fixings of {name} at t = {t:.6f}")
-                merged[t] = v
-    for name, h in history.items():
-        check_fixing_scale(h, (ctx.markets[name] if basket else ctx.market).spot, name)
-    return history
 
 
 @dataclass
@@ -263,6 +249,98 @@ def _basket_simulation(ctx: BasketContext, sim_ctx: BasketContext, d_model: str)
     return dataclasses.replace(sim_ctx, contexts=contexts)
 
 
+def _block(xs) -> tuple:
+    """([mean per position], [se per position], total, total se) of per-position pair values (or values)."""
+    st = [_stat(x) if np.ndim(x) else (float(x), 0.0) for x in xs]
+    tot = np.sum(xs, axis=0)
+    ts = _stat(tot) if np.ndim(tot) else (float(tot), 0.0)
+    return [s[0] for s in st], [s[1] for s in st], ts[0], ts[1]
+
+
+class _Results:
+    """Each shock's values and P&L against the base into a GroupRun, and every measure as soon as its shocks are in; a
+    shock's pairs are kept only while a measure still needs them."""
+
+    def __init__(self, run: GroupRun, measures: list):
+        self.run = run
+        self.measures = measures
+        self.refs: dict = {}
+        for m in measures:
+            for s in m.weights:
+                self.refs[s] = self.refs.get(s, 0) + 1
+        self.kept: dict = {}  # shock -> per-position pairs (or values), while a measure needs them
+        self.done: set = set()
+        self.base_pairs: list | None = None
+
+    def finish(self, shock_name, per_position) -> None:
+        run = self.run
+        run.values[shock_name] = [float(np.mean(p)) for p in per_position]
+        if shock_name == "base":
+            self.base_pairs = per_position
+            run.base_se = [_stat(p)[1] if np.ndim(p) else 0.0 for p in per_position]
+            run.base_total_se = _stat(np.sum(per_position, axis=0))[1] if np.ndim(per_position[0]) else 0.0
+        run.pnl[shock_name] = _block([np.asarray(p) - np.asarray(b) for p, b in zip(per_position, self.base)])
+        if self.refs.get(shock_name):
+            self.kept[shock_name] = per_position
+        for m in self.measures:
+            if m.name in self.done or not all(s in self.kept or s == "base" for s in m.weights):
+                continue
+            self._measure(m, len(per_position))
+
+    def _measure(self, m: Measure, n_pos: int) -> None:
+        pairs = {**self.kept, "base": self.base}
+        combo = [m.scale * sum(w * np.asarray(pairs[s][i]) for s, w in m.weights.items()) for i in range(n_pos)]
+        self.run.measures[m.name] = _block(combo)
+        self.done.add(m.name)
+        for s in m.weights:
+            self.refs[s] -= 1
+            if self.refs[s] <= 0 and s != "base":
+                self.kept.pop(s, None)
+
+    @property
+    def base(self) -> list:
+        """The base's pairs per position (or values); the base's bucket always runs first."""
+        if self.base_pairs is None:
+            raise RuntimeError("a shock was revalued before the base")
+        return self.base_pairs
+
+    def unfinished(self) -> list:
+        return [m.name for m in self.measures if m.name not in self.done]
+
+
+@dataclass
+class _Group:
+    """What every simulation of one group shares."""
+
+    group: RiskGroup
+    shocks: dict
+    settings: RiskSettings
+    env: RiskEnv
+    decision: PricingDecision  # method, model, warnings
+    base_items: list
+    names: list
+    spot0: object  # {name: spot} for a basket, the spot otherwise
+    quantities: list
+    notionals: list
+    run: GroupRun
+    results: _Results
+    cash_since: float | None
+    keep_pairs: bool
+    slv_cache: dict = field(default_factory=dict)
+
+    @property
+    def basket(self) -> bool:
+        return isinstance(self.group.ctx, BasketContext)
+
+    @property
+    def cur(self) -> str:
+        return self.run.currency
+
+    @property
+    def smooth(self) -> float:
+        return self.settings.smoothing if self.decision.method != "replication" else 0.0
+
+
 def run_group(
     group: RiskGroup,
     shocks: dict,
@@ -279,14 +357,30 @@ def run_group(
     settings = settings or RiskSettings()
     env = env or RiskEnv()
     measures = list(measures or [])
-    ctx, book = group.ctx, group.book
-    basket = isinstance(ctx, BasketContext)
-    cur = context_currency(ctx)
     shocks = {"base": BASE, **{k: v for k, v in shocks.items() if k != "base"}}
     for m in measures:
         missing = set(m.weights) - set(shocks)
         if missing:
             raise KeyError(f"measure {m.name} reads unknown shock(s) {', '.join(sorted(missing))}")
+    g = _group(group, shocks, measures, settings, env, cash_since, keep_pairs)
+    buckets: OrderedDict = OrderedDict()
+    for k, s in shocks.items():
+        buckets.setdefault(sim_key(group.ctx, s, env), []).append(k)
+    ordered = sorted(buckets.items(), key=lambda kv: "base" not in kv[1])  # the base's simulation first
+    for _key, members in ordered:
+        _run_bucket(g, members)
+    unfinished = g.results.unfinished()
+    if unfinished:
+        raise RuntimeError(f"measures not evaluated: {', '.join(unfinished)}")
+    g.run.seconds = time.perf_counter() - t_start
+    return g.run
+
+
+def _group(group: RiskGroup, shocks, measures, settings, env, cash_since, keep_pairs) -> _Group:
+    """The group's positions prepared on its context, its pricing decision and its empty GroupRun."""
+    ctx, book = group.ctx, group.book
+    basket = isinstance(ctx, BasketContext)
+    cur = context_currency(ctx)
     base_items = book._prepare(ctx)
     d = book.decision(ctx, base_items, settings.model)
     used = sorted({n for it in base_items for n in it["underlyings"]})
@@ -306,186 +400,192 @@ def run_group(
         group.seed,
         warnings=list(d.warnings),
     )
-    buckets: OrderedDict = OrderedDict()
-    for k, s in shocks.items():
-        buckets.setdefault(sim_key(ctx, s, env), []).append(k)
-    refs: dict = {}
-    for m in measures:
-        for s in m.weights:
-            refs[s] = refs.get(s, 0) + 1
-    kept: dict = {}  # shock -> per-position pairs (or values), while a measure needs them
-    done_measures: set = set()
-    slv_cache: dict = {}
-    smooth = settings.smoothing if d.method != "replication" else 0.0
-    base_pairs = None
+    return _Group(
+        group=group,
+        shocks=shocks,
+        settings=settings,
+        env=env,
+        decision=d,
+        base_items=base_items,
+        names=names,
+        spot0=spot0,
+        quantities=quantities,
+        notionals=notionals,
+        run=run,
+        results=_Results(run, measures),
+        cash_since=cash_since,
+        keep_pairs=keep_pairs,
+    )
 
-    def finish(shock_name, per_position):
-        nonlocal base_pairs
-        run.values[shock_name] = [float(np.mean(p)) for p in per_position]
-        if shock_name == "base":
-            base_pairs = per_position
-            run.base_se = [_stat(p)[1] if np.ndim(p) else 0.0 for p in per_position]
-            run.base_total_se = _stat(np.sum(per_position, axis=0))[1] if np.ndim(per_position[0]) else 0.0
-        diff = [np.asarray(p) - np.asarray(b) for p, b in zip(per_position, base_pairs)]
-        stats = [_stat(x) if np.ndim(x) else (float(x), 0.0) for x in diff]
-        tot = np.sum(diff, axis=0)
-        ts = _stat(tot) if np.ndim(tot) else (float(tot), 0.0)
-        run.pnl[shock_name] = ([s[0] for s in stats], [s[1] for s in stats], ts[0], ts[1])
-        if refs.get(shock_name):
-            kept[shock_name] = per_position
-        for m in measures:
-            if m.name in done_measures or not all(s in kept or s == "base" for s in m.weights):
-                continue
-            combo = [
-                m.scale * sum(w * np.asarray((kept[s] if s != "base" else base_pairs)[i]) for s, w in m.weights.items())
-                for i in range(len(per_position))
-            ]
-            st = [_stat(x) if np.ndim(x) else (float(x), 0.0) for x in combo]
-            tot = np.sum(combo, axis=0)
-            ts = _stat(tot) if np.ndim(tot) else (float(tot), 0.0)
-            run.measures[m.name] = ([s[0] for s in st], [s[1] for s in st], ts[0], ts[1])
-            done_measures.add(m.name)
-            for s in m.weights:
-                refs[s] -= 1
-                if refs[s] <= 0 and s != "base":
-                    kept.pop(s, None)
 
-    ordered = sorted(buckets.items(), key=lambda kv: "base" not in kv[1])  # the base's simulation first
-    for key, members in ordered:
-        first = shocks[members[0]]
-        sim_ctx = simulation_part(ctx, first, env)
-        if basket:
-            sim_ctx = _basket_simulation(ctx, sim_ctx, d.model)
-        items, since = base_items, cash_since
-        if first.roll_days:
-            rolled = rolled_book(book, base_items, ctx.valuation, sim_ctx.valuation, spot0)
-            items = rolled._prepare(sim_ctx)
-            since = -year_fraction(ctx.valuation, sim_ctx.valuation)
-        fx = {m: fx_factor(shocks[m], cur, env.currency) for m in members}
-        if d.method == "replication":
-            name = names[0]
-            for m in members:
-                full = apply(ctx, shocks[m], env)
-                vals = []
-                for it, q in zip(items, quantities):
-                    tl = it["timeline"]
-                    T_obs = it["profile"].observation_times[-1] if it["profile"].observation_times else tl.horizon
-                    fmt = RiskFormat(it["fmt"], None, since) if since is not None else it["fmt"]
-                    r = replication_result(
-                        it["program"],
-                        tl,
-                        full.surface,
-                        full.market,
-                        T_obs,
-                        fmt,
-                        it["pos"].params,
-                        initial_fixing=spot0,
-                        history=it["history"].get(name, {}),
-                    )
-                    vals.append(q * r.value.price * fx[m])
-                    if m == "base" or shocks[m].roll_days:
-                        N = float(r.notional)
-                        run.cash.setdefault(m, []).append(
-                            _expected_cash(it["fmt"], r.expected_flows, r.redemption_probabilities, N, 1.0, q * fx[m])
-                        )
-                if m == "base" and keep_pairs:
-                    run.pairs = list(vals)
-                finish(m, vals)
-            continue
-        horizon = max(it["profile"].horizon for it in items)
-        times = np.unique(np.concatenate([it["timeline"].sim_times for it in items]))
-        base_markets = dict(ctx.markets) if basket else {names[0]: ctx.market}
-        surfaces = ctx.vols if basket else {names[0]: ctx.surface}
-        moved_markets = {
-            m: {
-                n: shocked_market(
-                    base_markets[n], surfaces[n], name_moves(shocks[m], n, cur, env), None, with_spot=False
+def _run_bucket(g: _Group, members: list) -> None:
+    """The shocks that share one simulation: the positions rolled if the shocks roll, then replicated or simulated."""
+    ctx = g.group.ctx
+    first = g.shocks[members[0]]
+    sim_ctx = simulation_part(ctx, first, g.env)
+    if g.basket:
+        sim_ctx = _basket_simulation(ctx, sim_ctx, g.decision.model)
+    items, since = g.base_items, g.cash_since
+    if first.roll_days:
+        rolled = rolled_book(g.group.book, g.base_items, ctx.valuation, sim_ctx.valuation, g.spot0)
+        items = rolled._prepare(sim_ctx)
+        since = -year_fraction(ctx.valuation, sim_ctx.valuation)
+    fx = {m: fx_factor(g.shocks[m], g.cur, g.env.currency) for m in members}
+    if g.decision.method == "replication":
+        _replicate(g, members, items, since, fx)
+    else:
+        _simulate(g, members, sim_ctx, items, since, fx)
+
+
+def _replicate(g: _Group, members: list, items: list, since, fx: dict) -> None:
+    """Each shock priced by replication on its own moved surface and market."""
+    name = g.names[0]
+    for m in members:
+        full = apply(g.group.ctx, g.shocks[m], g.env)
+        vals = []
+        for it, q in zip(items, g.quantities):
+            tl = it["timeline"]
+            T_obs = it["profile"].observation_times[-1] if it["profile"].observation_times else tl.horizon
+            fmt = RiskFormat(it["fmt"], None, since) if since is not None else it["fmt"]
+            r = replication_result(
+                it["program"],
+                tl,
+                full.surface,
+                full.market,
+                T_obs,
+                fmt,
+                it["pos"].params,
+                initial_fixing=g.spot0,
+                history=it["history"].get(name, {}),
+            )
+            vals.append(q * r.value.price * fx[m])
+            if m == "base" or g.shocks[m].roll_days:
+                N = float(r.notional)
+                g.run.cash.setdefault(m, []).append(
+                    _expected_cash(it["fmt"], r.expected_flows, r.redemption_probabilities, N, 1.0, q * fx[m])
                 )
-                for n in names
-            }
-            for m in members
+        if m == "base" and g.keep_pairs:
+            g.run.pairs = list(vals)
+        g.results.finish(m, vals)
+
+
+def _moved_markets(g: _Group, members: list, sim_ctx):
+    """Each shock's market per name, and the markets the simulation runs on: the base's, or a lone shock's own forwards
+    (no factor per date, so daily windows can still be reduced)."""
+    ctx, names = g.group.ctx, g.names
+    base_markets = dict(ctx.markets) if g.basket else {names[0]: ctx.market}
+    surfaces = ctx.vols if g.basket else {names[0]: ctx.surface}
+    moved_markets = {
+        m: {
+            n: shocked_market(
+                base_markets[n], surfaces[n], name_moves(g.shocks[m], n, g.cur, g.env), None, with_spot=False
+            )
+            for n in names
         }
-        sim_markets = dict(base_markets)
-        if len(members) == 1 and members[0] != "base":  # a shock alone on its simulation: simulate on its forwards (no
-            sim_markets.update(moved_markets[members[0]])  # factor per date, so daily windows can still be reduced)
-            if basket:
-                sim_ctx = dataclasses.replace(sim_ctx, markets={**sim_ctx.markets, **sim_markets})
-            else:
-                sim_ctx = dataclasses.replace(sim_ctx, market=sim_markets[names[0]])
-        model = _sim_model(d.model, ctx, sim_ctx, horizon, settings, group.seed, slv_cache, names)
-        history = _merged_history(items, basket, ctx)
-        hist = history if basket else history.get(names[0], {})
-        market = sim_ctx.market
-        evaluations, layout = [], []
-        for m in members:
-            s = shocks[m]
-            disc = discount_move(s, cur)
-            pv_market = bumped_market(market, disc) if disc else None
-            factor = {}
-            for n in names:
-                moved, on = moved_markets[m][n], sim_markets[n]
-                ratio = 1.0 if moved is on else forward_ratio(on, moved, times)
-                factor[n] = (1.0 + name_moves(s, n, cur, env).spot) * ratio
-            if not basket:
-                factor = factor[names[0]]
-            for it, N in zip(items, notionals):
-                fmt = it["fmt"] if pv_market is None and since is None else RiskFormat(it["fmt"], pv_market, since)
+        for m in members
+    }
+    sim_markets = dict(base_markets)
+    if len(members) == 1 and members[0] != "base":
+        sim_markets.update(moved_markets[members[0]])
+        if g.basket:
+            sim_ctx = dataclasses.replace(sim_ctx, markets={**sim_ctx.markets, **sim_markets})
+        else:
+            sim_ctx = dataclasses.replace(sim_ctx, market=sim_markets[names[0]])
+    return sim_ctx, moved_markets, sim_markets
+
+
+def _evaluations(g: _Group, members, items, since, market, times, moved_markets, sim_markets) -> tuple[list, list]:
+    """One Evaluation per shock and position (spot factors, discounts and the roll's cash), and the shocks in that order;
+    with smoothing, the base again without it."""
+    evaluations, layout = [], []
+    for m in members:
+        s = g.shocks[m]
+        disc = discount_move(s, g.cur)
+        pv_market = bumped_market(market, disc) if disc else None
+        factor = {}
+        for n in g.names:
+            moved, on = moved_markets[m][n], sim_markets[n]
+            ratio = 1.0 if moved is on else forward_ratio(on, moved, times)
+            factor[n] = (1.0 + name_moves(s, n, g.cur, g.env).spot) * ratio
+        if not g.basket:
+            factor = factor[g.names[0]]
+        for it, N in zip(items, g.notionals):
+            fmt = it["fmt"] if pv_market is None and since is None else RiskFormat(it["fmt"], pv_market, since)
+            evaluations.append(
+                Evaluation(it["program"], it["timeline"], it["pos"].params, fmt, N, g.smooth, True, factor)
+            )
+        layout.append(m)
+        if m == "base" and g.smooth:
+            for it, N in zip(items, g.notionals):
                 evaluations.append(
-                    Evaluation(it["program"], it["timeline"], it["pos"].params, fmt, N, smooth, True, factor)
+                    Evaluation(it["program"], it["timeline"], it["pos"].params, it["fmt"], N, 0.0, True, 1.0)
                 )
-            layout.append(m)
-            if m == "base" and smooth:
-                for it, N in zip(items, notionals):
-                    evaluations.append(
-                        Evaluation(it["program"], it["timeline"], it["pos"].params, it["fmt"], N, 0.0, True, 1.0)
-                    )
-                layout.append("base@exact")
-        totals, timings = batch_engine.run(
-            model,
-            market,
-            names[0],
-            times,
-            settings.n_paths,
-            group.seed,
-            settings.batch,
-            spot0,
-            hist,
-            evaluations,
-            settings.workers,
-            engine=settings.engine,
-            threads=settings.engine_threads,
-            **({"eval_threads": settings.eval_threads} if settings.eval_threads else {}),
-        )
-        run.simulations += 1
-        run.timings.append({k: v for k, v in timings.items() if isinstance(v, (int, float, str))})
-        if timings.get("engine_note") and timings["engine_note"] not in run.warnings:
-            run.warnings.append(timings["engine_note"])
+            layout.append("base@exact")
+    return evaluations, layout
+
+
+def _simulate(g: _Group, members: list, sim_ctx, items: list, since, fx: dict) -> None:
+    """Every shock of the bucket on one simulation: factors on the paths, then each shock's pairs into the results."""
+    ctx, names, settings = g.group.ctx, g.names, g.settings
+    horizon = max(it["profile"].horizon for it in items)
+    times = np.unique(np.concatenate([it["timeline"].sim_times for it in items]))
+    sim_ctx, moved_markets, sim_markets = _moved_markets(g, members, sim_ctx)
+    model = _sim_model(g.decision.model, ctx, sim_ctx, horizon, settings, g.group.seed, g.slv_cache, names)
+    history = merged_history(items, ctx)
+    hist = history if g.basket else history.get(names[0], {})
+    market = sim_ctx.market
+    evaluations, layout = _evaluations(g, members, items, since, market, times, moved_markets, sim_markets)
+    totals, timings = batch_engine.run(
+        model,
+        market,
+        names[0],
+        times,
+        settings.n_paths,
+        g.group.seed,
+        settings.batch,
+        g.spot0,
+        hist,
+        evaluations,
+        settings.workers,
+        engine=settings.engine,
+        threads=settings.engine_threads,
+        **({"eval_threads": settings.eval_threads} if settings.eval_threads else {}),
+    )
+    run = g.run
+    run.simulations += 1
+    run.timings.append({k: v for k, v in timings.items() if isinstance(v, (int, float, str))})
+    if timings.get("engine_note") and timings["engine_note"] not in run.warnings:
+        run.warnings.append(timings["engine_note"])
+    exact = _collect(g, totals, layout, items, fx)
+    if exact is not None:  # smoothing, and the base among the shocks
         n_pos = len(items)
-        for b, m in enumerate(layout):
-            chunk = totals[b * n_pos : (b + 1) * n_pos]
-            mult = fx.get(m, 1.0)
-            per = [q * mult * np.concatenate(t.pairs) for q, t in zip(quantities, chunk)]
-            if m == "base@exact":
-                exact = per
-                continue
-            if m == "base" and keep_pairs:
-                run.pairs = per
-            if m == "base" or shocks[m].roll_days:
-                run.cash[m] = [
-                    _expected_cash(it["fmt"], t.flows, t.redemption, N, settings.n_paths, q * mult)
-                    for it, t, N, q in zip(items, chunk, notionals, quantities)
-                ]
-            finish(m, per)
-        if smooth and "base" in members:
-            bias = [run.values["base"][i] - float(np.mean(exact[i])) for i in range(n_pos)]
-            diffs = [base_pairs[i] - exact[i] for i in range(n_pos)]
-            tot = np.sum(diffs, axis=0)
-            run.smoothing_bias = (bias, [_stat(x)[1] for x in diffs], float(tot.mean()), _stat(tot)[1])
-    unfinished = [m.name for m in measures if m.name not in done_measures]
-    if unfinished:
-        raise RuntimeError(f"measures not evaluated: {', '.join(unfinished)}")
-    run.seconds = time.perf_counter() - t_start
-    return run
+        base_pairs = g.results.base
+        bias = [run.values["base"][i] - float(np.mean(exact[i])) for i in range(n_pos)]
+        diffs = [base_pairs[i] - exact[i] for i in range(n_pos)]
+        tot = np.sum(diffs, axis=0)
+        run.smoothing_bias = (bias, [_stat(x)[1] for x in diffs], float(tot.mean()), _stat(tot)[1])
+
+
+def _collect(g: _Group, totals, layout: list, items: list, fx: dict):
+    """Each shock's pairs per position (quantity and FX applied) into the results, with the expected cash of the base and
+    of the rolled shocks; returns the unsmoothed base's pairs (None without smoothing)."""
+    n_pos, exact = len(items), None
+    for b, m in enumerate(layout):
+        chunk = totals[b * n_pos : (b + 1) * n_pos]
+        mult = fx.get(m, 1.0)
+        per = [q * mult * np.concatenate(t.pairs) for q, t in zip(g.quantities, chunk)]
+        if m == "base@exact":
+            exact = per
+            continue
+        if m == "base" and g.keep_pairs:
+            g.run.pairs = per
+        if m == "base" or g.shocks[m].roll_days:
+            g.run.cash[m] = [
+                _expected_cash(it["fmt"], t.flows, t.redemption, N, g.settings.n_paths, q * mult)
+                for it, t, N, q in zip(items, chunk, g.notionals, g.quantities)
+            ]
+        g.results.finish(m, per)
+    return exact
 
 
 def run_group_safe(

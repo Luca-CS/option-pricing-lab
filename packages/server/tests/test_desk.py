@@ -2,11 +2,11 @@
 events, script lab, reports. Quotes run at the quick precision (20,000 paths) on the SPX calibration. The HTTP layer is
 tested in `test_api_*.py`."""
 
-import time
 from pathlib import Path
 
 import pytest
 from _api import SCRIPT_EXAMPLE
+from _desk import wait
 
 from optlab.server.api import ApiError, Desk
 from optlab.server.fixings import parse_fixings
@@ -21,15 +21,6 @@ def desk(tmp_path_factory):
     d = Desk(store=tmp_path_factory.mktemp("desk") / "optlab.sqlite")
     yield d
     d.close()
-
-
-def wait(desk, job_id, timeout=300):
-    t0 = time.perf_counter()
-    while (j := desk.job(job_id))["state"] in ("queued", "running"):
-        assert time.perf_counter() - t0 < timeout, "job did not finish"
-        time.sleep(0.1)
-    assert j["state"] == "done", j.get("error")
-    return j["result"]
 
 
 def sheet_of(desk, name):

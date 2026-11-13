@@ -39,7 +39,7 @@ class Scenario:
         return {"name": self.name, "description": self.description, "shock": self.shock.to_dict(), "label": self.label}
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Scenario":
+    def from_dict(cls, d: dict) -> Scenario:
         if not d.get("name"):
             raise ValueError("a scenario needs a name")
         return cls(

@@ -315,7 +315,7 @@ def world(tmp_path_factory):
     build_fx_forwards(lake)
     before = lake.read("quality_issues", where="check_name = 'no_curve'")
     time.sleep(1.1)  # ingestion stamps have one second of resolution
-    stamp = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None, microsecond=0)
+    stamp = dt.datetime.now(dt.UTC).replace(tzinfo=None, microsecond=0)
     time.sleep(1.1)
     fetch = fetchers(days)
     loads = load_mof(lake, fetch=fetch) + load_boj(lake, fetch=fetch) + load_boe(lake, fetch=fetch)

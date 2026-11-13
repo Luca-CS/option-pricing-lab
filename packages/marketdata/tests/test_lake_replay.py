@@ -140,7 +140,7 @@ def test_phoenix_is_called_on_the_first_observation_at_or_above_its_trigger(lake
 
 
 def test_cash_ends_the_trade_and_the_value_goes_to_zero(brc, phoenix):
-    for trade, info, result in (brc, phoenix):
+    for _trade, _info, result in (brc, phoenix):
         d = result.daily
         assert d["cash"].sum() == pytest.approx(result.reconciliation["cash_from_events"])
         assert d["value"].iloc[-1] == pytest.approx(0.0, abs=1e-9)

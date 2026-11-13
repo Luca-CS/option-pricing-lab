@@ -41,7 +41,7 @@ class SSVI:
         self._slope_last = (th[-1] - th[-2]) / (t[-1] - t[-2])
 
     @classmethod
-    def power_law(cls, rho, eta, gamma, maturities, thetas) -> "SSVI":
+    def power_law(cls, rho, eta, gamma, maturities, thetas) -> SSVI:
         """Plain SSVI with phi(theta) = eta / (theta^gamma (1 + theta)^(1 - gamma)) at the pillars."""
         th = np.asarray(thetas, dtype=float)
         psi = th * eta / (th**gamma * (1 + th) ** (1 - gamma))
@@ -126,7 +126,7 @@ class SSVI:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "SSVI":
+    def from_dict(cls, d: dict) -> SSVI:
         return cls(d["maturities"], d["thetas"], d["psis"], d["rhos"])
 
 

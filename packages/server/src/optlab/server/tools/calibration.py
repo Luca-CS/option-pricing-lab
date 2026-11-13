@@ -79,6 +79,14 @@ def spx_market():
     return market, slices, meta
 
 
+def compact_json(obj: dict) -> str:
+    """A calibration as stored (ADR-0023): one line per top-level key, each value in compact JSON. The floats are
+    written by `repr`, so reading the file gives back the same numbers to the bit; a diff still shows which part
+    changed."""
+    lines = [f"{json.dumps(k)}:{json.dumps(v, separators=(',', ':'), allow_nan=False)}" for k, v in obj.items()]
+    return "{\n" + ",\n".join(lines) + "\n}\n"
+
+
 def _round(x, nd=6):
     return np.round(np.asarray(x, dtype=float), nd).tolist()
 
@@ -171,7 +179,7 @@ def main(
     }
     results.mkdir(parents=True, exist_ok=True)
     path = results / f"{source}_calibration.json"
-    path.write_text(json.dumps(result, indent=1))
+    path.write_text(compact_json(result), encoding="utf-8")
     log("wrote", path)
 
     if plots:

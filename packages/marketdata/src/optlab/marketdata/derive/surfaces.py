@@ -45,7 +45,6 @@ LEVEL_POWER, LEVEL_REF = (
     0.12,
     0.12,
 )  # 0.118 fitted without the crash, 0.121 with it; the reference sits at the bound of the fit
-LAST_OBSERVABLE = 1.0  # VIX1Y: beyond it the term structure is an assumption
 OBSERVED_TARGETS = (1 / 24, 1 / 12, 1 / 6, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0)
 Z = np.linspace(-8.0, 8.0, 321)  # integration grid, in at-the-money standard deviations
 
@@ -63,7 +62,7 @@ class ShapePrior:
     )
     level_ref: float = 0.2
 
-    def scaled_rho(self, factor: float) -> "ShapePrior":
+    def scaled_rho(self, factor: float) -> ShapePrior:
         return replace(self, rho=self.rho * factor)
 
     def eta_at(self, level: float, rho: float | None = None) -> float:
@@ -359,9 +358,6 @@ class SurfaceAt:
     obs_date: dt.date
     extrapolated_from: float
     meta: dict
-
-
-LAYER_ORDER = ("observed", "reconstructed", "synthetic")
 
 
 def surface_at(

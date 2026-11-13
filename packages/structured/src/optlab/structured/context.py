@@ -59,7 +59,7 @@ class PricingContext:
         underlying: str = "SPX",
         valuation: dt.date | str | None = None,
         slv_regression: str | None = None,
-    ) -> "PricingContext":
+    ) -> PricingContext:
         """The calibrated market of a results/*.json file; files without a snapshot time need `valuation`.
         `slv_regression="local_linear"` recalibrates the SLV leverage at load (about 7 s) with the local linear
         regression of max(v, 0), which removes most of the ATM vanilla bias left by the stored leverage."""
@@ -86,7 +86,7 @@ class PricingContext:
         return ctx
 
     @classmethod
-    def from_snapshot(cls, snap) -> "PricingContext":
+    def from_snapshot(cls, snap) -> PricingContext:
         heston = HestonParams(**snap.heston)
         slv = SLVModel(heston, Leverage.from_dict(snap.slv["leverage"]), snap.slv["mix"])
         surface = FastSVISurface.from_dict(snap.surface)  # bit-identical to SVISurface, faster per step

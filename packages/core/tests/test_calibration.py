@@ -120,3 +120,18 @@ def test_slv_leverage_is_not_trivial(slv_model):
     # with stochastic variance the leverage must bend away from 1 to recover the local vol
     L = slv_model.leverage.values[len(slv_model.leverage.times) // 2]
     assert L.max() - L.min() > 0.1
+
+
+def test_the_local_vol_of_a_flat_surface_is_its_implied_vol():
+    """Dupire on a flat total variance w = sigma^2 T: the local volatility is sigma at every strike, on both kinds of
+    surface (`local_vol` is the square root of `local_var`)."""
+    from optlab.core import SSVI
+
+    T = np.array([0.25, 0.5, 1.0, 2.0])
+    k = np.linspace(-0.5, 0.5, 11)
+    flat_ssvi = SSVI(T, 0.04 * T, np.zeros_like(T), np.zeros_like(T))
+    flat_svi = SVISurface(T, [[0.04 * t, 0.0, 0.0, 0.0, 0.1] for t in T])  # raw SVI with b = 0: w = a
+    for surface in (flat_ssvi, flat_svi):
+        for t in (0.3, 0.75, 1.5):
+            np.testing.assert_allclose(surface.local_vol(k, t), 0.2, rtol=1e-6)
+            np.testing.assert_allclose(surface.local_vol(k, t) ** 2, surface.local_var(k, t))

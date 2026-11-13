@@ -127,17 +127,17 @@ def find_digitals(product, params: dict | None = None) -> list[Digital]:
                 if isinstance(s, If):
                     got = _classify(s.cond, s.body, values, product.sheet)
                     if got is not None and got[1]:
-                        out.append(Digital(got[0], s.cond.line, str(date), float(got[1]), float(got[2])))
+                        out.append(Digital(got[0], s.cond.line, str(date), float(got[1]), float(got[2])))  # noqa: B023 (called within this iteration only)
                     visit(s.body)
                     visit(s.orelse)
                 elif isinstance(s, Assign) and s.name == "knocked_in" and isinstance(s.expr, Binary):
                     ki = values["ki_barrier"]
                     if _has_window(s.expr.left):
-                        out.append(Digital("daily", s.expr.line, str(date), float(ki), 0.0))
+                        out.append(Digital("daily", s.expr.line, str(date), float(ki), 0.0))  # noqa: B023 (called within this iteration only)
                     else:
                         jump = values["put_strike"] - ki
                         if jump > 1e-12:
-                            out.append(Digital("barrier", s.expr.line, str(date), float(ki), float(jump)))
+                            out.append(Digital("barrier", s.expr.line, str(date), float(ki), float(jump)))  # noqa: B023 (called within this iteration only)
 
         visit(ev.body)
     return out

@@ -43,7 +43,7 @@ def model_risk_table(ctx, n_paths, batch):
         f"no memory, note, {n_paths:,} paths =="
     )
     results = {}
-    for name, label in MODELS.items():
+    for name, _label in MODELS.items():
         t0 = time.perf_counter()
         r0, r1 = price_many(
             product.program,
