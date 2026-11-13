@@ -19,10 +19,17 @@ RUN uv python install 3.14.7
 WORKDIR /src
 COPY pyproject.toml uv.lock ./
 COPY packages packages
-RUN uv sync --locked --no-dev --no-editable --extra yahoo --python 3.14.7
+RUN uv sync --locked --no-dev --no-editable --extra yahoo --python 3.14.7 \
+ && rm -rf /opt/python/*/lib/python3.14/site-packages/pip /opt/python/*/lib/python3.14/site-packages/pip-*.dist-info \
+           /opt/python/*/lib/python3.14/ensurepip/_bundled /opt/python/*/bin/pip*
+# no pip at run time: the venv is uv's, and pip carries its own copies of certifi, urllib3 and others
 
 FROM nvidia/cuda:12.9.1-base-ubuntu24.04@sha256:29e5e3425e2e0f5a4e97c9fb4695ba4887cd78210a43cf94c3bcafc6ab01c5e6
-RUN useradd --system --uid 10001 --user-group --home-dir /nonexistent --shell /usr/sbin/nologin optlab \
+# the distribution's security updates since the base image was built (July 2025)
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd --system --uid 10001 --user-group --home-dir /nonexistent --shell /usr/sbin/nologin optlab \
  && mkdir -p /data/store /data/logs /data/lake /data/archive /data/config /data/backups \
  && chown -R 10001:10001 /data
 COPY --from=build /opt/python /opt/python

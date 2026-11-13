@@ -22,7 +22,14 @@ COPY packages packages
 RUN uv sync --locked --no-dev --no-editable --extra yahoo --python /usr/local/bin/python3.14
 
 FROM python:3.14.7-slim-trixie@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d
-RUN useradd --system --uid 10001 --user-group --home-dir /nonexistent --shell /usr/sbin/nologin optlab \
+# the distribution's security updates since the base image was built; no pip (the venv is uv's, and pip carries its
+# own copies of certifi, urllib3 and others, which Trivy rightly counts)
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/* \
+ && rm -rf /usr/local/lib/python3.14/site-packages/pip /usr/local/lib/python3.14/site-packages/pip-*.dist-info \
+           /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.14 /usr/local/lib/python3.14/ensurepip/_bundled \
+ && useradd --system --uid 10001 --user-group --home-dir /nonexistent --shell /usr/sbin/nologin optlab \
  && mkdir -p /data/store /data/logs /data/lake /data/archive /data/config /data/backups \
  && chown -R 10001:10001 /data
 COPY --from=build /opt/venv /opt/venv
