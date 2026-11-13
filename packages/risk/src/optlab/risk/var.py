@@ -29,11 +29,13 @@ import multiprocessing as mp
 import time
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
+from typing import cast
 
 import numpy as np
 import pandas as pd
 
 from optlab.core import progress
+from optlab.marketdata.days import shifted_day
 from optlab.risk import grid
 from optlab.risk.curves import CurveMove
 from optlab.risk.engine import RiskSettings, run_group_safe
@@ -47,6 +49,11 @@ FACTORS = ("spot", "vol", "skew", "dividend", "rates", "corr")
 # --- factor history ---
 
 
+def _at(row, key: str) -> float:
+    """A factor's move in a row of the history, 0 when the row has none."""
+    return float(cast(float, row.get(key, 0.0)))
+
+
 def group_names(group) -> list[str]:
     items = group.book._prepare(group.ctx)
     used = sorted({n for it in items for n in it["underlyings"]})
@@ -57,7 +64,7 @@ def factor_levels(lake, names, currencies, start, end, layer: str = "reconstruct
     """Levels of every factor by date (rows where every spot and surface is known), and their origins."""
     from optlab.risk.history import carry, closes, realised_correlation, vol_factors, zero_rates
 
-    start_wide = (pd.Timestamp(start) - pd.tseries.offsets.BDay(130)).date()  # the correlation window needs its history
+    start_wide = shifted_day(start, 130)  # the correlation window needs its history
     spots = closes(lake, names, start_wide, end)
     cols, origins = {}, {}
     for n in names:
@@ -85,13 +92,13 @@ def factor_levels(lake, names, currencies, start, end, layer: str = "reconstruct
             if r is not None:
                 cols[f"div:{n}:{lab}"] = r - cy[f"c_{lab}"]
         origins[f"dividend:{n}"] = sorted(set(cy["method"].dropna()))
-    for pair, series in realised_correlation(spots[names], 120).items():
+    for pair, series in realised_correlation(cast(pd.DataFrame, spots[names]), 120).items():
         cols[f"corr:{pair}"] = series
         origins[f"corr:{pair}"] = ["derived (realised, 120 days)"]
     df = pd.DataFrame(cols).sort_index()
     need = [c for c in df.columns if c.startswith(("spot:", "atm:"))]
     df = df.dropna(subset=need).ffill()
-    return df[df.index >= pd.Timestamp(start).date()], origins
+    return cast(pd.DataFrame, df[df.index >= pd.Timestamp(start).date()]), origins
 
 
 def changes(levels: pd.DataFrame, horizon: int = 1) -> pd.DataFrame:
@@ -100,7 +107,7 @@ def changes(levels: pd.DataFrame, horizon: int = 1) -> pd.DataFrame:
     out = {}
     for c in levels.columns:
         x = levels[c].astype(float)
-        out[c] = np.log(x).diff(horizon) if c.startswith("spot:") else x.diff(horizon)
+        out[c] = cast(pd.Series, np.log(x)).diff(horizon) if c.startswith("spot:") else x.diff(horizon)
     return pd.DataFrame(out).iloc[horizon:].fillna(0.0)
 
 
@@ -109,28 +116,22 @@ def shock_of(row: pd.Series, names, currency: str, factors=FACTORS) -> Shock:
     spot, vol, div, rates, corr = {}, {}, {}, {}, {}
     for n in names:
         if "spot" in factors:
-            spot[n] = float(np.expm1(row.get(f"spot:{n}", 0.0)))
-        term = (
-            {j: float(row.get(f"atm:{n}:{lab}", 0.0)) for j, lab in enumerate(grid.TENOR_LABELS)}
-            if "vol" in factors
-            else {}
-        )
-        skew = float(row.get(f"skew:{n}", 0.0)) if "skew" in factors else 0.0
+            spot[n] = float(np.expm1(_at(row, f"spot:{n}")))
+        term = {j: _at(row, f"atm:{n}:{lab}") for j, lab in enumerate(grid.TENOR_LABELS)} if "vol" in factors else {}
+        skew = _at(row, f"skew:{n}") if "skew" in factors else 0.0
         if any(term.values()) or skew:
             vol[n] = VolMove(skew=skew, term={j: v for j, v in term.items() if v})
         if "dividend" in factors and f"div:{n}:1y" in row:
-            div[n] = CurveMove(
-                0.0, {j: float(row.get(f"div:{n}:{lab}", 0.0)) / 1e-4 for j, lab in enumerate(grid.TENOR_LABELS)}
-            )
+            div[n] = CurveMove(0.0, {j: _at(row, f"div:{n}:{lab}") / 1e-4 for j, lab in enumerate(grid.TENOR_LABELS)})
     if "rates" in factors and f"rate:{currency}:1y" in row:
         rates[currency] = CurveMove(
-            0.0, {j: float(row.get(f"rate:{currency}:{lab}", 0.0)) / 1e-4 for j, lab in enumerate(grid.TENOR_LABELS)}
+            0.0, {j: _at(row, f"rate:{currency}:{lab}") / 1e-4 for j, lab in enumerate(grid.TENOR_LABELS)}
         )
     if "corr" in factors:
         for a_i, a in enumerate(names):
             for b in names[a_i + 1 :]:
                 key = "|".join(sorted((a, b)))
-                v = float(row.get(f"corr:{key}", 0.0))
+                v = _at(row, f"corr:{key}")
                 if v:
                     corr[f"{a}|{b}"] = v
     return Shock(spot=spot, vol=vol, dividend=div, rates=rates, corr_pairs=corr)
@@ -148,6 +149,7 @@ def _init(groups, env):
 
 def _chunk(job):
     gi, shocks, settings = job
+    assert _GROUPS is not None  # noqa: S101 (narrows the type for pyright: set by the pool's initializer)
     groups, env = _GROUPS
     r = run_group_safe(groups[gi], shocks, None, settings, env)
     return (
@@ -274,23 +276,23 @@ def taylor_pnl(report, row: pd.Series, names, currency: str) -> float:
     v = lambda k: g.get(k, [0.0])[0]  # noqa: E731
     total = 0.0
     for n in names:
-        r = float(np.expm1(row.get(f"spot:{n}", 0.0)))
+        r = float(np.expm1(_at(row, f"spot:{n}")))
         x = r / 0.01
         total += v(f"delta|{n}|") * x + 0.5 * v(f"gamma|{n}|") * x * x
         dv_par = 0.0
         for lab in grid.TENOR_LABELS:
-            dv = float(row.get(f"atm:{n}:{lab}", 0.0)) / 0.01
+            dv = _at(row, f"atm:{n}:{lab}") / 0.01
             total += v(f"vega_tenor|{n}|{lab}") * dv
             dv_par += dv / len(grid.TENOR_LABELS)
         total += v(f"vanna|{n}|") * x * dv_par + 0.5 * v(f"volga|{n}|") * dv_par**2
-        total += v(f"skew_vega|{n}|") * float(row.get(f"skew:{n}", 0.0)) / 0.01
+        total += v(f"skew_vega|{n}|") * _at(row, f"skew:{n}") / 0.01
         for lab in grid.TENOR_LABELS:
-            total += v(f"epsilon_tenor|{n}|{lab}") * float(row.get(f"div:{n}:{lab}", 0.0)) / 1e-4
+            total += v(f"epsilon_tenor|{n}|{lab}") * _at(row, f"div:{n}:{lab}") / 1e-4
     for lab in grid.TENOR_LABELS:
-        total += v(f"rho_tenor|{currency}|{lab}") * float(row.get(f"rate:{currency}:{lab}", 0.0)) / 1e-4
+        total += v(f"rho_tenor|{currency}|{lab}") * _at(row, f"rate:{currency}:{lab}") / 1e-4
     for a_i, a in enumerate(names):
         for b in names[a_i + 1 :]:
-            total += v(f"corr|{a}~{b}|") * float(row.get(f"corr:{'|'.join(sorted((a, b)))}", 0.0)) / 0.01
+            total += v(f"corr|{a}~{b}|") * _at(row, f"corr:{'|'.join(sorted((a, b)))}") / 0.01
     return float(total)
 
 
@@ -396,7 +398,7 @@ def run_var(
     names = sorted({n for g in groups for n in group_names(g)})
     currencies = sorted({context_currency(g.ctx) for g in groups})
     cur = currencies[0]
-    start = (pd.Timestamp(day) - pd.tseries.offsets.BDay(days + 15)).date()
+    start = shifted_day(day, days + 15)
     levels, origins = factor_levels(lake, names, currencies, start, day)
     levels = levels.iloc[-(days + 10 + 1) :]
     out = {

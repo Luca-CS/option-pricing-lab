@@ -18,10 +18,12 @@ from __future__ import annotations
 import dataclasses
 import time
 from dataclasses import dataclass, field
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
 
+from optlab.marketdata.days import as_day, shifted_day
 from optlab.risk import grid
 from optlab.risk.curves import CurveMove
 from optlab.risk.engine import Measure, RiskSettings, run_group_safe
@@ -37,14 +39,14 @@ def estimate_betas(lake, name: str, day, window: int = 500, layer: str = "recons
     """Spot-vol betas of a name at a date: d(ATM vol at T) = a + beta_T d ln S, per tenor, with standard errors."""
     from optlab.risk.history import closes, vol_factors
 
-    day = pd.Timestamp(day).date()
-    start = (pd.Timestamp(day) - pd.tseries.offsets.BDay(window + 10)).date()
+    day = as_day(day)
+    start = shifted_day(day, window + 10)
     vols = vol_factors(lake, name, start, day, layer)
-    spots = closes(lake, [name], start, day)[name]
+    spots = cast(pd.Series, closes(lake, [name], start, day)[name])
     df = vols.join(spots.rename("spot"), how="inner").dropna(subset=["spot"]).tail(window + 1)
     if len(df) < 60:
         raise ValueError(f"only {len(df)} days with a surface and a close of {name} up to {day}")
-    r = np.log(df["spot"]).diff().to_numpy()[1:]
+    r = cast(pd.Series, np.log(df["spot"])).diff().to_numpy()[1:]
     betas, ses, r2 = [], [], []
     x = r - r.mean()
     for label in grid.TENOR_LABELS:
@@ -112,7 +114,8 @@ class LadderOptions:
     def from_dict(cls, d: dict | None) -> LadderOptions:
         d = dict(d or {})
         known = {f.name for f in dataclasses.fields(cls)}
-        out = cls(**{k: (tuple(v) if k in ("points", "rules") else v) for k, v in d.items() if k in known})
+        kwargs: dict[str, Any] = {k: (tuple(v) if k in ("points", "rules") else v) for k, v in d.items() if k in known}
+        out = cls(**kwargs)
         bad = set(out.rules) - set(RULES)
         if bad:
             raise ValueError(f"unknown vol rule(s) {', '.join(sorted(bad))}")

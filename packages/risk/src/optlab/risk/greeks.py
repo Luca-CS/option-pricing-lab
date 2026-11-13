@@ -24,6 +24,7 @@ from __future__ import annotations
 import dataclasses
 import time
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 
@@ -268,7 +269,9 @@ def _plan_rates(S: dict, M: list, cur: str, b: Bumps, o: GreekOptions) -> None:
     """The rates of the payment currency: rho, its discount and forward parts, by tenor with `curves`."""
     rb = b.rate_bp
     for kind, field_ in (("rho", "rates"), ("rho_discount", "discount"), ("rho_forward", "forward_rate")):
-        S[f"{kind}+"], S[f"{kind}-"] = Shock(**{field_: {cur: CurveMove(rb)}}), Shock(**{field_: {cur: CurveMove(-rb)}})
+        up: dict[str, Any] = {field_: {cur: CurveMove(rb)}}
+        down: dict[str, Any] = {field_: {cur: CurveMove(-rb)}}
+        S[f"{kind}+"], S[f"{kind}-"] = Shock(**up), Shock(**down)
         M.append(_central(f"{kind}|{cur}|", f"{kind}+", f"{kind}-", 1 / rb))
     if o.curves:
         for j, label in enumerate(grid.TENOR_LABELS):
