@@ -230,6 +230,17 @@ class UserIn(Body):
     roles: list[Literal["admin", "trader", "structurer", "risk", "quant", "viewer"]] = Field(..., min_length=1)
 
 
+class PipelineUpdate(Body):
+    enabled: bool | None = None
+    days: str | None = Field(
+        None,
+        pattern=r"^(mon|tue|wed|thu|fri|sat|sun)(,(mon|tue|wed|thu|fri|sat|sun)){0,6}$",
+        description="comma-separated days, e.g. mon,tue,wed,thu,fri",
+    )
+    at: str | None = Field(None, pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$", description="local time, HH:MM")
+    params: dict | None = Field(None, description="the job's parameters (keys checked against the schedule's kind)")
+
+
 class UserUpdate(Body):
     roles: list[Literal["admin", "trader", "structurer", "risk", "quant", "viewer"]] | None = Field(None, min_length=1)
     disabled: bool | None = None
@@ -250,12 +261,43 @@ class JobError(Out):
     message: str
 
 
+class MarketRef(Out):
+    snapshot_id: str | None = Field(None, description="the stored snapshot the job priced on (null: none, e.g. a fit)")
+    origin: dict | str | list | None = Field(None, description="how much of that market was observed")
+    as_of: str | None = Field(None, description="the market's date (ISO 8601)")
+
+
+class Method(BaseModel):
+    """How a result was computed: `name` (monte_carlo, replication, full_revaluation, ...) and its parameters."""
+
+    model_config = ConfigDict(extra="allow")
+    name: str
+
+
+class JobResult(Out):
+    """Every job result (api.md §5): the market, the method, and the result, whose Monte Carlo numbers are
+    `{value, se}`."""
+
+    market: MarketRef | None = None
+    method: Method | None = None
+    result: dict | list | None = None
+
+
 class Job(Out):
     id: str
     kind: str
     state: Literal["queued", "running", "done", "error", "cancelled"]
+    progress: float | None = Field(None, ge=0, le=1, description="fraction done, while running and at the end")
+    step: str | None = Field(None, description="what the job is doing")
+    eta: float | None = Field(None, description="seconds left, estimated from the progress so far (null early on)")
     elapsed: float = Field(..., description="seconds since the job started (0 while queued)")
-    result: dict | list | None = Field(None, description="the computation's result once done")
+    submitted_at: str
+    started_at: str | None = None
+    finished_at: str | None = None
+    engine: str | None = Field(None, description="the Monte Carlo engine the worker ran it on")
+    version: int = Field(..., description="+1 at every change: the id of its SSE events")
+    cancel_requested: bool = False
+    result: JobResult | None = Field(None, description="once done")
     error: JobError | None = None
 
 
@@ -263,10 +305,46 @@ class JobBrief(Out):
     id: str
     kind: str
     state: Literal["queued", "running"]
+    progress: float | None = None
+    step: str | None = None
 
 
 class JobList(Out):
     jobs: list[JobBrief]
+
+
+class CancelOut(Out):
+    ok: bool = True
+    state: Literal["queued", "running", "done", "error", "cancelled"] = Field(
+        ..., description="cancelled at once when it was queued; running until it stops at its next batch"
+    )
+
+
+class PipelineJob(Out):
+    id: str
+    state: str
+    finished_at: str | None = None
+    error: JobError | None = None
+
+
+class Pipeline(Out):
+    name: str
+    kind: str
+    params: dict
+    days: str
+    at: str
+    timezone: str
+    enabled: bool
+    last_run_at: str | None = None
+    last_job_id: str | None = None
+    next_run_at: str | None = Field(None, description="null when off")
+    updated_at: str
+    updated_by: str | None = None
+    last_job: PipelineJob | None = None
+
+
+class PipelineList(Out):
+    pipelines: list[Pipeline]
 
 
 class UserOut(Out):

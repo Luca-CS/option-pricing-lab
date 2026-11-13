@@ -1,8 +1,12 @@
-"""The desk behind the web page: every API route is a method here, JSON in and JSON out, no HTTP inside.
+"""The desk behind the API: every route is a method here, JSON in and JSON out, no HTTP inside.
 
 Levels and rates cross the API as fractions (0.6 = 60 %, 0.08 = 8 % p.a.), exactly as in the library; the page
-shows and takes percent and converts at its edge. Every job captures the market context when it is submitted, so
-switching snapshots never changes a run in progress.
+shows and takes percent and converts at its edge.
+
+A computation is a job (ADR-0006): the submitting method validates the request and freezes what the desk holds
+(`tasks.Frozen`: the market in use, the typed settings, the trades and their fixings), and its `run_<kind>` twin,
+called by the worker, rebuilds the same objects from the row and computes. So switching snapshots never changes a run
+in progress, and a job can run in another process (`python -m optlab.server.worker`).
 """
 
 from __future__ import annotations
@@ -18,7 +22,7 @@ from typing import Any
 import numpy as np
 
 from optlab import native
-from optlab.core import engines
+from optlab.core import engines, progress
 from optlab.core.config import DEFAULT_SEED
 from optlab.core.instruments import _BY_ID
 from optlab.core.log import get_logger
@@ -28,13 +32,14 @@ from optlab.marketdata.derive.correl import correlation_at
 from optlab.marketdata.lake import Lake
 from optlab.marketdata.names import NameMarkets
 from optlab.server.fixings import parse_fixings
-from optlab.server.jobs import Jobs
+from optlab.server.jobs import JobQueue
 from optlab.server.persistence import Database
 from optlab.server.persistence.desk import DeskRepository
 from optlab.server.persistence.replays import ReplayRepository
 from optlab.server.persistence.snapshots import SnapshotRepository
 from optlab.server.serialize import book_json, clean, events_json, quote_json, result_json, trade_json
 from optlab.server.settings import Settings
+from optlab.server.tasks import Frozen, envelope, freeze_fixings, market_of, register
 from optlab.structured import MASKS, PRESETS, PricingContext, TermSheet, TermSheetError, describe, preset, quote
 from optlab.structured.compiler import compile_sheet
 from optlab.structured.defaults import STARTING, merged, parameters, resolve, validate_table
@@ -89,14 +94,19 @@ class Desk:
         store=None,
         calibration=None,
         workers: int | None = None,
-        max_jobs: int = 2,
+        max_jobs: int | None = None,
         lake=None,
         engine: str | None = None,
         settings: Settings | None = None,
+        run_jobs: bool = True,
     ):
         """`engine`: where Monte Carlo paths come from (numpy, cpu, gpu, auto; see optlab.core.engines), for every job of this
         process. None keeps the library's default. `store` (the database file), `calibration` and `lake` override
-        `settings` (`Settings.load()` when not given), from which every other path comes."""
+        `settings` (`Settings.load()` when not given), from which every other path comes. `run_jobs`: run the queue's
+        jobs in this process (the embedded worker, `max_jobs` at a time) unless another worker already serves this
+        database; False for an api that leaves them to `python -m optlab.server.worker`."""
+        from optlab.server.risk_api import RiskApi
+
         if engine is not None:
             engines.set_default(engine)
         self.settings = settings or Settings.load()
@@ -106,21 +116,119 @@ class Desk:
         self.lake = Lake(lake or self.settings.lake)
         self.names = NameMarkets(self.lake)
         self.shared = False  # listening beyond this machine: raw quotes and levels stay private
-        self.risk: Any = None  # optlab.server.risk_api.RiskApi, set by create_app (it reads this desk)
         self.market_store = SnapshotRepository(self.db)
         self.calibration = Path(calibration) if calibration else self.settings.calibration
         self.ctx = PricingContext.from_calibration(self.calibration)
+        self._contexts: dict[str, PricingContext] = {}  # markets of earlier submissions, as they were
         self.files: dict[str, Path] = {}  # snapshot id -> calibration file (its model-risk table)
         self._register(self.calibration)
         for path in sorted(self.settings.results.glob("*_calibration.json")):
             if path.resolve() != self.calibration.resolve():
                 self._register(path)
-        self.jobs = Jobs(max_jobs)
+        self.jobs = JobQueue(self.db)
         self.workers = workers
+        self.max_jobs = max_jobs or self.settings.job_concurrency
         self.started = dt.datetime.now(dt.timezone.utc)
-        self.last_book = None
         self.public_url = None  # set when a tunnel is open
         self.lan_blockers: list[str] = []  # what stops other machines, found at start (Windows firewall)
+        self.risk = RiskApi(self)
+        self.worker: Any = None
+        if run_jobs:
+            self.start_worker()
+
+    # --- jobs ---
+    def start_worker(self) -> bool:
+        """Run the queue in this process (the embedded worker); False when another worker serves this database."""
+        from optlab.server.worker import Worker
+
+        worker = Worker(self, role="embedded", concurrency=self.max_jobs)
+        if worker.start():
+            self.worker = worker
+            return True
+        return False
+
+    def close(self) -> None:
+        """Stop the embedded worker (its running jobs are asked to stop, then marked interrupted) and release the
+        database file."""
+        if self.worker is not None:
+            self.worker.stop()
+            self.worker = None
+        self.db.close()
+
+    def _freeze(self, fixings: dict | None = None, trades: list | None = None, costs: bool = False) -> Frozen:
+        """What a job needs of the desk as it is now: the market in use, the typed basket settings, and, when asked,
+        the cost table's version, the fixings and the trades (by version)."""
+        table = self.repo.defaults() if costs else None
+        return Frozen(
+            snapshot_id=self.ctx.snapshot_id,
+            basket=self.repo.setting("basket", {}) or {},
+            costs=table["version"] if table else None,
+            fixings=freeze_fixings(fixings),
+            trades=None if trades is None else [[t.trade_id, t.version] for t in trades],
+        )
+
+    def _submit(self, kind: str, params: dict, frozen: Frozen | None = None) -> dict:
+        job_id, reused = self.jobs.submit(kind, clean(params), (frozen or Frozen()).to_json())
+        return {"job": job_id, "reused": reused}
+
+    def context_of(self, frozen: Frozen) -> PricingContext:
+        """The market a job was submitted on: the one in use, one used before (the same object), or the stored
+        snapshot."""
+        sid = frozen.snapshot_id
+        if sid is None or sid == self.ctx.snapshot_id:
+            return self.ctx
+        ctx = self._contexts.get(sid)
+        if ctx is None:
+            try:
+                ctx = PricingContext.from_snapshot(self.market_store.get(sid))
+            except KeyError as exc:
+                raise ApiError(str(exc).strip("'\""), 404)
+            self._keep_context(ctx)
+        return ctx
+
+    def _keep_context(self, ctx: PricingContext) -> None:
+        if ctx.snapshot_id:
+            kept = list(self._contexts.items())[-3:]  # a few markets, with their recalibrated leverages
+            self._contexts = {**dict(kept), ctx.snapshot_id: ctx}
+
+    def _trades_of(self, frozen: Frozen) -> list[Trade]:
+        return [self.repo.trade(trade_id, int(version)) for trade_id, version in frozen.trades or []]
+
+    @staticmethod
+    def _names_of(trades) -> list[str]:
+        names: list[str] = []
+        for t in trades:
+            sheet = t.term_sheet()
+            observed = (
+                sheet.underlyings if sheet is not None else tuple(validate(parse(t.product["script"])).underlying_names)
+            )
+            names += [n for n in observed if n not in names]
+        return names
+
+    def _market(self, ctx: PricingContext) -> dict:
+        return market_of(ctx.snapshot_id, self._origin(ctx.snapshot_id), ctx.valuation)
+
+    def job(self, job_id: str) -> dict:
+        """A job seen from Python: its state, and once done its result with the market and the method beside it."""
+        try:
+            j = self.jobs.get(job_id)
+        except KeyError as exc:
+            raise ApiError(str(exc), 404)
+        env = j.get("result") or {}
+        return clean({**j, "result": env.get("result"), "market": env.get("market"), "method": env.get("method")})
+
+    def cancel(self, job_id: str) -> dict:
+        try:
+            state = self.jobs.cancel(job_id)
+        except KeyError as exc:
+            raise ApiError(str(exc), 404)
+        return {"ok": True, "state": state}
+
+    @property
+    def last_book(self) -> dict | None:
+        """The newest book valuation on the market in use (the book report and the desk snapshot show it)."""
+        env = self.jobs.latest("book", lambda c: c.get("snapshot_id") == self.ctx.snapshot_id)
+        return None if env is None else env["result"]
 
     def _register(self, path: Path) -> None:
         """Keep a calibration file's market in the snapshot store (immutable, by content), so the desk can switch
@@ -144,7 +252,8 @@ class Desk:
             "valuation": self.ctx.valuation.isoformat(),
             "origin": self._origin(self.ctx.snapshot_id),
             "workers": self.workers,
-            "jobs": self.jobs.running(),
+            "jobs": self.jobs.active(everyone=True),
+            "worker": None if self.worker is None else self.worker.worker_id,
             "store": str(self.db.path),
             "started": self.started.isoformat(timespec="seconds"),
             "public_url": self.public_url,
@@ -212,8 +321,8 @@ class Desk:
             snap = self.market_store.get(sid)
         except KeyError as exc:
             raise ApiError(str(exc).strip("'\""), 404)
+        self._keep_context(self.ctx)  # jobs submitted on it still run on it
         self.ctx = PricingContext.from_snapshot(snap)
-        self.last_book = None  # valued on another market
         LOG.info("desk now on market %s (valuation %s)", self.ctx.snapshot_id, self.ctx.valuation)
         return self.context()
 
@@ -351,31 +460,37 @@ class Desk:
 
     def market_from_lake(self, body: dict) -> dict:
         """A market at a past date (a job: the leverage takes seconds), stored like any snapshot; /api/market/use prices on it."""
-        from optlab.marketdata.pit import market_at
-
         name, day = str(body.get("underlying", "SPX")), body.get("date")
-        calibrate = bool(body.get("leverage", True))
         try:
             day = dt.date.fromisoformat(str(day))
         except ValueError:
             raise ApiError("a date such as 2020-03-23 is needed", 422, "date")
+        params = {
+            "underlying": name,
+            "date": day,
+            "leverage": bool(body.get("leverage", True)),
+            "t_max": float(body.get("t_max", 3.0)),
+        }
+        return self._submit("market", params)
 
-        def run():
-            snap = market_at(
-                self.lake, name, day, leverage="calibrate" if calibrate else "flat", T_max=float(body.get("t_max", 3.0))
-            )
-            sid = self.market_store.put(snap)
-            return clean(
-                {
-                    "snapshot_id": sid,
-                    "valuation": day,
-                    "underlying": name,
-                    "provenance": snap.provenance,
-                    "source": snap.source,
-                }
-            )
+    def run_market(self, p: dict, f: Frozen) -> dict:
+        from optlab.marketdata.pit import market_at
 
-        return {"job": self.jobs.submit("market", run)}
+        name, day = p["underlying"], dt.date.fromisoformat(p["date"])
+        progress.step(f"market of {name} on {day}")
+        snap = market_at(self.lake, name, day, leverage="calibrate" if p["leverage"] else "flat", T_max=p["t_max"])
+        sid = self.market_store.put(snap)
+        out = clean(
+            {
+                "snapshot_id": sid,
+                "valuation": day,
+                "underlying": name,
+                "provenance": snap.provenance,
+                "source": snap.source,
+            }
+        )
+        method = {"name": "point_in_time", "leverage": "calibrate" if p["leverage"] else "flat"}
+        return envelope(market_of(sid, self._origin(sid), day), method, out)
 
     def fixings_from_lake(self, body: dict) -> dict:
         """Real closes of the lake as desk fixings, in the active market's scale."""
@@ -425,7 +540,7 @@ class Desk:
             raise ApiError(str(exc).strip("'\""), 404)
 
     def lab_fit(self, body: dict) -> dict:
-        from optlab.marketdata.vollab import MODELS, public_summary, run_fit
+        from optlab.marketdata.vollab import MODELS
 
         name, day, source = str(body.get("underlying", "SPX")), str(body.get("day", "")), body.get("source")
         try:
@@ -436,11 +551,20 @@ class Desk:
         if not models:
             raise ApiError("choose at least one model", 422)
         settings = {k: body[k] for k in ("n_particles", "n_paths", "mix", "seed") if k in body}
+        params = {"underlying": name, "day": day, "source": source, "models": list(models), "settings": settings}
+        return self._submit("fit", params)
 
-        def run():
-            return clean(public_summary(run_fit(self.lake, name, day, source, models, settings)))
+    def run_fit(self, p: dict, f: Frozen) -> dict:
+        from optlab.marketdata.vollab import public_summary, run_fit
 
-        return {"job": self.jobs.submit("fit", run)}
+        progress.step(f"fit of {p['underlying']} on {p['day']}")
+        out = clean(
+            public_summary(
+                run_fit(self.lake, p["underlying"], p["day"], p["source"], tuple(p["models"]), p["settings"])
+            )
+        )
+        method = {"name": "fit", "models": p["models"], **p["settings"]}
+        return envelope(market_of(None, "observed", p["day"]), method, out)
 
     def lab_runs(self, underlying: str | None = None) -> dict:
         from optlab.marketdata.vollab import list_runs
@@ -448,9 +572,15 @@ class Desk:
         return clean({"runs": list_runs(self.lake, underlying)})
 
     def lab_reproduce(self, calibration_id: str) -> dict:
+        return self._submit("reproduce", {"calibration_id": calibration_id})
+
+    def run_reproduce(self, p: dict, f: Frozen) -> dict:
         from optlab.marketdata.vollab import reproduce
 
-        return {"job": self.jobs.submit("reproduce", lambda: clean(reproduce(self.lake, calibration_id)))}
+        progress.step(f"fit {p['calibration_id']} again")
+        out = clean(reproduce(self.lake, p["calibration_id"]))
+        day = out.get("day") if isinstance(out, dict) else None
+        return envelope(market_of(None, "observed", day), {"name": "fit", "reproduce": True}, out)
 
     # --- replay ---
     def replay_runs(self) -> dict:
@@ -490,7 +620,26 @@ class Desk:
         return clean(data)
 
     def replay_run(self, body: dict) -> dict:
-        from optlab.marketdata.replay import ReplayConfig, replay, result_json, strike_trade
+        table = self.repo.defaults()
+        self._replay_inputs(body, table)  # refuses a bad request now
+        return self._submit("replay", body, Frozen(costs=table["version"] if table else None))
+
+    def run_replay(self, p: dict, f: Frozen) -> dict:
+        from optlab.marketdata.replay import replay, result_json, strike_trade
+
+        sheet, strike, end, cfg, trade_id, costs = self._replay_inputs(
+            p, self.repo.defaults(f.costs) if f.costs is not None else None
+        )
+        progress.step(f"replay of {trade_id} ({cfg.model})")
+        trade, info = strike_trade(self.lake, trade_id, sheet, strike, float(p.get("quantity", 1.0)), cfg, costs=costs)
+        out = clean(result_json(replay(self.lake, trade, end, cfg, info)))
+        self.replays.save(f"replay-{trade_id}-{cfg.model}", out)
+        method = {"name": "replay", "model": cfg.model, "n_paths": cfg.n_paths, "every": cfg.reval_every}
+        return envelope(market_of(None, "observed", strike), method, out)
+
+    def _replay_inputs(self, body: dict, table: dict | None):
+        """(sheet, strike date, end, config, trade id, cost inputs) of a replay request, or the 422 that says why not."""
+        from optlab.marketdata.replay import ReplayConfig
 
         name = str(body.get("preset", "barrier_reverse_convertible"))
         if name not in PRESETS:
@@ -514,22 +663,12 @@ class Desk:
         if cfg.model not in ("lv", "slv"):
             raise ApiError("the replay runs under lv or slv", 422, "model")
         trade_id = f"{name}-{underlying}-{strike}".replace("_", "-")
-
         costs = (
-            resolve(self.repo.defaults(), sheet).inputs()
-            if body.get("costs", True) and cfg.model == "lv" and not resolve(self.repo.defaults(), sheet).missing
+            resolve(table, sheet).inputs()
+            if body.get("costs", True) and cfg.model == "lv" and not resolve(table, sheet).missing
             else None
         )
-
-        def run():
-            trade, info = strike_trade(
-                self.lake, trade_id, sheet, strike, float(body.get("quantity", 1.0)), cfg, costs=costs
-            )
-            out = result_json(replay(self.lake, trade, end, cfg, info))
-            self.replays.save(f"replay-{trade_id}-{cfg.model}", clean(out))
-            return clean(out)
-
-        return {"job": self.jobs.submit("replay", run)}
+        return sheet, strike, end, cfg, trade_id, costs
 
     # --- other underlyings, for worst-ofs ---
     def basket_settings(self) -> dict:
@@ -693,9 +832,9 @@ class Desk:
             "calibrated": ctx.underlying,
         }
 
-    def _context_for(self, sheet: TermSheet, ctx: PricingContext):
+    def _context_for(self, sheet: TermSheet, ctx: PricingContext, settings: dict | None = None):
         if len(sheet.underlyings) > 1:
-            return self._basket_ctx(sheet.underlyings, ctx=ctx, payment=sheet.payment_currency)
+            return self._basket_ctx(sheet.underlyings, settings, ctx=ctx, payment=sheet.payment_currency)
         return self._single_ctx(sheet.underlyings[0], ctx, sheet.payment_currency)
 
     def _single_ctx(self, name: str, ctx: PricingContext, payment: str | None = None):
@@ -806,9 +945,10 @@ class Desk:
         self.repo.save_defaults(groups)
         return self.cost_defaults()
 
-    def _cost_inputs(self, sheet: TermSheet):
-        """The costs of a sheet, or an error naming what the trader must enter (above the last tier, or a name without a group)."""
-        got = resolve(self.repo.defaults(), sheet)
+    def _cost_inputs(self, sheet: TermSheet, table: dict | None = None, frozen: bool = False):
+        """The costs of a sheet, or an error naming what the trader must enter (above the last tier, or a name without a
+        group). `frozen`: `table` is a job's version of the cost table (None: the starting values), else the latest."""
+        got = resolve(table if frozen else self.repo.defaults(), sheet)
         if got.missing:
             raise ApiError(
                 " ".join(got.alerts) + f" Missing: {', '.join(got.missing)}.", 422, f"costs.{got.missing[0]}"
@@ -833,8 +973,8 @@ class Desk:
             "control_paths": min(int(opts.get("n_paths") or n_paths), 100_000),
         }
 
-    def _quote(self, sheet: TermSheet, ctx: PricingContext, o: dict, fixings, costs=None):
-        qctx, basket = self._context_for(sheet, ctx)
+    def _quote(self, sheet: TermSheet, ctx: PricingContext, o: dict, fixings, costs=None, settings: dict | None = None):
+        qctx, basket = self._context_for(sheet, ctx, settings)
         q = quote(
             sheet,
             qctx,
@@ -857,21 +997,27 @@ class Desk:
 
     def quote(self, body: dict) -> dict:
         sheet = _sheet(body.get("sheet") or {}, strict=True)
-        ctx = self.ctx
-        fixings = self._fixings_for(sheet, ctx)
-        o = self._options(body.get("options") or {})
-        costs = self._cost_inputs(sheet) if o["costs"] else None
+        options = body.get("options") or {}
+        if self._options(options)["costs"]:
+            self._cost_inputs(sheet)  # what the trader must enter is refused now, not in the job
+        frozen = self._freeze(fixings=self._fixings_for(sheet, self.ctx), costs=True)
+        return self._submit("quote", {"sheet": body.get("sheet") or {}, "options": options}, frozen)
 
-        def run():
-            q, basket = self._quote(sheet, ctx, o, fixings, costs)
-            out = quote_json(q)
-            out["sheet"] = sheet.to_dict(json_safe=True)
-            out["options"] = clean(o)
-            out["basket"] = clean(basket)
-            out["quote_id"] = self.repo.save_quote(out["sheet"], out)
-            return out
-
-        return {"job": self.jobs.submit("quote", run)}
+    def run_quote(self, p: dict, f: Frozen) -> dict:
+        sheet = _sheet(p["sheet"], strict=True)
+        ctx = self.context_of(f)
+        o = self._options(p["options"])
+        table = self.repo.defaults(f.costs) if f.costs is not None else None
+        costs = self._cost_inputs(sheet, table, frozen=True) if o["costs"] else None
+        progress.step(f"quote of a {sheet.mask.label}")
+        q, basket = self._quote(sheet, ctx, o, f.fixings_by_date(), costs, f.basket)
+        out = quote_json(q)
+        out["sheet"] = sheet.to_dict(json_safe=True)
+        out["options"] = clean(o)
+        out["basket"] = clean(basket)
+        out["quote_id"] = self.repo.save_quote(out["sheet"], out)
+        method = {"name": q.decision.method, "model": q.decision.model, "n_paths": q.decision.n_paths}
+        return envelope(self._market(ctx), method, out)
 
     def _fixings_for(self, sheet: TermSheet, ctx: PricingContext | None = None) -> dict | None:
         ctx = ctx or self.ctx
@@ -880,29 +1026,16 @@ class Desk:
             return None
         return self._known_fixings(sheet.underlyings, ctx.valuation)
 
-    def _known_fixings(self, names, valuation) -> dict | None:
+    def _known_fixings(self, names, valuation, stored: dict | None = None) -> dict | None:
         """The stored fixings of a product's names up to a date: the store holds other names, and later dates when the market
-        in use is an older one."""
-        stored = self.repo.fixings()
+        in use is an older one. `stored`: the fixings a job froze (else the store's)."""
+        stored = self.repo.fixings() if stored is None else stored
         out = {
             n: {d: v for d, v in stored[n].items() if dt.date.fromisoformat(str(d)) <= valuation}
             for n in names
             if n in stored
         }
         return {n: levels for n, levels in out.items() if levels} or None
-
-    def job(self, job_id: str) -> dict:
-        try:
-            return clean(self.jobs.get(job_id))
-        except KeyError as exc:
-            raise ApiError(str(exc), 404)
-
-    def cancel(self, job_id: str) -> dict:
-        try:
-            self.jobs.cancel(job_id)
-        except KeyError as exc:
-            raise ApiError(str(exc), 404)
-        return {"ok": True}
 
     def quotes(self) -> dict:
         return {"quotes": self.repo.quotes()}
@@ -937,38 +1070,47 @@ class Desk:
         """Mark one trade to the current market (a job): its price as % of notional and its value in currency,
         with the past fixings of a running trade."""
         t = self.repo.trade(trade_id)
+        sheet = self._upfront(t)
+        frozen = self._freeze(fixings=self._fixings_for(sheet, self.ctx), trades=[t])
+        return self._submit("value", {"trade_id": trade_id, "options": body.get("options") or {}}, frozen)
+
+    @staticmethod
+    def _upfront(t: Trade) -> TermSheet:
         sheet = t.term_sheet()
         if sheet is None:
             raise ApiError("a script trade is valued with the book", 422)
         if sheet.get("wrapper.solve") != "upfront":
             sheet = sheet.replace(**{"wrapper.solve": "upfront"})
-        ctx = self.ctx
-        fixings = self._fixings_for(sheet, ctx)
-        o = self._options(body.get("options") or {})
+        return sheet
 
-        def run():
-            q, basket = self._quote(sheet, ctx, o, fixings)
-            N = float(sheet.get("general.notional"))
-            r = q.result
-            return clean(
-                {
-                    "trade_id": trade_id,
-                    "quantity": t.quantity,
-                    "notional": N,
-                    "unit_price": r.price,
-                    "unit_stderr": r.stderr,
-                    "value": t.quantity * N * r.price / 100,
-                    "stderr": abs(t.quantity) * N * r.stderr / 100,
-                    "valuation": ctx.valuation,
-                    "reserve": remaining(t, ctx.valuation),
-                    "snapshot_id": ctx.snapshot_id,
-                    "result": result_json(r),
-                    "quote": quote_json(q),
-                    "basket": basket,
-                }
-            )
-
-        return {"job": self.jobs.submit("value", run)}
+    def run_value(self, p: dict, f: Frozen) -> dict:
+        (t,) = self._trades_of(f)
+        sheet = self._upfront(t)
+        ctx = self.context_of(f)
+        o = self._options(p["options"])
+        progress.step(f"value of {t.trade_id}")
+        q, basket = self._quote(sheet, ctx, o, f.fixings_by_date(), settings=f.basket)
+        N = float(sheet.get("general.notional"))
+        r = q.result
+        out = clean(
+            {
+                "trade_id": t.trade_id,
+                "quantity": t.quantity,
+                "notional": N,
+                "unit_price": r.price,
+                "unit_stderr": r.stderr,
+                "value": t.quantity * N * r.price / 100,
+                "stderr": abs(t.quantity) * N * r.stderr / 100,
+                "valuation": ctx.valuation,
+                "reserve": remaining(t, ctx.valuation),
+                "snapshot_id": ctx.snapshot_id,
+                "result": result_json(r),
+                "quote": quote_json(q),
+                "basket": basket,
+            }
+        )
+        method = {"name": q.decision.method, "model": q.decision.model, "n_paths": q.decision.n_paths}
+        return envelope(self._market(ctx), method, out)
 
     def create_trade(self, body: dict) -> dict:
         sheet = _sheet(body.get("sheet") or {}, strict=True)
@@ -1018,11 +1160,14 @@ class Desk:
         self.repo.restore_trade(trade_id)
         return {"ok": True}
 
-    def _positions_by_market(self, ctx: PricingContext) -> tuple[dict, dict]:
+    def _positions_by_market(
+        self, ctx: PricingContext, trades: list | None = None, stored: dict | None = None
+    ) -> tuple[dict, dict]:
         """Live trades as ({(single name, payment currency): positions}, {payment currency: (worst-of positions, their names)}):
-        trades paying in different currencies cannot share a market."""
+        trades paying in different currencies cannot share a market. `trades` and `stored` (fixings): a job's frozen
+        ones, else the store's."""
         singles, baskets = {}, {}
-        for t in self.repo.trades():
+        for t in self.repo.trades() if trades is None else trades:
             if t.status != "live":
                 continue
             sheet = t.term_sheet()
@@ -1030,7 +1175,7 @@ class Desk:
                 sheet.underlyings if sheet is not None else tuple(validate(parse(t.product["script"])).underlying_names)
             )
             fix = (
-                self._known_fixings(observed, ctx.valuation)
+                self._known_fixings(observed, ctx.valuation, stored)
                 if t.strike_date < ctx.valuation and sheet is not None
                 else None
             )
@@ -1047,59 +1192,70 @@ class Desk:
         """Live trades in groups, each on its own shared simulation: one group per single name, on that name's market and
         under the policy (SLV for path-dependent products), and the worst-ofs under the basket context. The groups use
         different seeds, so their errors add in quadrature."""
-        o = self._options(body.get("options") or {})
-        greeks = bool((body.get("options") or {}).get("greeks", True))
-        ctx = self.ctx
-        singles, baskets = self._positions_by_market(ctx)
+        return self._submit("book", {"options": body.get("options") or {}}, self.freeze_book())
+
+    def freeze_book(self) -> Frozen:
+        """The book as a job needs it: every trade by version, the fixings of their names, the market in use."""
+        trades = self.repo.trades()
+        if not any(t.status == "live" for t in trades):
+            raise ApiError("no live trade in the book", 422)
+        stored = self.repo.fixings()
+        return self._freeze(fixings={n: stored[n] for n in self._names_of(trades) if n in stored}, trades=trades)
+
+    def run_book(self, p: dict, f: Frozen) -> dict:
+        o = self._options(p["options"])
+        greeks = bool(p["options"].get("greeks", True))
+        ctx = self.context_of(f)
+        trades = self._trades_of(f)
+        singles, baskets = self._positions_by_market(ctx, trades, f.fixings_by_date() or {})
         if not singles and not baskets:
             raise ApiError("no live trade in the book", 422)
-        reserves = {t.trade_id: remaining(t, ctx.valuation) for t in self.repo.trades() if t.status == "live"}
-
-        def run():
-            t0 = time.perf_counter()
-            groups = []
-            key = lambda x: (x[0][0] != ctx.underlying, x[0][0], str(x[0][1]))  # noqa: E731
-            for k, ((name, pay), positions) in enumerate(sorted(singles.items(), key=key)):
-                gctx, shown = self._single_ctx(name, ctx, pay)
-                if gctx.underlying != name:
-                    raise ValueError(
-                        f"{', '.join(p.name for p in positions)}: no market of {name} on {ctx.valuation}, from the lake or in use"
-                    )
-                groups.append((name, Book(positions), gctx, shown, DEFAULT_SEED + k, name))
-            for pay, (positions, names) in sorted(baskets.items(), key=lambda x: str(x[0])):
-                bctx, shown = self._basket_ctx(names, ctx=ctx, payment=pay)
-                label = "worst-of" if len(baskets) == 1 else f"worst-of ({pay})"
-                groups.append((label, Book(positions), bctx, shown, DEFAULT_SEED + len(groups), None))
-            parts = []
-            for label, book, gctx, shown, seed, name in groups:
-                forced = None if name is None else o["model"]
-                res = book.price(
-                    gctx, model=forced, n_paths=o["n_paths"], seed=seed, batch=o["batch"], workers=self.workers
+        reserves = {t.trade_id: remaining(t, ctx.valuation) for t in trades if t.status == "live"}
+        t0 = time.perf_counter()
+        groups = []
+        key = lambda x: (x[0][0] != ctx.underlying, x[0][0], str(x[0][1]))  # noqa: E731
+        for k, ((name, pay), positions) in enumerate(sorted(singles.items(), key=key)):
+            gctx, shown = self._single_ctx(name, ctx, pay)
+            if gctx.underlying != name:
+                raise ValueError(
+                    f"{', '.join(p.name for p in positions)}: no market of {name} on {ctx.valuation}, from the lake or in use"
                 )
-                g = None
-                if greeks:
-                    g = book.greeks(
-                        gctx,
-                        model=forced,
-                        n_paths=o["n_paths"],
-                        seed=seed,
-                        batch=o["batch"],
-                        slv_vega=o["slv_vega"],
-                        workers=self.workers,
-                    )
-                parts.append((label, res, g, shown, name))
-            out = _combine_books(parts)
-            for p in out["positions"]:
-                p["reserve"] = clean(reserves.get(p["name"]))
-            out["reserve"] = float(sum(r["amount"] for r in reserves.values() if r))
-            out["reserve_initial"] = float(sum(r["initial"] for r in reserves.values() if r))
-            out["value_net"] = out["value"] - out["reserve"]
-            out["no_reserve"] = sorted(k for k, r in reserves.items() if r is None)
-            out["seconds"] = time.perf_counter() - t0  # prices and Greeks; each group's own time is its price
-            self.last_book = out
-            return out
-
-        return {"job": self.jobs.submit("book", run)}
+            groups.append((name, Book(positions), gctx, shown, DEFAULT_SEED + k, name))
+        for pay, (positions, names) in sorted(baskets.items(), key=lambda x: str(x[0])):
+            bctx, shown = self._basket_ctx(names, f.basket, ctx=ctx, payment=pay)
+            label = "worst-of" if len(baskets) == 1 else f"worst-of ({pay})"
+            groups.append((label, Book(positions), bctx, shown, DEFAULT_SEED + len(groups), None))
+        parts = []
+        steps = len(groups) * (2 if greeks else 1)
+        for k, (label, book, gctx, shown, seed, name) in enumerate(groups):
+            forced = None if name is None else o["model"]
+            progress.step(f"price {label}", k * (steps // len(groups)), steps)
+            res = book.price(
+                gctx, model=forced, n_paths=o["n_paths"], seed=seed, batch=o["batch"], workers=self.workers
+            )
+            g = None
+            if greeks:
+                progress.step(f"Greeks of {label}", 2 * k + 1, steps)
+                g = book.greeks(
+                    gctx,
+                    model=forced,
+                    n_paths=o["n_paths"],
+                    seed=seed,
+                    batch=o["batch"],
+                    slv_vega=o["slv_vega"],
+                    workers=self.workers,
+                )
+            parts.append((label, res, g, shown, name))
+        out = _combine_books(parts)
+        for pos in out["positions"]:
+            pos["reserve"] = clean(reserves.get(pos["name"]))
+        out["reserve"] = float(sum(r["amount"] for r in reserves.values() if r))
+        out["reserve_initial"] = float(sum(r["initial"] for r in reserves.values() if r))
+        out["value_net"] = out["value"] - out["reserve"]
+        out["no_reserve"] = sorted(k for k, r in reserves.items() if r is None)
+        out["seconds"] = time.perf_counter() - t0  # prices and Greeks; each group's own time is its price
+        method = {"name": out["method"], "model": out["model"], "n_paths": out["n_paths"], "groups": len(groups)}
+        return envelope(self._market(ctx), method, out)
 
     # --- fixings and lifecycle ---
     def fixings(self, underlying: str | None = None) -> dict:
@@ -1200,35 +1356,55 @@ class Desk:
             raise ApiError(f"line {check['line']}, col {check['col']}: {check['message']}", 422)
         if len(check["underlyings"]) > 1:
             raise ApiError("the script lab prices single-name scripts; worst-ofs go through the term sheet", 422)
-        model = (body.get("model") or "lv").lower()
-        n_paths = int(body.get("n_paths") or 40_000)
-        ctx = self.ctx
+        params = {
+            "script": body["script"],
+            "model": (body.get("model") or "lv").lower(),
+            "n_paths": int(body.get("n_paths") or 40_000),
+            "seed": int(body.get("seed", 2026)),
+        }
+        return self._submit("script", params, self._freeze())
 
-        def run():
-            res = price(
-                body["script"],
-                ctx.model(model, 2.0),
-                ctx.market,
-                n_paths=n_paths,
-                seed=int(body.get("seed", 2026)),
-                batch=min(n_paths, 25_000),
-                valuation=ctx.valuation,
-                workers=self.workers,
-            )
-            return clean(
-                {
-                    "price": res.price,
-                    "stderr": res.stderr,
-                    "seconds": res.seconds,
-                    "model": model,
-                    "n_paths": n_paths,
-                    "expected_life": res.expected_life,
-                    "warnings": res.warnings,
-                    "notional": res.notional,
-                }
-            )
+    def run_script(self, p: dict, f: Frozen) -> dict:
+        ctx = self.context_of(f)
+        model, n_paths = p["model"], p["n_paths"]
+        progress.step(f"script under {model}")
+        res = price(
+            p["script"],
+            ctx.model(model, 2.0),
+            ctx.market,
+            n_paths=n_paths,
+            seed=p["seed"],
+            batch=min(n_paths, 25_000),
+            valuation=ctx.valuation,
+            workers=self.workers,
+        )
+        out = clean(
+            {
+                "price": res.price,
+                "stderr": res.stderr,
+                "seconds": res.seconds,
+                "model": model,
+                "n_paths": n_paths,
+                "expected_life": res.expected_life,
+                "warnings": res.warnings,
+                "notional": res.notional,
+            }
+        )
+        method = {"name": "monte_carlo", "model": model, "n_paths": n_paths, "seed": p["seed"]}
+        return envelope(self._market(ctx), method, out)
 
-        return {"job": self.jobs.submit("script", run)}
+
+for _kind, _method in (
+    ("market", "run_market"),
+    ("fit", "run_fit"),
+    ("reproduce", "run_reproduce"),
+    ("replay", "run_replay"),
+    ("quote", "run_quote"),
+    ("value", "run_value"),
+    ("book", "run_book"),
+    ("script", "run_script"),
+):
+    register(_kind, lambda desk, p, f, _m=_method: getattr(desk, _m)(p, f))
 
 
 def _combine_books(parts) -> dict:

@@ -53,7 +53,7 @@ def term(request: Request, snapshot_id: str = PathParam(..., pattern=SNAPSHOT)):
 @router.post("/snapshots/from-lake", **access("trader"), status_code=202, responses=ACCEPTED)
 def market_from_lake(m: MarketFromLakeIn, request: Request):
     """Build the market of a past date from the lake (point in time), optionally with its SLV leverage."""
-    return submit(request, "market_from_lake", desk(request).market_from_lake(body(m)), target=m.underlying)
+    return submit(request, "market_from_lake", lambda: desk(request).market_from_lake(body(m)), target=m.underlying)
 
 
 @router.get("/other-underlyings", **access())

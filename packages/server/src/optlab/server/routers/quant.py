@@ -8,6 +8,7 @@ from fastapi import APIRouter, Query, Request
 from fastapi import Path as PathParam
 
 from optlab import native
+from optlab.server.present import estimates
 from optlab.server.routers._common import ACCEPTED, desk, submit
 from optlab.server.schemas import FitIn, ReplayIn, body
 from optlab.server.web import access
@@ -19,7 +20,7 @@ NAME = r"^[A-Z0-9._-]{1,16}$"
 @router.get("/model-risk", **access())
 def model_risk(request: Request):
     """Prices of the calibration's exotics under Black-Scholes, local vol, Heston and SLV."""
-    return desk(request).model_risk()
+    return estimates(desk(request).model_risk())
 
 
 @router.get("/vollab/days", **access())
@@ -42,7 +43,7 @@ def vollab_quotes(
 @router.post("/vollab/fits", **access("quant"), status_code=202, responses=ACCEPTED)
 def vollab_fit(f: FitIn, request: Request):
     """Fit SSVI, SVI and Heston against a day's quotes, stored as a replayable run."""
-    return submit(request, "vollab_fit", desk(request).lab_fit(body(f)), target=f.underlying)
+    return submit(request, "vollab_fit", lambda: desk(request).lab_fit(body(f)), target=f.underlying)
 
 
 @router.get("/vollab/runs", **access())
@@ -53,7 +54,7 @@ def vollab_runs(request: Request, underlying: str | None = Query(None, pattern=N
 @router.post("/vollab/runs/{run_id}/reproduce", **access("quant"), status_code=202, responses=ACCEPTED)
 def vollab_reproduce(request: Request, run_id: str = PathParam(..., pattern=r"^[\w.-]{1,128}$")):
     """Run a stored fit again and say how far the new numbers are from the stored ones."""
-    return submit(request, "vollab_reproduce", desk(request).lab_reproduce(run_id), target=run_id)
+    return submit(request, "vollab_reproduce", lambda: desk(request).lab_reproduce(run_id), target=run_id)
 
 
 @router.get("/replay/runs", **access())
@@ -65,15 +66,15 @@ def replay_runs(request: Request):
 @router.post("/replay/runs", **access("quant"), status_code=202, responses=ACCEPTED)
 def replay_run(r: ReplayIn, request: Request):
     """Replay a preset over its life on real closes (valuations, Greeks, events, P&L)."""
-    return submit(request, "replay_run", desk(request).replay_run(body(r)), target=f"{r.preset}/{r.underlying}")
+    return submit(request, "replay_run", lambda: desk(request).replay_run(body(r)), target=f"{r.preset}/{r.underlying}")
 
 
 @router.get("/replay/runs/{run_id:path}", **access())
 def replay_get(
     request: Request, run_id: str = PathParam(..., pattern=r"^[A-Za-z0-9_.-]{1,128}(/[A-Za-z0-9_.-]{1,128})?$")
 ):
-    """A replay (ids are checked against the stored ones, never used as a path)."""
-    return desk(request).replay_get(run_id)
+    """A replay (ids are checked against the stored ones, never used as a path), Monte Carlo numbers as {value, se}."""
+    return estimates(desk(request).replay_get(run_id))
 
 
 @router.get("/engine", **access())

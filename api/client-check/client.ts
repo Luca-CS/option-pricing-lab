@@ -5,6 +5,7 @@ import type { components, paths } from "./schema";
 
 type Problem = components["schemas"]["Problem"];
 type Job = components["schemas"]["Job"];
+type Estimate = components["schemas"]["Estimate"];
 type FixingsIn = components["schemas"]["FixingsIn"];
 
 const api = createClient<paths>({ baseUrl: "http://127.0.0.1:8765", credentials: "same-origin" });
@@ -20,19 +21,28 @@ export async function signIn(name: string, password: string): Promise<{ csrf: st
   return { csrf: data.csrf_token, permissions: data.permissions };
 }
 
-export async function quickQuote(csrf: string): Promise<string> {
+export async function quickQuote(csrf: string, key: string): Promise<{ jobId: string; reused: boolean }> {
+  // the same Idempotency-Key gives back the same job: a retried click never quotes twice
   const { data, error } = await api.POST("/api/v1/structuring/quotes", {
     body: { sheet: { type: "autocall", values: { coupon: { barrier: 0.7 } } }, options: { precision: "quick" } },
+    params: { header: { "Idempotency-Key": key } },
     headers: { "X-CSRF-Token": csrf },
   });
   if (error) fail(error);
-  return data.job_id;
+  return { jobId: data.job_id, reused: data.reused ?? false };
 }
 
-export async function job(jobId: string): Promise<Job["state"]> {
+export async function job(
+  jobId: string,
+): Promise<{ state: Job["state"]; progress: number | null | undefined; market: string | null | undefined }> {
   const { data, error } = await api.GET("/api/v1/jobs/{job_id}", { params: { path: { job_id: jobId } } });
   if (error) fail(error);
-  return data.state;
+  return { state: data.state, progress: data.progress, market: data.result?.market?.snapshot_id };
+}
+
+export function shown(e: Estimate): string {
+  // every Monte Carlo number of a result: its value and its standard error
+  return e.se === null ? `${e.value}` : `${e.value} ± ${2 * e.se}`;
 }
 
 export async function trades(cursor?: string): Promise<{ count: number; next: string | null | undefined }> {

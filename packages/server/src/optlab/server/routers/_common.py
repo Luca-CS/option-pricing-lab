@@ -4,6 +4,7 @@ writes, cursor pages and HTML reports with their own CSP."""
 from __future__ import annotations
 
 import base64
+import re
 from collections.abc import Callable
 from typing import Annotated, Any
 
@@ -11,15 +12,23 @@ from fastapi import Path, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
+from optlab.server.jobs import IdempotencyConflict, submitting
 from optlab.server.web import CSP_REPORT, Problem, State, current_user, state
 
 MAX_PAGE = 200
 ID_PATTERN = r"^[A-Za-z0-9_.:-]{1,128}$"
 Id = Annotated[str, Path(pattern=ID_PATTERN, description="a stored id (trade, quote, run, job), never a file path")]
+IDEMPOTENCY = "Idempotency-Key"
+KEY = re.compile(r"[A-Za-z0-9_.:-]{1,128}")
 
 
 class JobAccepted(BaseModel):
     job_id: str = Field(..., description="follow it on GET /jobs/{job_id} or GET /jobs/{job_id}/events")
+    reused: bool = Field(
+        False,
+        description="an existing job was given back: the same Idempotency-Key, or the same request still queued or "
+        "running",
+    )
 
 
 # the 202 of a route that submits a job, for the OpenAPI document
@@ -35,14 +44,24 @@ def desk(request: Request):
     return state(request).desk
 
 
-def submit(request: Request, action: str, out: dict, target: str | None = None, detail: dict | None = None):
-    """The desk answered {"job": id}: 202 {"job_id"}, the job's owner kept, the submission in the audit log."""
+def submit(
+    request: Request, action: str, call: Callable[[], dict], target: str | None = None, detail: dict | None = None
+):
+    """Run the desk's submission as the caller (the job's owner is in its row) with the request's Idempotency-Key:
+    202 {"job_id", "reused"}, and the submission in the audit log."""
     st: State = state(request)
-    job_id = out["job"]
     user = current_user(request)
-    st.job_owner[job_id] = user.user_id
-    st.audit.record(user.user_id, action, target, detail={"job_id": job_id, **(detail or {})})
-    return JSONResponse({"job_id": job_id}, status_code=202)
+    key = request.headers.get(IDEMPOTENCY)
+    if key is not None and not KEY.fullmatch(key):
+        raise Problem(422, f"{IDEMPOTENCY}: 1 to 128 letters, digits, '.', '_', ':' or '-'")
+    try:
+        with submitting(user.user_id, key):
+            out = call()
+    except IdempotencyConflict as exc:
+        raise Problem(422, str(exc)) from None
+    job_id, reused = out["job"], bool(out.get("reused"))
+    st.audit.record(user.user_id, action, target, detail={"job_id": job_id, "reused": reused, **(detail or {})})
+    return JSONResponse({"job_id": job_id, "reused": reused}, status_code=202)
 
 
 def audited(

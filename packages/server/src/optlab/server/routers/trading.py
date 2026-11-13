@@ -70,7 +70,7 @@ def restore_trade(trade_id: Id, request: Request):
 @router.post("/trades/{trade_id}/valuations", **access(), status_code=202, responses=ACCEPTED)
 def value_trade(trade_id: Id, v: ValuationIn, request: Request):
     """Value one trade at the market in use."""
-    return submit(request, "value_trade", desk(request).value_trade(trade_id, body(v)), target=trade_id)
+    return submit(request, "value_trade", lambda: desk(request).value_trade(trade_id, body(v)), target=trade_id)
 
 
 @router.get("/trades/{trade_id}/events", **access())
@@ -83,7 +83,7 @@ def trade_events(trade_id: Id, request: Request):
 @router.post("/book/valuations", **access(), status_code=202, responses=ACCEPTED)
 def value_book(v: ValuationIn, request: Request):
     """Value the book in independent groups, with delta, vega and the reserves held at issue."""
-    return submit(request, "value_book", desk(request).price_book(body(v)))
+    return submit(request, "value_book", lambda: desk(request).price_book(body(v)))
 
 
 @router.get("/events/upcoming", **access())

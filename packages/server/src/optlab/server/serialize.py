@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import math
+from typing import Any
 
 import numpy as np
 
@@ -11,7 +12,7 @@ from optlab.structured.script.nodes import DateLit
 from optlab.structured.script.timeline import Clock, build_timeline
 
 
-def clean(x):
+def clean(x: Any) -> Any:
     """JSON-safe: numpy scalars to Python, NaN and inf to None, dates to ISO strings, tuples to lists."""
     if isinstance(x, dict):
         return {str(k): clean(v) for k, v in x.items()}

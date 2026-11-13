@@ -104,7 +104,7 @@ def main():
                     )
             print(f"stored as {res['run_id']}")
         finally:
-            desk.jobs.shutdown()
+            desk.close()
     print(f"{time.perf_counter() - t0:.0f} s")
 
 

@@ -14,6 +14,7 @@ import uvicorn
 from optlab.core.log import configure
 from optlab.server.api import Desk
 from optlab.server.app import create_app
+from optlab.server.logs import to_files
 from optlab.server.settings import Settings
 
 
@@ -44,13 +45,20 @@ def main(argv=None) -> None:
         calibration=args.calibration,
         database=args.store,
     )
-    desk = Desk(settings=settings, engine=settings.engine, workers=settings.workers)
+    to_files(settings, "api", args.log)
+    desk = Desk(
+        settings=settings, engine=settings.engine, workers=settings.workers, run_jobs=settings.worker == "embedded"
+    )
     if args.market:
         desk.use_snapshot({"snapshot_id": args.market})
     eng = desk.health()["engine"]
     gpus = ", ".join(d["name"] for d in eng["devices"]) or "no CUDA device"
     print(f"data {settings.data}; database {desk.db.path}; market {desk.ctx.snapshot_id}")
     print(f"Monte Carlo engine: {eng['resolved']} ({gpus}; {eng['cpu_threads']} CPU threads)")
+    if desk.worker is not None:
+        print(f"jobs: the worker of this process, {desk.max_jobs} at a time")
+    else:
+        print("jobs: left to `python -m optlab.server.worker` (OPTLAB_WORKER=external, or another worker is running)")
     print(f"API on http://{settings.host}:{settings.port}/api/v1 (OpenAPI: /api/v1/openapi.json)")
     uvicorn.run(
         create_app(settings, desk),

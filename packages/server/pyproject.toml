@@ -1,7 +1,7 @@
 [project]
 name = "optlab-server"
 version = "0.1.0"
-description = "optlab's desk: the HTTP server, its jobs and store (the FastAPI API v1, auth and the worker replace them in A5 and A6)"
+description = "optlab's desk: API v1 (FastAPI), accounts, the job queue, its worker and schedules, the SQLite database"
 requires-python = ">=3.14"
 license = "MIT"
 dependencies = [
@@ -18,6 +18,7 @@ dependencies = [
     "fastapi>=0.162",  # API v1 (ADR-0005)
     "uvicorn>=0.54",
     "argon2-cffi>=25.1",  # password hashes (ADR-0020)
+    "tzdata>=2025.2",  # the schedules' time zone (zoneinfo has no database of its own on Windows or a slim image)
 ]
 
 [build-system]

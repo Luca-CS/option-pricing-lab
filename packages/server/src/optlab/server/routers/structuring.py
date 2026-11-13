@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
 
+from optlab.server.present import estimates
 from optlab.server.report import quote_report
 from optlab.server.routers._common import ACCEPTED, Id, Page, desk, page, report, submit
 from optlab.server.schemas import QuoteIn, ScriptIn, ScriptPriceIn, TermSheetIn, body
@@ -45,7 +46,7 @@ def termsheet_form(sheet: TermSheetIn, request: Request):
 @router.post("/quotes", **access("structurer"), status_code=202, responses=ACCEPTED)
 def create_quote(q: QuoteIn, request: Request):
     """Quote a sheet with the pricing policy (base, provisions, costs, optional Greeks and mix band)."""
-    return submit(request, "create_quote", desk(request).quote(body(q)), detail={"type": q.sheet.type})
+    return submit(request, "create_quote", lambda: desk(request).quote(body(q)), detail={"type": q.sheet.type})
 
 
 @router.get("/quotes", **access(), response_model=Page)
@@ -57,7 +58,9 @@ def list_quotes(request: Request, cursor: str | None = None, limit: int = Query(
 
 @router.get("/quotes/{quote_id}", **access())
 def get_quote(quote_id: Id, request: Request):
-    return desk(request).saved_quote(quote_id)
+    """A saved quote: its sheet and its result, Monte Carlo numbers as {value, se} (the job's result shape)."""
+    q = desk(request).saved_quote(quote_id)
+    return {**q, "result": estimates(q["result"])}
 
 
 @router.get("/quotes/{quote_id}/report", **access(), response_class=HTMLResponse)
@@ -75,4 +78,4 @@ def script_check(s: ScriptIn, request: Request):
 @router.post("/script/price", **access("structurer"), status_code=202, responses=ACCEPTED)
 def script_price(s: ScriptPriceIn, request: Request):
     """Price a payoff script under a chosen model."""
-    return submit(request, "script_price", desk(request).script_price(body(s)), detail={"model": s.model})
+    return submit(request, "script_price", lambda: desk(request).script_price(body(s)), detail={"model": s.model})
