@@ -32,18 +32,6 @@ def names(report) -> list[str]:
     return out
 
 
-def name_table(report, position: str | None = None) -> dict:
-    """{name: {greek: (value, se)}} of the scalar Greeks."""
-    src = source(report, position)
-    out: dict = {}
-    for k, v in src.items():
-        g, n, b = split(k)
-        if b:
-            continue
-        out.setdefault(n, {})[g] = tuple(v)
-    return out
-
-
 def tenor_buckets(report, greek: str, name: str, position: str | None = None) -> list:
     """[(tenor label, value, se)] of "vega_tenor", "rho_tenor" or "epsilon_tenor" for a name (or currency)."""
     src = source(report, position)

@@ -496,7 +496,7 @@ class _DigitalRun:
         return kinds
 
 
-def _settled(inputs: CostInputs, lines: _Lines, base_requests: dict, target, sets_solving: bool) -> tuple[dict, dict]:
+def _settled(inputs: CostInputs, lines: _Lines, target, sets_solving: bool) -> tuple[dict, dict]:
     """Run the base, the single bumps and the two sides of each conflict, then keep the side against the desk. Returns ({key: value used},
     {key: run of that bump alone, "base": run})."""
     values = dict(inputs.active)
@@ -536,7 +536,7 @@ def desk_price(
     solving = target is not None
     sets = [{coupon_param: 0.0}, {coupon_param: 1.0}] if solving else [{}]
     lines = _Lines(product, ctx, fmt, decision, profile, sets, fixings, workers, fast)
-    values, runs = _settled(inputs, lines, {}, target, solving)
+    values, runs = _settled(inputs, lines, target, solving)
     base = runs.pop("base")
     single = runs
     everything = lines.run({"all": values})["all"] if len(values) > 1 else None

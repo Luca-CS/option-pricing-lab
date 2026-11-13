@@ -16,6 +16,7 @@ from optlab.marketdata.quotes import as_clean_input, clean_day, discount_functio
 from optlab.marketdata.sources import dolthub, yahoo
 from optlab.marketdata.sources.archives import (
     import_historicaldata,
+    import_optionsdx,
     parse_historicaldata,
     parse_optionsdx,
     snapshot_time,
@@ -211,6 +212,21 @@ def test_optionsdx_parser_splits_the_two_sides():
     out = parse_optionsdx(OPTIONSDX, "SPX")
     assert out["cp"].tolist() == ["C", "P"] and out["bid"].tolist() == [120.0, 130.0]
     assert out["obs_date"].iloc[0] == dt.date(2020, 3, 16) and out["underlying_close"].iloc[0] == 2386.13
+
+
+def test_an_optionsdx_inbox_is_imported_once(tmp_path):
+    """The importer prepared for the free OptionsDX archives (reports/surface_reconstruction.md): every .txt or .csv
+    file of a folder goes into the lake's option quotes, and a second import of the same files adds nothing."""
+    inbox = tmp_path / "inbox"
+    (inbox / "2020").mkdir(parents=True)
+    (inbox / "2020" / "spx_eod_202003.txt").write_text(OPTIONSDX, encoding="utf-8")
+    (inbox / "notes.md").write_text("not a quote file", encoding="utf-8")
+    lake = Lake(tmp_path / "lake")
+    first = import_optionsdx(lake, inbox)
+    assert [r["n_new"] for r in first] == [2] and first[0]["table"] == "option_quotes"
+    quotes = lake.read("option_quotes")
+    assert sorted(quotes["cp"]) == ["C", "P"] and set(quotes["source"]) == {"optionsdx"}
+    assert [r["n_new"] for r in import_optionsdx(lake, inbox)] == [0]
 
 
 def test_clean_input_columns():

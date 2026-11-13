@@ -117,16 +117,3 @@ def load_dolthub(lake: Lake, dolt: Dolt, symbols=SYMBOLS, start: str = "2019-01-
         if len(rows):
             out.append(lake.ingest("option_quotes", rows, SOURCE, "observed", run))
     return out
-
-
-def coverage_table(lake: Lake) -> pd.DataFrame:
-    """Per symbol and year: days with a chain and the longest maturity. The calendar is irregular, this says how much."""
-    con = lake.connect()
-    try:
-        return con.execute(
-            "SELECT underlying, year(obs_date) AS year, count(DISTINCT obs_date) AS days, "
-            "count(*) AS quotes, round(max(date_diff('day', obs_date, expiry)) / 365.0, 2) AS longest_years "
-            f"FROM option_quotes WHERE source = '{SOURCE}' GROUP BY 1, 2 ORDER BY 1, 2"
-        ).df()
-    finally:
-        con.close()
