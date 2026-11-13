@@ -31,6 +31,7 @@ dev = [
     "pre-commit>=4.7",
     "nanobind==3.1.0",  # stubgen: the versioned stub of optlab.native._ext (its test compares)
     "httpx2>=2.16",  # the API tests' client (starlette TestClient; httpx is deprecated there)
+    "pandas-stubs==3.1.0.261029",  # pandas' types for pyright (its inline annotations type rows as tuples, logs as arrays)
 ]
 
 [tool.uv]

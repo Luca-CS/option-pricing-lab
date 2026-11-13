@@ -91,7 +91,7 @@ def carry(lake: Lake, name: str, start, end) -> pd.DataFrame:
     )
     out, methods = {}, {}
     for (d, m), g in rows.groupby(["obs_date", "method"]):  # pyright: ignore[reportGeneralTypeIssues] (two keys: a pair per group)
-        day = pd.Timestamp(d).date()
+        day = as_day(d)
         if day in out and methods[day] == "total_return":
             continue  # one method a day, the total-return one first when a name has several
         out[day] = np.interp(grid.TENORS, g["tenor"].to_numpy(float), g["carry"].to_numpy(float))

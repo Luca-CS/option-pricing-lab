@@ -14,11 +14,13 @@ from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass
+from typing import cast
 
 import numpy as np
 import pandas as pd
 
 from optlab.core.instruments import instrument
+from optlab.marketdata.days import as_day
 from optlab.marketdata.lake import Lake, new_run_id, sql_str
 
 # Assumed dividend yields of indices with neither chains nor a total-return index (origin = synthetic).
@@ -63,7 +65,7 @@ def parity_carry_rows(
     day = pd.Timestamp(q["obs_date"].iloc[0]).date() if len(q) else None
     rows = []
     for expiry, g in q.groupby("expiry"):
-        T = (pd.Timestamp(expiry).date() - day).days / 365.0
+        T = (as_day(expiry) - cast(dt.date, day)).days / 365.0  # a group means rows, so a day
         if T <= 0.01:
             continue
         pairs = g[g["cp"] == "C"].merge(g[g["cp"] == "P"], on="strike", suffixes=("_c", "_p"))
@@ -83,9 +85,9 @@ def realised_yield(price: pd.Series, total_return: pd.Series, window_days: int =
     date. Only past levels enter."""
     both = pd.concat({"p": price, "tr": total_return}, axis=1).dropna().sort_index()
     both.index = pd.to_datetime(both.index)
-    lagged = both.reindex(both.index - pd.Timedelta(days=window_days), method="ffill")
+    lagged = both.reindex(cast(pd.DatetimeIndex, both.index) - pd.Timedelta(days=window_days), method="ffill")
     lagged.index = both.index
-    gap = np.log(both["tr"] / lagged["tr"]) - np.log(both["p"] / lagged["p"])
+    gap = cast(pd.Series, np.log(both["tr"] / lagged["tr"]) - np.log(both["p"] / lagged["p"]))
     return (gap * 365.0 / window_days).dropna()
 
 
@@ -228,7 +230,8 @@ def dividend_stream(lake: Lake, name: str, day, spot: float, as_of=None) -> Divi
         if wide is not None and name + ".TR" in wide.columns and len(wide) > 1:
             wide.index = pd.to_datetime(wide.index)
             if (wide.index[-1] - wide.index[0]).days >= MIN_HISTORY_DAYS:
-                points = wide[name] * (np.exp(np.log(wide[name + ".TR"]).diff() - np.log(wide[name]).diff()) - 1.0)
+                log_tr, log_p = cast(pd.Series, np.log(wide[name + ".TR"])), cast(pd.Series, np.log(wide[name]))
+                points = wide[name] * (np.exp(log_tr.diff() - log_p.diff()) - 1.0)
                 months = points.dropna().groupby(pd.Grouper(freq="ME")).sum().clip(lower=0.0)
                 dates = [min(d, pd.Timestamp(day)) for d in months.index]
                 return _repeat_year(day, dates, months.to_numpy() / spot, "derived", "dividend_points")

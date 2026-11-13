@@ -451,7 +451,7 @@ def run_var(
                 "pnl": approx.tolist(),
             }
         res = _result(label, horizon, ch, reval, keys[label], origins, 0.0, taylor)
-        row = ch.loc[pd.Timestamp(res.var_date).date()]  # the VaR day's move one factor at a time
+        row = cast(pd.Series, ch.loc[pd.Timestamp(res.var_date).date()])  # the VaR day's move one factor at a time
         f_shocks = {f"{label}:factor:{f}": shock_of(row, names, cur, (f,)) for f in factors}
         fr = revalue_many(groups, f_shocks, settings, env, 1)
         res.factors = {f: fr["pnl"][f"{label}:factor:{f}"] for f in factors}

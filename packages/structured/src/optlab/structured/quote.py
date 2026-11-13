@@ -13,7 +13,7 @@ from optlab.core.log import get_logger
 from optlab.structured.cashflows import FundedSwap, Note, Swap, funding_periods
 from optlab.structured.compiler import CompiledProduct, compile_sheet
 from optlab.structured.context import PricingContext
-from optlab.structured.costs import desk_price
+from optlab.structured.costs import DeskPrice, desk_price
 from optlab.structured.multiasset import BasketContext
 from optlab.structured.policy import PricingDecision, decide
 from optlab.structured.pricer import StructuredResult, check_fixing_scale, history_times, price_many
@@ -45,7 +45,7 @@ class Quote:
     greeks: object | None = None  # greeks.Greeks at the solved coupon, with the policy model
     snapshot_id: str | None = None  # the market the quote was priced on
     mix_band: dict | None = None  # {mix: {"value", "se", "atm_error_bp"}}: coupon p.a. or upfront per SLV mix
-    desk: object | None = None  # costs.DeskPrice: base, lines and client price, when costs were asked
+    desk: DeskPrice | None = None  # base, lines and client price, when costs were asked
 
     @property
     def control_gap_se(self) -> float | None:
@@ -289,9 +289,9 @@ def _quote_greeks(sheet, product, ctx, decision, fmt, params, fixings, basket, s
 
 def quote(
     sheet: TermSheet,
-    ctx: PricingContext | None = None,
+    ctx: PricingContext | BasketContext | None = None,
     model: str | None = None,
-    control="default",
+    control: str | None = "default",
     n_paths: int = 200_000,
     batch: int = 25_000,
     seed: int = DEFAULT_SEED,

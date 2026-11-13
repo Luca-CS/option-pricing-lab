@@ -67,7 +67,7 @@ def latest_snapshot(out_dir) -> Path:
     return files[-1]
 
 
-def _year_fraction(snapshot: dt.datetime, expiry: str, am_settled=False) -> float:
+def _year_fraction(snapshot: dt.datetime, expiry, am_settled=False) -> float:
     close = dt.time(9, 30) if am_settled else dt.time(16, 0)
     exp = dt.datetime.combine(dt.date.fromisoformat(expiry), close, tzinfo=NY)
     return (exp - snapshot).total_seconds() / (365.0 * 86400)
@@ -168,9 +168,10 @@ def clean_chain(
         zero_curve = {"given": True}
 
     # pass 2: forwards with the smoothed discount factors, then implied vols
-    pillars, slices, tables = [], [], []
+    pillars, slices = [], []
+    tables: list[pd.DataFrame] = []  # typed: pandas-stubs reads concat of an untyped list as never returning
     for expiry, T, calls, puts, D_given in groups:
-        D = D_given if discount is not None else float(np.exp(-(a * T + b) * T))
+        D = D_given if discount is not None else float(np.exp(-(a * T + b) * T))  # pyright: ignore[reportPossiblyUnboundVariable] (fitted when no discount is given)
         F = forward_given_discount(calls, puts, spot, D)
         otm = pd.concat([puts[puts["strike"] < F].assign(cp="put"), calls[calls["strike"] >= F].assign(cp="call")])
         otm = otm.sort_values("strike")
