@@ -31,7 +31,7 @@ from optlab.server import tasks
 from optlab.server.jobs import Workers
 from optlab.server.serialize import clean
 
-LOG = get_logger(__name__)
+LOG = get_logger("optlab.server.worker")  # not __name__: run as -m, it is __main__
 BEAT_SECONDS = 5.0
 SCHEDULE_SECONDS = 20.0
 GPU_SECONDS = 60.0

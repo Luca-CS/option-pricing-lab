@@ -26,8 +26,13 @@ class JsonLines(logging.Formatter):
         return json.dumps(out, ensure_ascii=False)
 
 
+_HANDLER: TimedRotatingFileHandler | None = None
+SERVER_LOGGERS = ("uvicorn.error", "uvicorn.access")  # the requests and the server's own messages, in the api's file
+
+
 def to_files(settings: Settings, role: str, level: str = "INFO") -> Path:
     """Add the rotating JSON file of this process (`api` or `worker`) to the optlab logger; returns its path."""
+    global _HANDLER
     folder = Path(settings.logs)
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{role}.log"
@@ -40,4 +45,15 @@ def to_files(settings: Settings, role: str, level: str = "INFO") -> Path:
     handler.setFormatter(JsonLines())
     handler.setLevel(level.upper())
     root.addHandler(handler)
+    _HANDLER = handler
     return path
+
+
+def attach_server_logs() -> None:
+    """Uvicorn's loggers into the same file, once uvicorn has configured them (the api's startup calls it)."""
+    if _HANDLER is None:
+        return
+    for name in SERVER_LOGGERS:
+        logger = logging.getLogger(name)
+        if _HANDLER not in logger.handlers:
+            logger.addHandler(_HANDLER)

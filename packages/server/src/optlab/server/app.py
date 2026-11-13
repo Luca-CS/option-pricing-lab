@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 from optlab.server.api import Desk
 from optlab.server.audit import Audit
+from optlab.server.logs import attach_server_logs
 from optlab.server.routers import admin, market, quant, risk, structuring, system, trading
 from optlab.server.security import COOKIE, CSRF_HEADER, Accounts
 from optlab.server.settings import Settings
@@ -45,6 +46,7 @@ ROUTERS = (system, structuring, trading, market, risk, quant, admin)
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
+    attach_server_logs()  # the requests into <data>/logs/api.log when the server writes its log file
     yield
     st = getattr(app.state, "optlab", None)
     if st is not None:  # the embedded worker (its running jobs end interrupted), then the database file
