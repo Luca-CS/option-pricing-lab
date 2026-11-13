@@ -1,6 +1,6 @@
 # ADR-0016: The calibration JSON files leave the repository
 
-- Status: Accepted (A0 checkpoint, 7 November 2026)
+- Status: Accepted (A0 checkpoint, 7 November 2026); **superseded by ADR-0023** (A8: the files stay, in compact JSON)
 - Handoff §1: Résultats
 
 ## Context

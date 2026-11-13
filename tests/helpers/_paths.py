@@ -1,5 +1,5 @@
 """Where the tests find the repository's files and the machine's data. The library itself has no default path any
-more (ADR-0012): the versioned calibrations of `results/` (until ADR-0016 archives them) and, for the tests marked
+more (ADR-0012): the versioned calibrations of `results/` (compact JSON, ADR-0023) and, for the tests marked
 `lake`, the real lake that Settings name."""
 
 from pathlib import Path
