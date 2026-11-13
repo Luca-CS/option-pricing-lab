@@ -104,13 +104,13 @@ def load_dolthub(lake: Lake, dolt: Dolt, symbols=SYMBOLS, start: str = "2019-01-
     names = ", ".join(f"'{s}'" for s in symbols)
     out = []
     history = dolt.sql(
-        f"SELECT date, act_symbol, iv_current FROM volatility_history WHERE act_symbol IN ({names}) "  # noqa: S608 (identifiers from the code; values through sql_str or bound)
+        f"SELECT date, act_symbol, iv_current FROM volatility_history WHERE act_symbol IN ({names}) "  # noqa: S608 (symbols and start from the code's defaults, never from a request)
         f"AND date >= '{start}'"
     )
     out.append(lake.ingest("vol_indices", parse_vol_history(history), SOURCE, "observed", run))
     for year in range(int(start[:4]), pd.Timestamp.now().year + 1):
         chain = dolt.sql(
-            f"SELECT * FROM option_chain WHERE date >= '{year}-01-01' AND date <= '{year}-12-31' AND "  # noqa: S608 (identifiers from the code; values through sql_str or bound)
+            f"SELECT * FROM option_chain WHERE date >= '{year}-01-01' AND date <= '{year}-12-31' AND "  # noqa: S608 (symbols and start from the code's defaults, never from a request)
             f"act_symbol IN ({names})"
         )
         rows = parse_chain(chain, symbols)
