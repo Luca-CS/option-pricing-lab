@@ -72,7 +72,7 @@ class Leverage:
         return {"times": self.times.tolist(), "x_grids": self.x_grids.tolist(), "values": self.values.tolist()}
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Leverage":
+    def from_dict(cls, d: dict) -> Leverage:
         return cls(d["times"], d["x_grids"], d["values"])
 
 
@@ -162,7 +162,7 @@ def simulate(
         t0, dt = grid[i - 1], grid[i] - grid[i - 1]
         z1 = rng.standard_normal(half)
         z2 = None
-        for k, (a, b, o, sign) in enumerate(segments):
+        for _k, (a, b, o, sign) in enumerate(segments):
             s = slice(a, b)
             zz1 = z1[o : o + (b - a)] if sign > 0 else -z1[o : o + (b - a)]
             av = model.inst_var(t0, x[s], v[s])

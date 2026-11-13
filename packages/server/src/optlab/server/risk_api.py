@@ -156,7 +156,7 @@ class RiskApi:
         try:
             r = self.store.run(run_id)
         except KeyError as exc:
-            raise ApiError(str(exc).strip("'\""), 404)
+            raise ApiError(str(exc).strip("'\""), 404) from exc
         return clean({**r["payload"], "run_id": r["run_id"], "kind": r["kind"], "created_at": r["created_at"]})
 
     # --- ladder ---
@@ -165,7 +165,7 @@ class RiskApi:
         try:
             LadderOptions.from_dict(body.get("ladder"))
         except (TypeError, ValueError) as exc:
-            raise ApiError(str(exc), 422)
+            raise ApiError(str(exc), 422) from exc
         return self._submit("ladder", body, opts, float(opts.get("smoothing", 0.005)))
 
     def run_ladder(self, body: dict, f: Frozen) -> dict:
@@ -201,7 +201,7 @@ class RiskApi:
         try:
             version = sc.save(self.store, body.get("scenarios") or [], body.get("signed_by", ""), body.get("note", ""))
         except (TypeError, ValueError, KeyError) as exc:
-            raise ApiError(str(exc).strip("'\""), 422)
+            raise ApiError(str(exc).strip("'\""), 422) from exc
         return {"ok": True, "version": version}
 
     def run_scenarios(self, body: dict) -> dict:
@@ -314,7 +314,7 @@ class RiskApi:
             try:
                 dt.date.fromisoformat(d)
             except TypeError, ValueError:
-                raise ApiError(f"not a date: {d!r}", 422)
+                raise ApiError(f"not a date: {d!r}", 422) from None
         trades = self.desk.repo.trades()
         frozen = Frozen(trades=[[t.trade_id, t.version] for t in trades])
         return self.desk._submit("eod", {**body, "from": start, "to": end}, frozen)

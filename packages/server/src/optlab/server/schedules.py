@@ -227,7 +227,7 @@ class Schedules:
 
 
 def _iso(t: float) -> str:
-    return dt.datetime.fromtimestamp(t, dt.timezone.utc).isoformat(timespec="seconds")
+    return dt.datetime.fromtimestamp(t, dt.UTC).isoformat(timespec="seconds")
 
 
 # --- the jobs of the schedules ----------------------------------------------------------------------------------------
@@ -263,7 +263,7 @@ def run_lake_backup(desk, p: dict, f: Frozen) -> dict:
 def run_housekeeping(desk, p: dict, f: Frozen) -> dict:
     s = desk.settings
     pruned = desk.jobs.prune(float(p.get("job_keep_days", s.job_keep_days)))
-    old_sessions = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=7)
+    old_sessions = dt.datetime.now(dt.UTC) - dt.timedelta(days=7)
     with desk.db.write() as c:  # sessions over a week past their expiry, or revoked a week ago
         res = c.execute(delete(sessions).where(sessions.c.expires_at < old_sessions.isoformat(timespec="seconds")))
     logs, cutoff = [], time.time() - int(p.get("log_keep_days", s.log_keep_days)) * 86400

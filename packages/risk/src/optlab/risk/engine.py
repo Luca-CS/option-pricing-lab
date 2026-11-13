@@ -351,7 +351,7 @@ def run_group(
                     kept.pop(s, None)
 
     ordered = sorted(buckets.items(), key=lambda kv: "base" not in kv[1])  # the base's simulation first
-    for key, members in ordered:
+    for _key, members in ordered:
         first = shocks[members[0]]
         sim_ctx = simulation_part(ctx, first, env)
         if basket:

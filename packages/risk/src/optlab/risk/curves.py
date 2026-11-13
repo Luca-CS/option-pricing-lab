@@ -36,13 +36,13 @@ class CurveMove:
     def __bool__(self) -> bool:
         return bool(self.parallel) or any(v for v in self.tenors.values())
 
-    def __add__(self, other: "CurveMove") -> "CurveMove":
+    def __add__(self, other: CurveMove) -> CurveMove:
         tenors = dict(self.tenors)
         for j, v in other.tenors.items():
             tenors[int(j)] = tenors.get(int(j), 0.0) + float(v)
         return CurveMove(self.parallel + other.parallel, tenors)
 
-    def scaled(self, c: float) -> "CurveMove":
+    def scaled(self, c: float) -> CurveMove:
         return CurveMove(c * self.parallel, {int(j): c * v for j, v in self.tenors.items()})
 
     def rate(self, T) -> np.ndarray:
@@ -59,7 +59,7 @@ class CurveMove:
         return {"parallel": self.parallel, "tenors": {str(int(j)): float(v) for j, v in self.tenors.items()}}
 
     @classmethod
-    def from_dict(cls, d) -> "CurveMove":
+    def from_dict(cls, d) -> CurveMove:
         if d is None:
             return cls()
         if isinstance(d, (int, float)):

@@ -223,7 +223,7 @@ class BasketContext:
         correlation_root(self.corr)
 
     @classmethod
-    def with_spx(cls, others: dict, corr, spx=None) -> "BasketContext":
+    def with_spx(cls, others: dict, corr, spx=None) -> BasketContext:
         """SPX from the calibration plus other names given as {name: (spot, r, q, vol)} on flat markets."""
 
         if spx is None:
@@ -239,7 +239,7 @@ class BasketContext:
     def market(self) -> Market:
         return self.markets[self.names[0]]
 
-    def bumped(self, name: str, spot_factor: float = 1.0, vol_shift: float = 0.0) -> "BasketContext":
+    def bumped(self, name: str, spot_factor: float = 1.0, vol_shift: float = 0.0) -> BasketContext:
         """The same context with one name's spot scaled (sticky moneyness) or its implied vols shifted."""
         from optlab.structured.greeks import ShiftedSurface
 
@@ -260,7 +260,7 @@ class BasketContext:
             self.payment_currency,
         )
 
-    def with_bumps(self, vol: float = 0.0, skew: float = 0.0, corr: float = 0.0) -> "BasketContext":
+    def with_bumps(self, vol: float = 0.0, skew: float = 0.0, corr: float = 0.0) -> BasketContext:
         """The same context with every name's implied vols moved, and every pair's correlation, the matrix repaired if needed."""
         from optlab.structured.surfaces import BumpedSurface
 

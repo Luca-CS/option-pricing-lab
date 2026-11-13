@@ -62,7 +62,7 @@ class ShapePrior:
     )
     level_ref: float = 0.2
 
-    def scaled_rho(self, factor: float) -> "ShapePrior":
+    def scaled_rho(self, factor: float) -> ShapePrior:
         return replace(self, rho=self.rho * factor)
 
     def eta_at(self, level: float, rho: float | None = None) -> float:

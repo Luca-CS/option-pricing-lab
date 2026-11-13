@@ -67,7 +67,7 @@ class Bumps:
     roll_days: int = 1
 
     @classmethod
-    def from_dict(cls, d: dict | None) -> "Bumps":
+    def from_dict(cls, d: dict | None) -> Bumps:
         d = dict(d or {})
         known = {f.name for f in dataclasses.fields(cls)}
         return cls(**{k: v for k, v in d.items() if k in known})
@@ -83,7 +83,7 @@ class GreekOptions:
     theta: bool = True
 
     @classmethod
-    def from_dict(cls, d: dict | None) -> "GreekOptions":
+    def from_dict(cls, d: dict | None) -> GreekOptions:
         d = dict(d or {})
         known = {f.name for f in dataclasses.fields(cls)}
         return cls(**{k: v for k, v in d.items() if k in known})

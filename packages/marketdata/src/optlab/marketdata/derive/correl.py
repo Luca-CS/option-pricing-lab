@@ -170,12 +170,12 @@ def build_basket_quotes(lake: Lake, baskets, days, n_pairs: int = 100_000, as_of
         cache = {}
 
         def parts(name):
-            if name not in cache:
-                cache[name] = (
-                    surface_at(lake, name, day, as_of, layer="reconstructed").surface,
-                    market_curves(lake, name, day, as_of)[0],
+            if name not in cache:  # noqa: B023 (called within this iteration only)
+                cache[name] = (  # noqa: B023 (called within this iteration only)
+                    surface_at(lake, name, day, as_of, layer="reconstructed").surface,  # noqa: B023 (called within this iteration only)
+                    market_curves(lake, name, day, as_of)[0],  # noqa: B023 (called within this iteration only)
                 )
-            return cache[name]
+            return cache[name]  # noqa: B023 (called within this iteration only)
 
         for names in baskets:
             try:

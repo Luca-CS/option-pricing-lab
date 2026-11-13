@@ -54,6 +54,9 @@ class ReplayConfig:
     surface_layer: str | None = "reconstructed"  # one layer over a life: a switch of layer is not market P&L
 
 
+DEFAULT_REPLAY = ReplayConfig()  # a frozen default, shared by the functions that take one
+
+
 def place_calendar(names) -> str:
     places = {PLACE_CALENDAR.get(instrument(n).place, "weekend") for n in names}
     return places.pop() if len(places) == 1 else "weekend"
@@ -107,7 +110,7 @@ def strike_trade(
     sheet: TermSheet,
     strike,
     quantity: float = 1.0,
-    cfg: ReplayConfig = ReplayConfig(),
+    cfg: ReplayConfig = DEFAULT_REPLAY,
     coupon: float | None = None,
     costs=None,
 ) -> tuple[Trade, dict]:
@@ -301,7 +304,7 @@ def result_json(r: ReplayResult) -> dict:
 
 
 def replay(
-    lake: Lake, trade: Trade, end=None, cfg: ReplayConfig = ReplayConfig(), inception: dict | None = None
+    lake: Lake, trade: Trade, end=None, cfg: ReplayConfig = DEFAULT_REPLAY, inception: dict | None = None
 ) -> ReplayResult:
     """The loop over a trade's life, up to `end` or the last close in the lake."""
     t_all = time.perf_counter()
@@ -470,7 +473,7 @@ def _explained(daily: pd.DataFrame) -> dict:
     }
 
 
-def replay_book(lake: Lake, trades, end=None, cfg: ReplayConfig = ReplayConfig()) -> dict:
+def replay_book(lake: Lake, trades, end=None, cfg: ReplayConfig = DEFAULT_REPLAY) -> dict:
     """Each trade through its life, and the book's value, cash and P&L by date (a trade adds nothing before its strike or
     after its last payment). Trades are valued apart, so errors add as if independent."""
     results = [replay(lake, t, end, cfg) for t in trades]

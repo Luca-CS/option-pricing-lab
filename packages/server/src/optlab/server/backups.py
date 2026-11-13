@@ -34,7 +34,7 @@ MANIFEST = "MANIFEST.json"
 
 def stamp(now: dt.datetime | None = None) -> str:
     """A sortable name to the millisecond: two copies in one second do not collide."""
-    now = now or dt.datetime.now(dt.timezone.utc)
+    now = now or dt.datetime.now(dt.UTC)
     return f"{now:%Y%m%d-%H%M%S}-{now.microsecond // 1000:03d}"
 
 
@@ -101,7 +101,9 @@ def check_database_copy(path: Path) -> dict:
             raise ValueError(f"{path.name} is not an optlab database (no schema revision)")
         revision = con.execute("SELECT version_num FROM alembic_version").fetchone()[0]
         counts = {
-            t: con.execute(f'SELECT count(*) FROM "{t}"').fetchone()[0] for t in ("trades", "users") if t in tables
+            t: con.execute(f'SELECT count(*) FROM "{t}"').fetchone()[0]  # noqa: S608 (two fixed table names)
+            for t in ("trades", "users")
+            if t in tables
         }
     finally:
         con.close()
@@ -217,7 +219,7 @@ def lake_snapshot(lake_root: Path, folder: Path, keep: int = 4, log: Callable[[s
             progress.tick(i, len(sources), "files")
     manifest = {
         "lake": str(root),
-        "made_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        "made_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
         "linked_to": previous.name if previous else None,
         "files": files,
     }

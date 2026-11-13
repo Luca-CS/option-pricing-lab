@@ -109,7 +109,7 @@ class LadderOptions:
     greeks: bool = True  # Greeks at every point (else values and P&L only)
 
     @classmethod
-    def from_dict(cls, d: dict | None) -> "LadderOptions":
+    def from_dict(cls, d: dict | None) -> LadderOptions:
         d = dict(d or {})
         known = {f.name for f in dataclasses.fields(cls)}
         out = cls(**{k: (tuple(v) if k in ("points", "rules") else v) for k, v in d.items() if k in known})
@@ -153,8 +153,8 @@ def plan(ctx, options: LadderOptions, env: RiskEnv | None = None) -> tuple[dict,
                 continue
 
             def add(name, shock):
-                k = f"{name}|{tag}"
-                S[k] = P + shock
+                k = f"{name}|{tag}"  # noqa: B023 (called within this iteration only)
+                S[k] = P + shock  # noqa: B023 (called within this iteration only)
                 return k
 
             up, dn = add("s+", Shock(spot={"*": h})), add("s-", Shock(spot={"*": -h}))

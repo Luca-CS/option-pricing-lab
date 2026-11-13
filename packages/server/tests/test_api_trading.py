@@ -63,7 +63,7 @@ def test_events_and_unknown_trades(trader):
 
 
 def test_filters_and_cursor_pages(trader):
-    for i in range(3):
+    for _i in range(3):
         _book(trader, book="paged")
     first = trader.get("/api/v1/trading/trades", params={"book": "paged", "limit": 2}).json()
     assert len(first["items"]) == 2 and first["next"]

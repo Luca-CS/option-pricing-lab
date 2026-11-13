@@ -434,7 +434,7 @@ def _solved(base: _Run, effect, provisions: dict, sign: float, target: float) ->
     gaps = {k: (r.price(0.0) - b0, r.price(1.0) - b1) for k, r in provisions.items()}
     on = dict.fromkeys(gaps, True)
     x, passes = 0.0, 0
-    for passes in range(1, 9):
+    for passes in range(1, 9):  # noqa: B007 (counts the passes, read after the loop)
         at0 = b0 + e0 + sum(g[0] for k, g in gaps.items() if on[k])
         at1 = b1 + e1 + sum(g[1] for k, g in gaps.items() if on[k])
         if abs(at1 - at0) < 1e-14:

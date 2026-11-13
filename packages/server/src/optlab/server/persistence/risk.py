@@ -15,7 +15,7 @@ from optlab.server.persistence.schema import risk_records, risk_runs
 
 
 def _now() -> str:
-    return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    return dt.datetime.now(dt.UTC).isoformat(timespec="seconds")
 
 
 class RiskRepository:
@@ -119,7 +119,7 @@ class RiskRepository:
         if row is None:
             raise KeyError(f"no risk run {run_id}")
         out = self._run(row)
-        assert out is not None
+        assert out is not None  # noqa: S101 (narrows the type for pyright: checked above)
         return out
 
     def runs(self, kind: str | None = None, start=None, end=None, latest: bool = True) -> list[dict]:

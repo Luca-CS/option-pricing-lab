@@ -191,7 +191,7 @@ def build(
         "market": sid,
         "trades": added,
         "account": "demo",
-        "built_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        "built_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
         "seconds": round(time.perf_counter() - t0, 1),
     }
     (folder / READY).write_text(json.dumps(out, indent=1), encoding="utf-8")

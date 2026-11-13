@@ -168,16 +168,16 @@ def _column(reference: str) -> str:
 
 def _sheet_numbers(book: zipfile.ZipFile, title: str):
     """Yields {column: number} for each row of a sheet. Text cells (labels, the "Refresh" row) and empty ones are left out."""
-    workbook = ET.fromstring(book.read("xl/workbook.xml"))
+    workbook = ET.fromstring(book.read("xl/workbook.xml"))  # noqa: S314 (ElementTree resolves no external entity; expat bounds entity expansion)
     properties = workbook.find(f"{_MAIN}workbookPr")
     if properties is not None and properties.get("date1904") in ("1", "true"):
         raise ValueError("this workbook counts its dates from 1904, the parser assumes 1900")
     ids = {s.get("name"): s.get(f"{_RELATION}id") for s in workbook.find(f"{_MAIN}sheets")}
     if title not in ids:
         raise ValueError(f"no sheet {title!r} in the workbook: {sorted(ids)}")
-    targets = {r.get("Id"): r.get("Target") for r in ET.fromstring(book.read("xl/_rels/workbook.xml.rels"))}
+    targets = {r.get("Id"): r.get("Target") for r in ET.fromstring(book.read("xl/_rels/workbook.xml.rels"))}  # noqa: S314 (ElementTree resolves no external entity; expat bounds entity expansion)
     with book.open("xl/" + targets[ids[title]].removeprefix("/xl/")) as sheet:
-        for _, element in ET.iterparse(sheet):
+        for _, element in ET.iterparse(sheet):  # noqa: S314 (ElementTree resolves no external entity; expat bounds entity expansion)
             if element.tag == f"{_MAIN}row":
                 row = {}
                 for cell in element.iter(f"{_MAIN}c"):

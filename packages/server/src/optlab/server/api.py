@@ -79,9 +79,9 @@ def _sheet(body: dict, strict: bool = False) -> TermSheet:
         return TermSheet.from_dict({"type": body.get("type", "autocall"), **values}, strict=strict)
     except TermSheetError as exc:
         m = FIELD.match(str(exc))
-        raise ApiError(str(exc), 422, m.group(1) if m else None)
+        raise ApiError(str(exc), 422, m.group(1) if m else None) from exc
     except (TypeError, ValueError) as exc:
-        raise ApiError(str(exc), 422)
+        raise ApiError(str(exc), 422) from exc
 
 
 def _pair(a: str, b: str) -> str:
@@ -128,7 +128,7 @@ class Desk:
         self.jobs = JobQueue(self.db)
         self.workers = workers
         self.max_jobs = max_jobs or self.settings.job_concurrency
-        self.started = dt.datetime.now(dt.timezone.utc)
+        self.started = dt.datetime.now(dt.UTC)
         self.public_url = None  # set when a tunnel is open
         self.lan_blockers: list[str] = []  # what stops other machines, found at start (Windows firewall)
         self.risk = RiskApi(self)
@@ -182,7 +182,7 @@ class Desk:
             try:
                 ctx = PricingContext.from_snapshot(self.market_store.get(sid))
             except KeyError as exc:
-                raise ApiError(str(exc).strip("'\""), 404)
+                raise ApiError(str(exc).strip("'\""), 404) from exc
             self._keep_context(ctx)
         return ctx
 
@@ -213,7 +213,7 @@ class Desk:
         try:
             j = self.jobs.get(job_id)
         except KeyError as exc:
-            raise ApiError(str(exc), 404)
+            raise ApiError(str(exc), 404) from exc
         env = j.get("result") or {}
         return clean({**j, "result": env.get("result"), "market": env.get("market"), "method": env.get("method")})
 
@@ -221,7 +221,7 @@ class Desk:
         try:
             state = self.jobs.cancel(job_id)
         except KeyError as exc:
-            raise ApiError(str(exc), 404)
+            raise ApiError(str(exc), 404) from exc
         return {"ok": True, "state": state}
 
     @property
@@ -320,7 +320,7 @@ class Desk:
         try:
             snap = self.market_store.get(sid)
         except KeyError as exc:
-            raise ApiError(str(exc).strip("'\""), 404)
+            raise ApiError(str(exc).strip("'\""), 404) from exc
         self._keep_context(self.ctx)  # jobs submitted on it still run on it
         self.ctx = PricingContext.from_snapshot(snap)
         LOG.info("desk now on market %s (valuation %s)", self.ctx.snapshot_id, self.ctx.valuation)
@@ -333,7 +333,7 @@ class Desk:
         try:
             return PricingContext.from_snapshot(self.market_store.get(str(snapshot_id)))
         except KeyError as exc:
-            raise ApiError(str(exc).strip("'\""), 404)
+            raise ApiError(str(exc).strip("'\""), 404) from exc
 
     def smile(self, T: float, snapshot_id: str | None = None) -> dict:
         ctx, T = self._context_of(snapshot_id), float(T)
@@ -464,7 +464,7 @@ class Desk:
         try:
             day = dt.date.fromisoformat(str(day))
         except ValueError:
-            raise ApiError("a date such as 2020-03-23 is needed", 422, "date")
+            raise ApiError("a date such as 2020-03-23 is needed", 422, "date") from None
         params = {
             "underlying": name,
             "date": day,
@@ -537,7 +537,7 @@ class Desk:
             dt.date.fromisoformat(day)
             return clean(quote_table(self.lake, name, day, source))
         except (KeyError, ValueError) as exc:
-            raise ApiError(str(exc).strip("'\""), 404)
+            raise ApiError(str(exc).strip("'\""), 404) from exc
 
     def lab_fit(self, body: dict) -> dict:
         from optlab.marketdata.vollab import MODELS
@@ -546,7 +546,7 @@ class Desk:
         try:
             dt.date.fromisoformat(day)
         except ValueError:
-            raise ApiError("a day such as 2022-09-15 is needed", 422, "day")
+            raise ApiError("a day such as 2022-09-15 is needed", 422, "day") from None
         models = tuple(m for m in (body.get("models") or MODELS) if m in MODELS)
         if not models:
             raise ApiError("choose at least one model", 422)
@@ -651,7 +651,7 @@ class Desk:
             strike = dt.date.fromisoformat(str(body.get("strike", "")))
             end = dt.date.fromisoformat(body["end"]) if body.get("end") else None
         except (TermSheetError, ValueError) as exc:
-            raise ApiError(str(exc), 422)
+            raise ApiError(str(exc), 422) from exc
         cfg = ReplayConfig(
             model=str(body.get("model", "lv")),
             n_paths=int(body.get("n_paths", 20_000)),
@@ -703,12 +703,12 @@ class Desk:
                     raise ApiError(f"correlation {a}-{b} = {float(rho):.2f} outside -0.99 to 0.99", 422)
                 corr[_pair(a.upper(), b.upper())] = float(rho)
         except (TypeError, ValueError) as exc:
-            raise ApiError(str(exc), 422)
+            raise ApiError(str(exc), 422) from exc
         settings = {"names": names, "corr": corr}
         try:  # the full matrix must be a correlation matrix (positive definite)
             self._basket_ctx((self.ctx.underlying, *names), settings)
         except ValueError as exc:
-            raise ApiError(f"the correlations do not form a valid matrix: {exc}", 422)
+            raise ApiError(f"the correlations do not form a valid matrix: {exc}", 422) from exc
         self.repo.put_setting("basket", settings)
         return self.basket_settings()
 
@@ -941,7 +941,7 @@ class Desk:
         try:
             groups = validate_table(body.get("groups") or {})
         except (TypeError, KeyError, ValueError) as exc:
-            raise ApiError(str(exc), 422)
+            raise ApiError(str(exc), 422) from exc
         self.repo.save_defaults(groups)
         return self.cost_defaults()
 
@@ -1044,7 +1044,7 @@ class Desk:
         try:
             return self.repo.quote(quote_id)
         except KeyError as exc:
-            raise ApiError(str(exc), 404)
+            raise ApiError(str(exc), 404) from exc
 
     # --- trades and book ---
     def trades(self) -> dict:

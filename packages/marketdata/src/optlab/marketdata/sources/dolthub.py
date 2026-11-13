@@ -76,7 +76,7 @@ class Dolt:
     home: Path | None = None
 
     @classmethod
-    def from_environment(cls, data, database=None) -> "Dolt":
+    def from_environment(cls, data, database=None) -> Dolt:
         """The Dolt binary and the options database under the data folder `data` (`Settings.data`)."""
         root = Path(data)
         db = Path(database) if database and database != "default" else root / "dolt" / "options"
@@ -86,7 +86,7 @@ class Dolt:
 
     def sql(self, query: str, timeout: float = 1800.0) -> bytes:
         env = {**os.environ, **({"DOLT_ROOT_PATH": str(self.home)} if self.home else {})}
-        out = subprocess.run(
+        out = subprocess.run(  # noqa: S603 (the dolt binary by its full path, fixed arguments, no shell)
             [str(self.executable), "sql", "-r", "csv", "-q", query],
             cwd=self.database,
             env=env,
@@ -104,13 +104,13 @@ def load_dolthub(lake: Lake, dolt: Dolt, symbols=SYMBOLS, start: str = "2019-01-
     names = ", ".join(f"'{s}'" for s in symbols)
     out = []
     history = dolt.sql(
-        f"SELECT date, act_symbol, iv_current FROM volatility_history WHERE act_symbol IN ({names}) "
+        f"SELECT date, act_symbol, iv_current FROM volatility_history WHERE act_symbol IN ({names}) "  # noqa: S608 (identifiers from the code; values through sql_str or bound)
         f"AND date >= '{start}'"
     )
     out.append(lake.ingest("vol_indices", parse_vol_history(history), SOURCE, "observed", run))
     for year in range(int(start[:4]), pd.Timestamp.now().year + 1):
         chain = dolt.sql(
-            f"SELECT * FROM option_chain WHERE date >= '{year}-01-01' AND date <= '{year}-12-31' AND "
+            f"SELECT * FROM option_chain WHERE date >= '{year}-01-01' AND date <= '{year}-12-31' AND "  # noqa: S608 (identifiers from the code; values through sql_str or bound)
             f"act_symbol IN ({names})"
         )
         rows = parse_chain(chain, symbols)

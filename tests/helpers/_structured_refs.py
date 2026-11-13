@@ -1,5 +1,7 @@
 """Independent references for the structured pricer: Black-Scholes closed forms and a flat SVI surface."""
 
+import functools
+
 import numpy as np
 from _paths import SPX_CALIBRATION
 from scipy.stats import norm
@@ -69,7 +71,6 @@ def autocall_reference(sheet, market=FLAT, vol=VOL, valuation="2026-10-27", dx=0
     """Value (currency, notional 100, S0 = 100) of an autocall or bullet term sheet under Black-Scholes, from the
     term-sheet semantics only (not the generated script). States: missed coupons (memory) and knock-in flag."""
     import datetime as dt
-    from functools import lru_cache
 
     from optlab.structured.dates import add_months, adjust, business_days, schedule, year_fraction
 
@@ -112,7 +113,7 @@ def autocall_reference(sheet, market=FLAT, vol=VOL, valuation="2026-10-27", dx=0
     n_m = len(dates) + 1 if memory else 1
     r_, q_ = market.zero_rate(1.0), market.zero_rate(1.0) - market.carry_rate(1.0)
 
-    @lru_cache(maxsize=None)
+    @functools.cache
     def kernel(dt_):
         mu, sd = (float(r_ - q_) - 0.5 * vol**2) * dt_, vol * np.sqrt(dt_)
         cdf = norm.cdf((edges[None, :] - x[:, None] - mu) / sd)
