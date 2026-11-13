@@ -2,7 +2,7 @@
 reports, and the audit line of every write."""
 
 import pytest
-from _api import api, preset_sheet
+from _api import api, preset_sheet, raw_errors
 
 
 @pytest.fixture(scope="module")
@@ -118,8 +118,12 @@ def test_value_a_trade_and_the_book(a, trader):
     quick = {"options": {"precision": "quick"}}
     r = trader.post(f"/api/v1/trading/trades/{tid}/valuations", json=quick)
     assert r.status_code == 202
-    v = a.wait(trader, r.json()["job_id"])
-    assert v["snapshot_id"] and v["trade_id"] == tid
+    env = a.wait(trader, r.json()["job_id"])
+    v = env["result"]
+    assert v["snapshot_id"] == env["market"]["snapshot_id"] and v["trade_id"] == tid and v["unit_price"]["se"] > 0
+    assert v["value"]["se"] > 0 and raw_errors(env) == []
     r = trader.post("/api/v1/trading/book/valuations", json=quick)
-    book = a.wait(trader, r.json()["job_id"])
-    assert book["positions"] and any(p["name"] == tid for p in book["positions"])
+    env = a.wait(trader, r.json()["job_id"])
+    book = env["result"]
+    assert book["positions"] and any(p["name"] == tid for p in book["positions"]) and book["value"]["se"] > 0
+    assert env["method"]["groups"] >= 1 and raw_errors(env) == []

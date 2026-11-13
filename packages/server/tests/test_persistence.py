@@ -46,7 +46,7 @@ def snapshot(underlying="SPX", day="2026-11-04", level=0.04) -> MarketSnapshot:
 
 
 def test_the_head_migration_builds_the_declared_schema(db):
-    assert db.revision() == db.head() == "0002"
+    assert db.revision() == db.head() == "0003"
     with db.engine.connect() as conn:
         assert compare_metadata(MigrationContext.configure(conn), metadata) == []
         assert conn.exec_driver_sql("PRAGMA journal_mode").scalar() == "wal"

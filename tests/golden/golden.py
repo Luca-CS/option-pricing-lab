@@ -649,8 +649,7 @@ class _ShowcaseCopy:
 
         from optlab.core import engines
 
-        self.desk.jobs.shutdown()
-        self.desk.db.close()
+        self.desk.close()  # its worker, then the database file
         engines.set_default("numpy")
         del self.desk
         gc.collect()

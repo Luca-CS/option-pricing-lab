@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[3]
 def desk(tmp_path_factory):
     d = Desk(store=tmp_path_factory.mktemp("desk") / "optlab.sqlite")
     yield d
-    d.jobs.shutdown()
+    d.close()
 
 
 def wait(desk, job_id, timeout=300):
@@ -297,14 +297,16 @@ def test_script_lab(desk):
 
 
 def test_jobs_report_errors_and_cancel(desk):
-    def boom():
-        raise RuntimeError("no luck")
+    from _tasks import submit_as, wait_state
 
-    j = desk.jobs.submit("test", boom)
-    while desk.job(j)["state"] in ("queued", "running"):
-        time.sleep(0.02)
+    j = submit_as(desk, None, "test_boom", {"message": "no luck"})
+    wait_state(desk, j)
     err = desk.job(j)
     assert err["state"] == "error" and err["error"] == {"type": "RuntimeError", "message": "no luck"}
     with pytest.raises(ApiError) as exc:
         desk.job("missing")
     assert exc.value.status == 404
+    slow = submit_as(desk, None, "test_slow", {"steps": 500, "dt": 0.02})
+    wait_state(desk, slow, ("running",))
+    assert desk.cancel(slow)["state"] in ("running", "cancelled")
+    assert wait_state(desk, slow)["state"] == "cancelled"

@@ -27,7 +27,7 @@ DENIED = {401, 403}
 @pytest.fixture(scope="module")
 def setup(tmp_path_factory):
     with api(tmp_path_factory.mktemp("matrix")) as a:
-        a.state.desk.jobs.submit = lambda kind, fn, *args, **kw: "stub-job"
+        a.state.desk._submit = lambda kind, params, frozen=None: {"job": "stub-job", "reused": False}
         clients: dict[str | None, Any] = {role: a.client(role) for role in ROLES}
         clients[None] = a.client()
         yield a, clients

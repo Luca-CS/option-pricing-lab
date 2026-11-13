@@ -31,7 +31,7 @@ def desk(tmp_path_factory):
         {"snapshot_id": d.market_store.put(market_at(lake, "SPX", DAY, leverage="calibrate", n_particles=20_000))}
     )
     yield d
-    d.jobs.shutdown()
+    d.close()
 
 
 def wait(desk, job_id, timeout=300):

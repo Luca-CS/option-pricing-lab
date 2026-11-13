@@ -244,7 +244,7 @@ def test_the_desk_prices_a_share_and_a_worst_of_on_their_real_surfaces(tmp_path)
         assert bctx.has_surfaces and {r["origin"] for r in shown["names"].values()} == {"reconstructed"}
         assert all(v == "lake" for v in shown["corr_source"].values()) and 0.3 < shown["corr"]["NDX|SPX"] < 1
     finally:
-        desk.jobs.shutdown()
+        desk.close()
 
 
 @pytest.mark.lake
@@ -271,7 +271,7 @@ def test_the_desk_puts_a_name_paid_in_another_currency_on_its_quanto_market(tmp_
         sctx, _ = desk._context_for(single, desk.ctx)
         assert sctx.underlying == "SX5E" and sctx.payment_currency == "USD"
     finally:
-        desk.jobs.shutdown()
+        desk.close()
 
 
 @pytest.mark.lake

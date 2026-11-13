@@ -2,7 +2,7 @@
 explained P&L and the report. The computations behind the jobs are in test_risk_app.py and optlab.risk's tests."""
 
 import pytest
-from _api import api, preset_sheet
+from _api import api, preset_sheet, raw_errors
 
 
 @pytest.fixture(scope="module")
@@ -59,6 +59,8 @@ def test_a_greeks_run_through_the_api(a, risk):
     opts = {"precision": "quick", "kxt": "none", "curves": False, "sticky_strike": False, "realistic": False}
     r = risk.post("/api/v1/risk/greeks", json={"options": opts})
     assert r.status_code == 202
-    res = a.wait(risk, r.json()["job_id"], timeout=900)
-    assert res["run_id"].startswith("risk-") and res["book"]["delta|SPX|"][1] > 0
+    env = a.wait(risk, r.json()["job_id"], timeout=900)
+    res = env["result"]
+    assert res["run_id"].startswith("risk-") and res["book"]["delta|SPX|"]["se"] > 0
+    assert env["method"]["name"] == "full_revaluation" and raw_errors(env) == []
     assert risk.get(f"/api/v1/risk/runs/{res['run_id']}").json()["book"] == res["book"]

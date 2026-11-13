@@ -29,7 +29,7 @@ def desk(tmp_path_factory):
     lake.ingest("option_quotes", synthetic_rows(EXPIRIES), "archive", "observed")
     d = Desk(store=root / "optlab.sqlite", lake=root / "lake")
     yield d
-    d.jobs.shutdown()
+    d.close()
 
 
 def wait(desk, job_id, timeout=300):
@@ -63,7 +63,7 @@ def test_an_empty_lake_says_so(tmp_path):
         assert d.lab_days()["available"] is False
         assert d.replay_runs()["available"] is False
     finally:
-        d.jobs.shutdown()
+        d.close()
 
 
 def test_market_at_a_past_date_becomes_a_snapshot_the_desk_can_use(desk):
@@ -219,7 +219,7 @@ def test_showcase_seed_fills_a_store_with_trades_struck_on_their_own_markets(tmp
         assert got["missing"] is None and got["past"]
         job = desk.price_book({"options": {"precision": "fast", "greeks": False}})["job"]
         for _ in range(240):
-            state = desk.jobs.get(job)
+            state = desk.job(job)
             if state["state"] in ("done", "error"):
                 break
             time.sleep(0.5)
@@ -229,7 +229,7 @@ def test_showcase_seed_fills_a_store_with_trades_struck_on_their_own_markets(tmp
         # a second run keeps what is there
         assert mod.seed(desk, lake, day, deals, n_paths=2000, log=lambda s: None, look_back=()) == []
     finally:
-        desk.jobs.shutdown()
+        desk.close()
 
 
 def test_data_screen_shows_the_latest_basket_spreads_as_synthetic(tmp_path):
@@ -261,4 +261,4 @@ def test_data_screen_shows_the_latest_basket_spreads_as_synthetic(tmp_path):
         got = desk.data_baskets()
         assert got["day"] == "2026-10-30" and len(got["rows"]) == 1 and got["rows"][0]["origin"] == "synthetic"
     finally:
-        desk.jobs.shutdown()
+        desk.close()

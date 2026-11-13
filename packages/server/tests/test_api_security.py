@@ -251,8 +251,9 @@ def test_passwords_are_argon2id_and_sessions_stored_as_hashes(a):
 
 def test_someone_else_s_job_does_not_exist(a):
     alice, bob, admin = a.client("structurer"), a.client("structurer"), a.client("admin")
-    job = a.state.desk.jobs.submit("test", lambda: {"ok": True})
-    a.state.job_owner[job] = a.state.accounts.session(alice.cookies.get("optlab_session"))[0].user_id
+    from _tasks import submit_as
+
+    job = submit_as(a.state.desk, a.user_id(alice), "test_answer", {"answer": "ok"})
     assert alice.get(f"/api/v1/jobs/{job}").status_code == 200
     assert bob.get(f"/api/v1/jobs/{job}").status_code == 404
     assert bob.post(f"/api/v1/jobs/{job}/cancel").status_code == 404

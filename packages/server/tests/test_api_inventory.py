@@ -12,8 +12,8 @@ from optlab.server.app import operations
 
 INVENTORY = Path(__file__).resolve().parents[3] / "docs" / "architecture" / "feature-inventory.md"
 METHOD = r"(GET|POST|PUT|PATCH|DELETE)"
-LATER = {("GET", "/admin/pipelines"): "A6: the worker's planned jobs"}
-NEW = {  # routes v0 had no equivalent for (accounts replace the shared token)
+LATER: dict[tuple[str, str], str] = {}  # routes of the inventory that a later step brings, with that step
+NEW = {  # routes v0 had no equivalent for: accounts replace the shared token (A5), the worker's queue and schedules (A6)
     ("POST", "/auth/login"),
     ("POST", "/auth/logout"),
     ("GET", "/auth/me"),
@@ -21,6 +21,9 @@ NEW = {  # routes v0 had no equivalent for (accounts replace the shared token)
     ("POST", "/admin/users"),
     ("PATCH", "/admin/users/{}"),
     ("GET", "/admin/audit"),
+    ("GET", "/admin/jobs"),
+    ("PATCH", "/admin/pipelines/{}"),
+    ("POST", "/admin/pipelines/{}/run"),
 }
 
 
