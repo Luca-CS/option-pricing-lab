@@ -692,7 +692,7 @@ def lake_replay(
 Store_ = Annotated[
     Path | None, typer.Option("--store", help="the desk database (default: the showcase's, else the settings')")
 ]
-Precision = Annotated[str, typer.Option(help="fast, standard, precise or max")]
+Precision = Annotated[str, typer.Option(help="quick, standard, precise or max")]
 Engine_ = Annotated[str, typer.Option(help="auto, gpu, cpu or numpy")]
 AsJob = Annotated[bool, typer.Option("--as-job", help="leave it to the worker that serves the database")]
 
