@@ -197,6 +197,11 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
   (SQLite: versioned records and runs keyed by what determines them), `report.py`. Tests compare with closed forms and
   `tests/_risk_refs.py`.
 - **`space/app.py`** is a local Gradio front-end (needs `pip install gradio`), not deployed.
+- **`deploy/`** runs the desk in containers in WSL (ADR-0009): `api.Dockerfile` (no CUDA), `worker.Dockerfile` (CUDA's devel
+  image builds the engine for sm_61 to sm_120, its base image runs it), `compose.yaml` (ports on 127.0.0.1, read-only roots, no
+  capability, uid 10001, named volumes: the lake and the database never on `/mnt/c`, ADR-0022; Caddy in the `lan` profile),
+  `wsl/` (Docker's install, the volumes' first fill, the Windows task that keeps WSL up, the lake timing). Every `docker` command
+  runs in Ubuntu as root (`wsl -d Ubuntu -u root -- ...`); CI builds and scans the images (`.github/workflows/images.yml`).
 
 ## Conventions
 

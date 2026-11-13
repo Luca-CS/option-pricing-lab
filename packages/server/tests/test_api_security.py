@@ -65,11 +65,17 @@ def test_a_rebound_host_cannot_read(a, trader):
         assert trader.get("/api/v1/trading/trades", headers={"host": host}).status_code == 200, host
 
 
-def test_the_lan_profile_accepts_other_hosts_but_keeps_the_origin_rule(tmp_path):
-    with api(tmp_path, lan=True, host="0.0.0.0") as lan:
+def test_the_lan_profile_answers_on_its_names_only_and_keeps_the_origin_rule(tmp_path):
+    names = "optlab.home.arpa,192.168.1.20"
+    with api(tmp_path, lan=True, host="0.0.0.0", lan_names=names) as lan:
         c = lan.client("trader")
         h = {"host": "192.168.1.20:8765"}
         assert c.get("/api/v1/trading/trades", headers=h).status_code == 200
+        assert c.get("/api/v1/trading/trades", headers={"host": "OPTLAB.home.arpa"}).status_code == 200
+        for host in ("evil.example", "optlab.home.arpa.evil.example", "192.168.1.21:8765"):  # finding 17
+            r = c.get("/api/v1/trading/trades", headers={"host": host})
+            assert r.status_code == 403 and "LAN names" in r.json()["detail"], host
+        assert c.get("/api/v1/trading/trades", headers={"host": "127.0.0.1:8765"}).status_code == 200
         r = c.post("/api/v1/trading/fixings", json=FIXING, headers=h | {"origin": "http://192.168.1.20:8765"})
         assert r.status_code == 200, r.text
         r = c.post("/api/v1/trading/fixings", json=FIXING, headers=h | {"origin": "http://other:8765"})

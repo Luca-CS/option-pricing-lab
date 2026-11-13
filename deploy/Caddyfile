@@ -1,0 +1,25 @@
+# The LAN profile's proxy (ADR-0002, compose.yaml profile `lan`): TLS with Caddy's internal CA for the names of
+# OPTLAB_LAN_NAMES (separated by a comma and a space: "optlab.home.arpa, 192.168.1.198"), in front of the api. Off
+# unless Luca turns it on; each device that opens the desk trusts Caddy's root certificate once (operations.md, "Open
+# to the LAN"). Caddy listens on 8443 inside its container (no capability to bind 443); what the LAN reaches is the
+# address compose publishes.
+{
+	admin off
+	auto_https disable_redirects
+	http_port 8080
+	https_port 8443
+	servers {
+		protocols h1 h2
+	}
+}
+
+{$OPTLAB_LAN_NAMES} {
+	tls internal
+	encode zstd gzip
+	# Host and X-Forwarded-For pass as they are; the api trusts the latter from 172.30.0.10 (this proxy) only
+	reverse_proxy api:8765
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000"
+	}
+}

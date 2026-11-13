@@ -88,6 +88,16 @@ class Settings(BaseSettings):
     host: str = Field("127.0.0.1", description="where the server listens; beyond this machine only with lan")
     port: int = Field(8765, ge=1, le=65535)
     lan: bool = Field(False, description="the LAN profile (ADR-0002): off unless Luca turns it on")
+    lan_names: str = Field(
+        "",
+        description="with lan: the names the desk answers to, separated by a comma and a space as Caddy wants them "
+        '("optlab.home.arpa, 192.168.1.198"); any other Host is refused',
+    )
+    container: bool = Field(
+        False,
+        description="a process of deploy/'s containers: it may listen on 0.0.0.0 of its container, which compose "
+        "publishes on 127.0.0.1 of the host only (ADR-0009)",
+    )
 
     frontend: Path | None = Field(None, description="the front's static build, served on the same origin (session 2)")
     docs: bool = Field(False, description="the Swagger UI page, whose script comes from a CDN: off unless asked")
@@ -136,12 +146,22 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _safety(self) -> Settings:
-        if not self.lan and not _is_loopback(self.host):
+        if self.container and not in_container():
+            raise ValueError("OPTLAB_CONTAINER is for deploy/'s containers: this process does not run in one")
+        in_container_interface = self.container and self.host == "0.0.0.0"  # the container's own interface (ADR-0009)
+        if not self.lan and not _is_loopback(self.host) and not in_container_interface:
             raise ValueError(
                 f"host {self.host!r} listens beyond this machine: set OPTLAB_LAN=true only with Luca's agreement "
                 "(ADR-0002), or keep 127.0.0.1"
             )
+        if self.lan and not self.lan_hosts:
+            raise ValueError("the LAN profile needs the names the desk answers to: OPTLAB_LAN_NAMES (ADR-0002)")
         return self
+
+    @property
+    def lan_hosts(self) -> set[str]:
+        """The LAN names a request's Host may carry (lowercase, without a port)."""
+        return {n.strip().lower() for n in self.lan_names.split(",") if n.strip()}
 
     @classmethod
     def load(cls, **overrides) -> Settings:
@@ -155,6 +175,11 @@ class Settings(BaseSettings):
     def describe(self) -> dict:
         """Where everything is, for a start-up line or a health check (no secret in here)."""
         return {k: str(v) if isinstance(v, Path) else v for k, v in self.model_dump().items()}
+
+
+def in_container() -> bool:
+    """Docker writes /.dockerenv in every container it starts (Podman /run/.containerenv): a native process has none."""
+    return Path("/.dockerenv").exists() or Path("/run/.containerenv").exists()
 
 
 def _is_loopback(host: str) -> bool:

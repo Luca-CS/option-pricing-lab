@@ -378,3 +378,24 @@ def test_the_demo_settings_never_name_the_real_database(tmp_path, monkeypatch):
     monkeypatch.setenv("OPTLAB_DATABASE", str(tmp_path / "real" / "optlab.sqlite"))
     with pytest.raises(RuntimeError, match="OPTLAB_DATABASE"):
         demo.check_paths(folder, Settings.load(data=folder))
+
+
+def test_copies_made_in_the_same_millisecond_get_their_own_names(tmp_path, monkeypatch, data):
+    """A fast machine makes two copies in one millisecond (the Linux runner did): each gets a name, in order."""
+    from optlab.server.cli import _latest_copy
+    from optlab.server.persistence import Database
+
+    monkeypatch.setattr(backups, "stamp", lambda now=None: "20261113-120000-000")
+    db = Database(tmp_path / "db.sqlite")
+    try:
+        first = backups.database_copy(db, data / "backups" / "manual")
+        second = backups.database_copy(db, data / "backups" / "manual")
+    finally:
+        db.close()
+    assert (first.name, second.name) == ("optlab-20261113-120000-000.sqlite", "optlab-20261113-120000-000-1.sqlite")
+    assert _latest_copy(data / "backups") == second
+    lake, folder = tmp_path / "lake", tmp_path / "backups" / "lake"
+    _lake(lake)
+    names = [backups.lake_snapshot(lake, folder, keep=3, log=lambda *a: None)["folder"] for _ in range(3)]
+    assert names == ["20261113-120000-000", "20261113-120000-000-1", "20261113-120000-000-2"]
+    assert [p.name for p in backups.lake_snapshots(folder)] == names  # oldest first, as made
