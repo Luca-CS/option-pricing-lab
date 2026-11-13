@@ -312,7 +312,7 @@ class RiskApi:
             raise ApiError("give the first date (from)", 422, "from")
         for d in (start, end):
             try:
-                dt.date.fromisoformat(d)
+                dt.date.fromisoformat(d)  # pyright: ignore[reportArgumentType] (None is refused by the TypeError branch)
             except TypeError, ValueError:
                 raise ApiError(f"not a date: {d!r}", 422) from None
         trades = self.desk.repo.trades()
