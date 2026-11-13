@@ -48,6 +48,7 @@ from optlab.structured.cashflows import FundedSwap, Swap
 from optlab.structured.dates import year_fraction
 from optlab.structured.engine import Evaluation
 from optlab.structured.multiasset import BasketContext
+from optlab.structured.policy import PricingDecision
 from optlab.structured.portfolio import Book, merged_history
 from optlab.structured.replication import replication_result
 
@@ -269,7 +270,7 @@ class _Results:
                 self.refs[s] = self.refs.get(s, 0) + 1
         self.kept: dict = {}  # shock -> per-position pairs (or values), while a measure needs them
         self.done: set = set()
-        self.base_pairs = None
+        self.base_pairs: list | None = None
 
     def finish(self, shock_name, per_position) -> None:
         run = self.run
@@ -278,7 +279,7 @@ class _Results:
             self.base_pairs = per_position
             run.base_se = [_stat(p)[1] if np.ndim(p) else 0.0 for p in per_position]
             run.base_total_se = _stat(np.sum(per_position, axis=0))[1] if np.ndim(per_position[0]) else 0.0
-        run.pnl[shock_name] = _block([np.asarray(p) - np.asarray(b) for p, b in zip(per_position, self.base_pairs)])
+        run.pnl[shock_name] = _block([np.asarray(p) - np.asarray(b) for p, b in zip(per_position, self.base)])
         if self.refs.get(shock_name):
             self.kept[shock_name] = per_position
         for m in self.measures:
@@ -287,7 +288,7 @@ class _Results:
             self._measure(m, len(per_position))
 
     def _measure(self, m: Measure, n_pos: int) -> None:
-        pairs = {**self.kept, "base": self.base_pairs}
+        pairs = {**self.kept, "base": self.base}
         combo = [m.scale * sum(w * np.asarray(pairs[s][i]) for s, w in m.weights.items()) for i in range(n_pos)]
         self.run.measures[m.name] = _block(combo)
         self.done.add(m.name)
@@ -295,6 +296,13 @@ class _Results:
             self.refs[s] -= 1
             if self.refs[s] <= 0 and s != "base":
                 self.kept.pop(s, None)
+
+    @property
+    def base(self) -> list:
+        """The base's pairs per position (or values); the base's bucket always runs first."""
+        if self.base_pairs is None:
+            raise RuntimeError("a shock was revalued before the base")
+        return self.base_pairs
 
     def unfinished(self) -> list:
         return [m.name for m in self.measures if m.name not in self.done]
@@ -308,7 +316,7 @@ class _Group:
     shocks: dict
     settings: RiskSettings
     env: RiskEnv
-    decision: object  # the book's pricing decision (method, model, warnings)
+    decision: PricingDecision  # method, model, warnings
     base_items: list
     names: list
     spot0: object  # {name: spot} for a basket, the spot otherwise
@@ -549,9 +557,9 @@ def _simulate(g: _Group, members: list, sim_ctx, items: list, since, fx: dict) -
     if timings.get("engine_note") and timings["engine_note"] not in run.warnings:
         run.warnings.append(timings["engine_note"])
     exact = _collect(g, totals, layout, items, fx)
-    if g.smooth and "base" in members:
+    if exact is not None:  # smoothing, and the base among the shocks
         n_pos = len(items)
-        base_pairs = g.results.base_pairs
+        base_pairs = g.results.base
         bias = [run.values["base"][i] - float(np.mean(exact[i])) for i in range(n_pos)]
         diffs = [base_pairs[i] - exact[i] for i in range(n_pos)]
         tot = np.sum(diffs, axis=0)
