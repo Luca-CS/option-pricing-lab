@@ -1,6 +1,6 @@
 # FX in the lake and the quanto adjustment
 
-Written by `scripts/lake_fx_check.py`, 2026-11-05. Gaps and statistics only: no vendor's levels.
+Written by `optlab lake fx-check` (then `scripts/lake_fx_check.py`), 2026-11-05. Gaps and statistics only: no vendor's levels.
 
 ## What is loaded
 

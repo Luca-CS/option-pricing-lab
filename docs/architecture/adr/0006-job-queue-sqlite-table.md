@@ -58,7 +58,7 @@ never unpickles anything from the table. Results are JSON (or a reference to a s
   book through this path, bit for bit.
 - **One worker per database**: a lease row renewed every 5 s; a worker that has been silent for 15 s is gone. The
   worker runs in the api's process by default (`Settings.worker = "embedded"`, one command to start the desk on
-  Windows) or alone (`python -m optlab.server.worker`, `OPTLAB_WORKER=external`, the container of A7); a second one
+  Windows) or alone (`optlab worker`, `OPTLAB_WORKER=external`, the `worker` container); a second one
   waits for the lease (`--wait-lease`) instead of sharing the GPU. At start the lease holder marks every `running` row
   `error` (Interrupted).
 - **Progress and cancellation** come from `optlab.core.progress`, a context variable that is silent unless the worker

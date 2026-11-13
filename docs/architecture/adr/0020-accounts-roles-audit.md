@@ -53,7 +53,7 @@ string (`?token=`), in a cookie and in a header. Scenarios carry a free-text `si
   to admins only (404 for anyone else).
 - `optlab.server.audit.Audit`: one row per write (who, when, action, target, sha256 of the state before and after,
   a detail without secrets), including logins, failed logins, job submissions and cancels, and the commands of
-  `python -m optlab.server.users` (as the system). Read by admins on `GET /admin/audit`.
-- The command line is `python -m optlab.server.users create|list|roles|password|disable|enable` (`optlab users` in
-  A7): the password is read with `getpass` (or standard input with `--stdin`), never an argument. A lost admin
+  `optlab users` (as the system). Read by admins on `GET /admin/audit`.
+- The command line is `optlab users create|list|roles|password|disable|enable` (`python -m optlab.server.users` before
+  A7, an alias since): the password is read with `getpass` (or standard input with `--stdin`), never an argument. A lost admin
   password is reset there (`password <name>`).

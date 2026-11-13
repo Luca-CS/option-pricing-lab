@@ -176,9 +176,9 @@ what a machine without an NVIDIA card needs.
 cmake -S packages/native/cuda -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release
 ctest --test-dir build -C Release                     # path engine checks, validation table, 10^8-path QE bias test
-python scripts/bench_accel.py                         # NumPy, CPU engine and GPU engine on structured products
+uv run optlab bench accel                             # NumPy, CPU engine and GPU engine on structured products
 build/Release/test_prices.exe gpu                     # one suite: cpu | gpu | double | closed | qe-bias
-python packages/native/cuda/bench/bench_numpy.py      # NumPy timings of optlab (venv), read by bench.exe
+uv run optlab bench numpy                             # NumPy timings of optlab (venv), read by bench.exe
 build/Release/bench.exe                               # benchmark table above
 build/Release/ablation.exe                            # optimisation study (also ablation_ieee, ablation_fastmath)
 ```

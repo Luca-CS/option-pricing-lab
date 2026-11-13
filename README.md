@@ -158,7 +158,7 @@ Beyond single products:
   times and SLV 1.6 to 1.8 times faster) and randomised quasi-Monte Carlo (`price_rqmc`, Sobol with a Brownian
   bridge: variance divided by 24 to 29 under Black-Scholes and local vol, by 2.7 under SLV).
 
-`python scripts/structured_examples.py` prints the model-risk table, timings, example quotes, worst-of coupons
+`uv run optlab structured examples` prints the model-risk table, timings, example quotes, worst-of coupons
 against the correlation and a book (about five minutes at 200,000 paths).
 
 ## Desk
@@ -169,8 +169,9 @@ being rebuilt on that API (the v0 page is kept in `legacy/desk-static/` as the r
 below are reached through `/api/v1`, its docs page or a script.
 
 ```
-uv run python -m optlab.server.users create <name> --roles admin      # your account; the password is asked twice
-uv run python -m optlab.server --workers 6                             # http://127.0.0.1:8765/api/v1
+uv run optlab users create <name> --roles admin      # your account; the password is asked twice
+uv run optlab serve --workers 6                      # http://127.0.0.1:8765/api/v1
+uv run optlab serve --demo-data                      # the same on made-up data (an account `demo`, built once)
 ```
 
 `OPTLAB_DOCS=true` adds the interactive page `/api/v1/docs`; `--store` and `--market` choose the database and the
@@ -208,7 +209,7 @@ real instance is never exposed to the internet (ADR-0002).
   and the historical VaR by full revaluation with its stressed window and contributions. **P&L explained** (`#/pnl`): stored
   end-of-day runs, daily and cumulated, the cascade of full revaluations (time, spot, vol, skew, rates, dividends, correlation,
   FX) against the prediction of the Greeks, per trade, with events and new trades. Method and measured numbers in
-  [reports/risk.md](reports/risk.md); `scripts/risk_eod.py` runs the same from the console.
+  [reports/risk.md](reports/risk.md); `optlab risk ...` runs the same from the console.
 
 Sharing a result while the engine stays on this PC: the desk snapshot (`GET /api/v1/trading/desk-snapshot`) and the
 reports of a quote or of the book are standalone HTML files that open anywhere without the desk. Trades, fixings,
@@ -298,10 +299,11 @@ wing). [reports/replay.md](reports/replay.md) follows a BRC and a Phoenix throug
 ```bash
 uv sync --locked --all-extras                     # https://docs.astral.sh/uv/ ; the lock pins every version with its hash
 uv run pytest                                     # about half an hour with the real lake; CI runs the offline part
-python scripts/run_calibration.py --source simulated
-python scripts/download_spx.py                    # personal-use snapshot in data/raw/
-python scripts/run_calibration.py --source spx
-python scripts/make_report.py
+uv run optlab calib run --source simulated
+uv run optlab calib download-spx                  # personal-use snapshot in data/raw/
+uv run optlab calib run --source spx
+uv run optlab calib report
+uv run optlab --help                              # every command: serve, worker, users, backup, lake, risk, ...
 ```
 
 ```python
@@ -316,7 +318,7 @@ price, stderr = barrier_mc(model, market, K=100, H=80, T=1.0, kind="down-out", c
 American PDE (Crank-Nicolson with projected SOR on a strike-centred grid, so that the Greeks are smooth in the
 spot), the tree, Lévy's Asian approximation, Heston by Fourier, Monte Carlo (Andersen's QE scheme for Heston)
 and Longstaff-Schwartz, checked against the Python library by `packages/core/tests/test_widget_js.py` (needs node), plus the
-SPX results written by `scripts/build_widget_data.py`. Deep links open a given case, for instance
+SPX results written by `optlab demo widget-data`. Deep links open a given case, for instance
 `?product=barrier&K=119&model=heston`. The full library, with live SLV recalibration, also has a Gradio app that
 runs locally: `pip install gradio`, then `python space/app.py`.
 
@@ -332,8 +334,7 @@ A uv workspace: six distributions share the namespace `optlab`, each in `package
 | `packages/structured` | `optlab.structured`: script language, term-sheet builder, policy, pricers, desk costs, books |
 | `packages/marketdata` | `optlab.marketdata`: the historical lake, its sources and derivations, point-in-time markets, replays, the SPX chain download and cleaning |
 | `packages/risk` | `optlab.risk`: shocks and one revaluation engine, Greeks, ladder, scenarios, VaR, EOD runs and explained P&L |
-| `packages/server` | `optlab.server`: the desk's API v1 (FastAPI): accounts and roles, audit log, jobs, the SQLite database, reports |
-| `scripts/` | calibration runs, lake updates, report and charts |
+| `packages/server` | `optlab.server`: the desk's API v1 (FastAPI): accounts and roles, audit log, jobs, the SQLite database, reports; the `optlab` command line and its tools (calibration runs, lake updates, reports and charts) |
 | `docs/` | demo page (GitHub Pages); `docs/architecture/` the target architecture and its decisions |
 | `space/` | Gradio app, run locally |
 | `tests/` | the golden numbers and the fixtures shared across packages |

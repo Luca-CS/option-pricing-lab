@@ -23,15 +23,15 @@ Tests live beside their package (`packages/<name>/tests`); fixtures shared acros
 or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
 
 - Structured products: `uv run pytest -q packages/structured/tests` (about a minute);
-  `scripts/structured_examples.py [--quick]` prints the autocall model-risk table, timings and example quotes.
+  `uv run optlab structured examples [--quick]` prints the autocall model-risk table, timings and example quotes.
 - Desk (API v1, no web front until session 2; the v0 page is in `legacy/desk-static/`, not served):
-  `uv run python -m optlab.server.users create <name> --roles admin` (password asked twice), then
-  `uv run python -m optlab.server [--port 8765] [--workers 6] [--engine auto] [--store FILE] [--market ID]` serves
+  `uv run optlab users create <name> --roles admin` (password asked twice), then
+  `uv run optlab serve [--port 8765] [--workers 6] [--engine auto] [--store FILE] [--market ID] [--open]` serves
   `http://127.0.0.1:8765/api/v1` (127.0.0.1 only; another host needs `OPTLAB_LAN=true`, with Luca's agreement);
   `OPTLAB_DOCS=true` adds the Swagger page `/api/v1/docs`. Conventions in `docs/architecture/api.md`; after changing a
-  route, `uv run python -m optlab.server.openapi export` (writes `api/openapi.json`; `test_openapi.py` fails on drift).
-  Jobs run in the api's process unless `OPTLAB_WORKER=external`, then `uv run python -m optlab.server.worker
-  [--concurrency 2] [--engine auto]` serves the queue (one worker per database). Logs: `<data>/logs/api.log`,
+  route, `uv run optlab api export` (writes `api/openapi.json`; `test_openapi.py` fails on drift).
+  Jobs run in the api's process unless `OPTLAB_WORKER=external`, then `uv run optlab worker
+  [--concurrency 2] [--engine auto]` serves the queue (one worker per database); `optlab jobs list|show|wait|cancel`. Logs: `<data>/logs/api.log`,
   `worker.log` (JSON lines). Tests: `packages/server/tests/test_api_*.py` (one per router, the security checks, the
   authorisation matrix, the parity with `feature-inventory.md`; about 40 s), `test_jobs.py` (the queue),
   `test_worker.py` (a worker process, killed mid-job, and the next one), `test_schedules.py`, `test_desk.py` (the
@@ -40,34 +40,34 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
   `api-contract`).
 - `packages/core/tests/test_widget_js.py` runs `docs/lab.js` under `node` and compares it to the Python library; it is
   skipped when `node` is not on PATH.
-- Calibration pipeline: `scripts/run_calibration.py --source simulated|spx` writes `results/*.json`;
-  `scripts/make_report.py` writes `reports/calibration.md` and figures; `scripts/build_widget_data.py`
+- Calibration pipeline: `optlab calib run --source simulated|spx` writes `results/*.json`;
+  `optlab calib report` writes `reports/calibration.md` and figures; `optlab demo widget-data`
   regenerates `docs/pricer-data.js` from `results/spx_calibration.json`. `--source spx` needs a snapshot
-  from `scripts/download_spx.py` in `data/raw/`.
+  from `optlab calib download-spx` in `data/raw/`.
 - CUDA engine (`packages/native/cuda/`, needs CUDA 12.x and VS 2022 Build Tools; RTX 2070 Super, `sm_75`), its own
   C++ tests and benchmarks: `cmake -S packages/native/cuda -B build -G "Visual Studio 17 2022" -A x64`,
   `cmake --build build --config Release`,
   `ctest --test-dir build -C Release`. `build\Release\test_prices.exe cpu|gpu|double|closed|qe-bias` runs one suite.
-  Benchmarks, from the repo root: `packages/native/cuda/bench/bench_numpy.py` (venv) then `build\Release\bench.exe`;
+  Benchmarks, from the repo root: `uv run optlab bench numpy` then `build\Release\bench.exe`;
   `build\Release\ablation.exe` (plus `ablation_ieee`, `ablation_fastmath`: same library, other nvcc math flags).
   Time the GPU only after a sustained warm-up (seconds of CPU work drop it to the 300 MHz idle clock).
   `-DOPTLAB_WITH_CUDA=OFF` builds the CPU engines only; `-DOPTLAB_CUDA_ARCHS=portable` targets sm_61 to sm_120.
-  `build\Release\test_paths.exe` checks the path engine; `scripts/bench_accel.py [--desk standard]` times NumPy against
+  `build\Release\test_paths.exe` checks the path engine; `optlab bench accel [--desk standard]` times NumPy against
   the CPU and GPU engines; `packages/native/tests/test_native.py` validates the engine from Python (skipped without the library).
   Profiling: `ncu --set full -k regex:mc_kernel -o build/ncu_profile build\Release\profile.exe` from an
   administrator shell (GPU counters are admin-only on this machine); read it with
   `ncu -i build/ncu_profile.ncu-rep --page raw --csv --metrics ...` (`--page details` fails under the French locale).
 - Risk engine (`optlab.risk`): `packages/risk/tests` (about 20 minutes; `test_risk_var`, `test_risk_pnl` and the betas test need the
-  lake and skip without it). `scripts/risk_eod.py eod --date D | backfill --from A --to B | pnl --from A --to B | var | ladder`
+  lake and skip without it). `optlab risk eod --date D | backfill --from A --to B | pnl --from A --to B | var | ladder` (`--as-job`)
   works on a desk database (default the showcase's) and keeps every run in its risk tables; method and measured numbers in
   `reports/risk.md`. The API serves it under `/api/v1/risk/*` (`optlab.server.risk_api`, router `routers/risk.py`, report
   `/api/v1/risk/report`).
 - Data lake (`optlab.marketdata`, needs `duckdb` and `pyarrow`; data in `OPTLAB_DATA`, default `optlab-data` beside the main checkout):
-  `scripts/lake_update.py` (public sources, yen and sterling rates in the steps `mof`, `boj`, `boe`; `--import-sample zip`, `--dolt default`,
-  `--yahoo-chains` during US hours only: Yahoo blanks bid and ask otherwise), `scripts/lake_derive.py` (curves, carry, bank, surfaces, correlation, pairs, observed fits),
-  `scripts/lake_fx_check.py` (FX against H.10 and CME futures, size of the quanto adjustment: `reports/fx_check.md`),
-  `scripts/lake_surface_test.py` (reconstruction against real chains), `scripts/lake_regime_test.py` (the same by level of the VIX, crash held out),
-  `scripts/lake_replay.py cost|run [--costs]`, `scripts/seed_showcase.py` (a dozen trades in their own store, `optlab-data/showcase`; guide in `reports/showcase.md`).
+  `optlab lake update` (public sources, yen and sterling rates in the steps `mof`, `boj`, `boe`; `--import-sample zip`, `--dolt default`,
+  `--yahoo-chains` during US hours only: Yahoo blanks bid and ask otherwise), `optlab lake derive` (curves, carry, bank, surfaces, correlation, pairs, observed fits),
+  `optlab lake fx-check` (FX against H.10 and CME futures, size of the quanto adjustment: `reports/fx_check.md`),
+  `optlab lake surface-test` (reconstruction against real chains), `optlab lake regime-test` (the same by level of the VIX, crash held out),
+  `optlab lake replay cost|run [--costs]`, `optlab demo seed-showcase` (a dozen trades in their own store, `optlab-data/showcase`; guide in `reports/showcase.md`).
   `packages/server/tests/test_lake_real.py` checks the exit criteria on the real lake and skips without it.
 - Lint config: ruff, line length 120, absolute imports only (`pyproject.toml`). No build step for `docs/` (static, dependency-free JS).
 
@@ -158,7 +158,7 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
   progress, cancel, the sweep of a dead worker's jobs; `Workers`: the one-worker lease), `tasks.py` what a job carries
   (`Frozen`: the market in use by snapshot id, the basket settings, the cost table's version, trades by version, their
   fixings) and the registry of kinds, `worker.py` the loop (claims, runs with a `optlab.core.progress` reporter, beats,
-  fires the schedules; embedded in the api or `python -m optlab.server.worker`), `schedules.py` (backup, housekeeping,
+  fires the schedules; embedded in the api or `optlab worker`), `schedules.py` (backup, housekeeping, lake copy,
   lake, EOD), `present.py` the `{value, se}` shape at the API's boundary, `logs.py` the JSON log files. Each `Desk`
   method that submits has a `run_<kind>` twin the worker calls (`risk_api.py` the same); the API's job result is
   `{market, method, result}` (`/api/v1/jobs`, SSE events with progress).
@@ -169,6 +169,9 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
   `settings.py` is the one `Settings` object (environment, then `<data>/config/optlab.env`, then the command line);
   the domain packages have no default path and receive theirs from it. `report.py` writes standalone
   HTML reports, `fixings.py` parses pasted or CSV fixings (the client sends the raw text), `netcheck.py` reads what blocks LAN access on Windows (firewall, Public profile; read-only).
+  `cli.py` is the `optlab` command line (Typer, ADR-0010) over `tools/` (the bodies of v0's scripts, one function each),
+  `backups.py` the copies of the database and of the lake and their checked restoration, `demo.py` the demo data folder
+  (synthetic lake, simulated calibration, a small book: `optlab serve --demo-data`); operations in `docs/architecture/operations.md`.
   Every name is on its own market: the one in use for its name, else the lake's at the same date (`marketdata/names.py`), else flat
   inputs (what is typed in the Market screen wins). The book is valued in independent groups (one per single name, the worst-ofs).
   Each job freezes the desk's state when submitted, so a snapshot switch never changes

@@ -6,7 +6,7 @@ runs on whatever the machine has: an NVIDIA GPU, every CPU core, or NumPy as bef
 compiled result is checked against it, or against a closed form, within 4 standard errors.
 
 Measured on the development machine: Ryzen 5 3600 (6 cores, 12 threads, AVX2), 24 GB, RTX 2070 Super (8 GB,
-sm_75, display GPU), Windows 11, CUDA 12.9. GPU times after a warm-up (`scripts/bench_accel.py`), on an idle machine.
+sm_75, display GPU), Windows 11, CUDA 12.9. GPU times after a warm-up (`optlab bench accel`), on an idle machine.
 
 ## Hardware tiers
 

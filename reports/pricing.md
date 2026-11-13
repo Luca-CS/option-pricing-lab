@@ -1,6 +1,6 @@
 # The desk price: a base and what is added to it
 
-Run on 5 November 2026 with `scripts/pricing_examples.py`, on the market of 4 November 2026, 100,000 paths, stored in `results/pricing_examples.json`. Amounts are in % of notional, seen from a desk that sells: a positive cost is against it. Surfaces are reconstructed from volatility indices, so no option quote was read ([surface_reconstruction.md](surface_reconstruction.md)).
+Run on 5 November 2026 with `optlab structured pricing-report` (then `scripts/pricing_examples.py`), on the market of 4 November 2026, 100,000 paths, stored in `results/pricing_examples.json`. Amounts are in % of notional, seen from a desk that sells: a positive cost is against it. Surfaces are reconstructed from volatility indices, so no option quote was read ([surface_reconstruction.md](surface_reconstruction.md)).
 
 **The defaults are starting values, not a trader's.** They are in `optlab/structured/defaults.py`, labelled on every screen, and every cost below scales with them.
 
