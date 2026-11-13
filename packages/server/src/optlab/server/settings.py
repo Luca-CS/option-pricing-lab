@@ -91,7 +91,7 @@ class Settings(BaseSettings):
     lan_names: str = Field(
         "",
         description="with lan: the names the desk answers to, separated by a comma and a space as Caddy wants them "
-        "(\"optlab.home.arpa, 192.168.1.198\"); any other Host is refused",
+        '("optlab.home.arpa, 192.168.1.198"); any other Host is refused',
     )
     container: bool = Field(
         False,
