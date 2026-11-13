@@ -54,6 +54,15 @@ def estimates(x, risk: bool = False):
     if not isinstance(x, dict):
         return x
     out = {k: estimates(v, risk) for k, v in x.items()}
+    _pair_suffixes(out)
+    _pair_named(out)
+    if risk:
+        _pair_risk(out)
+    return out
+
+
+def _pair_suffixes(out: dict) -> None:
+    """Rule 1: `x` beside `x_se` or `x_stderr` (in place)."""
     for key in list(out):
         if key not in out:
             continue
@@ -62,6 +71,10 @@ def estimates(x, risk: bool = False):
             if key.endswith(suffix) and base in out and (_pairable(out[base]) or isinstance(out[base], (dict, list))):
                 out[base] = estimate(out[base], out.pop(key))
                 break
+
+
+def _pair_named(out: dict) -> None:
+    """Rule 2: the named pairs of the library's results (in place)."""
     for key in list(out):  # base_price beside base_se (the desk price's lines of costs.py)
         if key.endswith("_price") and f"{key[:-6]}_se" in out and _pairable(out[key]):
             out[key] = estimate(out[key], out.pop(f"{key[:-6]}_se"))
@@ -73,15 +86,17 @@ def estimates(x, risk: bool = False):
         base = "price" if "price" in out else "value" if "value" in out else None
         if base is not None:
             out[base] = estimate(out[base], out.pop("stderr"))
-    if risk:
-        for key in RISK_MAPS:
-            v = out.get(key)
-            if isinstance(v, dict):
-                out[key] = {k: ({"value": p[0], "se": p[1]} if _is_pair(p) else p) for k, p in v.items()}
-        for key in RISK_PAIRS:
-            if _is_pair(out.get(key)):
-                out[key] = {"value": out[key][0], "se": out[key][1]}
-    return out
+
+
+def _pair_risk(out: dict) -> None:
+    """Rule 3: the [value, se] pairs of the risk engine's payloads (in place)."""
+    for key in RISK_MAPS:
+        v = out.get(key)
+        if isinstance(v, dict):
+            out[key] = {k: ({"value": p[0], "se": p[1]} if _is_pair(p) else p) for k, p in v.items()}
+    for key in RISK_PAIRS:
+        if _is_pair(out.get(key)):
+            out[key] = {"value": out[key][0], "se": out[key][1]}
 
 
 RISK_KINDS = ("risk", "ladder", "scenarios", "var", "eod")

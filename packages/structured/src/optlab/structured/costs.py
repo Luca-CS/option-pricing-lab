@@ -516,6 +516,156 @@ def _settled(inputs: CostInputs, lines: _Lines, target, sets_solving: bool) -> t
     return values, {"base": base, **runs}
 
 
+def _settle_digitals(inputs, lines, coupon_param, base, effect, models, target, x, passes):
+    """Widen the digitals until their widths settle (three passes at most), solving the coupon again on each when
+    solving. Returns (the digital run, the run of every ramp, the passes it took, the coupon parameter, its passes)."""
+    solving = target is not None
+    digital_run = _DigitalRun(inputs, lines, coupon_param, base)
+    digital_run.settle_sides(x)
+    digital_all, digital_passes, widths = None, 0, None
+    for _ in range(3):
+        found = digital_run.found(x)
+        now = [d.width(inputs.min_spread, inputs.delta_max) for d in found]
+        if widths is not None and np.allclose(now, widths, rtol=1e-2, atol=1e-6):
+            break
+        widths = now
+        ramps = digital_run.ramps(found)
+        if not ramps:
+            break
+        digital_passes += 1
+        digital_all = lines.ramp_run([ramps])[0]
+        if not solving:
+            break
+        moved_with_digitals = lambda y, r=digital_all: effect(y) + r.price(y) - base.price(y)  # noqa: E731
+        x, passes = _solved(base, moved_with_digitals, models, inputs.sign, target)
+    return digital_run, digital_all, digital_passes, x, passes
+
+
+def _model_lines(models, x, base_pairs, inputs, lines, line, final_extra):
+    """The lines of the models of provision (SLV, local correlation), and the price added by those in force."""
+    out = []
+    for name, run in models.items():
+        r = run.at(x)
+        pairs = _pct_pairs(r) - base_pairs
+        gap = float(pairs.mean())
+        on = inputs.sign * gap > 0
+        if on:
+            final_extra = final_extra + pairs
+        slv = name == "slv"
+        mix = lines.mix_used(inputs.mix) if slv else None
+        note = "" if on else "the gap is in the desk's favour: no provision"
+        label = f"Model: SLV (mix {mix:g})" if slv else "Model: correlation skew (local correlation)"
+        c = line(
+            name,
+            label,
+            "model",
+            pairs,
+            gap if on else 0.0,
+            note=note,
+            gap=inputs.sign * gap,
+            used=mix,
+            default=inputs.defaults.get("slv_mix") if slv else None,
+            overridden=inputs.overridden_mix if slv else False,
+        )
+        if name == "local_corr":
+            c.origin = lines.ctx.local_correlation(lines.names)["origin"]
+            c.note = (note + " · " if note else "") + lines.ctx.local_correlation(lines.names)["note"]
+            c.fit = lines.ctx.local_correlation(lines.names)["lines"]
+        out.append(c)
+    return out, final_extra
+
+
+def _bump_lines(single, x, base_pairs, at_base, inputs, values, line):
+    """The lines of the single bumps, in the order of BUMPS, and their sum."""
+    out, total_single = [], 0.0
+    for key, label in BUMPS.items():
+        if key not in single:
+            continue
+        r = single[key].at(x)
+        pairs = None if base_pairs is None else _pct_pairs(r) - base_pairs
+        d = float(pairs.mean()) if pairs is not None else r.price - at_base.price
+        total_single += d
+        default = inputs.defaults.get(key)
+        used = values[key]
+        note = ""
+        if key in inputs.candidates:
+            a, b = inputs.candidates[key]
+            note = f"the groups disagree ({a:+.4f}, {b:+.4f}): the one against the desk on this product"
+        out.append(
+            line(
+                key,
+                label,
+                "bump",
+                pairs,
+                d,
+                used=used,
+                default=default,
+                overridden=default is not None and key not in inputs.candidates and default != used,
+                note=note,
+            )
+        )
+    return out, total_single
+
+
+def _digital_lines(digital_all, digital_run, x, base_pairs, at_base, inputs, lines, line):
+    """The lines of the digitals by kind, their interaction, and the price and pairs they add together."""
+    out = []
+    r = digital_all.at(x)
+    digital_effect = r.price - at_base.price
+    digital_pairs = None if base_pairs is None else _pct_pairs(r) - base_pairs
+    found = digital_run.found(x)
+    kinds = digital_run.by_kind([d for d in found if digital_run._key(d) in digital_run.sides])
+    runs = lines.ramp_run([digital_run.ramps(ds) for ds in kinds.values()])
+    total_kinds = 0.0
+    for (kind, ds), run in zip(kinds.items(), runs):
+        rk = run.at(x)
+        pairs = None if base_pairs is None else _pct_pairs(rk) - base_pairs
+        d = float(pairs.mean()) if pairs is not None else rk.price - at_base.price
+        total_kinds += d
+        detail = [
+            {
+                "date": g.date,
+                "level": g.level,
+                "jump": g.jump,
+                "width": g.width(inputs.min_spread, inputs.delta_max),
+                "side": digital_run.sides[digital_run._key(g)],
+                "alone": digital_run.alone[digital_run._key(g)],
+                "shift": g.kind == "daily",
+            }
+            for g in ds
+        ]
+        widths_seen = sorted({round(c["width"], 6) for c in detail})
+        what = "moved by" if kind == "daily" else "width"
+        note = f"{len(ds)} date{'s' if len(ds) > 1 else ''}, {what} " + (
+            f"{100 * widths_seen[0]:.2f} pt"
+            if len(widths_seen) == 1
+            else f"{100 * widths_seen[0]:.2f} to {100 * widths_seen[-1]:.2f} pt"
+        )
+        out.append(line(kind, KINDS[kind], "digital", pairs, d, note=note, detail=detail))
+    if len(kinds) > 1:
+        singles = None if base_pairs is None else sum(_pct_pairs(run.at(x)) - base_pairs for run in runs)
+        out.append(
+            line(
+                "digital_interaction",
+                "Interaction of the digitals",
+                "interaction",
+                None if base_pairs is None else digital_pairs - singles,
+                digital_effect - total_kinds,
+            )
+        )
+    return out, digital_effect, digital_pairs
+
+
+def _rate_se(base, effect, on, digital_all, final_se):
+    """The coupon's standard error: the client price's, over its slope in the coupon parameter."""
+    slope_x = (base.price(1.0) + effect(1.0) + sum(r.price(1.0) - base.price(1.0) for r in on.values())) - (
+        base.price(0.0) + effect(0.0) + sum(r.price(0.0) - base.price(0.0) for r in on.values())
+    )
+    if digital_all is not None:
+        slope_x += (digital_all.price(1.0) - base.price(1.0)) - (digital_all.price(0.0) - base.price(0.0))
+    return final_se / abs(slope_x)
+
+
 def desk_price(
     product,
     ctx,
@@ -567,24 +717,9 @@ def desk_price(
     digital_run = digital_all = None
     digital_passes = 0
     if inputs.min_spread is not None:
-        digital_run = _DigitalRun(inputs, lines, coupon_param, base)
-        digital_run.settle_sides(x)
-        widths = None
-        for _ in range(3):
-            found = digital_run.found(x)
-            now = [d.width(inputs.min_spread, inputs.delta_max) for d in found]
-            if widths is not None and np.allclose(now, widths, rtol=1e-2, atol=1e-6):
-                break
-            widths = now
-            ramps = digital_run.ramps(found)
-            if not ramps:
-                break
-            digital_passes += 1
-            digital_all = lines.ramp_run([ramps])[0]
-            if not solving:
-                break
-            moved_with_digitals = lambda y, r=digital_all: effect(y) + r.price(y) - base.price(y)  # noqa: E731
-            x, passes = _solved(base, moved_with_digitals, models, inputs.sign, target)
+        digital_run, digital_all, digital_passes, x, passes = _settle_digitals(
+            inputs, lines, coupon_param, base, effect, models, target, x, passes
+        )
     at_base = base.at(x)
     base_pairs = _pct_pairs(at_base)
     s = inputs.sign
@@ -594,36 +729,8 @@ def desk_price(
         bp = -1e4 * price_effect / slope_rate if solving else None
         return CostLine(key, label, kind, s * price_effect, _se(pairs), bp, **kw)
 
-    out, total_single = [], 0.0
     final_extra = 0.0 if base_pairs is None else np.zeros_like(base_pairs)
-    for name, run in models.items():
-        r = run.at(x)
-        pairs = _pct_pairs(r) - base_pairs
-        gap = float(pairs.mean())
-        on = inputs.sign * gap > 0
-        if on:
-            final_extra = final_extra + pairs
-        slv = name == "slv"
-        mix = lines.mix_used(inputs.mix) if slv else None
-        note = "" if on else "the gap is in the desk's favour: no provision"
-        label = f"Model: SLV (mix {mix:g})" if slv else "Model: correlation skew (local correlation)"
-        c = line(
-            name,
-            label,
-            "model",
-            pairs,
-            gap if on else 0.0,
-            note=note,
-            gap=inputs.sign * gap,
-            used=mix,
-            default=inputs.defaults.get("slv_mix") if slv else None,
-            overridden=inputs.overridden_mix if slv else False,
-        )
-        if name == "local_corr":
-            c.origin = lines.ctx.local_correlation(lines.names)["origin"]
-            c.note = (note + " · " if note else "") + lines.ctx.local_correlation(lines.names)["note"]
-            c.fit = lines.ctx.local_correlation(lines.names)["lines"]
-        out.append(c)
+    out, final_extra = _model_lines(models, x, base_pairs, inputs, lines, line, final_extra)
     if skew_up is not None:
         r, rm = skew_up.at(x), models["local_corr"].at(x)
         pairs = None if base_pairs is None else _pct_pairs(r) - _pct_pairs(rm)
@@ -642,79 +749,16 @@ def desk_price(
                 note="the slope of the local correlation, on its own paths",
             )
         )
-    for key, label in BUMPS.items():
-        if key not in single:
-            continue
-        r = single[key].at(x)
-        pairs = None if base_pairs is None else _pct_pairs(r) - base_pairs
-        d = float(pairs.mean()) if pairs is not None else r.price - at_base.price
-        total_single += d
-        default = inputs.defaults.get(key)
-        used = values[key]
-        note = ""
-        if key in inputs.candidates:
-            a, b = inputs.candidates[key]
-            note = f"the groups disagree ({a:+.4f}, {b:+.4f}): the one against the desk on this product"
-        out.append(
-            line(
-                key,
-                label,
-                "bump",
-                pairs,
-                d,
-                used=used,
-                default=default,
-                overridden=default is not None and key not in inputs.candidates and default != used,
-                note=note,
-            )
-        )
+    bump_lines, total_single = _bump_lines(single, x, base_pairs, at_base, inputs, values, line)
+    out += bump_lines
     final_pairs = base_pairs
     digital_effect = 0.0
     digital_pairs = None if base_pairs is None else np.zeros_like(base_pairs)
     if digital_all is not None:
-        r = digital_all.at(x)
-        digital_effect = r.price - at_base.price
-        digital_pairs = None if base_pairs is None else _pct_pairs(r) - base_pairs
-        found = digital_run.found(x)
-        kinds = digital_run.by_kind([d for d in found if digital_run._key(d) in digital_run.sides])
-        runs = lines.ramp_run([digital_run.ramps(ds) for ds in kinds.values()])
-        total_kinds = 0.0
-        for (kind, ds), run in zip(kinds.items(), runs):
-            rk = run.at(x)
-            pairs = None if base_pairs is None else _pct_pairs(rk) - base_pairs
-            d = float(pairs.mean()) if pairs is not None else rk.price - at_base.price
-            total_kinds += d
-            detail = [
-                {
-                    "date": g.date,
-                    "level": g.level,
-                    "jump": g.jump,
-                    "width": g.width(inputs.min_spread, inputs.delta_max),
-                    "side": digital_run.sides[digital_run._key(g)],
-                    "alone": digital_run.alone[digital_run._key(g)],
-                    "shift": g.kind == "daily",
-                }
-                for g in ds
-            ]
-            widths_seen = sorted({round(c["width"], 6) for c in detail})
-            what = "moved by" if kind == "daily" else "width"
-            note = f"{len(ds)} date{'s' if len(ds) > 1 else ''}, {what} " + (
-                f"{100 * widths_seen[0]:.2f} pt"
-                if len(widths_seen) == 1
-                else f"{100 * widths_seen[0]:.2f} to {100 * widths_seen[-1]:.2f} pt"
-            )
-            out.append(line(kind, KINDS[kind], "digital", pairs, d, note=note, detail=detail))
-        if len(kinds) > 1:
-            singles = None if base_pairs is None else sum(_pct_pairs(run.at(x)) - base_pairs for run in runs)
-            out.append(
-                line(
-                    "digital_interaction",
-                    "Interaction of the digitals",
-                    "interaction",
-                    None if base_pairs is None else digital_pairs - singles,
-                    digital_effect - total_kinds,
-                )
-            )
+        digital_lines, digital_effect, digital_pairs = _digital_lines(
+            digital_all, digital_run, x, base_pairs, at_base, inputs, lines, line
+        )
+        out += digital_lines
     if moved is not None:
         r = moved.at(x)
         final_pairs = _pct_pairs(r)
@@ -737,15 +781,7 @@ def desk_price(
     warnings = (
         _arbitrage_warnings(ctx, values, lines.horizon, lines.names) if "vol" in values or "skew" in values else []
     )
-    rate_se = None
-    if solving:
-        on = in_force(x)
-        slope_x = (base.price(1.0) + effect(1.0) + sum(r.price(1.0) - base.price(1.0) for r in on.values())) - (
-            base.price(0.0) + effect(0.0) + sum(r.price(0.0) - base.price(0.0) for r in on.values())
-        )
-        if digital_all is not None:
-            slope_x += (digital_all.price(1.0) - base.price(1.0)) - (digital_all.price(0.0) - base.price(0.0))
-        rate_se = final_se / abs(slope_x)
+    rate_se = _rate_se(base, effect, in_force(x), digital_all, final_se) if solving else None
     desk = DeskPrice(
         inputs.side,
         at_base.price,
