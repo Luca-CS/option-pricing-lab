@@ -189,7 +189,7 @@ crash interrupted ends `error` with `{"type": "Interrupted", ...}` (never resume
   Keep `changeOrigin: false` (Vite's default): the API compares the browser's `Origin` (`http://127.0.0.1:5173`)
   with the `Host` the proxy forwards, and refuses a write when they differ. The session cookie is set for the Vite
   origin and sent back through the proxy.
-- A quick start without real data: `optlab serve --demo-data`. The first time it builds `<temp>/optlab-demo`
+- A quick start without real data: `optlab serve --demo-data`. The first time it builds `~/.cache/optlab/demo`
   (about two minutes): the synthetic mini-lake (`optlab.marketdata.synthetic`, seven names, 2019-01-01 to
   2021-06-30), the simulated calibration, the market of 30 June 2021 in use and four trades struck on their own past
   markets (`DEMO-01` to `DEMO-04`), and an admin account `demo` whose password is printed once. For a CI job or a

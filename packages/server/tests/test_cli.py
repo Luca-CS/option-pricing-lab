@@ -316,3 +316,65 @@ def test_demo_data_never_takes_the_data_folder_of_the_environment(tmp_path, monk
     monkeypatch.setitem(cli.GIVEN, "data", tmp_path / "chosen")  # `optlab --data DIR serve --demo-data`
     cli._use_demo()
     assert os.environ["OPTLAB_DATA"] == str(tmp_path / "chosen")
+
+
+def test_a_lake_copy_whose_manifest_points_outside_it_is_never_restored(tmp_path):
+    """A restoration writes where the manifest's keys say: a key that leaves the copy (`../`, an absolute path) makes
+    the copy unrestorable, even when the file it names exists with the right size and hash."""
+    import hashlib
+    import json
+
+    lake, folder = tmp_path / "lake", tmp_path / "backups" / "lake"
+    _lake(lake)
+    backups.lake_snapshot(lake, folder, log=lambda *a: None)
+    (snapshot,) = backups.lake_snapshots(folder)
+    planted = tmp_path / "backups" / "planted.txt"  # outside the copy, as the key below resolves
+    planted.write_bytes(b"payload")
+    manifest = json.loads((snapshot / backups.MANIFEST).read_text(encoding="utf-8"))
+    entry = {"size": 7, "mtime_ns": 0, "sha256": hashlib.sha256(b"payload").hexdigest()}
+    for key in ("../planted.txt", "curated/../../planted.txt", str(planted)):
+        bad = json.loads(json.dumps(manifest))
+        bad["files"][key] = entry
+        (snapshot / backups.MANIFEST).write_text(json.dumps(bad), encoding="utf-8")
+        problems = backups.verify_lake_snapshot(snapshot)
+        assert any("not a file inside the copy" in p for p in problems), (key, problems)
+        with pytest.raises(ValueError):
+            backups.restore_lake(snapshot, lake)
+        assert not (tmp_path / "planted.txt").exists() and not (lake.parent.parent / "planted.txt").exists()
+    assert lake.is_dir() and not list(tmp_path.glob("lake.before-restore-*"))  # nothing was moved either
+
+
+def test_a_restored_database_keeps_no_session_and_records_its_restoration(data, monkeypatch):
+    from optlab.server.persistence import Database
+    from optlab.server.security import Accounts
+    from optlab.server.settings import Settings
+
+    _user(monkeypatch, "alice")
+    db = Database(data / "store" / "optlab.sqlite")
+    try:
+        accounts = Accounts(db, Settings.load())
+        password = secrets.token_urlsafe(18)
+        accounts.create("carol", password, ["viewer"])
+        accounts.open_session(accounts.authenticate("carol", password, "127.0.0.1"))  # a session in the copy
+    finally:
+        db.close()
+    assert run(["backup"]) == 0
+    assert run(["restore", "latest", "--yes"]) == 0
+    con = sqlite3.connect(f"file:{data / 'store' / 'optlab.sqlite'}?mode=ro", uri=True)
+    try:
+        assert con.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 0
+        actions = [r[0] for r in con.execute("SELECT action FROM audit_log")]
+    finally:
+        con.close()
+    assert "cli_restore_database" in actions
+
+
+def test_the_demo_settings_never_name_the_real_database(tmp_path, monkeypatch):
+    from optlab.server import demo
+    from optlab.server.settings import Settings
+
+    folder = tmp_path / "demo"
+    demo.check_paths(folder, Settings(_env_file=None, **demo.paths(folder)))  # pyright: ignore[reportCallIssue]
+    monkeypatch.setenv("OPTLAB_DATABASE", str(tmp_path / "real" / "optlab.sqlite"))
+    with pytest.raises(RuntimeError, match="OPTLAB_DATABASE"):
+        demo.check_paths(folder, Settings.load(data=folder))

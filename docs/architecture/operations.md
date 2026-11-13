@@ -87,7 +87,7 @@ never deleted. Both are tested (`packages/server/tests/test_cli.py`).
 
 `optlab serve --demo-data` serves a data folder made only of made-up numbers (the synthetic lake, the simulated
 calibration, a book of four trades struck on its past markets, an account `demo` whose password is printed once),
-built in `<temp>/optlab-demo` the first time (about two minutes). `optlab demo data --to DIR [--password-stdin]`
+built in `~/.cache/optlab/demo` (the user's profile) the first time (about two minutes). `optlab demo data --to DIR [--password-stdin]`
 builds it elsewhere, for the front's development and its end-to-end tests (handoff §7.7); then
 `optlab --data DIR serve`. Nothing in it comes from a vendor.
 

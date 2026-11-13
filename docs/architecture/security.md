@@ -100,6 +100,23 @@ inject an event. `GET /jobs` lists the caller's jobs only (v0's status bar showe
 | 26 | The book report reads the newest book valuation of anyone on the market in use | Info (v0 shared it the same way) | kept: the book is the desk's, not a user's |
 | 27 | The public `/ready` says whether a worker is alive (503 when none) | Info | kept: a readiness probe must say it |
 
+### Found in A7, the command line (the `security-review` pass: nothing above its bar)
+
+Checked and sound: `VACUUM INTO` takes a bound parameter, the table names of a copy's check are fixed, and a copy is
+opened read-only; `optlab check` runs this interpreter with fixed arguments and no shell; the new admin listing of
+the lake's copies and the `lake_backup` schedule are admin only, with `keep` bounded (1 to 52) and no path from a
+request; jobs submitted from the console are the system's (a 404 to API users); the demo account's password comes
+from `secrets` and is printed once, never logged or written; no pickle, `eval` or YAML.
+
+| # | Finding | Severity | Fate |
+|---|---|---|---|
+| 28 | A lake restoration used the manifest's keys as paths: a planted copy listing `../` keys would make `optlab restore --lake` write outside the lake (a git hook of the checkout, `optlab.env`) | Low today (only Luca's processes write `<data>/backups`); a real control once a container writes that folder | keys must be relative paths inside the copy (no `..`, drive, absolute path or link), the files found must be exactly the manifest's, and the restore checks each target stays inside the lake; test |
+| 29 | `optlab serve --demo-data` used `<temp>/optlab-demo`, shared on a multi-user Unix machine: another account could plant a "finished" demo folder with its own admin and settings | Low (Windows' `%TEMP%` is per user) | the folder is `~/.cache/optlab/demo`; on Unix a folder owned by another user, or writable by others, is refused |
+| 30 | The demo's paths could follow the environment: an `OPTLAB_DATABASE` or `OPTLAB_LAKE` (or the real folder's `optlab.env` through `OPTLAB_DATA`) would put the `demo` admin and its trades in the real database | Low (environment is trusted, but demo mode must never touch real data) | the demo builds its settings with every path in its folder and no env file, and `serve --demo-data` refuses a database, lake or backups folder outside it; test |
+| 31 | A restored database brought back the sessions of its time (revoked or expired since), and left no trace | Low | every session is closed after a restoration, which is in the audit log (`cli_restore_database`); test |
+| 32 | `restore latest` takes the copy whose name sorts last, so a planted far-future name wins; a copy's schema is not compared with its revision's (extra triggers or views would come with it) | Info (same condition as 28: write access to the backups) | kept: the backups folder is as trusted as the data; the containers' part keeps it out of reach of what they run |
+| 33 | An admin may set the lake copy's `keep` to 1 and run it, which removes the older copies | Info (as `keep_days` of the nightly copy) | kept: admin only, audited, and the newest copy stays complete |
+
 ## 6. Secrets
 
 None today (checked in A0: no key, token or password in the tree; gitleaks in A1 checks the history). Future secrets

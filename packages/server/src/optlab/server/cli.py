@@ -129,9 +129,12 @@ def serve(
 
     _choice("--engine", engine, ENGINES)
     configure(log)
-    if demo_data:
-        _use_demo()
+    folder = _use_demo() if demo_data else None
     settings = _settings(host=host, port=port, workers=workers, engine=engine, calibration=calibration, database=store)
+    if folder is not None:
+        from optlab.server import demo
+
+        demo.check_paths(folder, settings)  # the demo never serves the real database or lake
     to_files(settings, "api", log)
     desk = Desk(
         settings=settings, engine=settings.engine, workers=settings.workers, run_jobs=settings.worker == "embedded"
@@ -165,17 +168,19 @@ def serve(
     )
 
 
-def _use_demo() -> None:
+def _use_demo() -> Path:
     """Point this process at the demo folder (`--data` when given on the command line, else the default one; never an
     OPTLAB_DATA of the environment, which names the real data), built first when missing."""
     from optlab.server import demo
 
-    folder = Path(GIVEN["data"] or demo.default_folder())
+    folder = Path(GIVEN["data"] or demo.default_folder()).resolve()
+    demo.trust(folder)
     os.environ["OPTLAB_DATA"] = str(folder)
     if demo.info(folder) is None:
         say(f"building the demo data in {folder} (made-up numbers; a few minutes, once)")
         out = demo.build(folder, log=say)
         say(f"account demo, password {out['password']} (shown once; `optlab users password demo` changes it)")
+    return folder
 
 
 @app.command()
@@ -848,7 +853,7 @@ def structured_pricing_report(
 
 @demo_app.command("data")
 def demo_data_cmd(
-    to: Annotated[Path | None, typer.Option(help="the folder (default: <temp>/optlab-demo)")] = None,
+    to: Annotated[Path | None, typer.Option(help="the folder (default: ~/.cache/optlab/demo)")] = None,
     password_stdin: Annotated[
         bool, typer.Option("--password-stdin", help="the demo account's password from standard input")
     ] = False,

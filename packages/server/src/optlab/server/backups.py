@@ -24,7 +24,7 @@ import shutil
 import sqlite3
 import time
 from collections.abc import Callable
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from optlab.core.log import get_logger
 
@@ -130,12 +130,27 @@ def restore_database(source: Path, target: Path, backups: Path) -> dict:
     finally:
         dst.close()
         src.close()
+    from sqlalchemy import delete
+
+    from optlab.server.audit import Audit
+    from optlab.server.persistence.schema import sessions
+
     db = Database(target)  # migrated to this code's revision
     try:
         revision = db.revision()
+        with db.write() as c:  # sessions of the copy's time come back with it: none survives a restoration
+            closed = c.execute(delete(sessions)).rowcount or 0
+        detail = {"from": Path(source).name, "revision": info["revision"], "sessions_closed": closed}
+        Audit(db).record(None, "cli_restore_database", target.name, detail=detail)
     finally:
         db.close()
-    return {**info, "target": str(target), "saved_as": None if saved is None else str(saved), "revision_now": revision}
+    return {
+        **info,
+        "target": str(target),
+        "saved_as": None if saved is None else str(saved),
+        "revision_now": revision,
+        "sessions_closed": closed,
+    }
 
 
 # --- the lake --------------------------------------------------------------------------------------------------------
@@ -218,23 +233,51 @@ def lake_snapshot(lake_root: Path, folder: Path, keep: int = 4, log: Callable[[s
     }
 
 
+def _inside(rel: str) -> bool:
+    """A manifest key names a file inside its folder: relative, in `/` form, without `..`, `.`, a drive or a `\\`."""
+    parts = PurePosixPath(rel).parts
+    return (
+        bool(rel)
+        and "\\" not in rel
+        and ":" not in rel
+        and not PurePosixPath(rel).is_absolute()
+        and all(p not in ("", ".", "..") for p in parts)
+    )
+
+
+def _contained(base: Path, rel: str) -> bool:
+    return (Path(base) / rel).resolve().is_relative_to(Path(base).resolve())
+
+
 def verify_lake_snapshot(snapshot: Path) -> list[str]:
-    """What is wrong with a copy (empty when every file is there with its size and hash)."""
+    """What is wrong with a copy (empty when the files found in it are exactly those of its manifest, each with its
+    size and hash). A key that would point outside the copy, or a link inside it, makes it unrestorable: a restoration
+    writes where the keys say, so they are checked as untrusted input."""
     snapshot = Path(snapshot)
     if not (snapshot / MANIFEST).is_file():
         return [f"{snapshot.name}: no {MANIFEST} (an unfinished copy)"]
     files = _manifest(snapshot)["files"]
-    problems = []
+    problems = [
+        f"not a file inside the copy: {rel!r}" for rel in files if not _inside(rel) or not _contained(snapshot, rel)
+    ]
+    found = set()
+    for p in snapshot.rglob("*"):
+        rel = p.relative_to(snapshot).as_posix()
+        if p.is_symlink():
+            problems.append(f"a link: {rel}")
+        elif p.is_file() and rel != MANIFEST:
+            found.add(rel)
     for rel, f in files.items():
+        if not _inside(rel):
+            continue
         p = snapshot / rel
-        if not p.is_file():
+        if rel not in found:
             problems.append(f"missing {rel}")
         elif p.stat().st_size != f["size"]:
             problems.append(f"size of {rel}")
         elif sha256(p) != f["sha256"]:
             problems.append(f"hash of {rel}")
-    present = {p.relative_to(snapshot).as_posix() for p in snapshot.rglob("*") if p.is_file()} - {MANIFEST}
-    problems += [f"not in the manifest: {rel}" for rel in sorted(present - set(files))]
+    problems += [f"not in the manifest: {rel}" for rel in sorted(found - set(files))]
     return problems
 
 
@@ -244,11 +287,13 @@ def restore_lake(snapshot: Path, lake_root: Path) -> dict:
     problems = verify_lake_snapshot(snapshot)
     if problems:
         raise ValueError(f"{snapshot.name} cannot be restored: " + "; ".join(problems[:5]))
+    files = _manifest(snapshot)["files"]
+    if not all(_contained(root, rel) for rel in files):  # checked above; a second guard on the side that writes
+        raise ValueError(f"{snapshot.name} names files outside the lake")
     aside = None
     if root.exists():
         aside = root.with_name(f"{root.name}.before-restore-{stamp()}")
         root.rename(aside)
-    files = _manifest(snapshot)["files"]
     for rel in files:
         dest = root / rel
         dest.parent.mkdir(parents=True, exist_ok=True)

@@ -20,7 +20,6 @@ from __future__ import annotations
 import datetime as dt
 import json
 import secrets
-import tempfile
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -34,7 +33,50 @@ MARKER = "optlab-demo"  # written first: a folder that has it may be rebuilt
 
 
 def default_folder() -> Path:
-    return Path(tempfile.gettempdir()) / "optlab-demo"
+    """In the user's own profile, not a shared temporary folder (where another account could plant one first)."""
+    return Path.home() / ".cache" / "optlab" / "demo"
+
+
+def paths(folder: Path) -> dict[str, Path]:
+    """Every path of the demo's settings, inside its folder: nothing of the real data is read or written."""
+    folder = Path(folder)
+    return {
+        "data": folder,
+        "store": folder / "store",
+        "database": folder / "store" / "optlab.sqlite",
+        "lake": folder / "lake",
+        "results": folder / "archive",
+        "calibration": folder / "archive" / "simulated_calibration.json",
+        "reports": folder / "reports",
+        "raw": folder / "raw",
+        "logs": folder / "logs",
+        "backups": folder / "backups",
+    }
+
+
+def check_paths(folder: Path, settings) -> None:
+    """Refuse settings whose database or lake is not the demo's (an OPTLAB_DATABASE or OPTLAB_LAKE of the
+    environment, which names the real ones)."""
+    root = Path(folder).resolve()
+    for name in ("database", "lake", "backups"):
+        if not Path(getattr(settings, name)).resolve().is_relative_to(root):
+            raise RuntimeError(
+                f"demo data: the settings' {name} ({getattr(settings, name)}) is outside {root}: unset "
+                f"OPTLAB_{name.upper()} first"
+            )
+
+
+def trust(folder: Path) -> None:
+    """On a shared Unix machine, a folder is used only if it is this user's and nobody else may write it."""
+    import os
+    import stat
+
+    folder = Path(folder)
+    if os.name != "posix" or not folder.exists():
+        return
+    st = folder.stat()
+    if st.st_uid != os.getuid() or st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):  # pyright: ignore[reportAttributeAccessIssue]
+        raise PermissionError(f"{folder} belongs to another user or others may write it: give another folder")
 
 
 def deals():
@@ -78,6 +120,7 @@ def build(
     from optlab.server.settings import Settings
 
     folder = Path(folder or default_folder()).resolve()
+    trust(folder)
     done = info(folder)
     if done and not rebuild:
         return done
@@ -111,7 +154,9 @@ def build(
     cal["meta"].update(snapshot=f"{END}T16:00:00", note="demo data: a simulated Heston market plus noise")
     calib.write_text(json.dumps(cal, indent=1), encoding="utf-8")
     log(f"simulated calibration: {time.perf_counter() - t1:.0f} s")
-    settings = Settings.load(data=folder, results=folder / "archive", calibration=calib, lake=folder / "lake")
+    # built here, not by Settings.load: an OPTLAB_DATA of the environment would bring the real folder's optlab.env
+    settings = Settings(_env_file=None, **{**paths(folder), "calibration": calib})  # pyright: ignore[reportCallIssue]
+    check_paths(folder, settings)
 
     from optlab.marketdata.lake import Lake
     from optlab.server.api import Desk
