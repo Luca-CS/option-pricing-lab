@@ -90,8 +90,8 @@ class Settings(BaseSettings):
     lan: bool = Field(False, description="the LAN profile (ADR-0002): off unless Luca turns it on")
     lan_names: str = Field(
         "",
-        description="with lan: the names the desk answers to, comma-separated (the proxy's LAN name, e.g. "
-        "optlab.home.arpa); any other Host is refused",
+        description="with lan: the names the desk answers to, separated by a comma and a space as Caddy wants them "
+        "(\"optlab.home.arpa, 192.168.1.198\"); any other Host is refused",
     )
     container: bool = Field(
         False,
