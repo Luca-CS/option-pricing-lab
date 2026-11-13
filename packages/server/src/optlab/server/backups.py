@@ -38,6 +38,16 @@ def stamp(now: dt.datetime | None = None) -> str:
     return f"{now:%Y%m%d-%H%M%S}-{now.microsecond // 1000:03d}"
 
 
+def fresh(folder: Path, name: str, taken) -> str:
+    """`name`, or `name-1`, `name-2`... when `taken(candidate)` says it is used: two copies in one millisecond (a fast
+    Linux machine makes them) get two names, which still sort in the order they were made."""
+    candidate, k = name, 0
+    while taken(candidate):
+        k += 1
+        candidate = f"{name}-{k}"
+    return candidate
+
+
 def sha256(path: Path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as fh:
@@ -49,7 +59,9 @@ def sha256(path: Path) -> str:
 # --- the database ----------------------------------------------------------------------------------------------------
 def database_copy(db, folder: Path, prefix: str = "optlab") -> Path:
     """A consistent copy of `db` (a `Database`) in `folder`."""
-    return db.backup(Path(folder) / f"{prefix}-{stamp()}.sqlite")
+    folder = Path(folder)
+    name = fresh(folder, f"{prefix}-{stamp()}", lambda n: (folder / f"{n}.sqlite").exists())
+    return db.backup(folder / f"{name}.sqlite")
 
 
 def prune_files(folder: Path, pattern: str, keep_days: int, keep: Path | None = None) -> list[str]:
@@ -178,7 +190,7 @@ def lake_snapshot(lake_root: Path, folder: Path, keep: int = 4, log: Callable[[s
     copies = lake_snapshots(folder)
     previous = copies[-1] if copies else None
     before = _manifest(previous)["files"] if previous else {}
-    name = stamp()
+    name = fresh(folder, stamp(), lambda n: (folder / n).exists() or (folder / f".{n}.partial").exists())
     work = folder / f".{name}.partial"
     files: dict[str, dict] = {}
     linked = copied = copied_bytes = 0

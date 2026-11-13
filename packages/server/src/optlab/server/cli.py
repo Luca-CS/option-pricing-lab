@@ -358,11 +358,12 @@ def backup(
 
 
 def _latest_copy(root: Path) -> Path:
-    """The newest copy of the database, nightly or manual (their names sort as their times)."""
+    """The newest copy of the database, nightly or manual (their stems sort as their times: `...-902-1` after `...-902`,
+    which their full names would not do, `-` sorting before `.`)."""
     found = [*(root / "nightly").glob("optlab-*.sqlite"), *(root / "manual").glob("optlab-*.sqlite")]
     if not found:
         raise FileNotFoundError(f"no copy of the database in {root / 'nightly'} or {root / 'manual'}")
-    return max(found, key=lambda p: p.name)
+    return max(found, key=lambda p: p.stem)
 
 
 @app.command()
