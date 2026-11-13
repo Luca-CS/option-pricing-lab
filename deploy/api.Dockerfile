@@ -8,7 +8,7 @@
 # read-only root file system (compose.yaml), with its data on volumes under /data.
 FROM ghcr.io/astral-sh/uv:0.13.1@sha256:4a1f3666816dafadd20ceb71eac9a7d56d7ef30279f7d64048519ab901ada336 AS uv
 
-FROM python:3.14.7-slim-trixie@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d AS build
+FROM python:3.15.0-slim-trixie@sha256:f5b92f2a669a4c347044f29367f31983280b648250ca94dea66f98c53bc87e58 AS build
 RUN apt-get update \
  && apt-get install -y --no-install-recommends g++ make cmake \
  && rm -rf /var/lib/apt/lists/*
@@ -21,7 +21,7 @@ COPY packages packages
 # the lock with its hashes, the runtime only (no dev tools), installed as wheels: the image holds no source tree
 RUN uv sync --locked --no-dev --no-editable --extra yahoo --python /usr/local/bin/python3.14
 
-FROM python:3.14.7-slim-trixie@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d
+FROM python:3.15.0-slim-trixie@sha256:f5b92f2a669a4c347044f29367f31983280b648250ca94dea66f98c53bc87e58
 # the distribution's security updates since the base image was built; no pip (the venv is uv's, and pip carries its
 # own copies of certifi, urllib3 and others, which Trivy rightly counts)
 RUN apt-get update \
