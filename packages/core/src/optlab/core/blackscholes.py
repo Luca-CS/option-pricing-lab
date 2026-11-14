@@ -64,7 +64,7 @@ def black_vega(F, K, T, vol, D: ArrayLike = 1.0):
     return D * F * _npdf(d1) * np.sqrt(T)
 
 
-def implied_vol(price, F, K, T, D=1.0, cp="call", lo=1e-4, hi=5.0, tol=1e-10):
+def implied_vol(price, F, K, T, D: ArrayLike = 1.0, cp: str | ArrayLike = "call", lo=1e-4, hi=5.0, tol=1e-10):
     """Black implied volatility, vectorised bisection followed by Newton polishing.
 
     Returns NaN where the price is outside the no-arbitrage bounds.

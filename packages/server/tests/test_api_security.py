@@ -5,13 +5,14 @@ errors that never show a stack trace. No market data needed: the routes used her
 import datetime as dt
 import secrets
 from html.parser import HTMLParser
+from typing import Any
 
 import pytest
 from _api import api
 
 from optlab.server import security
 
-FIXING = {"underlying": "SPX", "text": "2025-01-06 100"}
+FIXING: dict[str, Any] = {"underlying": "SPX", "text": "2025-01-06 100"}
 PASSWORD = secrets.token_urlsafe(18)  # generated for the run, never written anywhere
 
 

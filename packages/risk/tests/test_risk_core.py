@@ -167,21 +167,8 @@ def test_forward_and_spot_moves_on_the_paths_equal_a_new_simulation_on_the_moved
     g = revalue([RiskGroup("SPX", b, SPX, 5)], {"s": shock}, settings=settings).groups[0]
     assert g.simulations == 1  # spot and forwards ride on the base simulation
     moved = apply(SPX, shock)
-    ref = (
-        b.price(
-            SPX,
-            model="lv",
-            market=moved.market,
-            n_paths=20_000,
-            batch=10_000,
-            seed=5,
-            initial_fixing=SPX.market.spot,
-            engine="numpy",
-        )
-        if "engine" in Book.price.__code__.co_varnames
-        else b.price(
-            SPX, model="lv", market=moved.market, n_paths=20_000, batch=10_000, seed=5, initial_fixing=SPX.market.spot
-        )
+    ref = b.price(
+        SPX, model="lv", market=moved.market, n_paths=20_000, batch=10_000, seed=5, initial_fixing=SPX.market.spot
     )
     np.testing.assert_allclose(g.values["s"][0], ref.positions[0].value, rtol=1e-10)
     base = b.price(SPX, model="lv", n_paths=20_000, batch=10_000, seed=5)

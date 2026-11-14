@@ -6,6 +6,7 @@ import json
 import numpy as np
 import pytest
 from _paths import SPX_CALIBRATION
+from _quotes import some
 from _risk_refs import (
     FLAT,
     S0,
@@ -246,7 +247,7 @@ def test_aggregate_views(vanillas):
     from optlab.risk import aggregate
 
     assert aggregate.names(vanillas) == ["SPX"]
-    vals, ses = aggregate.vega_matrix(vanillas, "SPX")
+    vals, ses = some(aggregate.vega_matrix(vanillas, "SPX"))
     assert vals.shape == (10, 8) and np.all(ses == 0)
     s = aggregate.vega_summary(vanillas, "SPX")
     np.testing.assert_allclose(s["net"][0], np.nansum(vals), rtol=1e-9)

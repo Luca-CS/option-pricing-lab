@@ -5,6 +5,7 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 import pytest
+from _quotes import some
 
 from optlab.core.snapshot import MarketSnapshot, to_model_scale
 from optlab.marketdata.lake import Lake
@@ -62,7 +63,7 @@ def test_rederiving_after_erasing_the_future_gives_the_same_market(world, tmp_pa
 def test_changing_a_future_price_changes_nothing_but_a_past_one_does(world, tmp_path):
     root, lake, days, paths = world
     twisted = {n: p.copy() for n, p in paths.items()}
-    i = np.searchsorted(days, pd.Timestamp(DAY))
+    i = days.searchsorted(pd.Timestamp(DAY))
     twisted["SPX"][i + 1 :] *= 3.0
     fresh = Lake(tmp_path / "twist")
     fill_observed(fresh, days, twisted)
@@ -70,7 +71,9 @@ def test_changing_a_future_price_changes_nothing_but_a_past_one_does(world, tmp_
     assert market_at(fresh, "SPX", DAY).snapshot_id == market_at(lake, "SPX", DAY).snapshot_id
     assert market_at(fresh, "SPX", DAY).spot_scale == market_at(lake, "SPX", DAY).spot_scale
     later = days[i + 2].date()
-    assert market_at(fresh, "SPX", later).spot_scale == pytest.approx(3 * market_at(lake, "SPX", later).spot_scale)
+    assert market_at(fresh, "SPX", later).spot_scale == pytest.approx(
+        3 * some(market_at(lake, "SPX", later).spot_scale)
+    )
 
 
 def test_as_of_reads_what_the_lake_knew(tmp_path):
@@ -92,7 +95,7 @@ def test_snapshot_is_in_the_model_scale_and_says_where_each_part_comes_from(worl
     root, lake, days, paths = world
     snap = market_at(lake, "SPX", DAY)
     assert snap.market["spot"] == 100.0
-    i = np.searchsorted(days, pd.Timestamp(DAY))
+    i = days.searchsorted(pd.Timestamp(DAY))
     assert snap.spot_scale == pytest.approx(paths["SPX"][i] / 100.0)
     p = snap.provenance
     assert p["spot"]["origin"] == "observed" and p["discount"]["origin"] == "derived"
@@ -124,7 +127,7 @@ def test_real_fixings_go_to_the_model_scale(world):
     snap = market_at(lake, "SPX", DAY)
     real = real_fixings(lake, "SPX", days[0], DAY)
     assert max(real) == str(DAY)
-    model = to_model_scale({"SPX": real}, snap.spot_scale)["SPX"]
+    model = to_model_scale({"SPX": real}, some(snap.spot_scale))["SPX"]
     assert model[str(DAY)] == pytest.approx(100.0)
 
 
@@ -132,7 +135,7 @@ def test_a_seasoned_product_prices_on_a_past_market_with_real_fixings(world):
     root, lake, days, paths = world
     strike = dt.date(2020, 1, 15)
     ctx, snap = context_at(lake, "SPX", DAY)
-    fixings = to_model_scale({"SPX": real_fixings(lake, "SPX", strike, DAY)}, snap.spot_scale)
+    fixings = to_model_scale({"SPX": real_fixings(lake, "SPX", strike, DAY)}, some(snap.spot_scale))
     sheet = preset(
         "phoenix",
         **{"general.strike_date": strike, "wrapper.solve": "upfront", "coupon.rate": 0.08, "autocall.trigger": 2.0},
@@ -158,7 +161,7 @@ def test_basket_context_at_a_date(world):
         n_paths=4000,
         batch=4000,
     )
-    assert q.coupon_rate > 0
+    assert some(q.coupon_rate) > 0
 
 
 def test_no_market_without_data_at_the_date(world):
@@ -182,7 +185,7 @@ def test_a_calibrated_leverage_comes_with_the_snapshot_and_reprices(world):
         n_paths=4000,
         batch=4000,
     )
-    assert q.coupon_rate > 0
+    assert some(q.coupon_rate) > 0
 
 
 def test_a_replay_can_stay_on_one_surface_layer(world):

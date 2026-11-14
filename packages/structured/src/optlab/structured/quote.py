@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -15,6 +15,9 @@ from optlab.structured.compiler import CompiledProduct, compile_sheet
 from optlab.structured.context import PricingContext
 from optlab.structured.costs import DeskPrice, desk_price
 from optlab.structured.multiasset import BasketContext
+
+if TYPE_CHECKING:
+    from optlab.structured.greeks import Greeks
 from optlab.structured.policy import PricingDecision, decide
 from optlab.structured.pricer import StructuredResult, check_fixing_scale, history_times, price_many
 from optlab.structured.profile import ProductProfile, profile
@@ -42,7 +45,7 @@ class Quote:
     control: StructuredResult | None = None
     seconds: float = 0.0
     warnings: list = field(default_factory=list)
-    greeks: object | None = None  # greeks.Greeks at the solved coupon, with the policy model
+    greeks: Greeks | None = None  # at the solved coupon, with the policy model
     snapshot_id: str | None = None  # the market the quote was priced on
     mix_band: dict | None = None  # {mix: {"value", "se", "atm_error_bp"}}: coupon p.a. or upfront per SLV mix
     desk: DeskPrice | None = None  # base, lines and client price, when costs were asked
@@ -293,7 +296,7 @@ def quote(
     model: str | None = None,
     control: str | None = "default",
     n_paths: int = 200_000,
-    batch: int = 25_000,
+    batch: int | None = 25_000,
     seed: int = DEFAULT_SEED,
     control_paths: int | None = None,
     fixings: dict | None = None,

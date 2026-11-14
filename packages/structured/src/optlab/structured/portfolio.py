@@ -350,7 +350,7 @@ class Book:
 
     def greeks(
         self,
-        ctx: PricingContext | None = None,
+        ctx: PricingContext | BasketContext | None = None,
         model: str | None = None,
         n_paths: int = 200_000,
         seed: int = DEFAULT_SEED,

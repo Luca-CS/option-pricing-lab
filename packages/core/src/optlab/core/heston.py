@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 
 import numpy as np
+from numpy.typing import ArrayLike
 from scipy.optimize import least_squares
 
 from optlab.core.blackscholes import black_price, black_vega, implied_vol
@@ -66,7 +67,7 @@ def _lewis_integral(F, K, T, p: HestonParams):
     return integrand @ w
 
 
-def heston_price(F, K, T, p: HestonParams, D=1.0, cp="call"):
+def heston_price(F, K, T, p: HestonParams, D: ArrayLike = 1.0, cp="call"):
     """Vanilla price by the Lewis (2001) formula: C = D [F - sqrt(F K) / pi * integral]."""
     K = np.atleast_1d(np.asarray(K, dtype=float))
     call = D * (F - np.sqrt(F * K) / np.pi * _lewis_integral(F, K, T, p))
@@ -75,7 +76,7 @@ def heston_price(F, K, T, p: HestonParams, D=1.0, cp="call"):
     return call - D * (F - K)
 
 
-def heston_iv(F, K, T, p: HestonParams, D=1.0):
+def heston_iv(F, K, T, p: HestonParams, D: ArrayLike = 1.0):
     """Black implied volatility of Heston prices (out-of-the-money side for accuracy)."""
     K = np.atleast_1d(np.asarray(K, dtype=float))
     call = heston_price(F, K, T, p, D, "call")

@@ -19,12 +19,16 @@ from __future__ import annotations
 import os
 from collections import OrderedDict
 from dataclasses import asdict, dataclass
+from typing import TYPE_CHECKING, Any, overload
 
 import numpy as np
 
 from optlab.core.engines import EngineError, default_engine, seed64
 from optlab.core.models import BlackScholesModel, HestonModel, Leverage, LocalVolModel, Model, SLVModel, time_grid
 from optlab.native import gpu as _gpu
+
+if TYPE_CHECKING:
+    from optlab.structured.multiasset import Basket
 
 __all__ = [
     "MAX_NAMES",
@@ -369,6 +373,36 @@ def run(
     return spots, extremes, {"kernel_ms": kernel_ms, "total_ms": total_ms, "backend": backend}
 
 
+@overload
+def simulate(
+    model: Basket,
+    market,
+    times,
+    n_paths: int,
+    seed=...,
+    dt_max=...,
+    dt_min=...,
+    backend: str = ...,
+    first_pair: int = ...,
+    threads: int = ...,
+) -> dict[str, np.ndarray]: ...
+
+
+@overload
+def simulate(
+    model: Model,
+    market,
+    times,
+    n_paths: int,
+    seed=...,
+    dt_max=...,
+    dt_min=...,
+    backend: str = ...,
+    first_pair: int = ...,
+    threads: int = ...,
+) -> np.ndarray: ...
+
+
 def simulate(
     model,
     market,
@@ -461,7 +495,7 @@ def calibrate_leverage(
     return SLVModel(params, Leverage(t0, xg, vals), mix)
 
 
-def summary() -> dict:
+def summary() -> dict[str, Any]:
     """What this machine offers the engine: the library, its CUDA build, the devices and the CPU threads."""
     lib = _lib()
     return {

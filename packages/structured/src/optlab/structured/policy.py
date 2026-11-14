@@ -70,7 +70,7 @@ class PricingDecision:
     control: str | None
     reason: str
     n_paths: int
-    batch: int
+    batch: int | None  # None: one batch
     seed: int
     forced: bool = False
     warnings: list = field(default_factory=list)
@@ -94,7 +94,7 @@ def decide(
     model: str | None = None,
     control: str | None = "default",
     n_paths: int = 200_000,
-    batch: int = 25_000,
+    batch: int | None = 25_000,
     seed: int = DEFAULT_SEED,
     rules: dict | None = None,
     has_surfaces: bool = True,

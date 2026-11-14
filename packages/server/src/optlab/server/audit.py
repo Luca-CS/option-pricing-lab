@@ -7,6 +7,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+from typing import Any
 
 from sqlalchemy import insert, select
 
@@ -14,7 +15,7 @@ from optlab.server.persistence import Database
 from optlab.server.persistence.schema import audit_log
 
 
-def digest(value) -> str | None:
+def digest(value: object) -> str | None:
     """sha256 of the canonical JSON of a value, None for None: a change shows without storing the data itself."""
     if value is None:
         return None
@@ -30,9 +31,9 @@ class Audit:
         user_id: str | None,
         action: str,
         target: str | None = None,
-        before=None,
-        after=None,
-        detail: dict | None = None,
+        before: object = None,
+        after: object = None,
+        detail: dict[str, Any] | None = None,
     ) -> None:
         with self.db.write() as c:
             c.execute(
@@ -47,13 +48,13 @@ class Audit:
                 )
             )
 
-    def entries(self, limit: int = 100, before_id: int | None = None) -> list[dict]:
+    def entries(self, limit: int = 100, before_id: int | None = None) -> list[dict[str, Any]]:
         """The latest entries first; `before_id` is the cursor of the next page."""
         q = select(audit_log).order_by(audit_log.c.audit_id.desc()).limit(limit)
         if before_id is not None:
             q = q.where(audit_log.c.audit_id < before_id)
         with self.db.read() as c:
-            rows = [dict(r._mapping) for r in c.execute(q)]
+            rows = [dict(r._mapping) for r in c.execute(q)]  # pyright: ignore[reportPrivateUsage] (SQLAlchemy's documented row mapping)
         for r in rows:
             r["detail"] = json.loads(r["detail"]) if r["detail"] else None
         return rows

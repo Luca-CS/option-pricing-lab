@@ -21,6 +21,7 @@ from __future__ import annotations
 import dataclasses
 import json
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 
@@ -32,7 +33,7 @@ from optlab.structured.multiasset import BasketContext
 RULES = ("sticky_moneyness", "sticky_strike", "realistic")
 
 
-def _get(d: dict, key, default=None, combine=None):
+def _get(d: dict, key, default: Any = None, combine=None) -> Any:
     """The move of `key`: its own entry combined with the "*" entry (both apply), the default when neither is there."""
     star, own = d.get("*"), d.get(key)
     if star is None:

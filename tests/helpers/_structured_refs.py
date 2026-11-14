@@ -23,7 +23,7 @@ def flat_context(valuation="2026-10-27", vol=VOL) -> PricingContext:
 
     spx = PricingContext.from_calibration(SPX_CALIBRATION)
     ctx = PricingContext(FLAT, flat_surface(vol), spx.heston, spx.slv, dt.date.fromisoformat(valuation))
-    ctx.model = lambda name, T=1.0: BlackScholesModel(vol) if name in ("bs", "lv") else spx.model(name, T)
+    ctx.model = lambda name, T=1.0: BlackScholesModel(vol) if name in ("bs", "lv") else spx.model(name, T)  # pyright: ignore[reportAttributeAccessIssue] (BS for bs and lv)
     return ctx
 
 
@@ -228,6 +228,7 @@ def autocall_reference(sheet, market=FLAT, vol=VOL, valuation="2026-10-27", dx=0
         W = _values_at(role, W, D, S, n_m, T)
         if k > 0:
             W = lattice.propagate(W, dates[k - 1], dates[k])
+    assert W is not None  # every date has been valued
     return float(lattice.propagate(W, val, dates[0], from_x=0.0)[0, 0])
 
 
@@ -274,7 +275,7 @@ def worst_digital(b, T, vols, rho, r, qs):
     from scipy.stats import multivariate_normal
 
     d = [(m - np.log(b)) / s for m, s in (_log_params(T, v, r, q) for v, q in zip(vols, qs))]
-    return float(multivariate_normal(mean=[0, 0], cov=[[1, rho], [rho, 1]]).cdf(d))
+    return float(multivariate_normal(mean=[0, 0], cov=[[1, rho], [rho, 1]]).cdf(d))  # pyright: ignore[reportArgumentType] (scipy types cov from its default)
 
 
 def worst_put(K, T, vols, rho, r, qs):

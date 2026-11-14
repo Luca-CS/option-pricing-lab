@@ -250,7 +250,7 @@ def history_times(fixings: dict | None, name: str, clock: Clock) -> dict:
 
 def price(
     script,
-    model: Model,
+    model: Model | Basket,
     market: Market,
     fmt=None,
     n_paths: int = 100_000,

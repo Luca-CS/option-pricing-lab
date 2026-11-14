@@ -266,7 +266,8 @@ def test_rows_on_a_smile_have_one_correlation_per_strike_and_cvc_equal_to_pvp():
     assert sorted(rows[rows["kind"] == "pvp"]["strike"]) == [0.9, 1.0]
     atm = rows[rows["strike"] == 1.0].set_index("kind")
     assert atm.loc["cvc", "price"] == pytest.approx(atm.loc["pvp", "price"], abs=1e-12)
-    assert atm.loc["cvc", "rho"] == atm.loc["pvp", "rho"] == pytest.approx(0.7)
+    rho = atm["rho"]  # one float column
+    assert rho["cvc"] == rho["pvp"] == pytest.approx(0.7)
     assert rows.set_index("strike")["rho"].loc[0.9] == pytest.approx(0.75)
     assert rows[rows["kind"] == "cvc"].set_index("strike")["rho"].loc[1.1] == pytest.approx(0.675)
     assert (rows["price"] < 0).all() and (rows["price_se"] < 0.05).all()

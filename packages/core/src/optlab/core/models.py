@@ -166,6 +166,21 @@ def simulate(
 ) -> tuple[np.ndarray, np.ndarray]: ...
 
 
+@overload
+def simulate(
+    model: Model,
+    market: Market,
+    times,
+    n_paths: int,
+    rng=...,
+    dt_max=...,
+    antithetic=...,
+    return_variance: bool = ...,
+    dt_min=...,
+    tile: int | None = ...,
+) -> np.ndarray | tuple[np.ndarray, np.ndarray]: ...
+
+
 def simulate(
     model: Model,
     market: Market,

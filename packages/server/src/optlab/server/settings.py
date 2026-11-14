@@ -15,7 +15,7 @@ from __future__ import annotations
 import ipaddress
 import os
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -164,7 +164,7 @@ class Settings(BaseSettings):
         return {n.strip().lower() for n in self.lan_names.split(",") if n.strip()}
 
     @classmethod
-    def load(cls, **overrides) -> Settings:
+    def load(cls, **overrides: Any) -> Settings:
         """The environment, then `<data>/config/optlab.env` when it exists, then `overrides` (command-line options
         not left at their default). The env file is read only from the data folder the environment names."""
         data = Path(os.environ.get(f"{ENV_PREFIX}DATA") or overrides.get("data") or default_data())
@@ -172,7 +172,7 @@ class Settings(BaseSettings):
         given = {k: v for k, v in overrides.items() if v is not None}
         return cls(_env_file=file if file.is_file() else None, **given)  # pyright: ignore[reportCallIssue] (a pydantic-settings init option)
 
-    def describe(self) -> dict:
+    def describe(self) -> dict[str, Any]:
         """Where everything is, for a start-up line or a health check (no secret in here)."""
         return {k: str(v) if isinstance(v, Path) else v for k, v in self.model_dump().items()}
 
