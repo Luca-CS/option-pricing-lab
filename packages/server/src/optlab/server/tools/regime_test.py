@@ -10,6 +10,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import time
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -43,7 +44,9 @@ def sample(lake: Lake, panel: pd.DataFrame, step: int) -> list:
         if day in panel.index:
             days.append(("SPY", "dolthub", day))
     spy = [
-        d for i, d in enumerate(days) if CRASH[0] <= d[2] <= CRASH[1] or panel.loc[d[2], "VIX"] > 27 or i % step == 0
+        d
+        for i, d in enumerate(days)
+        if CRASH[0] <= d[2] <= CRASH[1] or bool(panel.loc[d[2], "VIX"] > 27) or i % step == 0
     ]
     spx = [
         ("SPX", "historicaldata", d)
@@ -53,7 +56,7 @@ def sample(lake: Lake, panel: pd.DataFrame, step: int) -> list:
     out = []
     for name, source, day in spy + spx:
         try:
-            kw = {"spot": 0.1 * real_close(lake, "SPX", day.date())[0]} if name == "SPY" else {}
+            kw: dict[str, Any] = {"spot": 0.1 * real_close(lake, "SPX", day.date())[0]} if name == "SPY" else {}
             chain = clean_day(lake, name, day.date(), source, **kw)
         except KeyError, ValueError:
             continue

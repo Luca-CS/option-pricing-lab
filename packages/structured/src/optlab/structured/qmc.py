@@ -64,7 +64,7 @@ class SobolNormals(np.random.Generator):
     def __init__(self, n_half: int, grid: np.ndarray, n_factors: int, seed):
         super().__init__(np.random.PCG64(seed))
         steps = len(grid) - 1
-        sobol = qmc.Sobol(steps * n_factors, scramble=True, seed=np.random.default_rng(seed))
+        sobol = qmc.Sobol(steps * n_factors, scramble=True, rng=np.random.default_rng(seed))
         m = int(np.log2(n_half))
         if 2**m != n_half:
             raise ValueError("RQMC needs a power of two of path pairs")
@@ -74,7 +74,7 @@ class SobolNormals(np.random.Generator):
         self._z = [bridge_normals(z[:, f::n_factors], grid) for f in range(n_factors)]
         self._n_factors, self._step, self._factor, self._n_steps = n_factors, 0, 0, steps
 
-    def standard_normal(self, size=None, dtype=np.float64, out=None):
+    def standard_normal(self, size=None, dtype=np.float64, out=None):  # pyright: ignore[reportIncompatibleMethodOverride] (answers the calls simulate makes)
         if self._step >= self._n_steps:
             raise RuntimeError("the simulation asked for more steps than the Sobol grid has")
         z = self._z[self._factor][:, self._step]

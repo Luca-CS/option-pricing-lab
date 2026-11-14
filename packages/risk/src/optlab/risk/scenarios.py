@@ -119,11 +119,11 @@ def _arbitrage_flags(ctx, shock: Shock, env: RiskEnv, horizon: float = 3.0) -> d
     except KeyError as exc:
         return {"error": str(exc)}
     out = {}
-    pairs = (
-        [(n, ctx.vols[n], moved.vols[n]) for n in ctx.names]
-        if isinstance(ctx, BasketContext)
-        else [(ctx.underlying, ctx.surface, moved.surface)]
-    )
+    if isinstance(ctx, BasketContext):
+        pairs = [(n, ctx.vols[n], moved.vols[n]) for n in ctx.names]
+    else:
+        assert not isinstance(moved, BasketContext)  # noqa: S101 (narrows the type for pyright: apply keeps the kind of context)
+        pairs = [(ctx.underlying, ctx.surface, moved.surface)]
     for n, before, after in pairs:
         if after is before or np.isscalar(after):
             continue

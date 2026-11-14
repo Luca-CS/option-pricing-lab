@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 from _desk import sheet_body, wait
 from _paths import SPX_CALIBRATION
+from _quotes import desk_of
 from scipy.stats import multivariate_normal, norm
 
 from optlab.core.instruments import UNIVERSE, instrument
@@ -135,7 +136,7 @@ def two_names(rho=0.5, vol=0.2):
 
 def bivariate_digital(F, K, vol, T, rho, D):
     d = (np.log(F / K) - 0.5 * vol**2 * T) / (vol * np.sqrt(T))
-    return D * float(multivariate_normal.cdf([d, d], cov=[[1, rho], [rho, 1]]))
+    return D * float(multivariate_normal.cdf([d, d], cov=[[1, rho], [rho, 1]]))  # pyright: ignore[reportArgumentType] (scipy types cov from its default)
 
 
 def test_moved_correlation_is_repaired_and_keeps_the_diagonal():
@@ -159,7 +160,7 @@ def test_the_correlation_line_of_a_worst_of_digital_is_the_bivariate_normal():
     )
     q = quote(s, ctx, control=None, n_paths=200_000, batch=25_000, costs=CostInputs({"corr": 0.1}))
     # the redemption pays N - N max(1 - worst, 0): its correlation effect is checked with the same simulation against the digital below
-    line = q.desk.line("corr")
+    line = desk_of(q).line("corr")
     assert line.cost > 0 and line.se < q.result.stderr / 2  # more correlation, a better worst-of
     T = 1.0
     D, F = float(ctx.market.D(T)), float(ctx.market.F(T))
@@ -200,7 +201,7 @@ def test_vol_and_forward_bumps_reach_every_name_of_a_basket():
         batch=10_000,
         costs=CostInputs({"vol": -0.005, "dividend": -0.1, "repo": -0.001, "spot": 0.0005, "corr": 0.01}),
     )
-    d = q.desk
+    d = desk_of(q)
     assert d.final_price == pytest.approx(98.0, abs=1e-9)
     assert {x.key for x in d.lines} == {"vol", "corr", "dividend", "repo", "spot", "interaction"}
     assert d.line("dividend").cost > 0 and d.line("repo").cost > 0 and d.line("spot").cost > 0
@@ -226,9 +227,9 @@ def test_opposite_signs_are_measured_and_the_one_against_the_desk_stays():
         costs=CostInputs({"vol": 0.01}, "sell", {"vol": 0.01}, {"vol": (-0.01, 0.01)}),
     )
     assert (
-        pick.desk.line("vol").used == -0.01 and pick.desk.line("vol").cost > 0
+        desk_of(pick).line("vol").used == -0.01 and desk_of(pick).line("vol").cost > 0
     )  # a lower vol raises the note: against the seller
-    assert "disagree" in pick.desk.line("vol").note
+    assert "disagree" in desk_of(pick).line("vol").note
     bought = quote(
         s,
         ctx,
@@ -237,7 +238,7 @@ def test_opposite_signs_are_measured_and_the_one_against_the_desk_stays():
         batch=10_000,
         costs=CostInputs({"vol": 0.01}, "buy", {"vol": 0.01}, {"vol": (-0.01, 0.01)}),
     )
-    assert bought.desk.line("vol").used == 0.01 and bought.desk.line("vol").cost > 0
+    assert desk_of(bought).line("vol").used == 0.01 and desk_of(bought).line("vol").cost > 0
 
 
 # --- the desk ---

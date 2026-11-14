@@ -13,6 +13,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from optlab.marketdata.days import as_day
 from optlab.marketdata.lake import Lake, new_run_id
 
 USD_CURVE, EUR_CURVE, JPY_CURVE, GBP_CURVE = "USD.DISC", "EUR.DISC", "JPY.DISC", "GBP.DISC"
@@ -54,7 +55,7 @@ def par_curve_rows(par: pd.DataFrame, overnight: pd.DataFrame, curve: str) -> pd
     for day, g in par.groupby("obs_date"):
         t, z = bootstrap_par(g["tenor"], g["rate"] / 100)
         t, z = list(t), list(z)
-        d = pd.Timestamp(day).date()
+        d = as_day(day)
         if d in on:
             t.insert(0, OVERNIGHT)
             z.insert(0, np.log(1 + on[d] * OVERNIGHT) / OVERNIGHT)
@@ -68,7 +69,7 @@ def zero_curve_rows(zeros: pd.DataFrame, overnight: pd.DataFrame, curve: str) ->
     on = {pd.Timestamp(d).date(): r / 100 for d, r in zip(overnight["obs_date"], overnight["rate"])}
     rows = []
     for day, g in zeros.groupby("obs_date"):
-        d = pd.Timestamp(day).date()
+        d = as_day(day)
         g = g.sort_values("tenor")
         t, z = list(g["tenor"]), list(g["rate"] / 100)
         if d in on:
@@ -98,7 +99,9 @@ def build_discount_curves(lake: Lake, start: str = "2015-01-01") -> list[dict]:
         (zero_curve_rows(_rates(lake, "GBP.GLC"), _best_overnight(lake, "GBP.SONIA"), GBP_CURVE), "boe_glc+sonia"),
     )
     return [
-        lake.ingest("discount_curves", rows[pd.to_datetime(rows["obs_date"]) >= start], source, "derived", run)
+        lake.ingest(
+            "discount_curves", rows[pd.to_datetime(rows["obs_date"]) >= pd.Timestamp(start)], source, "derived", run
+        )
         for rows, source in built
         if len(rows)
     ]

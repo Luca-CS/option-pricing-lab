@@ -127,7 +127,7 @@ def find_digitals(product, params: dict | None = None) -> list[Digital]:
                 if isinstance(s, If):
                     got = _classify(s.cond, s.body, values, product.sheet)
                     if got is not None and got[1]:
-                        out.append(Digital(got[0], s.cond.line, str(date), float(got[1]), float(got[2])))  # noqa: B023 (called within this iteration only)
+                        out.append(Digital(got[0], s.cond.line, str(date), float(got[1]), float(got[2])))  # noqa: B023 (called within this iteration only)  # pyright: ignore[reportAttributeAccessIssue] (_classify answers for comparisons, which carry their line)
                     visit(s.body)
                     visit(s.orelse)
                 elif isinstance(s, Assign) and s.name == "knocked_in" and isinstance(s.expr, Binary):

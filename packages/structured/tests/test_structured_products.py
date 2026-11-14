@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 from _paths import SPX_CALIBRATION
+from _quotes import some
 from _structured_refs import S0, VOL, flat_context, rc_european
 
 from optlab.core.blackscholes import black_price
@@ -73,7 +74,7 @@ def test_european_policy_on_spx_agrees_with_local_vol_monte_carlo():
     q = quote(preset("reverse_convertible", **{"downside.barrier": 0.7}), SPX, n_paths=N_MC)
     assert q.decision.method == "replication"
     assert q.result.price == pytest.approx(q.target, abs=1e-10)
-    assert abs(q.control_gap_se) < 4
+    assert abs(some(q.control_gap_se)) < 4
 
 
 # --- test 9: coupon solver ---
@@ -83,7 +84,7 @@ def test_solved_coupon_reprices_to_the_target_on_the_same_paths():
     sheet = preset("reverse_convertible", **{"downside.barrier": 0.7, "downside.observation": "daily"})
     q = quote(sheet, BS_CTX, model="bs", control=None, n_paths=40_000, batch=10_000)
     assert q.result.price == pytest.approx(98.0, abs=1e-10)
-    cpn = q.coupon_rate * q.product.coupon_scale
+    cpn = some(q.coupon_rate) * q.product.coupon_scale
     again = price(
         q.product.program,
         BS_CTX.model("bs"),
@@ -95,7 +96,7 @@ def test_solved_coupon_reprices_to_the_target_on_the_same_paths():
         valuation=q.product.valuation,
     )
     assert again.price == pytest.approx(98.0, abs=1e-8)
-    assert 0 < q.coupon_rate_se < 0.01
+    assert 0 < some(q.coupon_rate_se) < 0.01
 
 
 def test_solved_coupon_matches_the_closed_form_inversion():
@@ -116,7 +117,7 @@ def test_swap_coupon_mode_targets_minus_the_margin_and_upfront_mode_adds_it():
     _, pays = times(q.product)
     annuity = 100 * q.product.coupon_scale * sum(float(BS_CTX.market.D(t)) for t in pays)
     interest = 100 * (1 - float(BS_CTX.market.D(pays[-1])))
-    assert note.coupon_rate - q.coupon_rate == pytest.approx(interest / annuity, rel=1e-9)
+    assert some(note.coupon_rate) - some(q.coupon_rate) == pytest.approx(interest / annuity, rel=1e-9)
     up = quote(sheet.replace(**{"wrapper.solve": "upfront", "coupon.rate": q.coupon_rate}), BS_CTX, control=None)
     assert up.upfront == pytest.approx(0.0, abs=1e-8)  # leg value -2 % plus the 2 % margin
 
@@ -124,7 +125,7 @@ def test_swap_coupon_mode_targets_minus_the_margin_and_upfront_mode_adds_it():
 def test_issuer_spread_raises_the_solved_coupon():
     base = quote(preset("reverse_convertible"), BS_CTX, control=None)
     wide = quote(preset("reverse_convertible", **{"wrapper.issuer_spread": 0.01}), BS_CTX, control=None)
-    assert wide.coupon_rate > base.coupon_rate
+    assert some(wide.coupon_rate) > some(base.coupon_rate)
 
 
 def test_quote_table_reads_like_a_term_sheet():
@@ -164,7 +165,7 @@ def test_brc_policy_is_local_vol_with_an_slv_control():
     q = quote(preset("barrier_reverse_convertible"), SPX, n_paths=40_000, batch=20_000)
     assert (q.decision.method, q.decision.model, q.decision.control) == ("monte_carlo", "lv", "slv")
     assert q.result.price == pytest.approx(98.0, abs=1e-10)
-    assert q.coupon_rate > 0 and q.control is not None
+    assert some(q.coupon_rate) > 0 and q.control is not None
 
 
 # --- geared put (low strike put geared at 1 / K) ---
@@ -258,7 +259,7 @@ def test_airbag_quote_on_spx_in_swap_format():
     q = quote(sheet, SPX, n_paths=N_MC)
     assert q.decision.method == "replication"
     assert q.upfront == pytest.approx(q.result.price + 2.0, abs=1e-12)  # leg value plus the margin
-    assert abs(q.control_gap_se) < 4
+    assert abs(some(q.control_gap_se)) < 4
 
 
 # --- tests 5 to 7: autocalls against the backward quadrature ---
@@ -390,7 +391,7 @@ def test_rc_greeks_match_closed_form_differences():
     assert mc.smoothing == 0.005
     assert abs(mc.smoothing_bias) <= 4 * mc.smoothing_bias_se + 0.002  # smoothing moves the price by < 0.01 %
     assert abs(mc.delta - delta) <= 4 * mc.delta_se + abs(mc.smoothing_bias)
-    assert abs(mc.vega - vega) <= 4 * mc.vega_se + abs(mc.smoothing_bias)
+    assert abs(some(mc.vega) - vega) <= 4 * some(mc.vega_se) + abs(some(mc.smoothing_bias))
 
 
 def test_slv_greeks_report_delta_but_no_vega():
@@ -418,7 +419,7 @@ def test_shifted_surface_shifts_implied_vols_and_keeps_local_vol_consistent():
 @pytest.mark.slow
 def test_quote_with_greeks_uses_the_policy_model():
     q = quote(preset("reverse_convertible", **{"downside.barrier": 0.7}), BS_CTX, control=None, with_greeks=True)
-    assert q.greeks.method == "replication" and q.greeks.vega < 0 < q.greeks.delta
+    assert some(q.greeks).method == "replication" and some(some(q.greeks).vega) < 0 < some(q.greeks).delta
     assert "greeks (SURFACE)" in q.table()
     q = quote(
         preset("phoenix", **{"general.maturity_months": 12}),
@@ -428,7 +429,7 @@ def test_quote_with_greeks_uses_the_policy_model():
         n_paths=20_000,
         batch=10_000,
     )
-    assert q.greeks.model == "lv" and q.greeks.vega is not None
+    assert some(q.greeks).model == "lv" and some(q.greeks).vega is not None
     q = quote(
         preset("phoenix", **{"general.maturity_months": 12}),
         SPX,
@@ -438,7 +439,7 @@ def test_quote_with_greeks_uses_the_policy_model():
         n_paths=20_000,
         batch=10_000,
     )
-    assert q.greeks.model == "slv" and q.greeks.vega is None and "recalibration" in q.table()
+    assert some(q.greeks).model == "slv" and some(q.greeks).vega is None and "recalibration" in q.table()
 
 
 def test_quote_script_carries_the_solved_coupon():
@@ -446,7 +447,7 @@ def test_quote_script_carries_the_solved_coupon():
 
     q = quote(preset("reverse_convertible"), BS_CTX, control=None)
     cpn = parse(q.script).param_values["cpn"]
-    assert cpn == pytest.approx(q.coupon_rate * q.product.coupon_scale, rel=1e-15)
+    assert cpn == pytest.approx(some(q.coupon_rate) * q.product.coupon_scale, rel=1e-15)
     again = price(q.script, BS_CTX.model("bs"), BS_CTX.market, n_paths=2_000, seed=1, valuation=q.product.valuation)
     assert np.isfinite(again.price)
 
@@ -461,7 +462,7 @@ def test_slv_vega_by_recalibration_matches_the_smile_vega_of_a_european_product(
     )
     rep = greeks(p.program, SPX, "surface", "replication")
     slv = greeks(p.program, SPX, "slv", n_paths=N_MC, slv_vega=True, n_particles=50_000)
-    assert abs(slv.vega - rep.vega) <= 4 * slv.vega_se + 0.01
+    assert abs(some(slv.vega) - some(rep.vega)) <= 4 * some(slv.vega_se) + 0.01
     assert abs(slv.delta - rep.delta) <= 4 * slv.delta_se + 0.005
     q = quote(
         preset("phoenix", **{"general.maturity_months": 12}),
@@ -472,4 +473,4 @@ def test_slv_vega_by_recalibration_matches_the_smile_vega_of_a_european_product(
         batch=10_000,
         with_greeks=True,
     )
-    assert q.greeks.vega is None and "slv_vega=True" in q.greeks.note
+    assert some(q.greeks).vega is None and "slv_vega=True" in some(q.greeks).note

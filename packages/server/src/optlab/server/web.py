@@ -14,11 +14,12 @@ from __future__ import annotations
 
 import hmac
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
-from fastapi import Depends, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -66,7 +67,7 @@ def state(request: Request) -> State:
 
 # --- problems (RFC 9457) ----------------------------------------------------------------------------------------------
 class Problem(Exception):
-    def __init__(self, status: int, detail: str, title: str | None = None, errors: list[dict] | None = None):
+    def __init__(self, status: int, detail: str, title: str | None = None, errors: list[dict[str, Any]] | None = None):
         super().__init__(detail)
         self.status, self.detail, self.title, self.errors = status, detail, title, errors or []
 
@@ -88,11 +89,20 @@ TITLES = {
 
 
 def problem(
-    status: int, detail: str, title: str | None = None, errors: list[dict] | None = None, extra: dict | None = None
+    status: int,
+    detail: str,
+    title: str | None = None,
+    errors: list[dict[str, Any]] | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> JSONResponse:
     """An RFC 9457 problem: `errors` lists the fields at fault ({field, message}, field a dotted path); `extra` adds
     extension members (the term-sheet form keeps its visible form there)."""
-    body = {"type": "about:blank", "title": title or TITLES.get(status, "Error"), "status": status, "detail": detail}
+    body: dict[str, Any] = {
+        "type": "about:blank",
+        "title": title or TITLES.get(status, "Error"),
+        "status": status,
+        "detail": detail,
+    }
     if errors:
         body["errors"] = errors
     if extra:
@@ -100,44 +110,46 @@ def problem(
     return JSONResponse(body, status_code=status, media_type=PROBLEM)
 
 
-def _field(loc) -> str:
+def _field(loc: Sequence[int | str]) -> str:
     parts = [str(p) for p in loc if p not in ("body", "query", "path")]
     return ".".join(parts)
 
 
-def install_problems(app) -> None:
+def install_problems(app: FastAPI) -> None:
     from optlab.server.api import ApiError
 
     @app.exception_handler(Problem)
-    async def _problem(request, exc: Problem):
+    async def _problem(request: Request, exc: Problem):
         return problem(exc.status, exc.detail, exc.title, exc.errors)
 
     @app.exception_handler(ApiError)
-    async def _api_error(request, exc: ApiError):
+    async def _api_error(request: Request, exc: ApiError):
         errors = [{"field": exc.field, "message": str(exc)}] if exc.field else None
         return problem(exc.status, str(exc), errors=errors)
 
     @app.exception_handler(KeyError)
-    async def _missing(request, exc: KeyError):  # a service looked up an id that does not exist, as v0 answered
+    async def _missing(
+        request: Request, exc: KeyError
+    ):  # a service looked up an id that does not exist, as v0 answered
         return problem(404, str(exc).strip("'\""))
 
     @app.exception_handler(RequestValidationError)
-    async def _invalid(request, exc: RequestValidationError):
+    async def _invalid(request: Request, exc: RequestValidationError):
         errors = [{"field": _field(e.get("loc", ())), "message": e.get("msg", "invalid")} for e in exc.errors()]
         return problem(422, "the request is not valid: see errors", errors=jsonable_encoder(errors))
 
     @app.exception_handler(StarletteHTTPException)
-    async def _http(request, exc: StarletteHTTPException):
+    async def _http(request: Request, exc: StarletteHTTPException):
         return problem(exc.status_code, str(exc.detail))
 
     @app.exception_handler(Exception)
-    async def _crash(request, exc: Exception):  # never a stack trace in a response
+    async def _crash(request: Request, exc: Exception):  # never a stack trace in a response
         LOG.exception("unhandled error on %s %s", request.method, request.url.path)
         return problem(500, "the server failed on this request; the log has the details")
 
 
 # --- who may call what --------------------------------------------------------------------------------------------------
-def access(*roles: str, public: bool = False) -> dict:
+def access(*roles: str, public: bool = False) -> dict[str, Any]:
     """The route's keyword arguments that check its caller. `public`: no session (health, ready, login)."""
     if public:
         return {"openapi_extra": {"x-roles": ["public"]}}
@@ -231,7 +243,7 @@ class Guard:
                 scope, receive, send, 500, "the server failed on this request; the log has the details"
             )
 
-    def _refusal(self, method: str, host: str, headers: dict) -> tuple[int, str] | None:
+    def _refusal(self, method: str, host: str, headers: dict[str, str]) -> tuple[int, str] | None:
         name = _host(host)
         if not self.settings.lan and name not in LOOPBACK:
             return 403, "this server answers on 127.0.0.1 or localhost only"
@@ -253,7 +265,7 @@ class Guard:
             return 415, "the body must be application/json"
         return None
 
-    async def _send_problem(self, scope, receive, send, status: int, detail: str) -> None:
+    async def _send_problem(self, scope: Scope, receive: Receive, send: Send, status: int, detail: str) -> None:
         body = json.dumps(
             {"type": "about:blank", "title": TITLES.get(status, "Error"), "status": status, "detail": detail}
         ).encode()

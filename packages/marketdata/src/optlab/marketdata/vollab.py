@@ -15,6 +15,7 @@ import json
 import subprocess
 import time
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -199,6 +200,7 @@ def fit_day(cleaned: CleanDay, models=MODELS, settings: dict | None = None) -> d
                 "curves": _curves(lambda k, s: heston_iv(s["F"], s["F"] * np.exp(k), s["T"], heston, s["D"]), slices),
             }
     if "slv" in models:
+        assert heston is not None and surface is not None  # noqa: S101 (narrows the type for pyright: slv fits both above)
         t0 = time.perf_counter()
         T_max = max(s["T"] for s in slices)
         slv = calibrate_leverage(
@@ -302,6 +304,7 @@ def list_runs(lake: Lake, underlying: str | None = None, limit: int = 200) -> li
     where = f"underlying = {sql_str(underlying)}" if underlying else ""
     rows = lake.read("calibration_runs", where=where, order="ingested_at DESC", columns="*")
     out = []
+    r: Any  # a row of itertuples: its fields by name
     for r in rows.head(limit).itertuples():
         fit = json.loads(r.fit)
         out.append(

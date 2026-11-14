@@ -4,6 +4,7 @@ maturities, SLV leverage and its regression, delta conventions."""
 import numpy as np
 import pytest
 from _paths import SPX_CALIBRATION
+from _quotes import some
 from scipy.integrate import quad
 
 from optlab.core import BlackScholesModel, HestonParams, Market, asian_mc, geometric_asian_price, heston_price
@@ -209,10 +210,12 @@ def test_mix_band_moves_the_autocall_coupon_and_starts_at_local_vol():
     ctx = PricingContext.from_calibration(SPX_CALIBRATION)
     sheet = preset("phoenix", **{"coupon.memory": False, "general.maturity_months": 12})
     q = quote(sheet, ctx, control=None, n_paths=40_000, batch=10_000, mix_band=(0.0, 0.25, 0.5, 0.75))
-    band = q.mix_band
+    band = some(q.mix_band)
     coupons = [band[m]["value"] for m in (0.0, 0.25, 0.5, 0.75)]
     assert all(a > b for a, b in zip(coupons, coupons[1:]))  # more stochastic vol of vol, cheaper autocall
     lv = quote(sheet, ctx, model="lv", control=None, n_paths=40_000, batch=10_000)
-    assert abs(band[0.0]["value"] - lv.coupon_rate) <= 4 * float(np.hypot(band[0.0]["se"], lv.coupon_rate_se))
-    assert band[0.5]["value"] == pytest.approx(q.coupon_rate, abs=4 * band[0.5]["se"])
+    assert abs(band[0.0]["value"] - some(lv.coupon_rate)) <= 4 * float(
+        np.hypot(band[0.0]["se"], some(lv.coupon_rate_se))
+    )
+    assert band[0.5]["value"] == pytest.approx(some(q.coupon_rate), abs=4 * band[0.5]["se"])
     assert "SLV mix band" in q.table() and len(ctx.slv_cache) == 4

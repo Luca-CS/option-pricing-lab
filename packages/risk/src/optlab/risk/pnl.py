@@ -29,12 +29,14 @@ import datetime as dt
 import time
 import zlib
 from dataclasses import dataclass, field
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
 
 from optlab.core import progress
 from optlab.core.config import DEFAULT_SEED
+from optlab.marketdata.days import as_day
 from optlab.risk import grid
 from optlab.risk.engine import RiskGroup, RiskSettings, run_group
 from optlab.risk.greeks import Bumps, GreekOptions, compute
@@ -99,7 +101,7 @@ def book_at(lake, trades, day, layer: str | None = "reconstructed") -> BookDay:
     """The book of a date on the lake's market of that date."""
     from optlab.marketdata.pit import basket_at, context_at
 
-    day = pd.Timestamp(day).date()
+    day = as_day(day)
     live = alive(trades, day)
     singles, baskets = {}, {}
     for t in live:
@@ -159,7 +161,7 @@ def eod(
 ) -> dict:
     """Value and Greeks of the book at the close of `day`, stored. A stored run with the same key is returned as it is."""
     t0 = time.perf_counter()
-    day = pd.Timestamp(day).date()
+    day = as_day(day)
     settings = settings or RiskSettings(smoothing=0.0)
     bumps = bumps or Bumps()
     live = alive(trades, day)
@@ -320,7 +322,7 @@ def _rates_market(ma, mb_in_a, spot):
 def _atm_move(sa, sb) -> list:
     if np.isscalar(sa) or np.isscalar(sb):
         return (
-            [float(sb) - float(sa)] * len(grid.TENORS)
+            [float(cast(float, sb)) - float(cast(float, sa))] * len(grid.TENORS)
             if np.isscalar(sa) and np.isscalar(sb)
             else [0.0] * len(grid.TENORS)
         )
@@ -352,7 +354,7 @@ def _step_contexts(ga: RiskGroup, gb_ctx, ratio: dict, a: dt.date, b: dt.date) -
     stages["dividends"] = (mb_a, sb, corr_a)
     stages["corr"] = (mb_a, sb, corr_b)
     for step, (m, s, c) in stages.items():
-        if basket:
+        if isinstance(ctx, BasketContext):
             contexts = {
                 n: dataclasses.replace(ctx.contexts[n], market=m[n], surface=s[n], valuation=b, slv_cache={})
                 for n in names
@@ -435,7 +437,7 @@ def explain_day(
     from optlab.structured.lifecycle import events as lifecycle_events
 
     t0 = time.perf_counter()
-    a, b = pd.Timestamp(a).date(), pd.Timestamp(b).date()
+    a, b = as_day(a), as_day(b)
     settings = settings or RiskSettings(smoothing=0.0)
     code = code_version()
     ea = eod(lake, trades, a, store, settings, layer)
@@ -483,7 +485,7 @@ def explain_day(
         real_b = {tid: real_fixings(lake, bda.trades[tid], b) for tid in trades_a}
         scale_a = {n: bda.scales[n] for n in names}
         base = run_group(ga, {}, None, settings, None, keep_pairs=True)
-        values = {"base": base.pairs}
+        values: dict[str, Any] = {"base": base.pairs}  # pairs per position (keep_pairs)
         cash = {}
         for step, sctx in contexts.items():
             book = _rolled_positions(ga.book, real_b, scale_a, a, b, frozen=(step == "time"))

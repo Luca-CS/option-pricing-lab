@@ -24,6 +24,7 @@ import os
 import time
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -34,13 +35,17 @@ from optlab.structured.multiasset import Basket, BasketScenario, simulate_basket
 from optlab.structured.scenario import Scenario, batch_sizes
 from optlab.structured.script.evaluator import Evaluator
 
+if TYPE_CHECKING:
+    from optlab.structured.script.nodes import Program
+    from optlab.structured.script.timeline import Timeline
+
 
 @dataclass
 class Evaluation:
-    program: object
-    timeline: object
+    program: Program
+    timeline: Timeline
     params: dict
-    fmt: object
+    fmt: Any  # Note, Swap, FundedSwap or risk.engine.RiskFormat: present_values(flows, market, notional)
     notional: float
     smoothing: float = 0.0
     check_redemption: bool = True
@@ -211,7 +216,8 @@ def reduction(times, evaluations) -> tuple:
             if len(future) < 3:
                 continue
             j = [index.get(round(float(t), 12)) for t in future]
-            if None in j or j != list(range(j[0], j[0] + len(j))):
+            first = j[0]
+            if None in j or first is None or j != list(range(first, first + len(j))):
                 return None, (), ()
             found[window_key(future)] = (j[0], j[-1])
     if not found or len(found) > engines.require().MAX_WINDOWS:

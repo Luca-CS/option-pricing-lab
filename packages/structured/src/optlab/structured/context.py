@@ -123,7 +123,7 @@ class PricingContext:
         if same and not self.leverage_flat:
             return self.slv
         band = next((h for h in LEVERAGE_HORIZONS if h >= horizon - 1e-9), max(horizon, LEVERAGE_HORIZONS[-1]))
-        return self.slv_at_mix(self.slv.mix if same else mix, band)
+        return self.slv_at_mix(self.slv.mix if same or mix is None else mix, band)
 
     @property
     def t_max(self) -> float:

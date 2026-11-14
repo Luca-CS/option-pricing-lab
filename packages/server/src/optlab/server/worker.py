@@ -22,14 +22,19 @@ import sys
 import threading
 import time
 import traceback
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from optlab.core import engines, progress
 from optlab.core.log import get_logger
 from optlab.server import tasks
-from optlab.server.jobs import Workers
+from optlab.server.jobs import JobQueue, Workers
 from optlab.server.serialize import clean
+
+if TYPE_CHECKING:
+    from optlab.server.api import Desk
 
 LOG = get_logger("optlab.server.worker")  # not __name__: run as -m, it is __main__
 BEAT_SECONDS = 5.0
@@ -41,7 +46,12 @@ class Reporter:
     """Progress of one job: steps named by the desk, ticks from the library, written to the row now and then."""
 
     def __init__(
-        self, queue, job_id: str, stopping: threading.Event | None = None, every: float = 0.5, clock=time.monotonic
+        self,
+        queue: JobQueue,
+        job_id: str,
+        stopping: threading.Event | None = None,
+        every: float = 0.5,
+        clock: Callable[[], float] = time.monotonic,
     ):
         self.queue, self.job_id, self.every, self.clock = queue, job_id, every, clock
         self.stopping = stopping or threading.Event()
@@ -95,7 +105,7 @@ def nvidia_smi() -> Path | None:
     return next((p for p in places if p.is_file()), None)
 
 
-def gpu_status() -> list[dict] | None:
+def gpu_status() -> list[dict[str, Any]] | None:
     """The GPUs as nvidia-smi reports them (fixed arguments, no shell); None without nvidia-smi."""
     exe = nvidia_smi()
     if exe is None:
@@ -111,14 +121,14 @@ def gpu_status() -> list[dict] | None:
         ).stdout
     except OSError, subprocess.SubprocessError:
         return None
-    rows = []
+    rows: list[dict[str, Any]] = []
     for line in out.strip().splitlines():
         parts = [p.strip() for p in line.split(",")]
         if len(parts) != 6:
             continue
         name, util, used, total, temp, clock = parts
 
-        def num(x):
+        def num(x: str) -> float | None:
             try:
                 return float(x)
             except ValueError:
@@ -137,7 +147,7 @@ def gpu_status() -> list[dict] | None:
     return rows
 
 
-def engine_summary() -> dict | None:
+def engine_summary() -> dict[str, Any] | None:
     try:
         from optlab import native
 
@@ -151,7 +161,12 @@ class Worker:
     """Runs a desk's queue: `start()` takes the lease and starts the loop in a thread, `stop()` ends it."""
 
     def __init__(
-        self, desk, role: str = "external", concurrency: int | None = None, poll: float = 0.25, schedules: bool = True
+        self,
+        desk: Desk,
+        role: str = "external",
+        concurrency: int | None = None,
+        poll: float = 0.25,
+        schedules: bool = True,
     ):
         from optlab.server.schedules import Schedules
 
@@ -183,8 +198,8 @@ class Worker:
         LOG.info("worker %s (%s, %d at a time, engine %s)", self.worker_id, self.role, self.concurrency, engine)
         return True
 
-    def _info(self, with_gpu: bool) -> dict:
-        info: dict = {"engine": engine_summary()}
+    def _info(self, with_gpu: bool) -> dict[str, Any]:
+        info: dict[str, Any] = {"engine": engine_summary()}
         if with_gpu:
             info["gpu"] = gpu_status()
         return info
@@ -257,7 +272,7 @@ class Worker:
             LOG.debug("lease not released", exc_info=True)
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     """`python -m optlab.server.worker [options]` is `optlab worker [options]`."""
     from optlab.server.cli import run
 

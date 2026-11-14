@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -32,7 +33,9 @@ def run_js(expr):
     with tempfile.TemporaryDirectory() as tmp:  # too long for a Windows command line
         path = Path(tmp) / "run.js"
         path.write_text(script, encoding="utf-8")
-        out = subprocess.run([NODE, str(path)], capture_output=True, text=True, check=True, timeout=60)
+        out = subprocess.run(
+            [str(NODE), str(path)], capture_output=True, text=True, check=True, timeout=60
+        )  # skipped without node
     return json.loads(out.stdout)
 
 
@@ -126,7 +129,13 @@ def test_longstaff_schwartz_matches_tree():
         assert tree - 0.05 - 4 * se < lsm < tree + 4 * se
 
 
-SPX_HESTON = {"v0": 0.0228466, "kappa": 3.0892636, "theta": 0.0537246, "xi": 1.3077452, "rho": -0.6879607}
+SPX_HESTON: dict[str, Any] = {
+    "v0": 0.0228466,
+    "kappa": 3.0892636,
+    "theta": 0.0537246,
+    "xi": 1.3077452,
+    "rho": -0.6879607,
+}
 
 
 def test_heston_fourier_matches_python():

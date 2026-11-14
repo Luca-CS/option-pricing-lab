@@ -1,5 +1,7 @@
 """Structured pricer: the scripting layer against the existing pricers and independent references."""
 
+from typing import Any
+
 import numpy as np
 import pytest
 from _paths import SPX_CALIBRATION
@@ -144,6 +146,8 @@ def test_date_script_matches_time_script_on_the_same_paths():
 def test_note_minus_swap_is_the_discounted_redemption_date():
     from optlab.structured import Note, Swap
 
+    kw: dict[str, Any]
+
     script, kw = phoenix_script(), dict(n_paths=N_REPRO, seed=3, batch=5_000, valuation=CTX.valuation)
     note = price(script, CTX.model("bs"), CTX.market, fmt=Note(), **kw)
     swap = price(script, CTX.model("bs"), CTX.market, fmt=Swap(), **kw)
@@ -156,6 +160,8 @@ def test_note_minus_swap_is_the_discounted_redemption_date():
 
 def test_issuer_spread_lowers_the_note_consistently_with_flow_timing():
     from optlab.structured import Note
+
+    kw: dict[str, Any]
 
     script, kw = phoenix_script(), dict(n_paths=N_REPRO, seed=3, valuation=CTX.valuation)
     m = CTX.model("bs")

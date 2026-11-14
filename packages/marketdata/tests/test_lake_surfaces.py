@@ -2,6 +2,7 @@
 
 import datetime as dt
 import json
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -30,7 +31,7 @@ from optlab.marketdata.derive.surfaces import (
 from optlab.marketdata.lake import Lake
 
 PRIOR = ShapePrior(-0.7, 1.0, 0.3, 0.05, source="test")
-LEVELS = {"VIX9D": 16.0, "VIX": 18.0, "VIX3M": 20.0, "VIX6M": 21.0, "VIX1Y": 22.0}
+LEVELS: dict[str, Any] = {"VIX9D": 16.0, "VIX": 18.0, "VIX3M": 20.0, "VIX6M": 21.0, "VIX1Y": 22.0}
 
 
 def test_flat_smile_variance_is_the_total_variance():
@@ -153,7 +154,7 @@ def test_an_observed_fit_of_the_day_takes_over_only_when_it_reaches_far_enough(t
     lake, _ = vol_lake(tmp_path)
     build_reconstructed(lake, ["SPX"], "2020-03-02", "2020-03-13", PRIOR)
     rec = reconstruct(LEVELS, PRIOR)
-    base = {
+    base: dict[str, Any] = {
         "underlying": "SPX",
         "layer": "observed",
         "surface": json.dumps(rec.surface.to_dict()),

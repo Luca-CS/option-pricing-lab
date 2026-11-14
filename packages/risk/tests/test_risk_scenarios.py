@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 from _paths import SPX_CALIBRATION
+from _quotes import some
 from _risk_refs import S0, VOL, Q, R, book, flat_ctx, vanilla
 from _stores import risk_store
 from _structured_refs import flat_surface
@@ -10,7 +11,7 @@ from _structured_refs import flat_surface
 from optlab.core.blackscholes import bs_price
 from optlab.risk import RiskGroup
 from optlab.risk import scenarios as sc
-from optlab.risk.shocks import RiskEnv
+from optlab.risk.shocks import RiskEnv, Shock, VolMove
 from optlab.structured.context import PricingContext
 from optlab.structured.surfaces import BumpedSurface
 
@@ -64,7 +65,7 @@ def test_scenarios_replayed_on_a_vanilla_match_the_closed_forms():
     skew = float(BumpedSurface(flat_surface(VOL), 0.0, 0.02).iv(k, T)) - VOL
     vol = VOL + BETA_1Y * np.log(0.8) + skew
     np.testing.assert_allclose(got["Equity crash"][0], bs_price(S0 * 0.8, K, T, r2, q2, vol) - base, rtol=1e-5)
-    g = rep.grid
+    g = some(rep.grid)
     i, j = g["spots"].index(-0.10), g["vols"].index(0.05)
     np.testing.assert_allclose(g["pnl"][i][j][0], bs_price(S0 * 0.9, K, T, R, Q, VOL + 0.05) - base, rtol=1e-6)
     assert all(s["arbitrage"] == [] for s in rep.scenarios)  # a flat surface stays clean
@@ -72,7 +73,7 @@ def test_scenarios_replayed_on_a_vanilla_match_the_closed_forms():
 
 def test_shocked_surfaces_are_checked_for_arbitrage():
     spx = PricingContext.from_calibration(SPX_CALIBRATION)
-    crash = sc.Scenario("Vol collapse", "vols -15 points", sc.Shock(vol={"*": sc.VolMove(-0.15)}))
+    crash = sc.Scenario("Vol collapse", "vols -15 points", Shock(vol={"*": VolMove(-0.15)}))
     rep = sc.run(
         [RiskGroup("SPX", book(vanilla(100.0, 365, valuation=spx.valuation)), spx, 1)],
         [crash] + sc.defaults()[1:3],

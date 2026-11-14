@@ -12,7 +12,7 @@ def as_date(d) -> dt.date:
     return dt.date.fromisoformat(d) if isinstance(d, str) else d
 
 
-def is_business_day(d: dt.date) -> bool:
+def is_business_day(d: dt.date | str) -> bool:
     return as_date(d).weekday() < 5
 
 

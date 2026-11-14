@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import time
+from typing import Any
 
 import numpy as np
 
@@ -79,7 +80,7 @@ def gap_table(ctx, names, n_paths, workers) -> list:
         },
     )
     p = compile_sheet(sheet, ctx.valuation)
-    kw = dict(
+    kw: dict[str, Any] = dict(
         fmt=wrapper(sheet, p),
         n_paths=n_paths,
         seed=2026,
@@ -95,6 +96,7 @@ def gap_table(ctx, names, n_paths, workers) -> list:
             slv = price_many(
                 p.program, ctx.model("slv", 2.0, mix=mix, spot_driven=True, vol_corr=vol_corr), ctx.market, [{}], **kw
             )[0]
+            assert slv.pairs is not None and lv.pairs is not None  # noqa: S101 (narrows the type for pyright: Monte Carlo keeps its pairs)
             d = (slv.pairs - lv.pairs) * 100 / slv.notional
             out.append(
                 {"vol_corr": vol_corr, "mix": mix, "gap": float(d.mean()), "se": float(d.std(ddof=1) / np.sqrt(len(d)))}
@@ -109,7 +111,7 @@ def fit_table(ctx, names) -> dict:
         {"kind": r["kind"], "strike": r["strike"], "pseudo_quote": r["price"], "model": float(f), "se": float(e)}
         for r, f, e in zip(wanted, flat, se)
     ]
-    out = {"constant": constant}
+    out: dict[str, Any] = {"constant": constant}
     for form in ("local", "stochastic"):
         t0 = time.perf_counter()
         got = calibrate(ctx, names, form=form)
@@ -158,7 +160,7 @@ def main(day: str = "2026-11-04", paths: int = 100_000, workers: int = 6, log=sa
         )
         out["products"][label] = summary(q)
         log(label, f"{q.seconds:.1f} s")
-        log(q.desk.table())
+        log(q.desk.table())  # pyright: ignore[reportOptionalMemberAccess] (quoted with costs: a desk price)
     for label, members in BASKETS.items():
         ctx, _, meta = basket_at(lake, members, day, layer="reconstructed")
         t0 = time.perf_counter()
@@ -170,7 +172,7 @@ def main(day: str = "2026-11-04", paths: int = 100_000, workers: int = 6, log=sa
             "phoenix", **{"general.basket": "worst_of", "general.underlyings": members, "general.notional": 5e6}
         )
         q = quote(sheet, ctx, n_paths=paths, batch=25_000, workers=workers, costs=resolve(None, sheet).inputs())
-        log(q.desk.table())
+        log(q.desk.table())  # pyright: ignore[reportOptionalMemberAccess] (quoted with costs: a desk price)
         out["baskets"][label] = {
             **summary(q),
             "correlation": {"matrix": np.round(ctx.corr, 3).tolist(), **meta},

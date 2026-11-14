@@ -18,6 +18,8 @@ rather than the bumped one; the engine reads any grid, and base and bumped table
 
 from __future__ import annotations
 
+from typing import cast
+
 import numpy as np
 
 from optlab.core.svi import g_function
@@ -26,7 +28,8 @@ from optlab.structured.surfaces import BumpedSurface, surface_arbitrage
 
 
 def _sigma_parts(surface, k, T):
-    return _sigma_from_w(*surface.derivatives(k, T), T)
+    w, wk, wkk, wT = surface.derivatives(k, T)
+    return _sigma_from_w(w, wk, wkk, wT, T)
 
 
 def _sigma_from_w(w, wk, wkk, wT, T):
@@ -204,7 +207,7 @@ def bumped_surface(
     """The surface with every move applied in one layer; the base object itself when nothing moves (its cached tables stay
     valid)."""
     if np.isscalar(surface):  # a flat Black-Scholes name: only the parallel moves apply
-        return float(surface) * (1 + relative) + parallel
+        return float(cast(float, surface)) * (1 + relative) + parallel
     moved = parallel or relative or any(np.any(np.asarray(x)) for x in (nodes, relative_nodes, term) if x is not None)
     if moved:
         return TentBumpedSurface(surface, nodes, relative_nodes, parallel, relative, term, skew)

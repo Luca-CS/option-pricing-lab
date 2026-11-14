@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from _paths import RESULTS, real_lake
+from _quotes import some
 
 from optlab.core.instruments import enabled_names
 from optlab.marketdata.lake import Lake
@@ -14,6 +15,7 @@ from optlab.marketdata.pit import basket_at, context_at, market_at, real_close, 
 from optlab.marketdata.quality import check_splits, open_issues
 from optlab.marketdata.quotes import clean_day, quote_days
 from optlab.structured import CALENDARS, preset, quote
+from optlab.structured.multiasset import BasketContext
 
 LAKE = Lake(real_lake())
 pytestmark = pytest.mark.skipif(
@@ -99,7 +101,7 @@ def test_all_enabled_names_have_prices_and_a_surface_on_a_stress_date():
     day = dt.date(2020, 3, 23)
     for name in enabled_names():
         snap = market_at(LAKE, name, day)
-        assert snap.market["spot"] == 100.0 and snap.spot_scale > 0
+        assert snap.market["spot"] == 100.0 and some(snap.spot_scale) > 0
         assert snap.provenance["surface"]["layer"] == "reconstructed"
 
 
@@ -175,6 +177,7 @@ def test_the_phoenix_was_called_on_the_right_date():
     cal = CALENDARS["nyse"]
     called = [e for e in r["events"] if e["kind"] == "called"]
     assert len(called) == 1
+    obs = None
     for months in range(3, 37, 3):
         y, m = 2022 + months // 12, 1 + months % 12
         obs = cal.adjust(dt.date(y, m, 14), "modified_following")
@@ -234,12 +237,14 @@ def test_the_desk_prices_a_share_and_a_worst_of_on_their_real_surfaces(tmp_path)
         snap = market_at(LAKE, "SPX", day, layer="reconstructed")
         desk.use_snapshot({"snapshot_id": desk.market_store.put(snap)})
         ctx, shown = desk._single_ctx("AAPL", desk.ctx)
-        assert ctx.underlying == "AAPL" and shown["names"]["AAPL"]["origin"] == "reconstructed"
+        assert ctx.underlying == "AAPL" and some(shown)["names"]["AAPL"]["origin"] == "reconstructed"
         assert ctx.atm_vol(1.0) > desk.ctx.atm_vol(1.0)  # a share is more volatile than the index
         phoenix = preset("phoenix", **{"general.underlying": "AAPL"})
         q = quote(phoenix, ctx, model="lv", control=None, n_paths=20_000, batch=10_000)
         spx = quote(preset("phoenix"), desk.ctx, model="lv", control=None, n_paths=20_000, batch=10_000)
-        assert q.coupon_rate > spx.coupon_rate + 4 * np.hypot(q.coupon_rate_se, spx.coupon_rate_se)
+        assert some(q.coupon_rate) > some(spx.coupon_rate) + 4 * np.hypot(
+            some(q.coupon_rate_se), some(spx.coupon_rate_se)
+        )
         bctx, shown = desk._basket_ctx(("SPX", "NDX", "AAPL"))
         assert bctx.has_surfaces and {r["origin"] for r in shown["names"].values()} == {"reconstructed"}
         assert all(v == "lake" for v in shown["corr_source"].values()) and 0.3 < shown["corr"]["NDX|SPX"] < 1
@@ -262,6 +267,7 @@ def test_the_desk_puts_a_name_paid_in_another_currency_on_its_quanto_market(tmp_
         direct, _, _ = basket_at(LAKE, ["SPX", "SX5E"], day, layer=desk.names.layer)
         native = desk.names.context("SX5E", day)[0].market
         T = np.array([0.5, 1.0, 2.0])
+        assert isinstance(bctx, BasketContext) and isinstance(direct, BasketContext)
         assert bctx.payment_currency == "USD"
         assert np.allclose(bctx.markets["SX5E"].F(T), direct.markets["SX5E"].F(T), rtol=0, atol=1e-12)
         assert not np.allclose(bctx.markets["SX5E"].F(T), native.F(T))  # the quanto drift moved the forward
@@ -269,6 +275,7 @@ def test_the_desk_puts_a_name_paid_in_another_currency_on_its_quanto_market(tmp_
         assert not any("not adjusted" in w for w in q.warnings)
         single = preset("phoenix", **{"general.underlying": "SX5E", "general.payment_currency": "USD"})
         sctx, _ = desk._context_for(single, desk.ctx)
+        assert not isinstance(sctx, BasketContext)
         assert sctx.underlying == "SX5E" and sctx.payment_currency == "USD"
     finally:
         desk.close()

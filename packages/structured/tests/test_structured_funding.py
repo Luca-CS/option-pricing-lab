@@ -1,5 +1,7 @@
 """Swap with a funding leg (floating rate plus spread until redemption)."""
 
+from typing import Any
+
 import numpy as np
 import pytest
 from _structured_refs import FLAT, flat_context
@@ -14,7 +16,7 @@ from optlab.structured.schema import TermSheet, TermSheetError
 from optlab.structured.script.timeline import Clock, build_timeline
 
 CTX = flat_context()
-FUNDED = {"wrapper.format": "swap", "wrapper.funding": "floating"}
+FUNDED: dict[str, Any] = {"wrapper.format": "swap", "wrapper.funding": "floating"}
 
 
 def mc(sheet, n_paths=40_000, seed=4):
@@ -34,7 +36,7 @@ def mc(sheet, n_paths=40_000, seed=4):
 def test_funded_swap_is_the_note_minus_par_path_by_path():
     # single curve, no spread, no payment lag, funding on the call dates: the floating leg telescopes to
     # N (1 - D(call date)), which is exactly what the note holder earns on the notional
-    base = {"general.pay_lag": 0, "wrapper.solve": "upfront"}
+    base: dict[str, Any] = {"general.pay_lag": 0, "wrapper.solve": "upfront"}
     note, _ = mc(preset("phoenix", **base))
     swap, _ = mc(preset("phoenix", **base, **FUNDED))
     assert swap.price == pytest.approx(note.price - 100, abs=1e-9)
@@ -42,7 +44,7 @@ def test_funded_swap_is_the_note_minus_par_path_by_path():
 
 
 def test_solved_coupon_is_the_same_in_note_and_in_funded_swap_without_lag():
-    base = {"general.pay_lag": 0}
+    base: dict[str, Any] = {"general.pay_lag": 0}
     note = quote(preset("phoenix", **base), CTX, model="bs", control=None, n_paths=40_000, batch=10_000)
     swap = quote(preset("phoenix", **base, **FUNDED), CTX, model="bs", control=None, n_paths=40_000, batch=10_000)
     assert swap.result.price == pytest.approx(-2.0, abs=1e-10)
@@ -68,6 +70,7 @@ def test_funding_spread_sensitivity_is_the_expected_funded_annuity():
     s0, p = mc(preset("phoenix", **{"wrapper.solve": "upfront", **FUNDED}))
     s1, _ = mc(preset("phoenix", **{"wrapper.solve": "upfront", **FUNDED, "wrapper.funding_spread": 0.01}))
     fs = wrapper(preset("phoenix", **FUNDED), p)
+    assert isinstance(fs, FundedSwap)
     tl = build_timeline(p.program, Clock(CTX.valuation))
     alive_after = 1 - np.cumsum(s0.termination)
     annuity = 0.0

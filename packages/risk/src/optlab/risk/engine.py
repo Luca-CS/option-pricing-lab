@@ -45,6 +45,7 @@ from optlab.risk.shocks import (
 )
 from optlab.structured import engine as batch_engine
 from optlab.structured.cashflows import FundedSwap, Swap
+from optlab.structured.context import PricingContext
 from optlab.structured.dates import year_fraction
 from optlab.structured.engine import Evaluation
 from optlab.structured.multiasset import BasketContext
@@ -59,7 +60,7 @@ class RiskGroup:
 
     label: str
     book: Book
-    ctx: object  # PricingContext or BasketContext
+    ctx: PricingContext | BasketContext
     seed: int = DEFAULT_SEED
 
 
@@ -236,7 +237,7 @@ def _sim_model(d_model: str, ctx, sim_ctx, horizon: float, settings: RiskSetting
     return sim_ctx.model(d_model, horizon)
 
 
-def _basket_simulation(ctx: BasketContext, sim_ctx: BasketContext, d_model: str) -> BasketContext:
+def _basket_simulation(ctx: BasketContext, sim_ctx, d_model: str) -> BasketContext:
     """Under SLV, a name whose surface moved needs its own leverage: its context is copied and recalibrates on first use."""
     if d_model != "slv":
         return sim_ctx
@@ -319,7 +320,7 @@ class _Group:
     decision: PricingDecision  # method, model, warnings
     base_items: list
     names: list
-    spot0: object  # {name: spot} for a basket, the spot otherwise
+    spot0: float | dict  # {name: spot} for a basket, the spot otherwise
     quantities: list
     notionals: list
     run: GroupRun
@@ -385,7 +386,7 @@ def _group(group: RiskGroup, shocks, measures, settings, env, cash_since, keep_p
     d = book.decision(ctx, base_items, settings.model)
     used = sorted({n for it in base_items for n in it["underlyings"]})
     names = [n for n in ctx.names if n in used] if basket else used
-    spot0 = {n: float(ctx.markets[n].spot) for n in names} if basket else float(ctx.market.spot)
+    spot0 = {n: float(ctx.markets[n].spot) for n in names} if isinstance(ctx, BasketContext) else float(ctx.market.spot)
     notionals = [float({**it["program"].param_values, **it["pos"].params}.get("N", 1.0)) for it in base_items]
     quantities = [float(it["pos"].quantity) for it in base_items]
     run = GroupRun(
@@ -423,7 +424,7 @@ def _run_bucket(g: _Group, members: list) -> None:
     ctx = g.group.ctx
     first = g.shocks[members[0]]
     sim_ctx = simulation_part(ctx, first, g.env)
-    if g.basket:
+    if isinstance(ctx, BasketContext):
         sim_ctx = _basket_simulation(ctx, sim_ctx, g.decision.model)
     items, since = g.base_items, g.cash_since
     if first.roll_days:
@@ -439,9 +440,11 @@ def _run_bucket(g: _Group, members: list) -> None:
 
 def _replicate(g: _Group, members: list, items: list, since, fx: dict) -> None:
     """Each shock priced by replication on its own moved surface and market."""
-    name = g.names[0]
+    name, spot0 = g.names[0], g.spot0
+    assert not isinstance(spot0, dict)  # noqa: S101 (narrows the type for pyright: replication prices one name)
     for m in members:
         full = apply(g.group.ctx, g.shocks[m], g.env)
+        assert not isinstance(full, BasketContext)  # noqa: S101 (narrows the type for pyright: replication prices one name)
         vals = []
         for it, q in zip(items, g.quantities):
             tl = it["timeline"]
@@ -455,7 +458,7 @@ def _replicate(g: _Group, members: list, items: list, since, fx: dict) -> None:
                 T_obs,
                 fmt,
                 it["pos"].params,
-                initial_fixing=g.spot0,
+                initial_fixing=spot0,
                 history=it["history"].get(name, {}),
             )
             vals.append(q * r.value.price * fx[m])
@@ -473,8 +476,9 @@ def _moved_markets(g: _Group, members: list, sim_ctx):
     """Each shock's market per name, and the markets the simulation runs on: the base's, or a lone shock's own forwards
     (no factor per date, so daily windows can still be reduced)."""
     ctx, names = g.group.ctx, g.names
-    base_markets = dict(ctx.markets) if g.basket else {names[0]: ctx.market}
-    surfaces = ctx.vols if g.basket else {names[0]: ctx.surface}
+    basket = isinstance(ctx, BasketContext)
+    base_markets = dict(ctx.markets) if basket else {names[0]: ctx.market}
+    surfaces = ctx.vols if basket else {names[0]: ctx.surface}
     moved_markets = {
         m: {
             n: shocked_market(

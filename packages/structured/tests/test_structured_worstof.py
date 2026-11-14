@@ -1,10 +1,12 @@
 """Worst-of products on correlated underlyings."""
 
 import datetime as dt
+from typing import Any
 
 import numpy as np
 import pytest
 from _paths import SPX_CALIBRATION
+from _quotes import some
 from _structured_refs import FLAT, VOL, R, autocall_reference, flat_context, worst_digital, worst_put
 
 from optlab.core import BlackScholesModel, Market, european_mc
@@ -48,7 +50,7 @@ def times(p):
 def test_one_name_basket_reproduces_simulate_bit_for_bit():
     script = "underlying SPX\nparam K = 100\nevent t=1 pay t=1\n  pay max(SPX - K, 0) as redemption\nend\n"
     bs = BlackScholesModel(VOL)
-    basket = Basket(("SPX",), {"SPX": bs}, {"SPX": FLAT}, [[1.0]])
+    basket = Basket(("SPX",), {"SPX": bs}, {"SPX": FLAT}, np.array([[1.0]]))
     ref = european_mc(bs, FLAT, 100.0, 1.0, "call", n_paths=20_000, rng=5)
     res = price(script, basket, FLAT, n_paths=20_000, seed=5)
     assert res.value.price == ref.price and res.value.stderr == ref.stderr
@@ -122,7 +124,7 @@ def test_identical_names_with_correlation_one_give_the_single_name_autocall():
 @pytest.mark.slow
 def test_identical_names_daily_knock_in_gives_the_single_name_autocall():
     ctx = context(1.0, vol2=VOL, q2=0.01)
-    changes = {
+    changes: dict[str, Any] = {
         "coupon.rate": 0.08,
         "coupon.memory": False,
         "general.maturity_months": 12,
@@ -167,7 +169,7 @@ def test_worst_of_quote_uses_the_basket_policy():
     assert any("flat volatility" in w for w in q.warnings)
     assert q.result.price == pytest.approx(98.0, abs=1e-10)
     single = quote(preset("phoenix"), flat_context(), model="bs", control=None, n_paths=20_000, batch=10_000)
-    assert q.coupon_rate > single.coupon_rate * 0.5  # a worst-of pays for the correlation risk
+    assert some(q.coupon_rate) > some(single.coupon_rate) * 0.5  # a worst-of pays for the correlation risk
     with pytest.raises(ValueError, match="needs a BasketContext"):
         quote(worst("phoenix"), flat_context())
 

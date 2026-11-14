@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 from _paths import SPX_CALIBRATION
+from _quotes import desk_of
 from scipy.stats import multivariate_normal, norm
 
 from optlab.core.blackscholes import black_price
@@ -123,7 +124,7 @@ def test_a_flat_weight_is_the_constant_correlation_against_the_bivariate_normal(
     half = n // 2
     pair = 0.5 * (both[:half].astype(float) + both[half:].astype(float))
     d = np.array([-0.5 * 0.2 * np.sqrt(T), -0.5 * 0.3 * np.sqrt(T)])
-    want = float(multivariate_normal.cdf(d, cov=[[1, RHO], [RHO, 1]]))
+    want = float(multivariate_normal.cdf(d, cov=[[1, RHO], [RHO, 1]]))  # pyright: ignore[reportArgumentType] (scipy types cov from its default)
     within(pair.mean(), want, pair.std(ddof=1) / np.sqrt(half))
 
 
@@ -178,7 +179,7 @@ def test_a_worst_of_has_both_provisions_and_says_what_the_skew_rests_on(ctx):
         **{"general.basket": "worst_of", "general.underlyings": ["SPX", "AAA"], "general.maturity_months": 12},
     )
     q = quote(s, ctx, n_paths=20_000, batch=10_000, costs=CostInputs({"corr_skew": 0.02}, mix=0.5))
-    d = q.desk
+    d = desk_of(q)
     assert d.final_price == pytest.approx(98.0, abs=1e-9)
     line = d.line("local_corr")
     assert line.kind == "model" and line.origin == "synthetic" and "assumption" in line.note and len(line.fit) == 3
@@ -213,7 +214,7 @@ def test_a_flat_name_has_no_pseudo_quote_so_no_correlation_skew():
         batch=4000,
         costs=CostInputs({"corr_skew": 0.02}, mix=0.5),
     )
-    assert {x.key for x in q.desk.lines} == {"slv"}
+    assert {x.key for x in desk_of(q).lines} == {"slv"}
 
 
 def test_the_assumption_can_be_replaced():

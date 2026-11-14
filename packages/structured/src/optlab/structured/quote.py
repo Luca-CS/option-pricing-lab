@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -12,8 +13,11 @@ from optlab.core.log import get_logger
 from optlab.structured.cashflows import FundedSwap, Note, Swap, funding_periods
 from optlab.structured.compiler import CompiledProduct, compile_sheet
 from optlab.structured.context import PricingContext
-from optlab.structured.costs import desk_price
+from optlab.structured.costs import DeskPrice, desk_price
 from optlab.structured.multiasset import BasketContext
+
+if TYPE_CHECKING:
+    from optlab.structured.greeks import Greeks
 from optlab.structured.policy import PricingDecision, decide
 from optlab.structured.pricer import StructuredResult, check_fixing_scale, history_times, price_many
 from optlab.structured.profile import ProductProfile, profile
@@ -41,10 +45,10 @@ class Quote:
     control: StructuredResult | None = None
     seconds: float = 0.0
     warnings: list = field(default_factory=list)
-    greeks: object | None = None  # greeks.Greeks at the solved coupon, with the policy model
+    greeks: Greeks | None = None  # at the solved coupon, with the policy model
     snapshot_id: str | None = None  # the market the quote was priced on
     mix_band: dict | None = None  # {mix: {"value", "se", "atm_error_bp"}}: coupon p.a. or upfront per SLV mix
-    desk: object | None = None  # costs.DeskPrice: base, lines and client price, when costs were asked
+    desk: DeskPrice | None = None  # base, lines and client price, when costs were asked
 
     @property
     def control_gap_se(self) -> float | None:
@@ -93,7 +97,7 @@ def _book_greeks(
     )
     scale = 100 / sheet.get("general.notional")
 
-    def one(d):
+    def one(d) -> tuple[Any, Any]:
         return (scale * d["positions"][0], scale * d["positions_se"][0]) if d is not None else (None, None)
 
     if isinstance(ctx, BasketContext):
@@ -193,7 +197,7 @@ def _mix_band(mixes, product, ctx, fmt, decision, prof, fixings, workers, margin
 
 def _pricer(
     product: CompiledProduct,
-    ctx: PricingContext,
+    ctx: PricingContext | BasketContext,
     fmt,
     decision: PricingDecision,
     prof: ProductProfile,
@@ -216,6 +220,7 @@ def _pricer(
 
     def run(param_sets):
         if method == "replication":
+            assert not isinstance(ctx, BasketContext)  # noqa: S101 (narrows the type for pyright: replication prices one name)
             T_obs = prof.observation_times[-1] if prof.observation_times else timeline.horizon
             return [
                 replication_result(program, timeline, ctx.surface, ctx.market, T_obs, fmt, p, history=history)
@@ -287,11 +292,11 @@ def _quote_greeks(sheet, product, ctx, decision, fmt, params, fixings, basket, s
 
 def quote(
     sheet: TermSheet,
-    ctx: PricingContext | None = None,
+    ctx: PricingContext | BasketContext | None = None,
     model: str | None = None,
-    control="default",
+    control: str | None = "default",
     n_paths: int = 200_000,
-    batch: int = 25_000,
+    batch: int | None = 25_000,
     seed: int = DEFAULT_SEED,
     control_paths: int | None = None,
     fixings: dict | None = None,
@@ -357,6 +362,7 @@ def quote(
         if aim is not None:
             target = aim
             result = base.at(x)
+            assert x is not None and x_se is not None  # noqa: S101 (narrows the type for pyright: desk_price solves the coupon it aims at)
             rate, rate_se = product.coupon_rate(x), x_se / product.coupon_scale
             params = {cpn: x}
         else:

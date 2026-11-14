@@ -6,6 +6,7 @@ import json
 import pandas as pd
 import pytest
 from _desk import sheet_body, wait
+from _quotes import some
 
 from optlab.marketdata.replay import ReplayConfig, replay, result_json, strike_trade
 from optlab.marketdata.synthetic import synthetic_lake
@@ -52,11 +53,11 @@ def test_it_amortises_by_calendar_days_and_ends_at_a_call_or_at_maturity():
 
 
 def test_the_amount_scales_with_the_size_whichever_side_and_goes_with_the_status():
-    left = remaining(sold(), "2027-01-01")
+    left = some(remaining(sold(), "2027-01-01"))
     assert left["initial"] == pytest.approx(2 * 1000 * 1.0 / 100) and left["amount"] == pytest.approx(20.0 * 365 / 730)
     assert left["lines"][0]["amount"] == pytest.approx(2 * 1000 * 0.6 / 100 * 365 / 730)
-    assert remaining(sold(quantity=2.0), "2027-01-01")["amount"] == left["amount"]
-    assert remaining(sold("called"), "2027-01-01")["amount"] == 0.0
+    assert some(remaining(sold(quantity=2.0), "2027-01-01"))["amount"] == left["amount"]
+    assert some(remaining(sold("called"), "2027-01-01"))["amount"] == 0.0
     plain = Trade.from_term_sheet("P", preset("phoenix"), 1.0, "2026-01-01", "2026-01-01")
     assert remaining(plain, "2027-01-01") is None
 

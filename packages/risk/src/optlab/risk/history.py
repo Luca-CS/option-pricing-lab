@@ -8,11 +8,13 @@ layer would show as a market move. Vols are read in forward moneyness, as the su
 from __future__ import annotations
 
 import json
+from typing import cast
 
 import numpy as np
 import pandas as pd
 
 from optlab.core.svi import SVISurface
+from optlab.marketdata.days import as_day
 from optlab.marketdata.lake import Lake, sql_str
 from optlab.risk import grid
 
@@ -74,7 +76,7 @@ def zero_rates(lake: Lake, currency: str, start, end) -> pd.DataFrame:
     )
     out = {}
     for d, g in rows.groupby("obs_date"):
-        out[pd.Timestamp(d).date()] = np.interp(grid.TENORS, g["tenor"].to_numpy(float), g["zero_rate"].to_numpy(float))
+        out[as_day(d)] = np.interp(grid.TENORS, g["tenor"].to_numpy(float), g["zero_rate"].to_numpy(float))
     return pd.DataFrame.from_dict(out, orient="index", columns=[f"r_{lab}" for lab in grid.TENOR_LABELS]).sort_index()
 
 
@@ -88,8 +90,8 @@ def carry(lake: Lake, name: str, start, end) -> pd.DataFrame:
         order="obs_date, tenor",
     )
     out, methods = {}, {}
-    for (d, m), g in rows.groupby(["obs_date", "method"]):
-        day = pd.Timestamp(d).date()
+    for (d, m), g in rows.groupby(["obs_date", "method"]):  # pyright: ignore[reportGeneralTypeIssues] (two keys: a pair per group)
+        day = as_day(d)
         if day in out and methods[day] == "total_return":
             continue  # one method a day, the total-return one first when a name has several
         out[day] = np.interp(grid.TENORS, g["tenor"].to_numpy(float), g["carry"].to_numpy(float))
@@ -107,7 +109,7 @@ def realised_correlation(spots: pd.DataFrame, window: int = 120) -> dict:
     for i, a in enumerate(cols):
         for b in cols[i + 1 :]:
             both = spots[[a, b]].dropna()
-            r = np.log(both).diff().dropna()
+            r = cast(pd.DataFrame, np.log(both)).diff().dropna()
             c = r[a].rolling(window).corr(r[b])
             out["|".join(sorted((a, b)))] = c.reindex(spots.index).ffill()
     return out

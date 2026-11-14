@@ -47,6 +47,7 @@ def tokenize(text: str) -> list[Token]:
         if m is None:
             raise ScriptError(f"unexpected character {text[pos]!r}", line, col)
         kind, value = m.lastgroup, m.group()
+        assert kind is not None  # noqa: S101 (narrows the type for pyright: every alternative is a named group)
         if kind == "NEWLINE":
             tokens.append(Token("NEWLINE", "\n", line, col))
             line, start = line + 1, m.end()
