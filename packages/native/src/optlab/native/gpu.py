@@ -104,7 +104,7 @@ def _run(model, market, T, cp, product, n_steps, n_paths, seed, backend, K, H=0.
     else:
         kind, sigma = _MODEL_BS, model.vol
     ext = _ext()
-    assert ext is not None  # _choose checked it
+    assert ext is not None  # noqa: S101 (narrows the type for pyright: checked above)
     return ext.price(
         model=kind,
         product=product,

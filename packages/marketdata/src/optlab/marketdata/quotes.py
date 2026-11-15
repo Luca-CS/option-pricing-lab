@@ -118,7 +118,7 @@ def quote_days(lake: Lake, underlying: str, source: str | None = None) -> list:
     con = lake.connect()
     try:
         rows = con.execute(
-            f"SELECT DISTINCT obs_date FROM read_parquet('{lake._pattern('option_quotes')}', hive_partitioning"
+            f"SELECT DISTINCT obs_date FROM read_parquet('{lake._pattern('option_quotes')}', hive_partitioning"  # noqa: S608 (identifiers from the code; values through sql_str or bound)
             f"=true, hive_types_autocast=false) WHERE {where} ORDER BY obs_date"
         ).fetchall()
     finally:

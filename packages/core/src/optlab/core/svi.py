@@ -134,7 +134,7 @@ class SVISurface:
         return {"kind": "svi", "maturities": self.maturities.tolist(), "params": self.params.tolist()}
 
     @classmethod
-    def from_dict(cls, d: dict) -> "SVISurface":
+    def from_dict(cls, d: dict) -> SVISurface:
         return cls(d["maturities"], d["params"])
 
 
@@ -219,11 +219,11 @@ def fit_svi_surface(slices, weights=None, rho_max=0.0):
 
         def outer(z):
             m, sig = z[0], np.exp(z[1])
-            if not (k_lo - sd <= m <= k_hi + sd) or not (1e-3 <= sig <= 3.0):
+            if not (k_lo - sd <= m <= k_hi + sd) or not (1e-3 <= sig <= 3.0):  # noqa: B023 (called within this iteration only)
                 return 1e6
-            x, sse = _inner_fit(m, sig, k, w_mkt, wt_w, k_grid, w_floor, rho_max)
-            g = g_function(*svi_derivs(_to_raw(m, sig, *x), g_grid), g_grid)
-            return sse + scale * 1e4 * float(np.sum(np.maximum(0.02 - g, 0.0) ** 2))  # butterfly
+            x, sse = _inner_fit(m, sig, k, w_mkt, wt_w, k_grid, w_floor, rho_max)  # noqa: B023 (called within this iteration only)
+            g = g_function(*svi_derivs(_to_raw(m, sig, *x), g_grid), g_grid)  # noqa: B023 (called within this iteration only)
+            return sse + scale * 1e4 * float(np.sum(np.maximum(0.02 - g, 0.0) ** 2))  # butterfly  # noqa: B023 (called within this iteration only)
 
         best = None
         for z0 in ([p0[3], np.log(max(p0[4], 1e-3))], [0.0, np.log(sd)], [0.5 * k_lo, np.log(2 * sd)]):

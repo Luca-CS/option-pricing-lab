@@ -57,7 +57,7 @@ class Trade:
     @classmethod
     def from_term_sheet(
         cls, trade_id: str, sheet: TermSheet, quantity: float, trade_date, strike_date=None, **kw
-    ) -> "Trade":
+    ) -> Trade:
         """A trade on a term sheet; the strike date (default: the sheet's, else the trade date) is written into
         the sheet, so that the stored product is fully determined."""
         strike = _date(strike_date or sheet.get("general.strike_date") or trade_date)
@@ -94,5 +94,5 @@ class Trade:
         return json.dumps(d, sort_keys=True)
 
     @classmethod
-    def from_json(cls, s: str) -> "Trade":
+    def from_json(cls, s: str) -> Trade:
         return cls(**json.loads(s))

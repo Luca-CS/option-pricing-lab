@@ -37,7 +37,7 @@ class Audit:
         with self.db.write() as c:
             c.execute(
                 insert(audit_log).values(
-                    at=dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+                    at=dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
                     user_id=user_id,
                     action=action,
                     target=target,

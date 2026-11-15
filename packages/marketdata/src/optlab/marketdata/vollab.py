@@ -19,6 +19,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from optlab.core import programs
 from optlab.core.heston import calibrate_heston, heston_iv
 from optlab.core.pipeline import _thin, _weights
 from optlab.core.slv import calibrate_leverage
@@ -42,9 +43,12 @@ DEFAULTS = {
 
 
 def _code_version() -> str:
+    git = programs.find("git")
+    if git is None:
+        return ""
     try:
-        return subprocess.run(
-            ["git", "-C", str(Path(__file__).parent), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=5
+        return subprocess.run(  # noqa: S603 (an absolute path, fixed arguments, no shell)
+            [git, "-C", str(Path(__file__).parent), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=5
         ).stdout.strip()
     except OSError, subprocess.SubprocessError:
         return ""
@@ -57,7 +61,7 @@ def lab_days(lake: Lake) -> list[dict]:
     con = lake.connect()
     try:
         rows = con.execute(
-            "SELECT DISTINCT underlying, source, obs_date, quality FROM read_parquet("
+            "SELECT DISTINCT underlying, source, obs_date, quality FROM read_parquet("  # noqa: S608 (identifiers from the code; values through sql_str or bound)
             f"'{lake._pattern('option_quotes')}', hive_partitioning=true, hive_types_autocast=false) "
             "ORDER BY underlying, source, obs_date"
         ).df()

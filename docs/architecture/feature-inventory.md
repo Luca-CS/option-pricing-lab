@@ -162,7 +162,7 @@ against the command tree. One change for all: a list option (`--only`) is comma-
 
 | Script | Does | Subcommand | Options | Status |
 |---|---|---|---|---|
-| `run_calibration.py` | SSVI -> SVI -> Heston -> SLV on the simulated market or the latest SPX snapshot, writes `results/<source>_calibration.json` and figures | `optlab calib run` | `--source simulated\|spx`, `--mix`, `--particles`, `--paths`, `--skip-sweep`, `--replot`; the output goes to the settings' `results` (`results/` of a checkout, `optlab-data/archive/` for an installed wheel; the versioned JSON leaves the repo in A8, decision §1) and the charts to `<reports>/figures` | kept |
+| `run_calibration.py` | SSVI -> SVI -> Heston -> SLV on the simulated market or the latest SPX snapshot, writes `results/<source>_calibration.json` and figures | `optlab calib run` | `--source simulated\|spx`, `--mix`, `--particles`, `--paths`, `--skip-sweep`, `--replot`; the output goes to the settings' `results` (`results/` of a checkout, `optlab-data/archive/` for an installed wheel; the versioned JSON stays, in compact JSON: ADR-0023) and the charts to `<reports>/figures` | kept |
 | `make_report.py` | `reports/calibration.md` from the calibrations | `optlab calib report` | none | kept |
 | `plots.py` | report charts (matplotlib, site palette) | library module of `calib report` (extra `[reports]`) | — | merged |
 | `build_widget_data.py` | `docs/pricer-data.js` from the SPX calibration | `optlab demo widget-data` | none | kept until session 2 replaces `docs/lab.js` |
@@ -224,7 +224,7 @@ Commands with no v0 script (A6, A7):
 | `reports/fx_check.md` | `optlab lake fx-check` | kept |
 | `reports/surface_reconstruction.md` | `optlab lake surface-test`, `regime-test` | kept |
 | `reports/showcase.md` | guide of the showcase (its commands are `optlab` ones since A7) | kept |
-| `results/spx_calibration.json`, `results/simulated_calibration.json` (112,000 lines) | `optlab calib run` | **moved out of the repo** (decided): release asset and `optlab-data/archive/` |
+| `results/spx_calibration.json`, `results/simulated_calibration.json` | `optlab calib run` | kept in the repo, in compact JSON (ADR-0023, superseding the move out of ADR-0016) |
 | `results/pricing_examples.json`, `replay_*.json`, `surface_*.json` (small) | their subcommands | kept in the repo |
 | `docs/` (GitHub Pages: `index.html`, `lab.js`, `pricer-data.js`) | by hand, `demo widget-data` | frozen; replaced by the demo build in session 2 |
 | `space/app.py` (Gradio, not deployed) | — | **dropped** (decided) |

@@ -142,6 +142,25 @@ def _diff(up, down, scale):
     return float(d.mean()), float(d.std(ddof=1) / np.sqrt(len(d)))
 
 
+def _last_observation(program, timeline) -> float:
+    """The replication's horizon: the last observation date, else the product's horizon."""
+    from optlab.structured.profile import profile
+
+    times = profile(program, timeline).observation_times
+    return times[-1] if times else timeline.horizon
+
+
+def _vega(vu, vd, h_vol: float, model: str):
+    """(vega, its SE, a note): None and the reason when the model has no vol bump without a recalibration."""
+    if vu is None:
+        note = f"no vega under {model.upper()}: a vol bump needs a recalibration of the model" + (
+            " (pass slv_vega=True to recalibrate the leverage)" if model == "slv" else ""
+        )
+        return None, None, note
+    vega, vega_se = _diff(vu, vd, 0.01 / (2 * h_vol))
+    return vega, vega_se, ""
+
+
 def greeks(
     program,
     ctx,
@@ -180,10 +199,7 @@ def greeks(
     timeline = build_timeline(program, Clock(valuation, calendar))
     horizon = timeline.horizon
     if method == "replication" and T_obs is None:
-        from optlab.structured.profile import profile
-
-        times = profile(program, timeline).observation_times
-        T_obs = times[-1] if times else horizon
+        T_obs = _last_observation(program, timeline)
     seconds = {}
 
     def mc_model(vol_shift=0.0):
@@ -287,13 +303,6 @@ def greeks(
     seconds["delta"] = time.perf_counter() - t0
     t0 = time.perf_counter()
     vu, vd = run(vol_shift=h_vol, eps=eps), run(vol_shift=-h_vol, eps=eps)
-    vega = vega_se = None
-    note = ""
-    if vu is not None:
-        vega, vega_se = _diff(vu, vd, 0.01 / (2 * h_vol))
-    else:
-        note = f"no vega under {model.upper()}: a vol bump needs a recalibration of the model" + (
-            " (pass slv_vega=True to recalibrate the leverage)" if model == "slv" else ""
-        )
+    vega, vega_se, note = _vega(vu, vd, h_vol, model)
     seconds["vega"] = time.perf_counter() - t0
     return Greeks(delta, delta_se, vega, vega_se, eps, bias, bias_se, method, model, seconds, note, sticky=convention)

@@ -16,24 +16,27 @@ import subprocess
 from pathlib import Path
 from typing import Protocol
 
+from optlab.core import programs
+
 
 def _now() -> str:
-    return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    return dt.datetime.now(dt.UTC).isoformat(timespec="seconds")
 
 
 def code_version() -> str:
     """The commit of the code, with "+dirty" when the working tree has changes under packages/ (git is asked from this
     file's folder, so it finds the repository the code runs from)."""
     try:
-        head = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
+        git = programs.require("git")
+        head = subprocess.run(  # noqa: S603 (an absolute path, fixed arguments, no shell)
+            [git, "rev-parse", "--short", "HEAD"],
             cwd=Path(__file__).parent,
             capture_output=True,
             text=True,
             timeout=10,
         ).stdout.strip()
-        dirty = subprocess.run(
-            ["git", "status", "--porcelain", "--", ":/packages"],
+        dirty = subprocess.run(  # noqa: S603 (an absolute path, fixed arguments, no shell)
+            [git, "status", "--porcelain", "--", ":/packages"],
             cwd=Path(__file__).parent,
             capture_output=True,
             text=True,

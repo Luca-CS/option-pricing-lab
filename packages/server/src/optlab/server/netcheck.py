@@ -6,8 +6,10 @@ from __future__ import annotations
 
 import json
 import ntpath
+import os
 import subprocess
 import sys
+from pathlib import Path
 
 SCRIPT = r"""
 $p = @(Get-NetConnectionProfile | ForEach-Object { [pscustomobject]@{ alias = $_.InterfaceAlias;
@@ -57,8 +59,11 @@ def lan_blockers(timeout: float = 30.0) -> list[str]:
     if sys.platform != "win32":
         return []
     try:
-        res = subprocess.run(
-            ["powershell", "-NoProfile", "-NonInteractive", "-Command", SCRIPT],
+        powershell = (
+            Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32/WindowsPowerShell/v1.0/powershell.exe"
+        )
+        res = subprocess.run(  # noqa: S603 (Windows' own PowerShell by its full path, a fixed script, no shell)
+            [str(powershell), "-NoProfile", "-NonInteractive", "-Command", SCRIPT],
             capture_output=True,
             text=True,
             timeout=timeout,

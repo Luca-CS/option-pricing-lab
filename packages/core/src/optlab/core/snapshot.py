@@ -51,10 +51,10 @@ class MarketSnapshot:
         return json.dumps(d, sort_keys=True)
 
     @classmethod
-    def from_json(cls, s: str) -> "MarketSnapshot":
+    def from_json(cls, s: str) -> MarketSnapshot:
         return cls(**json.loads(s))
 
-    def with_spot_scale(self, real_spot: float) -> "MarketSnapshot":
+    def with_spot_scale(self, real_spot: float) -> MarketSnapshot:
         """The same snapshot with its local scale: real spot level / model spot."""
         return replace(self, spot_scale=float(real_spot) / float(self.market["spot"]))
 
@@ -67,7 +67,7 @@ class MarketSnapshot:
         source: str | None = None,
         provenance: bool = True,
         code_version: str | None = None,
-    ) -> "MarketSnapshot":
+    ) -> MarketSnapshot:
         """A snapshot from a calibration JSON (results/*.json). Files without a snapshot time (the simulated
         market) need `valuation`. `provenance` adds the creation time and, when given, the code version."""
         path = Path(path)
@@ -83,7 +83,7 @@ class MarketSnapshot:
         slv = {"mix": cal["slv"]["mix"], "leverage": cal["slv"]["leverage"]}
         prov = {"file": path.name, "file_sha256": hashlib.sha256(raw).hexdigest(), "note": meta.get("note")}
         if provenance:
-            prov.update(code_version=code_version, created_at=dt.datetime.now(dt.timezone.utc).isoformat())
+            prov.update(code_version=code_version, created_at=dt.datetime.now(dt.UTC).isoformat())
         return cls(
             underlying,
             stamp or valuation.isoformat(),

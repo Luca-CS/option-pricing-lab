@@ -140,7 +140,7 @@ def sql_str(value) -> str:
 
 
 def _utcnow() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
+    return dt.datetime.now(dt.UTC).replace(tzinfo=None)
 
 
 def new_run_id(source: str) -> str:
@@ -288,7 +288,7 @@ class Lake:
         con = duckdb.connect()
         try:
             known = con.execute(
-                f"SELECT {select}, arg_max(row_hash, ingested_at) AS row_hash_old FROM "
+                f"SELECT {select}, arg_max(row_hash, ingested_at) AS row_hash_old FROM "  # noqa: S608 (identifiers from the code; values through sql_str or bound)
                 f"read_parquet(?, union_by_name=true, hive_partitioning=false) GROUP BY {select}",
                 [[str(f) for f in files]],
             ).df()
@@ -343,7 +343,7 @@ class Lake:
             filters.append(f"ingested_at <= TIMESTAMP '{pd.Timestamp(as_of):%Y-%m-%d %H:%M:%S}'")
         clause = f"WHERE {' AND '.join(filters)}" if filters else ""
         return (
-            f"(SELECT * EXCLUDE (_rn, year) FROM (SELECT *, row_number() OVER (PARTITION BY {keys} "
+            f"(SELECT * EXCLUDE (_rn, year) FROM (SELECT *, row_number() OVER (PARTITION BY {keys} "  # noqa: S608 (identifiers from the code; values through sql_str or bound)
             f"ORDER BY ingested_at DESC, run_id DESC) AS _rn FROM read_parquet('{self._pattern(table)}', "
             f"hive_partitioning=true, union_by_name=true, hive_types_autocast=false) {clause}) WHERE _rn = 1)"
         )
@@ -358,7 +358,7 @@ class Lake:
             return pd.DataFrame(columns=[*spec.keys, *spec.values, *STANDARD])
         con = duckdb.connect()
         try:
-            sql = f"SELECT {columns} FROM {self.sql_source(table, as_of, where)}"
+            sql = f"SELECT {columns} FROM {self.sql_source(table, as_of, where)}"  # noqa: S608 (identifiers from the code; values through sql_str or bound)
             return con.execute(sql + (f" ORDER BY {order}" if order else ""), list(params)).df()
         finally:
             con.close()
@@ -369,7 +369,7 @@ class Lake:
         try:
             clause = f"WHERE {where}" if where else ""
             return con.execute(
-                f"SELECT * FROM read_parquet('{self._pattern(table)}', hive_partitioning=true, "
+                f"SELECT * FROM read_parquet('{self._pattern(table)}', hive_partitioning=true, "  # noqa: S608 (identifiers from the code; values through sql_str or bound)
                 f"union_by_name=true, hive_types_autocast=false) {clause} ORDER BY ingested_at, run_id"
             ).df()
         finally:
@@ -380,7 +380,7 @@ class Lake:
         con = duckdb.connect()
         for table in TABLES:
             if self.has(table):
-                con.execute(f"CREATE VIEW {table} AS SELECT * FROM {self.sql_source(table, as_of)}")
+                con.execute(f"CREATE VIEW {table} AS SELECT * FROM {self.sql_source(table, as_of)}")  # noqa: S608 (identifiers from the code; values through sql_str or bound)
         return con
 
     def coverage(self) -> pd.DataFrame:
@@ -394,7 +394,7 @@ class Lake:
             try:
                 frames.append(
                     con.execute(
-                        f"SELECT '{table}' AS dataset, origin, source, count(*) AS n, min(obs_date) AS first, "
+                        f"SELECT '{table}' AS dataset, origin, source, count(*) AS n, min(obs_date) AS first, "  # noqa: S608 (identifiers from the code; values through sql_str or bound)
                         f"max(obs_date) AS last, max(ingested_at) AS ingested FROM read_parquet('{self._pattern(table)}', "
                         "union_by_name=true, hive_partitioning=false) GROUP BY origin, source ORDER BY source"
                     ).df()

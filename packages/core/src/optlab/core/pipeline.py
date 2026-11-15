@@ -55,7 +55,7 @@ def calibrate_all(
 
     t = time.time()
     hq = [_thin(s, n_strikes_heston) for s in slices]
-    heston, hsol = calibrate_heston(hq, heston_x0, [_weights(s) for s in hq])
+    heston, _ = calibrate_heston(hq, heston_x0, [_weights(s) for s in hq])
     out["heston"], out["timings"]["heston_s"] = heston, time.time() - t
     log(f"Heston {heston} feller={heston.feller():.2f} ({out['timings']['heston_s']:.1f} s)")
 
@@ -88,7 +88,7 @@ def fit_errors(fit, market: Market, slices, n_paths=400_000, seed=7, n_mc_strike
         k_mc = np.linspace(max(s["k"].min(), -2.0 * sd), min(s["k"].max(), 1.5 * sd), n_mc_strikes)
         K_mc = market.F(T) * np.exp(k_mc)
         target = surface.iv(k_mc, T)
-        iv_lv, se_lv = mc_smile(lv, market, T, K_mc, n_paths, seed + i)
+        iv_lv, _ = mc_smile(lv, market, T, K_mc, n_paths, seed + i)
         iv_slv, se_slv = mc_smile(slv, market, T, K_mc, n_paths, seed + i)
         row = {
             "expiry": s.get("expiry", ""),

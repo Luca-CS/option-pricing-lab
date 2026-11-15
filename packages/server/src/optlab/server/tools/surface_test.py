@@ -106,7 +106,7 @@ def main(step: int = 5, lake_root: str | Path | None = None, log=say) -> None:
         "days": [str(days[0]), str(days[-1])],
         "n_days": len(days),
         "n_quotes": int(sum(len(f) for f in frames["static_prior"])),
-        "run_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        "run_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
         "seconds_total": round(time.perf_counter() - t0, 1),
         "prior": {k: getattr(prior, k) for k in ("rho", "eta", "gamma", "v_inf", "kappa", "source")},
         "observed_svi": {

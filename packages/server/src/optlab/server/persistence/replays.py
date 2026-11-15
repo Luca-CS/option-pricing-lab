@@ -23,9 +23,7 @@ class ReplayRepository:
             c.execute(
                 insert(replays)
                 .prefix_with("OR REPLACE")
-                .values(
-                    stem=stem, payload=json.dumps(payload), recorded_at=dt.datetime.now(dt.timezone.utc).isoformat()
-                )
+                .values(stem=stem, payload=json.dumps(payload), recorded_at=dt.datetime.now(dt.UTC).isoformat())
             )
 
     def get(self, stem: str) -> dict | None:

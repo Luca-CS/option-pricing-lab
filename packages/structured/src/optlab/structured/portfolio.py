@@ -39,6 +39,23 @@ from optlab.structured.units import BOOK_UNITS
 CLASS_ORDER = ("european", "path_dependent", "callable")
 
 
+def merged_history(items, ctx, market=None) -> dict:
+    """{name: {time: fixing}} of prepared positions together (two positions that disagree on a fixing are an error), each
+    name's fixings checked against its spot: the basket's market of the name, else `market` or the context's."""
+    basket = isinstance(ctx, BasketContext)
+    history: dict = {}
+    for it in items:
+        for name, h in it["history"].items():
+            merged = history.setdefault(name, {})
+            for t, v in h.items():
+                if t in merged and merged[t] != v:
+                    raise ValueError(f"two positions give different fixings of {name} at t = {t:.6f}")
+                merged[t] = v
+    for name, h in history.items():
+        check_fixing_scale(h, (ctx.markets[name] if basket else (market or ctx.market)).spot, name)
+    return history
+
+
 @dataclass
 class Position:
     """`quantity` units of a product (a term sheet, a script or a Quote), signed: positive when the book holds
@@ -198,16 +215,7 @@ class Book:
         rule = "basket" if len(d_names := {n for it in items for n in it["underlyings"]}) > 1 else d.product_class
         reason = RULES[rule].reason.split(":")[0] if not d.forced else d.reason
         warnings = list(d.warnings)
-        history: dict = {}
-        for it in items:
-            for name, h in it["history"].items():
-                merged = history.setdefault(name, {})
-                for t, v in h.items():
-                    if t in merged and merged[t] != v:
-                        raise ValueError(f"two positions give different fixings of {name} at t = {t:.6f}")
-                    merged[t] = v
-        for name, h in history.items():
-            check_fixing_scale(h, (ctx.markets[name] if basket else market).spot, name)
+        history = merged_history(items, ctx, market)
         if d.method == "replication":
             results, values = [], []
             for it in items:

@@ -4,7 +4,7 @@ import datetime as dt
 
 import numpy as np
 import pytest
-from _paths import real_lake
+from _paths import spx_lake
 from _stores import risk_store
 
 from optlab.marketdata.replay import struck_sheet
@@ -18,20 +18,7 @@ SETTINGS = RiskSettings(n_paths=20_000, batch=10_000, engine="numpy")
 
 @pytest.fixture(scope="module")
 def lake():
-    from optlab.marketdata.lake import Lake
-
-    lk = Lake(real_lake())
-    try:
-        if (
-            lk.read("vol_surfaces", where="underlying = 'SPX' AND layer = 'reconstructed'", columns="count(*) AS n")[
-                "n"
-            ].iloc[0]
-            < 600
-        ):
-            pytest.skip("no reconstructed SPX surfaces in the lake")
-    except Exception:  # noqa: BLE001
-        pytest.skip("no lake")
-    return lk
+    return spx_lake()
 
 
 def brc_2020():

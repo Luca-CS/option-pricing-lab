@@ -68,9 +68,28 @@ extend-exclude = [
 ]
 
 [tool.ruff.lint]
-# v0's rules (pycodestyle errors, pyflakes) plus import sorting; the wider set of ADR-0014 (C901, S, B, UP) comes with
-# the clean-up of A8, measured against reports/refactor-baseline.md
-select = ["E4", "E7", "E9", "F", "I", "TID252"]
+# ADR-0014: pycodestyle errors, pyflakes, import sorting, absolute imports, and since A8 complexity (C901, at most 15),
+# bandit (S), bugbear (B) and pyupgrade (UP). A `noqa` in the code says why each exception is safe.
+select = ["E4", "E7", "E9", "F", "I", "TID252", "C901", "S", "B", "UP"]
+ignore = [
+    "B905",  # zip() without strict=: several pricers zip lists of the same length by construction; strict=True would
+             # turn into an error a case no test has, and strict=False everywhere would say nothing
+]
+
+[tool.ruff.lint.per-file-ignores]
+# tests assert, start the interpreter and node, bind 0.0.0.0 in settings they check, and type throwaway passwords
+"**/tests/**" = ["S101", "S105", "S106", "S108", "S603", "S607", "S104", "B017"]
+"tests/**" = ["S101", "S603", "S607"]
+"deploy/**" = ["S101"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 15  # 7 functions above it at the baseline (reports/refactor-baseline.md), none since A8
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's parameter markers are evaluated once, by design
+extend-immutable-calls = [
+    "fastapi.Query", "fastapi.Path", "fastapi.Body", "fastapi.Header", "fastapi.Depends", "fastapi.params.Query",
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["optlab"]  # a namespace spread over packages/*/src, which ruff cannot find alone

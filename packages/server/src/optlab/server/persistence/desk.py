@@ -17,7 +17,7 @@ from optlab.structured.trade import Trade
 
 
 def _now() -> str:
-    return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    return dt.datetime.now(dt.UTC).isoformat(timespec="seconds")
 
 
 class DeskRepository:

@@ -78,7 +78,7 @@ class LocalCorrelation:
     def advance(self, state, dt: float, market, rng_normal):
         return state
 
-    def bumped(self, slope: float) -> "LocalCorrelation":
+    def bumped(self, slope: float) -> LocalCorrelation:
         """The slope moved by `slope` on each side: a steeper correlation skew when positive."""
         return replace(self, down=max(self.down + slope, 0.0), up=max(self.up + slope, 0.0))
 
@@ -108,7 +108,7 @@ class StochasticMix:
         )
         return np.clip(w, 0.0, 1.0)
 
-    def bumped(self, slope: float) -> "StochasticMix":
+    def bumped(self, slope: float) -> StochasticMix:
         return replace(self, rho=float(np.clip(self.rho - slope, -0.99, 0.99)))
 
 
@@ -255,7 +255,10 @@ class CorrelationSkew:
         return self.slope_down * max(1.0 - strike, 0.0) - self.slope_up * max(strike - 1.0, 0.0)
 
 
-def skewed_matrix(matrix, strike: float, skew: CorrelationSkew = CorrelationSkew()) -> np.ndarray:
+DEFAULT_SKEW = CorrelationSkew()  # a frozen default, shared by the functions that take one
+
+
+def skewed_matrix(matrix, strike: float, skew: CorrelationSkew = DEFAULT_SKEW) -> np.ndarray:
     """A valid correlation matrix for a product living around this strike, every pair moved by the same offset. This is how
     the one correlation of `BasketContext` can carry a skew until the simulation has a local correlation."""
     moved = np.clip(np.asarray(matrix, dtype=float) + skew.offset(strike), -0.95, 0.99)
@@ -338,7 +341,7 @@ def basket_rows(
     tenors=(0.25, 0.5, 1.0),
     strikes=STRIKES,
     n_pairs: int = 100_000,
-    skew: CorrelationSkew = CorrelationSkew(),
+    skew: CorrelationSkew = DEFAULT_SKEW,
     seed: int = SEED,
 ) -> list[dict]:
     """Every line of one basket on one day. `forward(T)` gives S_i-forward over spot per member. Simulated once per strike, so

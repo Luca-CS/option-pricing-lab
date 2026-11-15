@@ -58,7 +58,7 @@ class User:
 
 
 def _now() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
+    return dt.datetime.now(dt.UTC)
 
 
 def _iso(t: dt.datetime) -> str:

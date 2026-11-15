@@ -34,7 +34,7 @@ class Market:
         self._log_f = np.concatenate([[0.0], np.log(f[order] / self.spot)])
 
     @classmethod
-    def flat(cls, spot: float, r: float = 0.0, q: float = 0.0) -> "Market":
+    def flat(cls, spot: float, r: float = 0.0, q: float = 0.0) -> Market:
         """Constant short rate r and dividend yield q."""
         t = np.array([1.0])
         return cls(spot, t, np.exp(-r * t), spot * np.exp((r - q) * t))
@@ -63,7 +63,7 @@ class Market:
         T = np.maximum(np.asarray(T, dtype=float), 1e-8)
         return np.log(self.F(T) / self.spot) / T
 
-    def scaled(self, new_spot: float) -> "Market":
+    def scaled(self, new_spot: float) -> Market:
         """Same curves with the spot rescaled (strikes can then be read in % of spot)."""
         return Market(new_spot, self._t[1:], np.exp(self._log_d[1:]), new_spot * np.exp(self._log_f[1:]))
 
@@ -76,5 +76,5 @@ class Market:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Market":
+    def from_dict(cls, d: dict) -> Market:
         return cls(d["spot"], np.array(d["pillars"]), np.array(d["discounts"]), np.array(d["forwards"]))

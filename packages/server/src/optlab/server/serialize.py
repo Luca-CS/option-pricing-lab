@@ -170,7 +170,7 @@ def quote_json(q) -> dict:
 
 def book_json(res, trades=None) -> dict:
     positions = []
-    for i, pos in enumerate(res.positions):
+    for _i, pos in enumerate(res.positions):
         row = {
             "name": pos.name,
             "quantity": pos.quantity,

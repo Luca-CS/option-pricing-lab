@@ -149,11 +149,6 @@ def strike_tents(k, T=1.0, rows=None):
     return out[0], out[1], out[2], out[3]
 
 
-def strike_weights(k, T) -> np.ndarray:
-    """How a strike (log forward moneyness k) at maturity T splits over the strike nodes (sums to one)."""
-    return strike_tents(np.asarray([k], dtype=float), np.asarray([T], dtype=float))[0][:, 0]
-
-
 def tenor_tents(T, order: int = 1):
     """Tents over the tenors, read in years."""
     return tents(TENORS, T, order)
@@ -178,11 +173,6 @@ def scalar_tenor_tents(T: float):
             psi[i, 0], psi[i + 1, 0] = 1.0 - float(s), float(s)
             dpsi[i, 0], dpsi[i + 1, 0] = -float(ds) / (b - a), float(ds) / (b - a)
     return psi, dpsi
-
-
-def tenor_weights(T) -> np.ndarray:
-    """How a maturity T splits over the tenors (sums to one)."""
-    return tenor_tents(np.asarray([T], dtype=float), order=0)[0][:, 0]
 
 
 def weighted_factor(T) -> np.ndarray:

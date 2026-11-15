@@ -319,8 +319,7 @@ American PDE (Crank-Nicolson with projected SOR on a strike-centred grid, so tha
 spot), the tree, Lévy's Asian approximation, Heston by Fourier, Monte Carlo (Andersen's QE scheme for Heston)
 and Longstaff-Schwartz, checked against the Python library by `packages/core/tests/test_widget_js.py` (needs node), plus the
 SPX results written by `optlab demo widget-data`. Deep links open a given case, for instance
-`?product=barrier&K=119&model=heston`. The full library, with live SLV recalibration, also has a Gradio app that
-runs locally: `pip install gradio`, then `python space/app.py`.
+`?product=barrier&K=119&model=heston`.
 
 ## Layout
 
@@ -336,7 +335,6 @@ A uv workspace: six distributions share the namespace `optlab`, each in `package
 | `packages/risk` | `optlab.risk`: shocks and one revaluation engine, Greeks, ladder, scenarios, VaR, EOD runs and explained P&L |
 | `packages/server` | `optlab.server`: the desk's API v1 (FastAPI): accounts and roles, audit log, jobs, the SQLite database, reports; the `optlab` command line and its tools (calibration runs, lake updates, reports and charts) |
 | `docs/` | demo page (GitHub Pages); `docs/architecture/` the target architecture and its decisions |
-| `space/` | Gradio app, run locally |
 | `tests/` | the golden numbers and the fixtures shared across packages |
 
 ## Limitations

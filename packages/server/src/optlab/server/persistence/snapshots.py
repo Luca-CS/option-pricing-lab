@@ -35,7 +35,7 @@ class SnapshotRepository:
                         source=snap.source,
                         payload=snap.to_json(),
                         spot_scale=snap.spot_scale,
-                        recorded_at=dt.datetime.now(dt.timezone.utc).isoformat(),
+                        recorded_at=dt.datetime.now(dt.UTC).isoformat(),
                     )
                 )
             if snap.spot_scale is not None:

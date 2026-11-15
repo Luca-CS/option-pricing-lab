@@ -148,7 +148,7 @@ class Settings(BaseSettings):
     def _safety(self) -> Settings:
         if self.container and not in_container():
             raise ValueError("OPTLAB_CONTAINER is for deploy/'s containers: this process does not run in one")
-        in_container_interface = self.container and self.host == "0.0.0.0"  # the container's own interface (ADR-0009)
+        in_container_interface = self.container and self.host == "0.0.0.0"  # the container's own interface (ADR-0009)  # noqa: S104 (a container's own interface only, ADR-0009)
         if not self.lan and not _is_loopback(self.host) and not in_container_interface:
             raise ValueError(
                 f"host {self.host!r} listens beyond this machine: set OPTLAB_LAN=true only with Luca's agreement "

@@ -216,7 +216,7 @@ def test_sessions_expire_when_idle_or_old(a, monkeypatch):
     c = a.client()
     _login(c, "dan")
     assert c.get("/api/v1/auth/me").status_code == 200
-    now = dt.datetime.now(dt.timezone.utc)
+    now = dt.datetime.now(dt.UTC)
     idle = a.state.settings.session_idle_minutes
     monkeypatch.setattr(security, "_now", lambda: now + dt.timedelta(minutes=idle + 1))
     assert c.get("/api/v1/auth/me").status_code == 401

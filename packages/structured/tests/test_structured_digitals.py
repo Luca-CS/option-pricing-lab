@@ -143,8 +143,8 @@ def test_the_delta_of_the_payoff_stays_under_the_limit():
             paths = np.tile(grid[:, None], (1, len(tl.sim_times)))
 
             def pv(ramps):
-                ev = Evaluator(p.program, tl, {}, ramps=ramps, check_redemption=False)
-                flows = ev.run(Scenario("SPX", tl.sim_times, paths, 100.0))
+                ev = Evaluator(p.program, tl, {}, ramps=ramps, check_redemption=False)  # noqa: B023 (called within this iteration only)
+                flows = ev.run(Scenario("SPX", tl.sim_times, paths, 100.0))  # noqa: B023 (called within this iteration only)
                 return sum(np.broadcast_to(f, grid.shape) for f in flows.flows.values())
 
             def slope(v):

@@ -67,7 +67,7 @@ class Bumps:
     roll_days: int = 1
 
     @classmethod
-    def from_dict(cls, d: dict | None) -> "Bumps":
+    def from_dict(cls, d: dict | None) -> Bumps:
         d = dict(d or {})
         known = {f.name for f in dataclasses.fields(cls)}
         return cls(**{k: v for k, v in d.items() if k in known})
@@ -83,7 +83,7 @@ class GreekOptions:
     theta: bool = True
 
     @classmethod
-    def from_dict(cls, d: dict | None) -> "GreekOptions":
+    def from_dict(cls, d: dict | None) -> GreekOptions:
         d = dict(d or {})
         known = {f.name for f in dataclasses.fields(cls)}
         return cls(**{k: v for k, v in d.items() if k in known})
@@ -130,108 +130,121 @@ def plan(
     cur = context_currency(ctx)
     S: dict = {}
     M: list = []
-    h, H, v, rv = b.spot, b.spot_large, b.vol, b.vol_relative
-    unit_s, unit_v = 0.01 / h, 0.01 / v
-    per_name: dict = {  # noqa: F841 (dead since v0, removed in A8)
-        k: []
-        for k in (
-            "delta",
-            "gamma",
-            "gamma_5",
-            "vega",
-            "vega_relative",
-            "volga",
-            "vanna",
-            "skew_vega",
-            "delta_sticky_strike",
-            "delta_realistic",
-            "epsilon",
-            "repo",
-            "vega_weighted",
-            "vega_weighted_direct",
-        )
-    }
     tenor_name: dict = {}
     kxt = o.kxt == "all" or (o.kxt == "single" and not basket)
     for n in names:
-        S[f"s+|{n}"], S[f"s-|{n}"] = Shock(spot={n: h}), Shock(spot={n: -h})
-        S[f"S+|{n}"], S[f"S-|{n}"] = Shock(spot={n: H}), Shock(spot={n: -H})
-        M += [
-            _central(f"delta|{n}|", f"s+|{n}", f"s-|{n}", unit_s),
-            _second(f"gamma|{n}|", f"s+|{n}", f"s-|{n}", unit_s**2),
-            _second(f"gamma_5|{n}|", f"S+|{n}", f"S-|{n}", (0.01 / H) ** 2),
-        ]
-        if o.sticky_strike:
-            S[f"ss+|{n}"] = Shock(spot={n: h}, rule="sticky_strike")
-            S[f"ss-|{n}"] = Shock(spot={n: -h}, rule="sticky_strike")
-            M.append(_central(f"delta_sticky_strike|{n}|", f"ss+|{n}", f"ss-|{n}", unit_s))
-        if o.realistic and n in env.betas:
-            S[f"rl+|{n}"] = Shock(spot={n: h}, rule="realistic")
-            S[f"rl-|{n}"] = Shock(spot={n: -h}, rule="realistic")
-            M.append(_central(f"delta_realistic|{n}|", f"rl+|{n}", f"rl-|{n}", unit_s))
-        S[f"v+|{n}"], S[f"v-|{n}"] = Shock(vol={n: VolMove(v)}), Shock(vol={n: VolMove(-v)})
-        S[f"vr+|{n}"], S[f"vr-|{n}"] = Shock(vol={n: VolMove(relative=rv)}), Shock(vol={n: VolMove(relative=-rv)})
-        M += [
-            _central(f"vega|{n}|", f"v+|{n}", f"v-|{n}", unit_v),
-            _central(f"vega_relative|{n}|", f"vr+|{n}", f"vr-|{n}", 0.01 / rv),
-        ]
-        if o.cross:
-            M.append(_second(f"volga|{n}|", f"v+|{n}", f"v-|{n}", unit_v**2))
-            for a, sa in (("+", h), ("-", -h)):
-                for c, sv in (("+", v), ("-", -v)):
-                    S[f"x{a}{c}|{n}"] = Shock(spot={n: sa}, vol={n: VolMove(sv)})
-            M.append(_cross(f"vanna|{n}|", f"x++|{n}", f"x+-|{n}", f"x-+|{n}", f"x--|{n}", unit_s * unit_v))
-        S[f"k+|{n}"], S[f"k-|{n}"] = Shock(vol={n: VolMove(skew=b.skew)}), Shock(vol={n: VolMove(skew=-b.skew)})
-        M.append(_central(f"skew_vega|{n}|", f"k+|{n}", f"k-|{n}", 0.01 / b.skew))
-        tenors = []
+        _plan_spot(S, M, n, b, o, env)
+        _plan_vol(S, M, n, b, o, kxt, tenor_name)
+        _plan_carry(S, M, n, b, o, env)
+    _plan_totals(M, names, tenor_name)
+    _plan_rates(S, M, cur, b, o)
+    if basket and o.cross and len(names) > 1:
+        _plan_correlation(S, M, names, b)
+    if o.theta:
+        S["roll"] = Shock(roll_days=b.roll_days)
+        M.append(_one_sided("theta|*|", "roll", 1.0))
+        if roll_spots:
+            S["roll@forward"] = Shock(roll_days=b.roll_days, spot=dict(roll_spots))
+            M.append(Measure("theta_carry|*|", {"roll": 1.0, "roll@forward": -1.0}))
+    return S, M
+
+
+def _plan_spot(S: dict, M: list, n: str, b: Bumps, o: GreekOptions, env: RiskEnv) -> None:
+    """Delta and gammas of a name, and the deltas under the other vol rules."""
+    h, H = b.spot, b.spot_large
+    unit_s = 0.01 / h
+    S[f"s+|{n}"], S[f"s-|{n}"] = Shock(spot={n: h}), Shock(spot={n: -h})
+    S[f"S+|{n}"], S[f"S-|{n}"] = Shock(spot={n: H}), Shock(spot={n: -H})
+    M += [
+        _central(f"delta|{n}|", f"s+|{n}", f"s-|{n}", unit_s),
+        _second(f"gamma|{n}|", f"s+|{n}", f"s-|{n}", unit_s**2),
+        _second(f"gamma_5|{n}|", f"S+|{n}", f"S-|{n}", (0.01 / H) ** 2),
+    ]
+    if o.sticky_strike:
+        S[f"ss+|{n}"] = Shock(spot={n: h}, rule="sticky_strike")
+        S[f"ss-|{n}"] = Shock(spot={n: -h}, rule="sticky_strike")
+        M.append(_central(f"delta_sticky_strike|{n}|", f"ss+|{n}", f"ss-|{n}", unit_s))
+    if o.realistic and n in env.betas:
+        S[f"rl+|{n}"] = Shock(spot={n: h}, rule="realistic")
+        S[f"rl-|{n}"] = Shock(spot={n: -h}, rule="realistic")
+        M.append(_central(f"delta_realistic|{n}|", f"rl+|{n}", f"rl-|{n}", unit_s))
+
+
+def _plan_vol(S: dict, M: list, n: str, b: Bumps, o: GreekOptions, kxt: bool, tenor_name: dict) -> None:
+    """Vegas of a name: parallel, relative, volga and vanna, skew, by node or by tenor, net and weighted."""
+    h, v, rv = b.spot, b.vol, b.vol_relative
+    unit_s, unit_v = 0.01 / h, 0.01 / v
+    S[f"v+|{n}"], S[f"v-|{n}"] = Shock(vol={n: VolMove(v)}), Shock(vol={n: VolMove(-v)})
+    S[f"vr+|{n}"], S[f"vr-|{n}"] = Shock(vol={n: VolMove(relative=rv)}), Shock(vol={n: VolMove(relative=-rv)})
+    M += [
+        _central(f"vega|{n}|", f"v+|{n}", f"v-|{n}", unit_v),
+        _central(f"vega_relative|{n}|", f"vr+|{n}", f"vr-|{n}", 0.01 / rv),
+    ]
+    if o.cross:
+        M.append(_second(f"volga|{n}|", f"v+|{n}", f"v-|{n}", unit_v**2))
+        for a, sa in (("+", h), ("-", -h)):
+            for c, sv in (("+", v), ("-", -v)):
+                S[f"x{a}{c}|{n}"] = Shock(spot={n: sa}, vol={n: VolMove(sv)})
+        M.append(_cross(f"vanna|{n}|", f"x++|{n}", f"x+-|{n}", f"x-+|{n}", f"x--|{n}", unit_s * unit_v))
+    S[f"k+|{n}"], S[f"k-|{n}"] = Shock(vol={n: VolMove(skew=b.skew)}), Shock(vol={n: VolMove(skew=-b.skew)})
+    M.append(_central(f"skew_vega|{n}|", f"k+|{n}", f"k-|{n}", 0.01 / b.skew))
+    tenors = []
+    for j, label in enumerate(grid.TENOR_LABELS):
+        if kxt:
+            nodes = []
+            for i, klabel in enumerate(grid.STRIKE_LABELS):
+                key = f"n{i},{j}|{n}"
+                S[key] = Shock(vol={n: VolMove(nodes={(i, j): v})})
+                m = _one_sided(f"vega_node|{n}|{klabel}@{label}", key, unit_v)
+                M.append(m)
+                nodes.append(m)
+            tm = _merge(f"vega_tenor|{n}|{label}", nodes)
+        else:
+            key = f"t{j}|{n}"
+            S[key] = Shock(vol={n: VolMove(term={j: v})})
+            tm = _one_sided(f"vega_tenor|{n}|{label}", key, unit_v)
+        M.append(tm)
+        tenors.append(tm)
+        tenor_name.setdefault(label, []).append(tm)
+    M.append(_merge(f"vega_net|{n}|", tenors))
+    wm = Measure(f"vega_weighted|{n}|", {})
+    for j, tm in enumerate(tenors):
+        for s_, x in tm.weights.items():
+            wm.weights[s_] = wm.weights.get(s_, 0.0) + x * tm.scale * float(grid.weighted_factor(grid.TENORS[j]))
+    M.append(wm)
+    S[f"w|{n}"] = Shock(
+        vol={n: VolMove(term={j: v * float(grid.weighted_factor(T)) for j, T in enumerate(grid.TENORS)})}
+    )
+    M.append(_one_sided(f"vega_weighted_direct|{n}|", f"w|{n}", unit_v))
+
+
+def _plan_carry(S: dict, M: list, n: str, b: Bumps, o: GreekOptions, env: RiskEnv) -> None:
+    """Dividends and repo of a name (by tenor with `curves`), and its quanto correlation and FX vega."""
+    unit_v = 0.01 / b.vol
+    S[f"q+|{n}"], S[f"q-|{n}"] = (
+        Shock(dividend={n: CurveMove(b.rate_bp)}),
+        Shock(dividend={n: CurveMove(-b.rate_bp)}),
+    )
+    S[f"p+|{n}"], S[f"p-|{n}"] = Shock(repo={n: CurveMove(b.rate_bp)}), Shock(repo={n: CurveMove(-b.rate_bp)})
+    M += [
+        _central(f"epsilon|{n}|", f"q+|{n}", f"q-|{n}", 1 / b.rate_bp),
+        _central(f"repo|{n}|", f"p+|{n}", f"p-|{n}", 1 / b.rate_bp),
+    ]
+    if o.curves:
         for j, label in enumerate(grid.TENOR_LABELS):
-            if kxt:
-                nodes = []
-                for i, klabel in enumerate(grid.STRIKE_LABELS):
-                    key = f"n{i},{j}|{n}"
-                    S[key] = Shock(vol={n: VolMove(nodes={(i, j): v})})
-                    m = _one_sided(f"vega_node|{n}|{klabel}@{label}", key, unit_v)
-                    M.append(m)
-                    nodes.append(m)
-                tm = _merge(f"vega_tenor|{n}|{label}", nodes)
-            else:
-                key = f"t{j}|{n}"
-                S[key] = Shock(vol={n: VolMove(term={j: v})})
-                tm = _one_sided(f"vega_tenor|{n}|{label}", key, unit_v)
-            M.append(tm)
-            tenors.append(tm)
-            tenor_name.setdefault(label, []).append(tm)
-        M.append(_merge(f"vega_net|{n}|", tenors))
-        wm = Measure(f"vega_weighted|{n}|", {})
-        for j, tm in enumerate(tenors):
-            for s_, x in tm.weights.items():
-                wm.weights[s_] = wm.weights.get(s_, 0.0) + x * tm.scale * float(grid.weighted_factor(grid.TENORS[j]))
-        M.append(wm)
-        S[f"w|{n}"] = Shock(
-            vol={n: VolMove(term={j: v * float(grid.weighted_factor(T)) for j, T in enumerate(grid.TENORS)})}
-        )
-        M.append(_one_sided(f"vega_weighted_direct|{n}|", f"w|{n}", unit_v))
-        S[f"q+|{n}"], S[f"q-|{n}"] = (
-            Shock(dividend={n: CurveMove(b.rate_bp)}),
-            Shock(dividend={n: CurveMove(-b.rate_bp)}),
-        )
-        S[f"p+|{n}"], S[f"p-|{n}"] = Shock(repo={n: CurveMove(b.rate_bp)}), Shock(repo={n: CurveMove(-b.rate_bp)})
+            S[f"qt{j}|{n}"] = Shock(dividend={n: CurveMove(tenors={j: b.rate_bp})})
+            M.append(_one_sided(f"epsilon_tenor|{n}|{label}", f"qt{j}|{n}", 1 / b.rate_bp))
+    if n in env.quanto:
+        S[f"qc+|{n}"], S[f"qc-|{n}"] = Shock(quanto_corr={n: b.corr}), Shock(quanto_corr={n: -b.corr})
+        S[f"fv+|{n}"], S[f"fv-|{n}"] = Shock(fx_vol={n: b.vol}), Shock(fx_vol={n: -b.vol})
         M += [
-            _central(f"epsilon|{n}|", f"q+|{n}", f"q-|{n}", 1 / b.rate_bp),
-            _central(f"repo|{n}|", f"p+|{n}", f"p-|{n}", 1 / b.rate_bp),
+            _central(f"quanto_corr|{n}|", f"qc+|{n}", f"qc-|{n}", 0.01 / b.corr),
+            _central(f"fx_vega|{n}|", f"fv+|{n}", f"fv-|{n}", unit_v),
         ]
-        if o.curves:
-            for j, label in enumerate(grid.TENOR_LABELS):
-                S[f"qt{j}|{n}"] = Shock(dividend={n: CurveMove(tenors={j: b.rate_bp})})
-                M.append(_one_sided(f"epsilon_tenor|{n}|{label}", f"qt{j}|{n}", 1 / b.rate_bp))
-        if n in env.quanto:
-            S[f"qc+|{n}"], S[f"qc-|{n}"] = Shock(quanto_corr={n: b.corr}), Shock(quanto_corr={n: -b.corr})
-            S[f"fv+|{n}"], S[f"fv-|{n}"] = Shock(fx_vol={n: v}), Shock(fx_vol={n: -v})
-            M += [
-                _central(f"quanto_corr|{n}|", f"qc+|{n}", f"qc-|{n}", 0.01 / b.corr),
-                _central(f"fx_vega|{n}|", f"fv+|{n}", f"fv-|{n}", unit_v),
-            ]
-    # every name together
+
+
+def _plan_totals(M: list, names: list, tenor_name: dict) -> None:
+    """Every name together, for a group of several names."""
     for g in (
         "delta",
         "gamma",
@@ -249,7 +262,10 @@ def plan(
     for label, parts in tenor_name.items():
         if len(names) > 1:
             M.append(_merge(f"vega_tenor|*|{label}", parts))
-    # rates of the payment currency
+
+
+def _plan_rates(S: dict, M: list, cur: str, b: Bumps, o: GreekOptions) -> None:
+    """The rates of the payment currency: rho, its discount and forward parts, by tenor with `curves`."""
     rb = b.rate_bp
     for kind, field_ in (("rho", "rates"), ("rho_discount", "discount"), ("rho_forward", "forward_rate")):
         S[f"{kind}+"], S[f"{kind}-"] = Shock(**{field_: {cur: CurveMove(rb)}}), Shock(**{field_: {cur: CurveMove(-rb)}})
@@ -258,29 +274,25 @@ def plan(
         for j, label in enumerate(grid.TENOR_LABELS):
             S[f"rt{j}"] = Shock(rates={cur: CurveMove(tenors={j: rb})})
             M.append(_one_sided(f"rho_tenor|{cur}|{label}", f"rt{j}", 1 / rb))
-    if basket and o.cross and len(names) > 1:
-        S["c+"], S["c-"] = Shock(corr=b.corr), Shock(corr=-b.corr)
-        M.append(_central("corr|*|", "c+", "c-", 0.01 / b.corr))
-        for a_i, a in enumerate(names):
-            for bb in names[a_i + 1 :]:
-                pair = f"{a}|{bb}"
-                S[f"c|{pair}"] = Shock(corr_pairs={pair: b.corr})
-                M.append(_one_sided(f"corr|{a}~{bb}|", f"c|{pair}", 0.01 / b.corr))
-                for sa, xa in (("+", h), ("-", -h)):
-                    for sb, xb in (("+", h), ("-", -h)):
-                        S[f"g{sa}{sb}|{pair}"] = Shock(spot={a: xa, bb: xb})
-                M.append(
-                    _cross(
-                        f"cross_gamma|{a}~{bb}|", f"g++|{pair}", f"g+-|{pair}", f"g-+|{pair}", f"g--|{pair}", unit_s**2
-                    )
-                )
-    if o.theta:
-        S["roll"] = Shock(roll_days=b.roll_days)
-        M.append(_one_sided("theta|*|", "roll", 1.0))
-        if roll_spots:
-            S["roll@forward"] = Shock(roll_days=b.roll_days, spot=dict(roll_spots))
-            M.append(Measure("theta_carry|*|", {"roll": 1.0, "roll@forward": -1.0}))
-    return S, M
+
+
+def _plan_correlation(S: dict, M: list, names: list, b: Bumps) -> None:
+    """The correlation of a basket: parallel, by pair, and the cross gammas."""
+    h = b.spot
+    unit_s = 0.01 / h
+    S["c+"], S["c-"] = Shock(corr=b.corr), Shock(corr=-b.corr)
+    M.append(_central("corr|*|", "c+", "c-", 0.01 / b.corr))
+    for a_i, a in enumerate(names):
+        for bb in names[a_i + 1 :]:
+            pair = f"{a}|{bb}"
+            S[f"c|{pair}"] = Shock(corr_pairs={pair: b.corr})
+            M.append(_one_sided(f"corr|{a}~{bb}|", f"c|{pair}", 0.01 / b.corr))
+            for sa, xa in (("+", h), ("-", -h)):
+                for sb, xb in (("+", h), ("-", -h)):
+                    S[f"g{sa}{sb}|{pair}"] = Shock(spot={a: xa, bb: xb})
+            M.append(
+                _cross(f"cross_gamma|{a}~{bb}|", f"g++|{pair}", f"g+-|{pair}", f"g-+|{pair}", f"g--|{pair}", unit_s**2)
+            )
 
 
 def _forward_drift(ctx, names, days: int) -> dict:

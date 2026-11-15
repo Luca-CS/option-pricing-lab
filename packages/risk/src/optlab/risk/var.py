@@ -75,7 +75,7 @@ def factor_levels(lake, names, currencies, start, end, layer: str = "reconstruct
     for n in names:
         try:
             cy = carry(lake, n, start_wide, end)
-        except Exception:  # noqa: BLE001 - a name without carry keeps its dividends
+        except Exception:  # noqa: BLE001, S112 - a name without carry keeps its dividends
             continue
         if cy.empty:
             continue
@@ -218,7 +218,7 @@ def revalue_many(
     book = {k: [0.0, 0.0] for k in names}
     per_pos: dict = {k: {} for k in names}
     warnings = []
-    for gi, pnl, base, warns, _ in results:
+    for gi, pnl, _base, warns, _ in results:
         pos_names = [p.name for p in groups[gi].book.positions]
         for k, (pos, pos_se, tot, tot_se) in pnl.items():
             book[k][0] += tot

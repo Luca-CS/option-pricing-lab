@@ -1,10 +1,10 @@
 """Defaults by group and size, what a sheet overrides, the most prudent of a worst-of's groups, and bumps on a basket."""
 
 import copy
-import time
 
 import numpy as np
 import pytest
+from _desk import sheet_body, wait
 from _paths import SPX_CALIBRATION
 from scipy.stats import multivariate_normal, norm
 
@@ -248,23 +248,8 @@ def desk(tmp_path_factory):
     d.close()
 
 
-def wait(desk, job_id, timeout=300):
-    t0 = time.perf_counter()
-    while (j := desk.job(job_id))["state"] in ("queued", "running"):
-        assert time.perf_counter() - t0 < timeout
-        time.sleep(0.05)
-    assert j["state"] == "done", j.get("error")
-    return j["result"]
-
-
-def body(sheet):
-    d = sheet.to_dict(json_safe=True)
-    t = d.pop("type")
-    return {"type": t, "values": d}
-
-
 def test_the_form_loads_the_defaults_of_a_sheet(desk):
-    f = desk.form(body(preset("phoenix", **{"general.notional": 20e6, "costs.vol": -0.02})))
+    f = desk.form(sheet_body(preset("phoenix", **{"general.notional": 20e6, "costs.vol": -0.02})))
     p = f["costs"]["params"]
     assert (
         p["skew"]["default"] == STARTING["index_us"]["tiers"][1]["skew"]
@@ -286,7 +271,7 @@ def test_a_quote_shows_its_lines_and_the_report_too(desk):
         desk,
         desk.quote(
             {
-                "sheet": body(preset("barrier_reverse_convertible", **{"costs.vol": -0.01})),
+                "sheet": sheet_body(preset("barrier_reverse_convertible", **{"costs.vol": -0.01})),
                 "options": {"precision": "quick", "model": "lv", "control": False},
             }
         )["job"],
@@ -314,7 +299,7 @@ def test_starting_values_are_against_the_seller_of_a_phoenix(desk):
         desk,
         desk.quote(
             {
-                "sheet": body(preset("phoenix", **{"general.notional": 20e6})),
+                "sheet": sheet_body(preset("phoenix", **{"general.notional": 20e6})),
                 "options": {"precision": "quick", "model": "lv", "control": False},
             }
         )["job"],
@@ -333,7 +318,7 @@ def test_a_forced_model_outside_the_base_says_it_has_no_costs(desk):
     q = wait(
         desk,
         desk.quote(
-            {"sheet": body(preset("phoenix")), "options": {"precision": "quick", "model": "bs", "control": False}}
+            {"sheet": sheet_body(preset("phoenix")), "options": {"precision": "quick", "model": "bs", "control": False}}
         )["job"],
     )
     assert q["desk"] is None and any("no hedging costs" in w for w in q["warnings"])
@@ -341,7 +326,7 @@ def test_a_forced_model_outside_the_base_says_it_has_no_costs(desk):
         desk,
         desk.quote(
             {
-                "sheet": body(preset("phoenix")),
+                "sheet": sheet_body(preset("phoenix")),
                 "options": {"precision": "quick", "model": "lv", "control": False, "costs": False},
             }
         )["job"],
@@ -350,7 +335,7 @@ def test_a_forced_model_outside_the_base_says_it_has_no_costs(desk):
 
 
 def test_above_the_last_tier_the_quote_is_refused_with_what_is_missing(desk):
-    big = body(preset("phoenix", **{"general.notional": 1e9}))
+    big = sheet_body(preset("phoenix", **{"general.notional": 1e9}))
     assert desk.form(big)["costs"]["missing"]
     with pytest.raises(ApiError, match="above the last tier") as exc:
         desk.quote({"sheet": big, "options": {"precision": "quick"}})
@@ -364,7 +349,7 @@ def test_the_table_is_edited_and_versioned(desk):
     groups["index_us"]["tiers"][0]["vol"] = -0.003
     saved = desk.put_cost_defaults({"groups": groups})
     assert saved["version"] == 1 and saved["groups"]["index_us"]["tiers"][0]["vol"] == -0.003
-    f = desk.form(body(preset("phoenix")))
+    f = desk.form(sheet_body(preset("phoenix")))
     assert f["costs"]["params"]["vol"]["default"] == -0.003 and not f["costs"]["params"]["vol"]["starting"]
     groups["index_us"]["tiers"][0]["vol"] = -0.004
     again = desk.put_cost_defaults({"groups": groups})

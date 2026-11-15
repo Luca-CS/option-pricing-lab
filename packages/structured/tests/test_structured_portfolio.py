@@ -88,7 +88,7 @@ def test_book_policy_follows_the_most_demanding_position():
 def test_replicated_book_equals_the_sum_of_quotes():
     sheets = {"rc": rc(**{"downside.barrier": 0.7}), "airbag": preset("airbag")}
     book = Book([Position(k, v, 2.0) for k, v in sheets.items()]).price(SPX)
-    for pos, (k, v) in zip(book.positions, sheets.items()):
+    for pos, (_k, v) in zip(book.positions, sheets.items()):
         q = quote(v, SPX, control=None)
         assert pos.unit_price == pytest.approx(q.upfront, abs=1e-10)
 

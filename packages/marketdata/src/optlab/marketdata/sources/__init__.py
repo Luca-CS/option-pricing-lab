@@ -11,6 +11,8 @@ import time
 
 import requests
 
+from optlab.core import programs
+
 USER_AGENT = "optlab-data/0.1"
 
 
@@ -32,10 +34,11 @@ def http_get(url: str, timeout: float = 90.0, retries: int = 3, headers: dict | 
 
 def curl_get(url: str, timeout: float = 90.0, retries: int = 3) -> bytes:
     """GET through the system's curl: FRED drops the connections of Python HTTP clients and answers curl at once."""
+    curl = programs.require("curl")  # an absolute path, never the working folder's
     last = ""
     for attempt in range(retries):
-        out = subprocess.run(
-            ["curl", "-sSL", "--fail", "-A", USER_AGENT, "-m", str(int(timeout)), url],
+        out = subprocess.run(  # noqa: S603 (an absolute path, fixed arguments, no shell)
+            [curl, "-sSL", "--fail", "-A", USER_AGENT, "-m", str(int(timeout)), url],
             capture_output=True,
             timeout=timeout + 10,
         )

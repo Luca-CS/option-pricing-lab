@@ -74,7 +74,7 @@ def api_app(docs: bool = False) -> FastAPI:
         if app.openapi_schema is None:
             describe_problems(base())  # base() keeps the document in app.openapi_schema
         doc = app.openapi_schema
-        assert doc is not None
+        assert doc is not None  # noqa: S101 (narrows the type for pyright: checked above)
         return doc
 
     app.openapi = openapi

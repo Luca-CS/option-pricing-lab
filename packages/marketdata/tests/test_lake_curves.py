@@ -69,7 +69,7 @@ def test_equity_forward_with_repo_and_a_dividend():
     disc = lambda t: np.exp(-r * np.asarray(t))  # noqa: E731
     F = equity_forward(100.0, [0.25, 1.0], disc, repo, dividends=[(0.5, 2.0)])
     assert F[0] == pytest.approx(100 * np.exp((r - repo) * 0.25), abs=1e-10)
-    assert F[1] == pytest.approx(100 * np.exp((r - repo)) - 2.0 * np.exp((r - repo) * 0.5), abs=1e-10)
+    assert F[1] == pytest.approx(100 * np.exp(r - repo) - 2.0 * np.exp((r - repo) * 0.5), abs=1e-10)
 
 
 def synthetic_chain(F=102.0, D=0.97, T=0.5, sigma=0.2):

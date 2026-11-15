@@ -9,7 +9,6 @@ import pandas as pd
 
 from optlab.marketdata.lake import Lake, new_run_id
 
-MAX_MOVE = {"index": 0.2, "equity": 0.3}  # one-day moves beyond these are flagged, not removed
 STALE_DAYS = 10
 VOL_RANGE = (3.0, 200.0)
 RESOLVED = "resolved"

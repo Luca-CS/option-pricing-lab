@@ -114,7 +114,7 @@ def choose(engine: str | None, model) -> tuple[str, str | None]:
         if engine == "auto":
             return "numpy", why
         raise EngineError(why)
-    assert eng is not None
+    assert eng is not None  # noqa: S101 (narrows the type for pyright: checked above)
     if engine == "auto":
         return ("gpu" if eng.gpu_available() else "cpu"), None
     return engine, None

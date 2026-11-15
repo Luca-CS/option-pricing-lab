@@ -742,7 +742,7 @@ def _meta(seconds: float) -> dict:
     except OSError, subprocess.CalledProcessError:
         commit = None
     return {
-        "recorded": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        "recorded": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
         "commit": commit,
         "platform": platform.platform(),
         "machine": platform.machine(),

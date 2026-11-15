@@ -83,7 +83,7 @@ def _loads(text: str | None):
 
 
 def iso(t: float | None) -> str | None:
-    return None if t is None else dt.datetime.fromtimestamp(t, dt.timezone.utc).isoformat(timespec="milliseconds")
+    return None if t is None else dt.datetime.fromtimestamp(t, dt.UTC).isoformat(timespec="milliseconds")
 
 
 def view(row, now: float | None = None) -> dict:
@@ -298,7 +298,8 @@ class JobQueue:
             return bool(c.execute(select(jobs.c.cancel_requested).where(jobs.c.job_id == job_id)).scalar())
 
     def finish(self, job_id: str, state: str, result: dict | None = None, error: dict | None = None) -> None:
-        assert state in FINAL
+        if state not in FINAL:
+            raise ValueError(f"a job ends in {', '.join(FINAL)}, not {state!r}")
         values: dict = {"state": state, "finished_at": self.clock(), "version": jobs.c.version + 1, "eta": None}
         if result is not None:
             values["result"] = canonical(result)

@@ -56,17 +56,9 @@ def _observations(sheet: TermSheet, strike: dt.date, cal):
     return dict(sorted(obs.items())), maturity
 
 
-def compile_sheet(sheet: TermSheet, valuation, calendar=None) -> CompiledProduct:
-    """The script of a term sheet. `calendar` overrides the sheet's general.calendar."""
-    valuation = as_date(valuation)
-    cal = calendars.calendar(calendar or sheet.get("general.calendar"))
-    strike = sheet.get("general.strike_date") or valuation
+def _params(sheet: TermSheet, coupon: str, upside: str, downside: str, autocall: bool) -> tuple[dict, float]:
+    """The script's parameters from the term sheet, and the coupon's scale (the period in years)."""
     g = sheet.get
-    coupon, upside, downside = g("coupon.type"), g("upside.type", "none"), g("downside.type")
-    autocall = sheet.mask.name == "autocall"
-    obs, maturity = _observations(sheet, strike, cal)
-    n_periods = g("general.maturity_months") // g("autocall.frequency_months") if autocall else None
-
     params = {"N": g("general.notional")}
     coupon_scale = 0.0
     if coupon in ("fixed", "conditional"):
@@ -93,6 +85,71 @@ def compile_sheet(sheet: TermSheet, valuation, calendar=None) -> CompiledProduct
         params["put_strike"] = g("downside.strike")
     if downside == "pdi":
         params["ki_barrier"] = g("downside.barrier")
+    return params, coupon_scale
+
+
+def _coupon_lines(coupon: str, memory: bool) -> list[str]:
+    """The coupon of an observation date: fixed, conditional, or conditional with memory."""
+    if coupon == "fixed":
+        return ["pay N * cpn as coupon"]
+    if memory:
+        return [
+            "if perf >= coupon_barrier then",
+            "  pay N * cpn * (1 + missed) as coupon",
+            "  missed = 0",
+            "else",
+            "  missed = missed + 1",
+            "end",
+        ]
+    return ["if perf >= coupon_barrier then", "  pay N * cpn as coupon", "end"]
+
+
+def _upside_lines(upside: str) -> list[str]:
+    """The upside paid at maturity: a call, a call spread or a digital (none: nothing)."""
+    if upside == "call":
+        return ["pay N * participation * max(perf - call_strike, 0) as upside"]
+    if upside == "call_spread":
+        return ["pay N * participation * max(min(perf, cap) - call_strike, 0) as upside"]
+    if upside == "digital":
+        return ["if perf >= call_strike then", "  pay N * digital as upside", "end"]
+    return []
+
+
+def _redemption_lines(downside: str, observation, names, strike, o) -> list[str]:
+    """The redemption at maturity: at par, a geared put, or a put knocked in at maturity or on a daily window."""
+    if downside == "none":
+        return ["pay N as redemption"]
+    if downside == "geared_put":
+        return ["pay N - N * max(put_strike - perf, 0) / put_strike as redemption"]
+    if observation == "daily" and len(names) > 1:
+        lows = ", ".join(f"lowest({n}, {strike}, {o}) / S0_{n}" for n in names)
+        knock = f"knocked_in = worst({lows}) < ki_barrier"
+    elif observation == "daily":
+        knock = f"knocked_in = lowest({names[0]}, {strike}, {o}) < ki_barrier * S0"
+    else:
+        knock = "knocked_in = perf < ki_barrier"
+    return [
+        knock,
+        "if knocked_in then",
+        "  pay N - N * max(put_strike - perf, 0) as redemption",
+        "else",
+        "  pay N as redemption",
+        "end",
+    ]
+
+
+def compile_sheet(sheet: TermSheet, valuation, calendar=None) -> CompiledProduct:
+    """The script of a term sheet. `calendar` overrides the sheet's general.calendar."""
+    valuation = as_date(valuation)
+    cal = calendars.calendar(calendar or sheet.get("general.calendar"))
+    strike = sheet.get("general.strike_date") or valuation
+    g = sheet.get
+    coupon, upside, downside = g("coupon.type"), g("upside.type", "none"), g("downside.type")
+    autocall = sheet.mask.name == "autocall"
+    obs, maturity = _observations(sheet, strike, cal)
+    n_periods = g("general.maturity_months") // g("autocall.frequency_months") if autocall else None
+
+    params, coupon_scale = _params(sheet, coupon, upside, downside, autocall)
     memory = coupon == "conditional" and g("coupon.memory")
 
     def trigger(j: int) -> str:
@@ -113,19 +170,7 @@ def compile_sheet(sheet: TermSheet, valuation, calendar=None) -> CompiledProduct
         needs_perf = coupon == "conditional" and role.get("coupon") or call is not None or final
         body = [f"perf = {perf_expr}"] if needs_perf else []
         if role.get("coupon"):
-            if coupon == "fixed":
-                body.append("pay N * cpn as coupon")
-            elif memory:
-                body += [
-                    "if perf >= coupon_barrier then",
-                    "  pay N * cpn * (1 + missed) as coupon",
-                    "  missed = 0",
-                    "else",
-                    "  missed = missed + 1",
-                    "end",
-                ]
-            else:
-                body += ["if perf >= coupon_barrier then", "  pay N * cpn as coupon", "end"]
+            body += _coupon_lines(coupon, memory)
         if call is not None:
             body.append(f"if perf >= {trigger(call)} then")
             if coupon == "snowball":
@@ -135,31 +180,8 @@ def compile_sheet(sheet: TermSheet, valuation, calendar=None) -> CompiledProduct
             if coupon == "snowball":
                 j_final = n_periods - g("autocall.first_call")
                 body += [f"if perf >= {trigger(j_final)} then", f"  pay N * cpn * {n_periods} as coupon", "end"]
-            if upside == "call":
-                body.append("pay N * participation * max(perf - call_strike, 0) as upside")
-            elif upside == "call_spread":
-                body.append("pay N * participation * max(min(perf, cap) - call_strike, 0) as upside")
-            elif upside == "digital":
-                body += ["if perf >= call_strike then", "  pay N * digital as upside", "end"]
-            if downside == "none":
-                body.append("pay N as redemption")
-            elif downside == "geared_put":
-                body.append("pay N - N * max(put_strike - perf, 0) / put_strike as redemption")
-            else:
-                if g("downside.observation") == "daily" and basket:
-                    lows = ", ".join(f"lowest({n}, {strike}, {o}) / S0_{n}" for n in names)
-                    body.append(f"knocked_in = worst({lows}) < ki_barrier")
-                elif g("downside.observation") == "daily":
-                    body.append(f"knocked_in = lowest({names[0]}, {strike}, {o}) < ki_barrier * S0")
-                else:
-                    body.append("knocked_in = perf < ki_barrier")
-                body += [
-                    "if knocked_in then",
-                    "  pay N - N * max(put_strike - perf, 0) as redemption",
-                    "else",
-                    "  pay N as redemption",
-                    "end",
-                ]
+            body += _upside_lines(upside)
+            body += _redemption_lines(downside, g("downside.observation"), names, strike, o)
         lines += ["", f"event {o} pay {role['pay']}", *("  " + b for b in body), "end"]
     script = "\n".join(lines) + "\n"
     program = validate(parse(script))

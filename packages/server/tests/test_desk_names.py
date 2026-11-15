@@ -6,6 +6,7 @@ import time
 import numpy as np
 import pandas as pd
 import pytest
+from _desk import wait
 
 from optlab.marketdata.derive.correl import correlation_at
 from optlab.marketdata.lake import Lake
@@ -32,15 +33,6 @@ def desk(tmp_path_factory):
     )
     yield d
     d.close()
-
-
-def wait(desk, job_id, timeout=300):
-    t0 = time.perf_counter()
-    while (j := desk.job(job_id))["state"] in ("queued", "running"):
-        assert time.perf_counter() - t0 < timeout
-        time.sleep(0.05)
-    assert j["state"] == "done", j.get("error")
-    return j["result"]
 
 
 def body(name="phoenix", **general):

@@ -2,10 +2,10 @@
 
 import datetime as dt
 import json
-import time
 
 import pandas as pd
 import pytest
+from _desk import sheet_body, wait
 
 from optlab.marketdata.replay import ReplayConfig, replay, result_json, strike_trade
 from optlab.marketdata.synthetic import synthetic_lake
@@ -78,28 +78,13 @@ def desk(tmp_path_factory):
     d.close()
 
 
-def wait(desk, job_id, timeout=300):
-    t0 = time.perf_counter()
-    while (j := desk.job(job_id))["state"] in ("queued", "running"):
-        assert time.perf_counter() - t0 < timeout
-        time.sleep(0.05)
-    assert j["state"] == "done", j.get("error")
-    return j["result"]
-
-
-def body(sheet):
-    d = sheet.to_dict(json_safe=True)
-    t = d.pop("type")
-    return {"type": t, "values": d}
-
-
 @pytest.mark.slow
 def test_a_booked_quote_freezes_its_lines_and_the_book_shows_what_is_left(desk):
     sheet = preset("phoenix", **{"general.notional": 1e6})
-    q = wait(desk, desk.quote({"sheet": body(sheet), "options": {"precision": "quick"}})["job"])
+    q = wait(desk, desk.quote({"sheet": sheet_body(sheet), "options": {"precision": "quick"}})["job"])
     t = desk.create_trade(
         {
-            "sheet": q["sheet"] and body(sheet),
+            "sheet": q["sheet"] and sheet_body(sheet),
             "coupon_rate": q["coupon_rate"],
             "quantity": -1.0,
             "tags": [f"quote:{q['quote_id']}"],
@@ -108,15 +93,22 @@ def test_a_booked_quote_freezes_its_lines_and_the_book_shows_what_is_left(desk):
     assert t["reserves"]["total"] == pytest.approx(sum(x["cost"] for x in q["desk"]["lines"]))
     assert t["reserves"]["total"] == pytest.approx(q["desk"]["final_price"] - q["desk"]["base_price"], abs=1e-9)
     assert {x["key"] for x in t["reserves"]["lines"]} >= {"slv", "vol", "coupon"}
-    bare = desk.create_trade({"sheet": body(sheet), "coupon_rate": 0.05, "quantity": -1.0})
+    bare = desk.create_trade({"sheet": sheet_body(sheet), "coupon_rate": 0.05, "quantity": -1.0})
     assert bare["reserves"] is None
     costless = wait(
         desk,
-        desk.quote({"sheet": body(sheet), "options": {"precision": "quick", "costs": False, "control": False}})["job"],
+        desk.quote({"sheet": sheet_body(sheet), "options": {"precision": "quick", "costs": False, "control": False}})[
+            "job"
+        ],
     )
     assert (
         desk.create_trade(
-            {"sheet": body(sheet), "coupon_rate": 0.05, "quantity": -1.0, "tags": [f"quote:{costless['quote_id']}"]}
+            {
+                "sheet": sheet_body(sheet),
+                "coupon_rate": 0.05,
+                "quantity": -1.0,
+                "tags": [f"quote:{costless['quote_id']}"],
+            }
         )["reserves"]
         is None
     )
@@ -145,7 +137,7 @@ def test_a_booked_quote_freezes_its_lines_and_the_book_shows_what_is_left(desk):
 
 
 def test_the_trade_page_says_when_there_is_none(desk):
-    t = desk.create_trade({"sheet": body(preset("phoenix")), "coupon_rate": 0.05, "quantity": -1.0})
+    t = desk.create_trade({"sheet": sheet_body(preset("phoenix")), "coupon_rate": 0.05, "quantity": -1.0})
     assert desk.trade(t["trade_id"])["reserve"] is None
 
 

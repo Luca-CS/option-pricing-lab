@@ -88,7 +88,7 @@ def migrate(folder: str | Path, target: str | Path) -> dict:
                 if name not in _tables(con):
                     continue
                 columns = [c.name for c in table.c]
-                rows = [dict(zip(columns, tuple(r))) for r in con.execute(f"SELECT {', '.join(columns)} FROM {name}")]
+                rows = [dict(zip(columns, tuple(r))) for r in con.execute(f"SELECT {', '.join(columns)} FROM {name}")]  # noqa: S608 (identifiers from the code; values through sql_str or bound)
             finally:
                 con.close()
             n = _insert_new(db, table, keys, rows)
@@ -146,7 +146,7 @@ def _v0_replays(folder: Path) -> list[dict]:
     for path in sorted(folder.glob("replay*.json")):
         payload = path.read_text(encoding="utf-8")
         json.loads(payload)  # a broken file stops the import before anything is claimed
-        stamp = dt.datetime.fromtimestamp(path.stat().st_mtime, dt.timezone.utc).isoformat(timespec="seconds")
+        stamp = dt.datetime.fromtimestamp(path.stat().st_mtime, dt.UTC).isoformat(timespec="seconds")
         out.append({"stem": path.stem, "payload": payload, "recorded_at": stamp})
     return out
 

@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from _paths import SPX_CALIBRATION, real_lake
+from _paths import SPX_CALIBRATION, spx_lake
 from _risk_refs import S0, VOL, Q, R, book, engine_name, flat_ctx, vanilla, within
 from _stores import risk_store
 
@@ -110,20 +110,7 @@ def test_the_rule_applies_to_the_ladder_point_only():
 
 @pytest.fixture(scope="module")
 def lake():
-    from optlab.marketdata.lake import Lake
-
-    lk = Lake(real_lake())
-    try:
-        if (
-            lk.read("vol_surfaces", where="underlying = 'SPX' AND layer = 'reconstructed'", columns="count(*) AS n")[
-                "n"
-            ].iloc[0]
-            < 600
-        ):
-            pytest.skip("no reconstructed SPX surfaces in the lake")
-    except Exception:  # noqa: BLE001 - no lake on this machine
-        pytest.skip("no lake")
-    return lk
+    return spx_lake()
 
 
 @pytest.mark.lake

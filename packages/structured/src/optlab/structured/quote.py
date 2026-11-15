@@ -247,6 +247,44 @@ def _pricer(
     return run
 
 
+def _refuse(sheet: TermSheet, ctx, product, basket: bool) -> None:
+    """The term sheets a market cannot price: a running product asked for its coupon, a basket on a single name's
+    market (or the reverse), a sheet on another name's market."""
+    if product.strike_date < product.valuation and sheet.get("wrapper.solve") == "coupon":
+        raise ValueError("a running product has a fixed coupon: price it with wrapper.solve = 'upfront'")
+    if basket != isinstance(ctx, BasketContext):
+        raise ValueError("a worst-of term sheet needs a BasketContext, a single-name one a PricingContext")
+    if not basket and getattr(ctx, "underlying", None) not in (None, *sheet.underlyings):
+        raise ValueError(
+            f"the market in use is {ctx.underlying}, the term sheet is on {sheet.underlyings[0]}: "
+            "choose a market of that name"
+        )
+
+
+def _quote_greeks(sheet, product, ctx, decision, fmt, params, fixings, basket, slv_vega, workers, sticky):
+    """Delta and vega at the quoted coupon: the book's Greeks for a basket or a running product, else greeks()."""
+    if basket or fixings:
+        return _book_greeks(sheet, params, fixings, ctx, decision, slv_vega, workers)
+    from optlab.structured.greeks import greeks
+
+    return greeks(
+        product.program,
+        ctx,
+        decision.model,
+        decision.method,
+        params,
+        fmt,
+        product.valuation,
+        decision.n_paths,
+        decision.seed,
+        decision.batch,
+        slv_vega=slv_vega,
+        calendar=product.calendar,
+        workers=workers,
+        sticky=sticky,
+    )
+
+
 def quote(
     sheet: TermSheet,
     ctx: PricingContext | None = None,
@@ -282,17 +320,9 @@ def quote(
     if ctx is None:
         raise TypeError("quote needs a market: a PricingContext (from_calibration(path), or the lake's context_at)")
     product = compile_sheet(sheet, ctx.valuation)
-    if product.strike_date < product.valuation and sheet.get("wrapper.solve") == "coupon":
-        raise ValueError("a running product has a fixed coupon: price it with wrapper.solve = 'upfront'")
-    prof = profile(product.program, build_timeline(product.program, Clock(product.valuation, product.calendar)))
     basket = len(product.program.underlyings) > 1
-    if basket != isinstance(ctx, BasketContext):
-        raise ValueError("a worst-of term sheet needs a BasketContext, a single-name one a PricingContext")
-    if not basket and getattr(ctx, "underlying", None) not in (None, *sheet.underlyings):
-        raise ValueError(
-            f"the market in use is {ctx.underlying}, the term sheet is on {sheet.underlyings[0]}: "
-            "choose a market of that name"
-        )
+    _refuse(sheet, ctx, product, basket)
+    prof = profile(product.program, build_timeline(product.program, Clock(product.valuation, product.calendar)))
     payment_notes = payment_warnings(sheet, ctx)
     decision = decide(
         prof, ctx.t_max, model, control, n_paths, batch, seed, has_surfaces=getattr(ctx, "has_surfaces", True)
@@ -369,27 +399,8 @@ def quote(
     if rate is not None and rate < 0:
         warnings.append("the solved coupon is negative: the product cannot reach the target price with a coupon")
     g = None
-    if with_greeks and (basket or fixings):
-        g = _book_greeks(sheet, params, fixings, ctx, decision, slv_vega, workers)
-    elif with_greeks:
-        from optlab.structured.greeks import greeks
-
-        g = greeks(
-            product.program,
-            ctx,
-            decision.model,
-            decision.method,
-            params,
-            fmt,
-            product.valuation,
-            decision.n_paths,
-            decision.seed,
-            decision.batch,
-            slv_vega=slv_vega,
-            calendar=product.calendar,
-            workers=workers,
-            sticky=sticky,
-        )
+    if with_greeks:
+        g = _quote_greeks(sheet, product, ctx, decision, fmt, params, fixings, basket, slv_vega, workers, sticky)
     seconds = time.perf_counter() - t0
     LOG.info(
         "quote %s %s: %s, %s, %.2f s",
