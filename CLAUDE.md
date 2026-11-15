@@ -9,11 +9,11 @@ uv sync --locked --all-extras                          # .venv from uv.lock (has
 uv run pytest -q packages/core/tests/test_closed_forms.py   # fast sanity check (seconds)
 uv run pytest packages/core/tests/test_monte_carlo.py::test_heston_mc_matches_fourier   # single test
 uv run pytest -m "not slow and not gpu and not lake and not native" -n auto --dist loadfile   # what CI runs (a few minutes)
-uv run pytest                                          # full suite, about 33 min (real lake, GPU, node when present)
+uv run pytest -n 6 --dist loadfile                     # full suite, 941 tests in about 13 min (real lake, GPU, node when present)
 uv run python tests/golden/golden.py check [--local]   # golden numbers, bit for bit (local: lake, showcase, GPU)
 uv run pre-commit install                              # ruff, ruff-format, gitleaks and file checks before each commit
 uv run lint-imports                                    # the package layers of ADR-0004
-uv run python tools/pyright_baseline.py               # pyright may only go down from pyright-baseline.json
+uv run python tools/pyright_baseline.py               # pyright at zero: the baseline file is empty, any new error fails
 ```
 
 Tests live beside their package (`packages/<name>/tests`); fixtures shared across packages are in `tests/helpers`
@@ -40,7 +40,8 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
   `api-contract`).
 - `packages/core/tests/test_widget_js.py` runs `docs/lab.js` under `node` and compares it to the Python library; it is
   skipped when `node` is not on PATH.
-- Calibration pipeline: `optlab calib run --source simulated|spx` writes `results/*.json`;
+- Calibration pipeline: `optlab calib run --source simulated|spx` writes `results/*.json` (compact JSON, one line per
+  key, ADR-0023);
   `optlab calib report` writes `reports/calibration.md` and figures; `optlab demo widget-data`
   regenerates `docs/pricer-data.js` from `results/spx_calibration.json`. `--source spx` needs a snapshot
   from `optlab calib download-spx` in `data/raw/`.
@@ -69,7 +70,12 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
   `optlab lake surface-test` (reconstruction against real chains), `optlab lake regime-test` (the same by level of the VIX, crash held out),
   `optlab lake replay cost|run [--costs]`, `optlab demo seed-showcase` (a dozen trades in their own store, `optlab-data/showcase`; guide in `reports/showcase.md`).
   `packages/server/tests/test_lake_real.py` checks the exit criteria on the real lake and skips without it.
-- Lint config: ruff, line length 120, absolute imports only (`pyproject.toml`). No build step for `docs/` (static, dependency-free JS).
+- Lint config: ruff, line length 120, absolute imports only, bandit (S), bugbear (B), pyupgrade (UP) and complexity
+  (C901, at most 15) (`pyproject.toml`, ADR-0014). No build step for `docs/` (static, dependency-free JS).
+- Types: pyright in standard mode everywhere (tests included) and strict on the server's security and contract core (the
+  16 modules listed in `pyproject.toml`); `pandas-stubs` in the dev group, `py.typed` in every package. The rest of
+  `optlab.server` stays in standard mode (Luca's decision of 15 November 2026: strict there means TypedDicts for every
+  JSON payload).
 
 ## Architecture
 
@@ -208,5 +214,12 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
   (`within` helper in `packages/core/tests/test_monte_carlo.py`); keep fixed seeds.
 - Market data from Yahoo is personal-use only: `data/` and the lake are never committed; only
   calibrated parameters, outputs and charts are versioned. Results hold performances, not levels; screens show the `origin`. `.gitignore` also ignores `*.csv` and `build/`.
+- A `noqa` or a `# pyright: ignore[rule]` says why, in parentheses after it: `# noqa: S101 (narrows the type for
+  pyright: ...)`, `# pyright: ignore[reportOptionalOperand] (the pairs exist with the base's)`. A narrowing `assert` is
+  only for an invariant that already holds. External programs run by their absolute path (`optlab.core.programs`).
+- Refactors keep the numbers bit for bit: the same operations in the same order, checked by the goldens
+  (`tests/golden/golden.py check --local`) or by comparing a function's outputs before and after.
+- In the tests, `some(x)` and `desk_of(q)` (`tests/helpers/_quotes.py`) read the optional results a test arranged;
+  `tests/helpers/_desk.py` waits for a desk job; `_paths.spx_lake()` is the real lake or a skip.
 - README and code are in English; commit messages are short English sentences in the style
   `"Demo page: ..."` (see `git log`).
