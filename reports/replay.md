@@ -1,6 +1,6 @@
 # Two products through their lives on real closes
 
-Run on 5 November 2026 with `optlab lake replay run` (then `scripts/lake_replay.py`), stored in `results/replay_*.json` (performances and amounts in % of
+Run on 5 November 2026 with `optlab lake replay run`, stored in `results/replay_*.json` (performances and amounts in % of
 notional, never a real level). Each valuation prices on the market of that date only: real closes, Treasury curve, the dividends of the
 past year repeated on the same dates, and a surface reconstructed from that day's volatility indices. No option quote is read, and one surface layer is kept over
 the whole life, so that a change of layer never shows up as P&L. The errors of that surface are in
@@ -18,7 +18,7 @@ the whole life, so that a change of layer never shows up as P&L. The errors of t
 | Lowest value | 68.88 on 23/03/2020 | 87.51 on 12/10/2022 |
 | Valuations, daily | 259 | 507 |
 
-Both dates were checked against an independent reading of the closes in `tests/test_lake_real.py`. Cash booked in the daily loop equals the
+Both dates were checked against an independent reading of the closes in `packages/server/tests/test_lake_real.py`. Cash booked in the daily loop equals the
 amounts from `lifecycle.events` to within 1e-13, and P&L, value and cash add up exactly.
 
 ## P&L explained

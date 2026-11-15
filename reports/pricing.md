@@ -1,8 +1,8 @@
 # The desk price: a base and what is added to it
 
-Run on 5 November 2026 with `optlab structured pricing-report` (then `scripts/pricing_examples.py`), on the market of 4 November 2026, 100,000 paths, stored in `results/pricing_examples.json`. Amounts are in % of notional, seen from a desk that sells: a positive cost is against it. Surfaces are reconstructed from volatility indices, so no option quote was read ([surface_reconstruction.md](surface_reconstruction.md)).
+Run on 5 November 2026 with `optlab structured pricing-report`, on the market of 4 November 2026, 100,000 paths, stored in `results/pricing_examples.json`. Amounts are in % of notional, seen from a desk that sells: a positive cost is against it. Surfaces are reconstructed from volatility indices, so no option quote was read ([surface_reconstruction.md](surface_reconstruction.md)).
 
-**The defaults are starting values, not a trader's.** They are in `optlab/structured/defaults.py`, labelled on every screen, and every cost below scales with them.
+**The defaults are starting values, not a trader's.** They are in `packages/structured/src/optlab/structured/defaults.py`, labelled on every screen, and every cost below scales with them.
 
 ```
 Base            local vol, or replication for a European product
@@ -45,7 +45,7 @@ All on the base's random numbers. On the phoenix, the SE of a line is about a te
 | Spot, delta bid-ask | +2 bp | +0.006 ± 0.002 | -1.2 |
 | Interaction | | -0.006 ± 0.008 | +1.3 |
 
-Each bump was checked against Black-Scholes on a 90 % put, by Monte Carlo and by replication, within 4 SE (`tests/test_structured_costs.py`). The skew rotation has exact derivatives for Dupire, and the check for butterfly and calendar arbitrage warns on the quote.
+Each bump was checked against Black-Scholes on a 90 % put, by Monte Carlo and by replication, within 4 SE (`packages/structured/tests/test_structured_costs.py`). The skew rotation has exact derivatives for Dupire, and the check for butterfly and calendar arbitrage warns on the quote.
 
 ## Provisions of model
 
@@ -62,7 +62,7 @@ Each bump was checked against Black-Scholes on a 90 % put, by Monte Carlo and by
 
 SEs are 0.03 to 0.06. Correlating the variances like the spots is the default: two identical names at a correlation of 1 then have the same paths and give the single-name price, which the independent choice cannot do, and index volatilities do move together. On three close indices that choice alone moves the provision by 55 bp of notional. Nothing here calibrates it.
 
-**SLV on a basket.** One leverage per name, from its own marginal, kept per name and date: 21 s for three names over 2 years. Vanillas of each name against its surface, 400,000 paths, on one seed: the largest gap is 4.8 SE, 16 bp of volatility at most. That gap is mostly the forward's own noise on that seed (+0.115 %, about 3.5 SE, on all three names, as they are correlated); over six other seeds the forward stays within 2.5 SE and has no bias. With the forward as a control variate, the vanillas are within 4 SE plus 10 bp of vol (`tests/test_lake_real.py`). So a leverage bias of the order of 10 bp of vol is possible and not excluded.
+**SLV on a basket.** One leverage per name, from its own marginal, kept per name and date: 21 s for three names over 2 years. Vanillas of each name against its surface, 400,000 paths, on one seed: the largest gap is 4.8 SE, 16 bp of volatility at most. That gap is mostly the forward's own noise on that seed (+0.115 %, about 3.5 SE, on all three names, as they are correlated); over six other seeds the forward stays within 2.5 SE and has no bias. With the forward as a control variate, the vanillas are within 4 SE plus 10 bp of vol (`packages/server/tests/test_lake_real.py`). So a leverage bias of the order of 10 bp of vol is possible and not excluded.
 
 ## Digitals
 
@@ -74,7 +74,7 @@ Width = max(min spread, jump / delta max), on the side against the desk, measure
 | Autocall trigger | 7 | 0.95 pt | +0.099 |
 | Final barrier | 1 | 8.00 pt | +0.195 |
 
-- **The bound is measured.** The payoff's delta is at the limit to within 1 %, and over ten times it for the hard digital (`tests/test_structured_digitals.py`). An upside digital matches the closed-form call spread. A daily barrier moved by the min spread gives, bit for bit, the sheet with the barrier moved.
+- **The bound is measured.** The payoff's delta is at the limit to within 1 %, and over ten times it for the hard digital (`packages/structured/tests/test_structured_digitals.py`). An upside digital matches the closed-form call spread. A daily barrier moved by the min spread gives, bit for bit, the sheet with the barrier moved.
 - **The jump of an autocall takes the continuation value at par.** The real gap depends on the path. This keeps the width known before any simulation, and it is the weakest definition of the four.
 - **Memory is left out** of a coupon's jump.
 - **The width depends on the solved coupon,** so the digitals solve twice, or three times on an Athena, within 1 % of width.

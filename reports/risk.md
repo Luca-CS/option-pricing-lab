@@ -8,7 +8,7 @@ the paired difference to the base on the same random numbers. Nothing here is a 
 
 ## Method
 
-**One engine.** A risk is a list of shocks (`optlab/risk/shocks.py`) revalued by one engine (`engine.run_group`). A shock moves
+**One engine.** A risk is a list of shocks (`packages/risk/src/optlab/risk/shocks.py`) revalued by one engine (`engine.run_group`). A shock moves
 spots (relative), vols (parallel, relative, per node of the grid, per tenor, skew rotation), discount and forward curves per
 tenor, dividend yields and flows, repo, correlations, FX, the quanto drift, and rolls the valuation date; the vol rule says
 what the surface does when the spot moves (sticky moneyness, sticky strike, or realistic: at-the-money vols move by
@@ -44,7 +44,7 @@ the delta-gamma-vega approximation, frozen, then revalued in full. **P&L**: EOD 
 full revaluations from one close to the next on the seeds of the day before: time, spot, vol (at-the-money per tenor), skew
 (the rest of the surface), rates, dividends (with repo and quanto drift), correlation, FX.
 
-## Validation (tests/test_risk_*.py)
+## Validation (packages/risk/tests/test_risk_*.py)
 
 | Test | Reference | Result |
 |---|---|---|
