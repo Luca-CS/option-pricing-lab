@@ -121,6 +121,7 @@ def test_phoenix_is_called_on_the_first_observation_at_or_above_its_trigger(lake
     assert len(called) == 1
     start = close_of(lake, STRIKE)
     cal = CALENDARS["nyse"]
+    obs = None
     for months in range(3, 25, 3):
         y, m = STRIKE.year + (STRIKE.month - 1 + months) // 12, (STRIKE.month - 1 + months) % 12 + 1
         obs = cal.adjust(dt.date(y, m, STRIKE.day), "modified_following")

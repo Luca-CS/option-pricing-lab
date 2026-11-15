@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from optlab.structured.script.lexer import KEYWORDS, ScriptError
 from optlab.structured.script.nodes import (
     FUNCTIONS,
@@ -24,7 +26,7 @@ from optlab.structured.script.nodes import (
 MAX_UNDERLYINGS = 5  # baskets (worst-of) of up to five names
 
 
-def _key(w):
+def _key(w) -> Any:
     return w.value  # ISO strings sort like dates, times are floats
 
 

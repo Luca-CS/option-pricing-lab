@@ -12,6 +12,7 @@ import dataclasses
 import datetime as dt
 import time
 from dataclasses import dataclass, field
+from typing import Any
 
 import pandas as pd
 
@@ -55,6 +56,14 @@ class ReplayConfig:
 
 
 DEFAULT_REPLAY = ReplayConfig()  # a frozen default, shared by the functions that take one
+
+
+def _sheet(trade) -> TermSheet:
+    """The trade's term sheet: a replay needs one (a script-only trade has none)."""
+    sheet = trade.term_sheet()
+    if sheet is None:
+        raise ValueError(f"trade {trade.trade_id} has no term sheet to replay")
+    return sheet
 
 
 def place_calendar(names) -> str:
@@ -151,7 +160,7 @@ def strike_trade(
     if desk is None:
         return trade, info
     info["desk"] = desk
-    return dataclasses.replace(trade, reserves=frozen(desk, strike, sheet_maturity(trade.term_sheet()))), info
+    return dataclasses.replace(trade, reserves=frozen(desk, strike, sheet_maturity(_sheet(trade)))), info
 
 
 def filled_fixings(lake: Lake, names, start, end, calendar, as_of=None) -> tuple[dict, list]:
@@ -224,7 +233,7 @@ def _time_value(trade, ctx, cfg, scales, fixings, names, new_day):
     """Yesterday's market moved to `new_day` with spot and term structure unchanged: yesterday's model spots as fixings."""
     extended = {n: dict(fixings[n]) for n in names}
     prev = max(max(f) for f in fixings.values())
-    calendar = CALENDARS[trade.term_sheet().get("general.calendar")]
+    calendar = CALENDARS[_sheet(trade).get("general.calendar")]
     for d in calendar.business_days(dt.date.fromisoformat(prev) + dt.timedelta(days=1), new_day):
         for n in names:
             extended[n][d.isoformat()] = fixings[n][max(fixings[n])]
@@ -273,7 +282,7 @@ class ReplayResult:
 def result_json(r: ReplayResult) -> dict:
     """Events, flows and P&L as JSON: performances of the fixings rather than levels, which are personal-use data."""
     out = r.summary()
-    names = r.trade.term_sheet().underlyings
+    names = _sheet(r.trade).underlyings
     d = r.daily
     first = {n: d["spot"].iloc[0][n] for n in names}
 
@@ -281,7 +290,7 @@ def result_json(r: ReplayResult) -> dict:
         return None if x is None or x != x else float(x)
 
     out["underlyings"] = list(names)
-    out["sheet"] = r.trade.term_sheet().to_dict(json_safe=True)
+    out["sheet"] = _sheet(r.trade).to_dict(json_safe=True)
     out["daily"] = [
         {
             "date": x["date"].isoformat(),
@@ -308,7 +317,7 @@ def replay(
 ) -> ReplayResult:
     """The loop over a trade's life, up to `end` or the last close in the lake."""
     t_all = time.perf_counter()
-    sheet = trade.term_sheet()
+    sheet = _sheet(trade)
     names = sheet.underlyings
     calendar = sheet.get("general.calendar")
     strike = trade.strike_date
@@ -496,11 +505,11 @@ def cost_table(
     lake: Lake, name: str, day, trade: Trade, n_paths=(20_000, 100_000), particles=(50_000, 100_000, 200_000)
 ) -> dict:
     """What a valuation costs, measured, to choose the frequencies of revaluation and of leverage recalibration."""
-    sheet = trade.term_sheet()
+    sheet = _sheet(trade)
     T = max(sheet.get("general.maturity_months") / 12, 0.5)
     day = pd.Timestamp(day).date()
     fix = {n: real_fixings(lake, n, trade.strike_date, day) for n in sheet.underlyings}
-    out = {"valuation": {}, "leverage": {}}
+    out: dict[str, Any] = {"valuation": {}, "leverage": {}}
     t = time.perf_counter()
     context_at(lake, name, day)
     out["market_seconds"] = time.perf_counter() - t

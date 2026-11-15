@@ -15,6 +15,7 @@ and its inverse when it is df: the inverse keeps the volatility and flips the co
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -74,6 +75,7 @@ def forward_rows(spots: pd.Series, base_curves: dict, quote_curves: dict, tenors
     )
     frames = []
     for day, spot in spots.items():
+        day = cast(pd.Timestamp, day)  # the spots are indexed by day
         base, quote = _last_curve(base_curves, base_days, day), _last_curve(quote_curves, quote_days, day)
         if base is None or quote is None:
             continue
@@ -128,7 +130,7 @@ def build_fx_forwards(lake: Lake, pairs=None) -> list[dict]:
 
 def realised_vol(spots: pd.Series, window: int) -> pd.Series:
     """Annualised standard deviation of the last `window` daily log returns."""
-    return np.log(spots).diff().rolling(window).std().mul(np.sqrt(TRADING_DAYS)).dropna()
+    return cast(pd.Series, np.log(spots)).diff().rolling(window).std().mul(np.sqrt(TRADING_DAYS)).dropna()
 
 
 def build_fx_vols(lake: Lake, pairs=None) -> list[dict]:

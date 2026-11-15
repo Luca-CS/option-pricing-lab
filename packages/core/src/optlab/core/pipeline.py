@@ -4,6 +4,7 @@ particles; then repricing of the vanillas and of a few exotics under every model
 from __future__ import annotations
 
 import time
+from typing import Any
 
 import numpy as np
 
@@ -46,7 +47,7 @@ def calibrate_all(
     log=print,
 ):
     """Run the three steps. Returns a dict of fitted objects plus timing and error statistics."""
-    out = {"timings": {}}
+    out: dict[str, Any] = {"timings": {}}
     t = time.time()
     surface, ssvi_start = fit_svi_surface(slices, [_weights(s) for s in slices])
     out["surface"], out["ssvi"], out["timings"]["surface_s"] = surface, ssvi_start, time.time() - t

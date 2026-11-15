@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -110,6 +111,7 @@ def check_splits(prices: pd.DataFrame, actions: pd.DataFrame, max_jump: float = 
     """Closes must be continuous across a split (Yahoo restates them): a return of about the split's size means an
     unadjusted series, and products on it would be struck at the wrong level."""
     issues = []
+    a: Any  # a row of itertuples: its fields by name
     for a in actions[actions["kind"] == "split"].itertuples():
         g = prices[prices["instrument"] == a.instrument].sort_values("obs_date")
         days = pd.to_datetime(g["obs_date"])
@@ -154,8 +156,8 @@ def check_fx(spots: pd.DataFrame, today: dt.date, max_gap: float = 0.02, max_mov
             )
     wide = spots.pivot_table(index=["pair", "obs_date"], columns="source", values="rate")
     if wide.shape[1] == 2:
-        gap = np.log(wide.iloc[:, 0] / wide.iloc[:, 1]).abs().dropna()
-        for (pair, day), value in gap[gap > max_gap].items():
+        gap = cast(pd.Series, np.log(wide.iloc[:, 0] / wide.iloc[:, 1])).abs().dropna()
+        for (pair, day), value in gap[gap > max_gap].items():  # pyright: ignore[reportGeneralTypeIssues] (a two-level index: a pair per key)
             issues.append(
                 _issue(
                     "fx_spots",
@@ -178,6 +180,7 @@ def check_calendar(lake: Lake) -> list[dict]:
     issues = []
     for place, name in PLACE_CALENDAR.items():
         rows = lake.read("calendars", where=f"place = '{place}'", order="obs_date")
+        r: Any  # a row of itertuples: its fields by name
         for r in rows.itertuples():
             expected = CALENDARS[name].is_business_day(pd.Timestamp(r.obs_date).date())
             if bool(r.is_open) != expected:
@@ -213,6 +216,7 @@ def report_text(lake: Lake, issues: pd.DataFrame) -> str:
     """A small plain-text table: coverage per dataset and issue counts."""
     cov = lake.coverage()
     lines = ["dataset | origin | source | rows | first | last"]
+    r: Any  # a row of itertuples: its fields by name
     for r in cov.itertuples():
         lines.append(
             f"{r.dataset} | {r.origin} | {r.source} | {r.n} | {pd.Timestamp(r.first).date()} | "

@@ -10,6 +10,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 SCRIPT = r"""
 $p = @(Get-NetConnectionProfile | ForEach-Object { [pscustomobject]@{ alias = $_.InterfaceAlias;
@@ -22,13 +23,13 @@ ConvertTo-Json -Compress -Depth 4 @{ profiles = $p; rules = $r }
 """
 
 
-def _list(x) -> list:
-    return [] if x is None else x if isinstance(x, list) else [x]
+def _list(x: Any) -> list[Any]:
+    return [] if x is None else cast(list[Any], x) if isinstance(x, list) else [x]  # JSON: one item or a list
 
 
-def interpret(data: dict, python: str) -> list[str]:
+def interpret(data: dict[str, Any], python: str) -> list[str]:
     """Plain-language reasons why another machine cannot connect, from the profiles and rules read on Windows."""
-    out = []
+    out: list[str] = []
     # the rules hold Windows paths: they are compared with Windows rules (case, separators) on any platform
     me = ntpath.normcase(ntpath.abspath(python))
     blocks = [

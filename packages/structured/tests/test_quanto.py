@@ -46,7 +46,7 @@ def single_context(rho):
     ctx = PricingContext(
         sx5e_in_usd(rho), flat_surface(VOL_S), spx.heston, spx.slv, VAL, "SX5E", payment_currency="USD"
     )
-    ctx.model = lambda name, T=1.0: BlackScholesModel(VOL_S) if name in ("bs", "lv") else spx.model(name, T)
+    ctx.model = lambda name, T=1.0: BlackScholesModel(VOL_S) if name in ("bs", "lv") else spx.model(name, T)  # pyright: ignore[reportAttributeAccessIssue] (BS for bs and lv)
     return ctx
 
 

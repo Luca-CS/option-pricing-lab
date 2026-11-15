@@ -18,6 +18,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from types import ModuleType
+from typing import cast
 
 import numpy as np
 
@@ -95,7 +96,9 @@ def _unsupported(model: Model, market: Market, T: float, cp: str, why: str | Non
 
 def _run(model, market, T, cp, product, n_steps, n_paths, seed, backend, K, H=0.0, threads=0) -> tuple:
     """(price[4], se[4], n_paths, kernel_ms, total_ms) from the engine; an engine error raises EngineError."""
-    r, q = _flat_rates(market, T)
+    rates = _flat_rates(market, T)
+    assert rates is not None  # noqa: S101 (narrows the type for pyright: _refusal checked a flat market)
+    r, q = rates
     heston = dict(v0=0.0, kappa=0.0, theta=0.0, xi=0.0, rho=0.0)
     sigma = 0.0
     if isinstance(model, HestonModel):
@@ -119,7 +122,7 @@ def _run(model, market, T, cp, product, n_steps, n_paths, seed, backend, K, H=0.
         sigma=float(sigma),
         **{k: float(v) for k, v in heston.items()},
         n_paths=max(4, n_paths + n_paths % 2),  # antithetic pairs
-        seed=seed if seed is not None else int(np.random.SeedSequence().entropy % 2**64),
+        seed=seed if seed is not None else int(cast(int, np.random.SeedSequence().entropy) % 2**64),
         backend=_BACKEND[backend],
         n_threads=threads,
     )

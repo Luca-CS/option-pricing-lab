@@ -258,7 +258,9 @@ def test_the_yen_curve_starts_with_the_call_rate_and_runs_straight_to_one_year()
     assert rows["zero_rate"].iloc[0] == pytest.approx(0.002, abs=1e-6) and rows["zero_rate"].iloc[1] == pytest.approx(
         2 * np.log(1.005), abs=1e-12
     )
-    assert rows["discount"].to_numpy() == pytest.approx(np.exp(-rows["zero_rate"] * rows["tenor"]).to_numpy())
+    assert rows["discount"].to_numpy() == pytest.approx(
+        np.exp(-rows["zero_rate"].to_numpy() * rows["tenor"].to_numpy())
+    )
 
 
 def test_gilt_rates_are_kept_as_continuous_zero_rates():

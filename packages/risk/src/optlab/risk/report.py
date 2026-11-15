@@ -24,7 +24,7 @@ def _stat(book: dict, key: str, d=0) -> str:
     return "–" if v is None else _pm(v[0], v[1], d)
 
 
-def greeks_section(run: dict) -> str:
+def greeks_section(run: dict | None) -> str:
     if not run:
         return "<h2>Greeks</h2><p class='muted'>No risk run stored: run one from the Risk screen.</p>"
     book = run["book"]
@@ -63,7 +63,7 @@ def greeks_section(run: dict) -> str:
     )
 
 
-def ladder_section(run: dict) -> str:
+def ladder_section(run: dict | None) -> str:
     if not run:
         return ""
     head = "".join(f"<th>{p:+.0%}</th>" for p in run["points"])
@@ -74,7 +74,7 @@ def ladder_section(run: dict) -> str:
     return f"<h2>Spot ladder</h2><p class='muted'>Book P&L against the base, every spot moved together.</p><table><tr><th>Rule</th>{head}</tr>{rows}</table>"
 
 
-def scenarios_section(run: dict) -> str:
+def scenarios_section(run: dict | None) -> str:
     if not run:
         return ""
     rows = "".join(
@@ -90,7 +90,7 @@ def scenarios_section(run: dict) -> str:
     return f"<h2>Scenarios</h2><p class='muted'>Hypothetical, {sign}.</p><table><tr><th>Scenario</th><th>Moves</th><th>Book P&L</th><th></th></tr>{rows}</table>"
 
 
-def var_section(run: dict) -> str:
+def var_section(run: dict | None) -> str:
     if not run:
         return ""
     rows = ""

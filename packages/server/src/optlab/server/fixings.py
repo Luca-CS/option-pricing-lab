@@ -20,7 +20,7 @@ def _date(cell: str) -> str | None:
         return None
 
 
-def parse_fixings(text: str) -> tuple[dict, list]:
+def parse_fixings(text: str) -> tuple[dict[str, float], list[str]]:
     """({iso date: level}, [lines that are not a date and a positive level])."""
     lines = [line.strip() for line in str(text or "").splitlines() if line.strip()]
     col = 1
@@ -28,7 +28,8 @@ def parse_fixings(text: str) -> tuple[dict, list]:
         head = [c.strip().lower() for c in SPLIT.split(lines.pop(0).lower().replace("adj close", "adj_close")) if c]
         if "close" in head[1:]:
             col = head.index("close")
-    levels, skipped = {}, []
+    levels: dict[str, float] = {}
+    skipped: list[str] = []
     for line in lines:
         cells = [c for c in SPLIT.split(line) if c]
         day = _date(cells[0]) if cells else None

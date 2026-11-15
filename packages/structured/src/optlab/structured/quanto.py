@@ -15,6 +15,8 @@ life. A vol bump keeps the adjustment of the base market, so a vega does not see
 
 from __future__ import annotations
 
+from typing import cast
+
 import numpy as np
 
 from optlab.core.instruments import _BY_ID
@@ -26,7 +28,7 @@ def integrated_vol(T, vol) -> np.ndarray:
     the maturities of the surface and the times asked."""
     T = np.atleast_1d(np.asarray(T, dtype=float))
     if np.isscalar(vol):
-        return float(vol) * T
+        return float(cast(float, vol)) * T
     grid = np.unique(np.concatenate([np.asarray(vol.maturities, dtype=float), T[T > 0]]))
     total = np.maximum.accumulate(np.array([float(vol.iv(0.0, t)) ** 2 * t for t in grid]))
     steps = np.sqrt(np.diff(total, prepend=0.0) * np.diff(grid, prepend=0.0))

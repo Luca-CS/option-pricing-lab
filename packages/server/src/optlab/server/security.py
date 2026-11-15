@@ -22,7 +22,9 @@ import threading
 import time
 import uuid
 from collections import deque
+from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import Any
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
@@ -69,7 +71,7 @@ def _digest(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def check_roles(roles) -> list[str]:
+def check_roles(roles: Iterable[str]) -> list[str]:
     out = sorted(set(roles))
     bad = [r for r in out if r not in ROLES]
     if bad or not out:
@@ -89,11 +91,11 @@ class Accounts:
         self.db, self.settings = db, settings
         self.hasher = PasswordHasher()
         self._dummy = self.hasher.hash(secrets.token_urlsafe(16))  # verified for unknown names: the same cost
-        self._attempts: dict[str, deque] = {}
+        self._attempts: dict[str, deque[float]] = {}  # monotonic times of the failed logins per address
         self._lock = threading.Lock()
 
     # --- accounts (the CLI `optlab.server.users`, and the admin routes) ---------------------------------------------
-    def create(self, name: str, password: str, roles) -> User:
+    def create(self, name: str, password: str, roles: Iterable[str]) -> User:
         if not NAME.match(name):
             raise ValueError("a name is 2 to 32 lower-case letters, digits, '.', '_' or '-', starting with a letter")
         check_password(password)
@@ -118,17 +120,17 @@ class Accounts:
             )
         return user
 
-    def get(self, name: str) -> dict | None:
+    def get(self, name: str) -> dict[str, Any] | None:
         with self.db.read() as c:
             row = c.execute(select(users).where(users.c.name == name)).first()
         return None if row is None else self._public(row)
 
-    def all(self) -> list[dict]:
+    def all(self) -> list[dict[str, Any]]:
         with self.db.read() as c:
             return [self._public(r) for r in c.execute(select(users).order_by(users.c.name))]
 
     @staticmethod
-    def _public(row) -> dict:
+    def _public(row: Any) -> dict[str, Any]:  # a users row
         return {
             "user_id": row.user_id,
             "name": row.name,
@@ -139,7 +141,7 @@ class Accounts:
             "password_changed_at": row.password_changed_at,
         }
 
-    def set_roles(self, name: str, roles) -> dict:
+    def set_roles(self, name: str, roles: Iterable[str]) -> dict[str, Any]:
         roles = check_roles(roles)
         self._change(name, roles=json.dumps(roles))
         return self.get(name) or {}
@@ -157,7 +159,7 @@ class Accounts:
     def set_disabled(self, name: str, disabled: bool) -> None:
         self._change(name, disabled=int(disabled))
 
-    def _change(self, name: str, **values) -> None:
+    def _change(self, name: str, **values: Any) -> None:
         """Change an account and end all its sessions (rotation on a change of privilege or password)."""
         with self.db.write() as c:
             uid = c.execute(select(users.c.user_id).where(users.c.name == name)).scalar()
@@ -167,9 +169,9 @@ class Accounts:
             c.execute(update(sessions).where(sessions.c.user_id == uid).values(revoked=1))
 
     # --- login ----------------------------------------------------------------------------------------------------
-    def _failures(self, address: str) -> deque:
+    def _failures(self, address: str) -> deque[float]:
         now, window = time.monotonic(), 600.0
-        q = self._attempts.setdefault(address, deque())
+        q = self._attempts.setdefault(address, deque[float]())
         while q and now - q[0] > window:
             q.popleft()
         return q
@@ -205,7 +207,7 @@ class Accounts:
             self.hasher.verify(row.password_hash, password)
         except VerifyMismatchError, InvalidHashError:
             failures = row.failed_logins + 1
-            values: dict = {"failed_logins": failures}
+            values: dict[str, Any] = {"failed_logins": failures}
             if failures >= self.settings.login_max_failures:
                 values = {
                     "failed_logins": 0,
@@ -216,7 +218,7 @@ class Accounts:
             raise LoginError(WRONG) from None
         if row.disabled:
             raise LoginError(WRONG)
-        values = {"failed_logins": 0, "locked_until": None}
+        values: dict[str, Any] = {"failed_logins": 0, "locked_until": None}
         if self.hasher.check_needs_rehash(row.password_hash):
             values["password_hash"] = self.hasher.hash(password)
         with self.db.write() as c:

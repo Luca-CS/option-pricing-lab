@@ -17,6 +17,7 @@ import io
 import re
 import xml.etree.ElementTree as ET
 import zipfile
+from typing import cast
 
 import pandas as pd
 
@@ -53,7 +54,9 @@ def parse_mof_jgb(content) -> pd.DataFrame:
     if head is None:
         raise ValueError("no 'Date,' header in the JGB file")
     df = pd.read_csv(
-        io.StringIO("\n".join(lines[head:])), na_values=["-"], usecols=lambda c: c == "Date" or re.fullmatch(r"\d+Y", c)
+        io.StringIO("\n".join(lines[head:])),
+        na_values=["-"],
+        usecols=lambda c: c == "Date" or bool(re.fullmatch(r"\d+Y", str(c))),
     )
     dates = pd.to_datetime(df["Date"], format="%Y/%m/%d", errors="coerce")
     parts = [
@@ -163,7 +166,10 @@ def glc_workbooks(content: bytes, first_year: int = 2015) -> dict[str, bytes]:
 
 
 def _column(reference: str) -> str:
-    return re.match(r"[A-Z]+", reference)[0]
+    m = re.match(r"[A-Z]+", reference)
+    if m is None:
+        raise ValueError(f"no column in the cell reference {reference!r}")
+    return m[0]
 
 
 def _sheet_numbers(book: zipfile.ZipFile, title: str):
@@ -172,18 +178,21 @@ def _sheet_numbers(book: zipfile.ZipFile, title: str):
     properties = workbook.find(f"{_MAIN}workbookPr")
     if properties is not None and properties.get("date1904") in ("1", "true"):
         raise ValueError("this workbook counts its dates from 1904, the parser assumes 1900")
-    ids = {s.get("name"): s.get(f"{_RELATION}id") for s in workbook.find(f"{_MAIN}sheets")}
+    sheets = workbook.find(f"{_MAIN}sheets")
+    if sheets is None:
+        raise ValueError("no sheets in the workbook")
+    ids = {cast(str, s.get("name")): cast(str, s.get(f"{_RELATION}id")) for s in sheets}
     if title not in ids:
         raise ValueError(f"no sheet {title!r} in the workbook: {sorted(ids)}")
     targets = {r.get("Id"): r.get("Target") for r in ET.fromstring(book.read("xl/_rels/workbook.xml.rels"))}  # noqa: S314 (ElementTree resolves no external entity; expat bounds entity expansion)
-    with book.open("xl/" + targets[ids[title]].removeprefix("/xl/")) as sheet:
+    with book.open("xl/" + cast(str, targets[ids[title]]).removeprefix("/xl/")) as sheet:
         for _, element in ET.iterparse(sheet):  # noqa: S314 (ElementTree resolves no external entity; expat bounds entity expansion)
             if element.tag == f"{_MAIN}row":
                 row = {}
                 for cell in element.iter(f"{_MAIN}c"):
                     value = cell.find(f"{_MAIN}v")
                     if value is not None and cell.get("t", "n") == "n":
-                        row[_column(cell.get("r"))] = float(value.text)
+                        row[_column(cast(str, cell.get("r")))] = float(cast(str, value.text))
                 yield row
                 element.clear()
 

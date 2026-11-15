@@ -25,6 +25,7 @@ import datetime as dt
 import json
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -153,7 +154,7 @@ def rho_from_skew(skew_index: float, theta_30d: float, prior: ShapePrior, bounds
     lo, hi = gap(bounds[0]), gap(bounds[1])
     if lo * hi > 0:  # out of the shape's reach: the closest end
         return bounds[0] if abs(lo) < abs(hi) else bounds[1]
-    return float(brentq(gap, *bounds, xtol=1e-4))
+    return float(cast(float, brentq(gap, *bounds, xtol=1e-4)))  # the root alone (full_output is off)
 
 
 def solve_thetas(levels, Ts, rho, eta, gamma, iterations: int = 8) -> np.ndarray:
@@ -276,6 +277,7 @@ def build_reconstructed(
     run = new_run_id("reconstruct")
     for name in names:
         rows = []
+        day: Any  # the panel is indexed by Timestamp
         for day, row in panel.iloc[::step].iterrows():
             try:
                 rec = reconstruct_on(row, name, prior, use_skew)

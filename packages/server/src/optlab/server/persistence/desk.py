@@ -7,6 +7,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import uuid
+from typing import Any
 
 from sqlalchemy import delete as sql_delete
 from sqlalchemy import func, insert, select, update
@@ -184,7 +185,7 @@ class DeskRepository:
         ]
 
     # --- desk settings (JSON values) ---
-    def setting(self, key: str, default=None):
+    def setting(self, key: str, default=None) -> Any:
         with self.db.read() as c:
             value = c.execute(select(desk_settings.c.value).where(desk_settings.c.key == key)).scalar()
         return default if value is None else json.loads(value)

@@ -2,6 +2,8 @@
 
 Engine tests are skipped when the shared library is not built, GPU tests when there is no CUDA device."""
 
+from typing import Any
+
 import numpy as np
 import pytest
 
@@ -101,7 +103,7 @@ def test_gpu_heston_barrier_close_to_euler_library():
 
 @needs_gpu
 def test_gpu_and_cpu_reference_agree():
-    kw = dict(n_paths=400_000, seed=6)
+    kw: dict[str, Any] = dict(n_paths=400_000, seed=6)
     g = gpu.barrier(HestonModel(SPX), MARKET, 100, 80, 1.0, backend="gpu", **kw)
     c = gpu.barrier(HestonModel(SPX), MARKET, 100, 80, 1.0, backend="cpu", **kw)
     assert abs(g.price - c.price) <= 4 * np.hypot(g.stderr, c.stderr)  # different generators: independent runs

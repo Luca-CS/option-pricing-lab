@@ -1,6 +1,7 @@
 """R7: the risk services of the desk (`RiskApi`), their stored runs and the report; API v1 in `test_api_risk.py`."""
 
 import json
+from typing import Any
 
 import _desk
 import pytest
@@ -9,7 +10,7 @@ from optlab.server.api import Desk
 from optlab.server.report import risk_report
 from optlab.server.risk_api import RiskApi
 
-QUICK = {"precision": "quick"}
+QUICK: dict[str, Any] = {"precision": "quick"}
 
 
 @pytest.fixture(scope="module")

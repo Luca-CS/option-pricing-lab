@@ -2,16 +2,19 @@
 calibrated to, Fourier, the NumPy simulation on another seed, and the CPU against the GPU on the same draws.
 Skipped without the library (cuda/, cmake), the GPU checks without a CUDA device."""
 
+from typing import Any, cast
+
 import numpy as np
 import pytest
 from _paths import SPX_CALIBRATION
+from numpy.typing import ArrayLike
 
 from optlab import native
 from optlab.core import engines
 from optlab.core.blackscholes import black_price
 from optlab.core.heston import heston_price
 from optlab.core.market import Market
-from optlab.core.models import BlackScholesModel, simulate
+from optlab.core.models import BlackScholesModel, Leverage, simulate
 from optlab.structured import PricingContext, compile_sheet, engine, preset, price_many
 from optlab.structured.localcorr import LocalCorrelation, StochasticMix
 from optlab.structured.multiasset import Basket, simulate_basket
@@ -40,7 +43,7 @@ CTX = PricingContext.from_calibration(SPX_CALIBRATION)
 K = np.array([80.0, 90.0, 100.0, 110.0, 120.0])
 
 
-def calls(S, D, strikes=K):
+def calls(S, D, strikes: ArrayLike = K):
     """Prices and standard errors of calls on pair averages (rows i and n/2 + i are a pair)."""
     h = len(S) // 2
     pay = D * np.maximum(S[:, None] - strikes, 0.0)
@@ -139,7 +142,7 @@ def test_a_phoenix_on_the_engine_matches_numpy():
     product = compile_sheet(preset("phoenix"), CTX.valuation)
     for name in ("lv", "slv"):
         model = CTX.model(name, product.horizon)
-        kw = dict(n_paths=200_000, valuation=CTX.valuation, calendar=product.calendar)
+        kw: dict[str, Any] = dict(n_paths=200_000, valuation=CTX.valuation, calendar=product.calendar)
         (a,) = price_many(product.program, model, CTX.market, [{product.coupon_param: 0.02}], seed=7, **kw)
         (b,) = price_many(
             product.program, model, CTX.market, [{product.coupon_param: 0.02}], seed=8, engine="cpu", **kw
@@ -203,7 +206,7 @@ def test_the_engine_leverage_reprices_the_surface_like_numpys(backend):
     from optlab.core.slv import calibrate_leverage
 
     T = 1.0
-    kw = dict(mix=0.5, n_particles=200_000, rng=1)
+    kw: dict[str, Any] = dict(mix=0.5, n_particles=200_000, rng=1)
     ours = calibrate_leverage(CTX.heston, CTX.surface, CTX.market, T, engine=backend, **kw)
     ref = calibrate_leverage(CTX.heston, CTX.surface, CTX.market, T, engine="numpy", **kw)
     F, D = float(CTX.market.F(T)), float(CTX.market.D(T))
@@ -221,7 +224,7 @@ def test_numpy_stays_the_default_of_the_leverage():
 
     a = calibrate_leverage(CTX.heston, CTX.surface, CTX.market, 0.2, n_particles=20_000, rng=2)
     b = calibrate_leverage(CTX.heston, CTX.surface, CTX.market, 0.2, n_particles=20_000, rng=2, engine="numpy")
-    assert np.array_equal(a.leverage.values, b.leverage.values)
+    assert np.array_equal(cast(Leverage, a.leverage).values, cast(Leverage, b.leverage).values)
 
 
 @needs_engine
@@ -231,7 +234,7 @@ def test_daily_windows_reduced_in_the_engine_give_the_same_numbers(name):
     product = compile_sheet(sheet, CTX.valuation)
     model = CTX.model("lv", product.horizon)
     sets = [{product.coupon_param: 0.02}] if product.coupon_param else [{}]
-    kw = dict(
+    kw: dict[str, Any] = dict(
         n_paths=40_000,
         seed=13,
         valuation=CTX.valuation,

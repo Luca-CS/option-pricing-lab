@@ -15,12 +15,16 @@ from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass, field, replace
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
 from optlab.core.heston import HestonParams
 from optlab.core.market import Market
 from optlab.core.models import BlackScholesModel, Leverage, LocalVolModel, Model, SLVModel, time_grid
+
+if TYPE_CHECKING:
+    from optlab.structured.localcorr import LocalCorrelation, StochasticMix
 
 
 def correlation_root(corr) -> np.ndarray:
@@ -55,7 +59,7 @@ class Basket:
     markets: dict  # name → Market (spot and forward curve)
     corr: np.ndarray
     vol_corr: str = "same"  # how the residuals of the variances correlate: "same" as the spots, or "independent"
-    mixer: object = None  # localcorr.LocalCorrelation or StochasticMix: a correlation that moves with the state
+    mixer: LocalCorrelation | StochasticMix | None = None  # a correlation that moves with the state (localcorr.py)
 
     def __post_init__(self):
         if self.vol_corr not in ("same", "independent"):
@@ -111,19 +115,19 @@ def simulate_basket(
         if mixer is None:
             z = basket.root @ raw
         else:  # at w0 the factors line up with the constant matrix's draws: common random numbers with it where the weight has not moved
-            market, fresh = market_sign * raw[-1], normals(half, residual)
-            common = np.cos(turn) * market + np.sin(turn) * fresh
+            market, fresh = market_sign * raw[-1], normals(half, residual)  # pyright: ignore[reportPossiblyUnboundVariable] (bound with the mixer, above)
+            common = np.cos(turn) * market + np.sin(turn) * fresh  # pyright: ignore[reportPossiblyUnboundVariable] (bound with the mixer, above)
             other = raw.copy()
-            other[-1] = np.sin(turn) * market - np.cos(turn) * fresh
-            weight = mixer.weight(t0, np.log(np.mean(np.exp(x), axis=0)), state)
-            z = np.sqrt(weight) * common + np.sqrt(1.0 - weight) * (root_low @ other)
-            state = mixer.advance(state, dt, market, normals(half, residual)) if state is not None else None
+            other[-1] = np.sin(turn) * market - np.cos(turn) * fresh  # pyright: ignore[reportPossiblyUnboundVariable] (bound with the mixer, above)
+            weight = mixer.weight(t0, np.log(np.mean(np.exp(x), axis=0)), state)  # pyright: ignore[reportPossiblyUnboundVariable] (bound with the mixer, above)
+            z = np.sqrt(weight) * common + np.sqrt(1.0 - weight) * (root_low @ other)  # pyright: ignore[reportPossiblyUnboundVariable, reportCallIssue, reportArgumentType, reportOperatorIssue] (bound with the mixer, above)
+            state = mixer.advance(state, dt, market, normals(half, residual)) if state is not None else None  # pyright: ignore[reportPossiblyUnboundVariable] (bound with the mixer, above)
         w = basket.root @ normals((k, half), residual) if same else None
         for a, (m, hp) in enumerate(zip(models, hps)):
             var = m.inst_var(t0, x[a], v[a] if v[a] is not None else np.zeros(n))
             if hp is not None:
-                z2 = hp.rho * z[a] + np.sqrt(1 - hp.rho**2) * (w[a] if same else normals(half, residual))
-                vp = np.maximum(v[a], 0.0)
+                z2 = hp.rho * z[a] + np.sqrt(1 - hp.rho**2) * (w[a] if same else normals(half, residual))  # pyright: ignore[reportOptionalSubscript] (w is drawn when same)
+                vp = np.maximum(v[a], 0.0)  # pyright: ignore[reportCallIssue, reportArgumentType] (a name with a variance process has its v)
                 v[a] = v[a] + hp.kappa * (hp.theta - vp) * dt + hp.xi * np.sqrt(vp * dt) * z2
             x[a] = x[a] - 0.5 * var * dt + np.sqrt(var * dt) * z[a]
         while j < len(obs) and obs[j] == i:
@@ -248,7 +252,7 @@ class BasketContext:
             markets[name] = markets[name].scaled(markets[name].spot * spot_factor)
         if vol_shift:
             v = vols[name]
-            vols[name] = v + vol_shift if np.isscalar(v) else ShiftedSurface(v, vol_shift)
+            vols[name] = cast(float, v) + vol_shift if np.isscalar(v) else ShiftedSurface(v, vol_shift)
         return BasketContext(
             self.names,
             markets,
@@ -265,7 +269,7 @@ class BasketContext:
         from optlab.structured.surfaces import BumpedSurface
 
         vols = {
-            n: (v + vol if np.isscalar(v) else BumpedSurface(v, vol, skew)) if vol or skew else v
+            n: (cast(float, v) + vol if np.isscalar(v) else BumpedSurface(v, vol, skew)) if vol or skew else v
             for n, v in self.vols.items()
         }
         return BasketContext(
@@ -290,7 +294,7 @@ class BasketContext:
 
     def atm_vol(self, name: str, T: float) -> float:
         v = self.vols[name]
-        return float(v) if np.isscalar(v) else float(v.iv(0.0, T))
+        return float(cast(float, v)) if np.isscalar(v) else float(v.iv(0.0, T))
 
     def name_context(self, name: str):
         """The context that keeps a name's SLV leverages, one with the day's levels and the prior's dynamics when none was given."""

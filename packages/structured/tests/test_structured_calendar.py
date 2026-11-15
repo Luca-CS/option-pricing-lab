@@ -3,6 +3,7 @@
 import datetime as dt
 
 import pytest
+from _quotes import some
 from _structured_refs import flat_context
 
 from optlab.structured import compile_sheet, preset, quote
@@ -86,7 +87,7 @@ def test_a_running_brc_priced_with_exchange_fixings_only():
     )
     closes = {d: 100.0 for d in NYSE.business_days(strike, CTX.valuation)}
     q = quote(sheet, CTX, model="bs", control=None, n_paths=4_000, batch=None, fixings={"SPX": closes})
-    assert 80 < q.upfront < 110
+    assert 80 < some(q.upfront) < 110
     with pytest.raises(KeyError, match="no fixing of SPX"):  # Monday-Friday wants the Good Friday close too
         quote(
             sheet.replace(**{"general.calendar": "weekend"}),

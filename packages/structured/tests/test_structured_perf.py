@@ -2,12 +2,14 @@
 the options that change the estimator)."""
 
 import json
+from typing import Any, cast
 
 import numpy as np
 import pytest
 from _paths import SPX_CALIBRATION
+from _quotes import some
 
-from optlab.core.models import LocalVolModel
+from optlab.core.models import Leverage, LocalVolModel
 from optlab.core.svi import SVISurface
 from optlab.structured import PricingContext, compile_sheet, preset, price
 from optlab.structured.surfaces import FastSVISurface
@@ -51,11 +53,11 @@ def test_process_pool_gives_the_same_numbers_bit_for_bit():
     from optlab.structured.pricer import price_many
 
     p = compile_sheet(preset("phoenix", **{"general.maturity_months": 12}), SPX.valuation)
-    kw = dict(n_paths=40_000, seed=7, batch=10_000, valuation=SPX.valuation)
+    kw: dict[str, Any] = dict(n_paths=40_000, seed=7, batch=10_000, valuation=SPX.valuation)
     seq = price_many(p.program, SPX.model("slv"), SPX.market, [{}, {"cpn": 0.03}], **kw)
     par = price_many(p.program, SPX.model("slv"), SPX.market, [{}, {"cpn": 0.03}], workers=2, **kw)
     for a, b in zip(seq, par):
-        assert np.array_equal(a.pairs, b.pairs) and np.array_equal(a.termination, b.termination)
+        assert np.array_equal(some(a.pairs), some(b.pairs)) and np.array_equal(some(a.termination), some(b.termination))
         assert a.expected_flows == b.expected_flows
     assert par[0].timings["workers"] == 2
     book = Book(
@@ -66,7 +68,7 @@ def test_process_pool_gives_the_same_numbers_bit_for_bit():
     )
     r1 = book.price(SPX, model="lv", n_paths=20_000, batch=10_000)
     r2 = book.price(SPX, model="lv", n_paths=20_000, batch=10_000, workers=2)
-    assert np.array_equal(r1.pairs, r2.pairs) and r1.value == r2.value
+    assert np.array_equal(some(r1.pairs), some(r2.pairs)) and r1.value == r2.value
     engine.shutdown_pool()
 
 
@@ -85,6 +87,7 @@ def test_one_simulation_delta_equals_the_bumped_market_delta():
     from optlab.structured.pricer import price_many
 
     p = compile_sheet(preset("phoenix", **{"general.maturity_months": 12}), SPX.valuation)
+    kw: dict[str, Any]
     m, kw = (
         SPX.model("lv"),
         dict(n_paths=10_000, seed=4, batch=5_000, valuation=SPX.valuation, smoothing=0.005, initial_fixing=100.0),
@@ -104,7 +107,7 @@ def test_window_extremes_without_copies_are_bit_identical():
     sc = Scenario("SPX", times, paths, 100.0, {-0.5: 90.0, -0.2: 130.0})
     for window in (times[10:60], times[::3], np.r_[-0.5, -0.2, 0.0, times[:40]], np.r_[-0.5, 0.0]):
         for func, ref in (("min", np.min), ("max", np.max)):
-            assert np.array_equal(sc.extreme("SPX", window, func), ref(sc.fixings("SPX", window), axis=1))
+            assert np.array_equal(some(sc.extreme("SPX", window, func)), ref(sc.fixings("SPX", window), axis=1))
 
 
 def test_daily_knock_in_prices_do_not_move_with_the_window_shortcut(monkeypatch):
@@ -112,11 +115,11 @@ def test_daily_knock_in_prices_do_not_move_with_the_window_shortcut(monkeypatch)
     from optlab.structured.scenario import Scenario
 
     p = compile_sheet(preset("barrier_reverse_convertible", **{"wrapper.solve": "upfront"}), SPX.valuation)
-    kw = dict(n_paths=20_000, seed=3, batch=10_000, valuation=SPX.valuation)
+    kw: dict[str, Any] = dict(n_paths=20_000, seed=3, batch=10_000, valuation=SPX.valuation)
     fast = price_many(p.program, SPX.model("bs"), SPX.market, [{}], **kw)[0]
     monkeypatch.delattr(Scenario, "extreme")  # the evaluator falls back to fixings(...).min(axis=1)
     slow = price_many(p.program, SPX.model("bs"), SPX.market, [{}], **kw)[0]
-    assert np.array_equal(fast.pairs, slow.pairs)
+    assert np.array_equal(some(fast.pairs), some(slow.pairs))
 
 
 # --- forward control variates (opt-in) ---
@@ -128,7 +131,7 @@ def test_forward_controls_reduce_the_variance_without_moving_the_price(model):
     from optlab.structured.pricer import price_many
 
     p = compile_sheet(preset("phoenix"), SPX.valuation)
-    kw = dict(n_paths=60_000, seed=8, batch=20_000, valuation=SPX.valuation)
+    kw: dict[str, Any] = dict(n_paths=60_000, seed=8, batch=20_000, valuation=SPX.valuation)
     plain = price_many(p.program, SPX.model(model), SPX.market, [{}], **kw)[0]
     ctrl = price_many(p.program, SPX.model(model), SPX.market, [{}], control_forwards=True, **kw)[0]
     assert ctrl.timings["variance_ratio"] > 1.2
@@ -149,7 +152,7 @@ def test_the_coupon_solver_stays_exact_with_forward_controls():
         batch=10_000,
         control_forwards=True,
     )
-    cpn = q.coupon_rate * q.product.coupon_scale
+    cpn = some(q.coupon_rate) * q.product.coupon_scale
     again = price_many(
         q.product.program,
         SPX.model("slv"),
@@ -205,7 +208,7 @@ def test_rqmc_needs_a_power_of_two():
 def test_uniform_leverage_and_tabulated_local_vol_interpolate_closely():
     from optlab.structured.fastmodels import TabulatedLocalVol, UniformLeverage
 
-    lev, ul = SPX.slv.leverage, UniformLeverage(SPX.slv.leverage)
+    lev, ul = cast(Leverage, SPX.slv.leverage), UniformLeverage(SPX.slv.leverage)
     for i in range(0, len(lev.times), 10):
         xs = np.linspace(lev.x_grids[i][0] - 0.1, lev.x_grids[i][-1] + 0.1, 2000)
         assert np.max(np.abs(ul(lev.times[i], xs) / lev(lev.times[i], xs) - 1)) < 1e-3
@@ -221,7 +224,7 @@ def test_fast_models_price_within_a_small_fraction_of_the_error(model):
     from optlab.structured.pricer import price_many
 
     p = compile_sheet(preset("phoenix", **{"general.maturity_months": 12}), SPX.valuation)
-    kw = dict(n_paths=40_000, seed=12, batch=10_000, valuation=SPX.valuation)
+    kw: dict[str, Any] = dict(n_paths=40_000, seed=12, batch=10_000, valuation=SPX.valuation)
     ref = price_many(p.program, SPX.model(model), SPX.market, [{}], **kw)[0]
     fast = price_many(p.program, SPX.model(model, fast=True), SPX.market, [{}], **kw)[0]
     assert abs(fast.price - ref.price) < 0.25 * ref.stderr

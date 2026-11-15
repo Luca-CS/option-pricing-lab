@@ -1,6 +1,7 @@
 """FX in the lake: parsers on small fixtures, loads without network, forwards, volatility, correlation and the quanto market at a date."""
 
 import datetime as dt
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -269,7 +270,7 @@ def test_fx_correlation_uses_multi_day_returns(world):
     wide = pd.DataFrame({"SX5E": closes["close"].to_numpy()}, index=pd.to_datetime(closes["obs_date"]))
     spots = spot_series(lake, "EURUSD")
     s = name_pair_series(wide, spots, "SX5E", "EURUSD", 60)
-    r = np.log(wide.join(spots.rename("EURUSD"), how="inner")).diff(3).dropna()
+    r = cast(pd.DataFrame, np.log(wide.join(spots.rename("EURUSD"), how="inner"))).diff(3).dropna()
     assert s.iloc[-1] == pytest.approx(r["SX5E"].iloc[-60:].corr(r["EURUSD"].iloc[-60:]), rel=1e-10)
 
 
@@ -356,7 +357,7 @@ def test_erasing_the_future_changes_no_quanto_market(world, tmp_path):
     for table in ("prices_eod", "fx_spots"):
         rows = cut.read(table)
         for (source, origin), g in rows.groupby(["source", "origin"]):
-            fresh.ingest(table, g, source, origin)
+            fresh.ingest(table, g, str(source), str(origin))
     build_fx_vols(fresh)
     build_fx_correl(fresh, ("SPX", "SX5E"))
     assert fx_vol_at(fresh, "EURUSD", DAY)[0] == pytest.approx(fx_vol_at(lake, "EURUSD", DAY)[0], rel=1e-12)

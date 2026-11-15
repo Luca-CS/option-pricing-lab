@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import time
+from typing import Any
 
 from _api import SCRIPT_EXAMPLE, api
 
@@ -41,7 +42,7 @@ def test_an_external_worker_its_crash_and_the_next_one(tmp_path):
         s = a.client("structurer")
         desk = a.state.desk
         assert desk.worker is None and s.get("/api/v1/ready").status_code == 503  # nobody serves the queue
-        quick = {"script": SCRIPT_EXAMPLE, "model": "bs", "n_paths": 4000}
+        quick: dict[str, Any] = {"script": SCRIPT_EXAMPLE, "model": "bs", "n_paths": 4000}
         first = s.post("/api/v1/structuring/script/price", json=quick).json()["job_id"]
         time.sleep(1.0)
         assert s.get(f"/api/v1/jobs/{first}").json()["state"] == "queued"  # it waits for a worker
