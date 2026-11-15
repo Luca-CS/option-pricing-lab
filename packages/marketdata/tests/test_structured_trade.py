@@ -5,6 +5,7 @@ import json
 
 import pytest
 from _paths import SIMULATED_CALIBRATION, SPX_CALIBRATION
+from _quotes import some
 from _stores import snapshot_store
 from _structured_refs import flat_context
 
@@ -48,11 +49,11 @@ def test_json_schema_has_enums_bounds_and_visibility():
 
 def test_a_trade_round_trips_and_never_restrikes():
     trade = Trade.from_term_sheet("PHX-1", preset("phoenix"), -10, VAL)
-    assert trade.strike_date == VAL and trade.term_sheet().get("general.strike_date") == VAL
+    assert trade.strike_date == VAL and some(trade.term_sheet()).get("general.strike_date") == VAL
     back = Trade.from_json(trade.to_json())
     assert back == trade
     # priced a week later, the stored trade keeps its strike: it needs the fixing of its strike date
-    later = compile_sheet(back.term_sheet(), dt.date(2026, 11, 3))
+    later = compile_sheet(some(back.term_sheet()), dt.date(2026, 11, 3))
     assert later.strike_date == VAL
 
 

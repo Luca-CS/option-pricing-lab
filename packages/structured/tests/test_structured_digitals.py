@@ -1,8 +1,11 @@
 """Digitals as call spreads: found in the script, the ramp of a comparison, closed forms, the delta bound and the daily barrier."""
 
+from typing import Any
+
 import numpy as np
 import pytest
 from _paths import SPX_CALIBRATION
+from _quotes import desk_of, some
 from _structured_refs import flat_context
 from scipy.stats import norm
 
@@ -20,7 +23,7 @@ from optlab.structured.script.timeline import Clock, build_timeline
 SPX = PricingContext.from_calibration(SPX_CALIBRATION)
 BS = flat_context()
 PATHS = 20_000
-DELTA = {"coupon": 1.0, "autocall": 1.0, "barrier": 5.0, "upside": 1.0}
+DELTA: dict[str, Any] = {"coupon": 1.0, "autocall": 1.0, "barrier": 5.0, "upside": 1.0}
 
 
 def inputs(spread=0.005, side="sell", delta=None):
@@ -113,7 +116,7 @@ def digital_sheet(months=12, amount=0.1):
 def test_an_upside_digital_costs_the_call_spread_on_the_side_against_the_desk():
     sheet = digital_sheet()
     q = quote(sheet, BS, control=None, costs=inputs(0.005, "sell", {**DELTA, "upside": 2.0}))
-    p, line = q.product, q.desk.line("upside")
+    p, line = q.product, desk_of(q).line("upside")
     tl = build_timeline(p.program, Clock(p.valuation, p.calendar))
     T = float(tl.event_times[-1])
     pay = float(tl.pay_times[-1])
@@ -125,7 +128,7 @@ def test_an_upside_digital_costs_the_call_spread_on_the_side_against_the_desk():
     assert line.detail[0]["side"] == "down" and line.detail[0]["width"] == pytest.approx(0.05)
     assert line.cost == pytest.approx(spread - hard, abs=1e-3) and line.cost > 0 and line.se == 0.0
     bought = quote(sheet, BS, control=None, costs=inputs(0.005, "buy", {**DELTA, "upside": 2.0}))
-    assert bought.desk.line("upside").detail[0]["side"] == "up" and bought.desk.line("upside").cost > 0
+    assert desk_of(bought).line("upside").detail[0]["side"] == "up" and desk_of(bought).line("upside").cost > 0
 
 
 def test_the_delta_of_the_payoff_stays_under_the_limit():
@@ -161,7 +164,7 @@ def test_a_european_barrier_is_the_same_by_replication_and_monte_carlo():
     sheet = preset("reverse_convertible", **{"downside.barrier": 0.8, "wrapper.solve": "upfront", "coupon.rate": 0.05})
     rep = quote(sheet, SPX, control=None, costs=inputs())
     mc = quote(sheet, SPX, model="lv", control=None, n_paths=100_000, batch=25_000, costs=inputs())
-    a, b = rep.desk.line("barrier"), mc.desk.line("barrier")
+    a, b = desk_of(rep).line("barrier"), desk_of(mc).line("barrier")
     assert (
         a.se == 0.0 and a.cost > 0 and b.detail[0]["side"] == a.detail[0]["side"] == "down"
     )  # less often knocked in: against the seller
@@ -172,11 +175,11 @@ def test_a_european_barrier_is_the_same_by_replication_and_monte_carlo():
 @pytest.mark.slow
 def test_each_digital_of_an_autocall_has_its_width_side_and_cost_and_the_price_is_on_target():
     q = quote(preset("phoenix"), SPX, model="lv", control=None, n_paths=PATHS, batch=10_000, costs=inputs())
-    d = q.desk
+    d = desk_of(q)
     assert d.final_price == pytest.approx(98.0, abs=1e-9)
     assert {x.key for x in d.lines} == {"coupon", "autocall", "barrier", "digital_interaction"}
     assert d.digital_passes <= 3
-    cpn = q.coupon_rate * q.product.coupon_scale
+    cpn = some(q.coupon_rate) * q.product.coupon_scale
     for x in d.lines:
         if x.kind == "digital":
             assert x.cost > 0 and x.se < q.result.stderr and x.note
@@ -186,7 +189,7 @@ def test_each_digital_of_an_autocall_has_its_width_side_and_cost_and_the_price_i
     )  # width of the solved coupon
     assert all(c["side"] == "down" for c in coupon.detail)  # paid more often: against the seller
     assert sum(x.cost for x in d.lines) == pytest.approx(d.final_price - d.base_price, abs=1e-10)
-    assert d.coupon_final < d.coupon_base
+    assert some(d.coupon_final) < some(d.coupon_base)
 
 
 def test_a_daily_barrier_moved_is_the_sheet_with_the_barrier_moved_bit_for_bit():
@@ -194,7 +197,7 @@ def test_a_daily_barrier_moved_is_the_sheet_with_the_barrier_moved_bit_for_bit()
         "barrier_reverse_convertible", **{"wrapper.solve": "upfront", "coupon.rate": 0.05, "downside.barrier": 0.7}
     )
     q = quote(sheet, SPX, model="lv", control=None, n_paths=PATHS, batch=10_000, costs=inputs(0.01))
-    line = q.desk.line("daily")
+    line = desk_of(q).line("daily")
     assert line.detail[0]["side"] == "down" and line.detail[0]["width"] == 0.01 and line.cost > 0
     moved = sheet.replace(**{"downside.barrier": 0.69})
     p = compile_sheet(moved, SPX.valuation)
@@ -210,7 +213,7 @@ def test_a_daily_barrier_moved_is_the_sheet_with_the_barrier_moved_bit_for_bit()
         valuation=p.valuation,
         calendar=p.calendar,
     )[0]
-    assert again.price == pytest.approx(q.desk.final_price, abs=1e-9)
+    assert again.price == pytest.approx(desk_of(q).final_price, abs=1e-9)
 
 
 @pytest.mark.slow
@@ -234,5 +237,5 @@ def test_a_worst_of_and_workers_take_the_digitals_too():
     )
     a = quote(s, ctx, control=None, n_paths=4000, batch=2000, costs=inputs())
     b = quote(s, ctx, control=None, n_paths=4000, batch=2000, costs=inputs(), workers=2)
-    assert a.desk.final_price == pytest.approx(98.0, abs=1e-9) and a.desk.line("coupon").cost > 0
-    assert a.coupon_rate == b.coupon_rate and a.desk.line("coupon").cost == b.desk.line("coupon").cost
+    assert desk_of(a).final_price == pytest.approx(98.0, abs=1e-9) and desk_of(a).line("coupon").cost > 0
+    assert a.coupon_rate == b.coupon_rate and desk_of(a).line("coupon").cost == desk_of(b).line("coupon").cost

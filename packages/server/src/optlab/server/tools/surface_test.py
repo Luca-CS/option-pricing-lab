@@ -11,6 +11,7 @@ import datetime as dt
 import json
 import time
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -87,7 +88,7 @@ def main(step: int = 5, lake_root: str | Path | None = None, log=say) -> None:
     t0 = time.perf_counter()
     for i, day in enumerate(days):
         cleaned = clean_day(lake, "SPX", day, "historicaldata")
-        row = panel.loc[pd.Timestamp(day)]
+        row = cast(pd.Series, panel.loc[pd.Timestamp(day)])  # one day of the panel
         for name, (shape, skew) in variants.items():
             t1 = time.perf_counter()
             rec = reconstruct_on(row, "SPX", shape, skew)

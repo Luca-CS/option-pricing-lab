@@ -29,6 +29,7 @@ def http_get(url: str, timeout: float = 90.0, retries: int = 3, headers: dict | 
         except (requests.ConnectionError, requests.Timeout) as exc:
             last = exc
         time.sleep(2.0 * (attempt + 1))
+    assert last is not None  # noqa: S101 (narrows the type for pyright: retries >= 1)
     raise last
 
 

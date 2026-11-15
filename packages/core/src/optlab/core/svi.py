@@ -20,6 +20,8 @@ calendar condition carries over to the whole surface.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 from scipy.interpolate import PchipInterpolator
 
@@ -152,8 +154,9 @@ def _inner_fit(m, sig, k, w_mkt, wt, k_grid, w_floor, rho_max=0.0, x0=None):
     if x0 is None:
         x0, *_ = np.linalg.lstsq(X * sw[:, None], w_mkt * sw, rcond=None)
     A = np.vstack([[0, 0, 1], [0, 1, 1], [0, -1, rho_max], [0, -1, -1], [0, 1, -1], Xg])
-    lb = np.concatenate([[0, 0, 0, -2 * sig, -2 * sig], w_floor])
-    ub = np.concatenate([[np.inf] * 5, np.full(len(k_grid), np.inf)])
+    # Any: scipy types LinearConstraint's lb and ub from their defaults (-inf, inf), arrays are what it takes
+    lb: Any = np.concatenate([[0, 0, 0, -2 * sig, -2 * sig], w_floor])
+    ub: Any = np.concatenate([[np.inf] * 5, np.full(len(k_grid), np.inf)])
     from scipy.optimize import LinearConstraint, minimize
 
     H = (X * wt[:, None]).T @ X

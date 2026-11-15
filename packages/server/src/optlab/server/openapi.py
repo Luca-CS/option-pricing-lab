@@ -12,21 +12,22 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from optlab.server.app import api_app
 
 DEFAULT = Path(__file__).resolve().parents[5] / "api" / "openapi.json"
 
 
-def document() -> dict:
+def document() -> dict[str, Any]:
     return api_app().openapi()
 
 
-def render(doc: dict) -> str:
+def render(doc: dict[str, Any]) -> str:
     return json.dumps(doc, indent=2, ensure_ascii=False) + "\n"
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     from optlab.server.cli import run
 
     return run(["api", *(sys.argv[1:] if argv is None else argv)])

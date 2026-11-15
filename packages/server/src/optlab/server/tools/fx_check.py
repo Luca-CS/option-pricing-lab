@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -61,7 +62,8 @@ def source_gaps(lake: Lake) -> str:
     for pair in ("EURUSD", "USDJPY", "GBPUSD"):
         a, b = spot_series(lake, pair, source="ecb"), spot_series(lake, pair, source="fred")
         both = pd.concat({"a": a, "b": b}, axis=1, sort=True).dropna()
-        gap = 1e4 * np.log(both["a"] / both["b"]).abs()
+        gap = 1e4 * cast(pd.Series, np.log(both["a"] / both["b"])).abs()
+        log_a, log_b = cast(pd.Series, np.log(both["a"])), cast(pd.Series, np.log(both["b"]))
         rows.append(
             (
                 pair,
@@ -69,8 +71,8 @@ def source_gaps(lake: Lake) -> str:
                 f"{gap.median():.0f}",
                 f"{gap.quantile(0.99):.0f}",
                 f"{gap.max():.0f}",
-                f"{np.log(both['a']).diff().corr(np.log(both['b']).diff()):.3f}",
-                f"{np.log(both['a']).diff(5).corr(np.log(both['b']).diff(5)):.3f}",
+                f"{log_a.diff().corr(log_b.diff()):.3f}",
+                f"{log_a.diff(5).corr(log_b.diff(5)):.3f}",
             )
         )
     return table(
@@ -93,7 +95,7 @@ def history(ticker: str) -> pd.Series:
     if h.empty:
         return pd.Series(dtype=float)
     out = h["Close"]
-    out.index = out.index.tz_localize(None).normalize()
+    out.index = cast(pd.DatetimeIndex, out.index).tz_localize(None).normalize()
     return out
 
 
@@ -123,6 +125,7 @@ def futures_gaps(lake: Lake, pair: str) -> tuple[pd.DataFrame, int]:
             contracts += 1
             expiry = imm_date(year, month)
             for day, f in fut.items():
+                day = cast(pd.Timestamp, day)  # the futures are indexed by day
                 T = (expiry - day).days / 365.0
                 if T < 0.25 or day not in spot.index or day not in curves[base] or day not in curves[quote]:
                     continue
@@ -176,7 +179,7 @@ def cip_against_futures(lake: Lake) -> tuple[str, str, str]:
             if frame["T"].between(lo, hi, inclusive="left").any()
         ]
         far = frame[frame["T"] >= 0.5]
-        by_year += [line(pair, str(y), g) for y, g in far.groupby(far.index.year)]
+        by_year += [line(pair, str(y), g) for y, g in far.groupby(cast(pd.DatetimeIndex, far.index).year)]
         notes.append(
             f"{pair}: {contracts} contracts, {len(frame)} contract-days, {frame.index.min().date()} to {frame.index.max().date()}; from six months out, "
             f"median gap {far['gap'].median():+.0f} bp a year, correlation {far['market'].corr(far['cip']):.2f}."
@@ -369,7 +372,10 @@ def worst_of_effect(lake: Lake, day: str, n_paths: int) -> tuple[str, str]:
 
     def coupons(s, ctx):
         runs = [quote(s, ctx, model="lv", control=None, n_paths=n_paths, seed=seed) for seed in SEEDS]
-        return np.array([1e4 * q.coupon_rate for q in runs]), float(np.mean([1e4 * q.coupon_rate_se for q in runs]))
+        rates = [
+            (cast(float, q.coupon_rate), cast(float, q.coupon_rate_se)) for q in runs
+        ]  # each quote solves its coupon
+        return np.array([1e4 * r for r, _ in rates]), float(np.mean([1e4 * se for _, se in rates]))
 
     runs = {
         "USD, no adjustment (the old mix)": coupons(sheet, mixed),

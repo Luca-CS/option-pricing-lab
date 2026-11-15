@@ -31,6 +31,7 @@ dev = [
     "pre-commit>=4.7",
     "nanobind==3.1.0",  # stubgen: the versioned stub of optlab.native._ext (its test compares)
     "httpx2>=2.16",  # the API tests' client (starlette TestClient; httpx is deprecated there)
+    "pandas-stubs==3.1.0.261029",  # pandas' types for pyright (its inline annotations type rows as tuples, logs as arrays)
 ]
 
 [tool.uv]
@@ -103,6 +104,25 @@ extraPaths = ["tests/helpers", "packages/native/src"]  # optlab.native installs 
 pythonVersion = "3.14"
 pythonPlatform = "All"  # the same counts on the Windows and Linux runners
 typeCheckingMode = "standard"
+# strict on the server's security and contract core (A8b): accounts, sessions, the guard, settings, schemas, jobs
+strict = [
+    "packages/server/src/optlab/server/app.py",
+    "packages/server/src/optlab/server/audit.py",
+    "packages/server/src/optlab/server/backups.py",
+    "packages/server/src/optlab/server/fixings.py",
+    "packages/server/src/optlab/server/jobs.py",
+    "packages/server/src/optlab/server/logs.py",
+    "packages/server/src/optlab/server/netcheck.py",
+    "packages/server/src/optlab/server/openapi.py",
+    "packages/server/src/optlab/server/present.py",
+    "packages/server/src/optlab/server/schemas.py",
+    "packages/server/src/optlab/server/security.py",
+    "packages/server/src/optlab/server/settings.py",
+    "packages/server/src/optlab/server/tasks.py",
+    "packages/server/src/optlab/server/users.py",
+    "packages/server/src/optlab/server/web.py",
+    "packages/server/src/optlab/server/worker.py",
+]
 venvPath = "."
 venv = ".venv"
 

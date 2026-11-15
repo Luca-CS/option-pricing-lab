@@ -5,7 +5,7 @@ import pytest
 from _paths import spx_lake
 from _risk_refs import book, flat_ctx, forward_contract, vanilla
 
-from optlab.risk import RiskGroup
+from optlab.risk import RiskGroup, RiskSettings
 from optlab.risk import var as V
 from optlab.risk.greeks import GreekOptions, compute
 
@@ -71,9 +71,9 @@ def test_processes_get_the_engine_of_the_parent():
 
     engines.set_default("gpu")
     try:
-        st = V.worker_settings(V.RiskSettings(), 5)
+        st = V.worker_settings(RiskSettings(), 5)
         assert st.engine == "gpu" and st.eval_threads == 1
-        assert V.worker_settings(V.RiskSettings(), 1).engine is None
-        assert V.worker_settings(V.RiskSettings(engine="cpu", eval_threads=2), 5).engine == "cpu"
+        assert V.worker_settings(RiskSettings(), 1).engine is None
+        assert V.worker_settings(RiskSettings(engine="cpu", eval_threads=2), 5).engine == "cpu"
     finally:
         engines.set_default(None)

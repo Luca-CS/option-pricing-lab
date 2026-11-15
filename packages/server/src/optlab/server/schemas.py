@@ -20,7 +20,7 @@ class Body(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-def body(model: BaseModel | None) -> dict:
+def body(model: BaseModel | None) -> dict[str, Any]:
     """The dict the desk's services take: the keys given, not the defaults the model filled."""
     return {} if model is None else model.model_dump(mode="json", exclude_unset=True, by_alias=True)
 
@@ -238,7 +238,9 @@ class PipelineUpdate(Body):
         description="comma-separated days, e.g. mon,tue,wed,thu,fri",
     )
     at: str | None = Field(None, pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$", description="local time, HH:MM")
-    params: dict | None = Field(None, description="the job's parameters (keys checked against the schedule's kind)")
+    params: dict[str, Any] | None = Field(
+        None, description="the job's parameters (keys checked against the schedule's kind)"
+    )
 
 
 class UserUpdate(Body):
@@ -263,7 +265,7 @@ class JobError(Out):
 
 class MarketRef(Out):
     snapshot_id: str | None = Field(None, description="the stored snapshot the job priced on (null: none, e.g. a fit)")
-    origin: dict | str | list | None = Field(None, description="how much of that market was observed")
+    origin: dict[str, Any] | str | list[Any] | None = Field(None, description="how much of that market was observed")
     as_of: str | None = Field(None, description="the market's date (ISO 8601)")
 
 
@@ -280,7 +282,7 @@ class JobResult(Out):
 
     market: MarketRef | None = None
     method: Method | None = None
-    result: dict | list | None = None
+    result: dict[str, Any] | list[Any] | None = None
 
 
 class Job(Out):
@@ -330,7 +332,7 @@ class PipelineJob(Out):
 class Pipeline(Out):
     name: str
     kind: str
-    params: dict
+    params: dict[str, Any]
     days: str
     at: str
     timezone: str
@@ -369,7 +371,7 @@ class AuditEntry(Out):
     target: str | None = None
     before_hash: str | None = Field(None, description="sha256 of the state before the write, when there was one")
     after_hash: str | None = None
-    detail: dict | None = None
+    detail: dict[str, Any] | None = None
 
 
 class AuditPage(Out):

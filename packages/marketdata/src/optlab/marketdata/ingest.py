@@ -57,7 +57,7 @@ def load_fred(lake: Lake, fetch=curl_get, pause=lambda: time.sleep(3.0)) -> list
         raw = lake.store_raw("fred", f"{series}.csv", fetch(url), url)
         pause()  # FRED drops the connection on quick series of requests
         rows = simple.parse_fred(raw.content, series).rename(columns={"value": "rate"}).assign(curve=curve, tenor=tenor)
-        rows = rows[pd.to_datetime(rows["obs_date"]) >= START]
+        rows = rows[pd.to_datetime(rows["obs_date"]) >= pd.Timestamp(START)]
         out.append(lake.ingest("rate_points", rows, "fred", "observed", raw_sha256=raw.sha256))
     return out
 
@@ -94,7 +94,7 @@ def load_fx(lake: Lake, fetch=http_get, fred_fetch=curl_get, pause=lambda: time.
         hashes.append(raw.sha256)
     rows = fx.ecb_pairs(per_euro)
     for origin, group in rows.groupby("origin"):
-        out.append(lake.ingest("fx_spots", group, "ecb", origin, raw_sha256=",".join(hashes)))
+        out.append(lake.ingest("fx_spots", group, "ecb", str(origin), raw_sha256=",".join(hashes)))
     for pair, series in fx.FRED_PAIRS.items():
         url = simple.fred_url(series, START)
         raw = lake.store_raw("fred", f"{series}.csv", fred_fetch(url), url)
@@ -106,7 +106,7 @@ def load_fx(lake: Lake, fetch=http_get, fred_fetch=curl_get, pause=lambda: time.
 
 
 def _since_start(rows: pd.DataFrame) -> pd.DataFrame:
-    return rows[pd.to_datetime(rows["obs_date"]) >= START]
+    return rows[pd.to_datetime(rows["obs_date"]) >= pd.Timestamp(START)]
 
 
 def load_mof(lake: Lake, fetch=http_get) -> list[dict]:

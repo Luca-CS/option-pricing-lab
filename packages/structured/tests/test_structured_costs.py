@@ -1,8 +1,11 @@
 """The desk's lines on a single name: the bumped surface, the bumped forward, costs on common random numbers against closed forms."""
 
+from typing import Any
+
 import numpy as np
 import pytest
 from _paths import SPX_CALIBRATION
+from _quotes import desk_of, some
 from scipy.stats import norm
 
 from optlab.core.models import LocalVolModel, simulate
@@ -107,9 +110,9 @@ def test_no_bump_is_the_plain_quote_bit_for_bit():
     q = lv_quote(sheet(), CostInputs())
     assert q.coupon_rate == plain.coupon_rate and q.coupon_rate_se == pytest.approx(plain.coupon_rate_se, rel=1e-12)
     assert (
-        q.desk.lines == []
-        and q.desk.final_price == pytest.approx(98.0, abs=1e-9)
-        and q.desk.base_price == q.desk.final_price
+        desk_of(q).lines == []
+        and desk_of(q).final_price == pytest.approx(98.0, abs=1e-9)
+        and desk_of(q).base_price == desk_of(q).final_price
     )
 
 
@@ -117,7 +120,7 @@ def test_no_bump_is_the_plain_quote_bit_for_bit():
 def test_every_bump_has_a_small_error_and_the_client_price_is_the_target():
     bumps = {"vol": 0.005, "skew": SKEW, "dividend": 0.1, "repo": 0.001, "spot": 0.0005}
     q = lv_quote(sheet(), CostInputs(bumps))
-    d = q.desk
+    d = desk_of(q)
     assert d.final_price == pytest.approx(q.target, abs=1e-9) and q.target == pytest.approx(98.0)
     assert d.base_price == pytest.approx(q.result.price, abs=1e-12)
     keys = [x.key for x in d.lines]
@@ -131,8 +134,8 @@ def test_every_bump_has_a_small_error_and_the_client_price_is_the_target():
     # the lines add up to the difference with the base
     assert sum(x.cost for x in d.lines) == pytest.approx(d.final_price - d.base_price, abs=1e-10)
     # the coupon moves against the cost: less value, a higher coupon for the same client price
-    assert q.coupon_rate > d.coupon_base and d.coupon_final == q.coupon_rate
-    assert d.line("vol").coupon_bp > 0
+    assert some(q.coupon_rate) > some(d.coupon_base) and some(d.coupon_final) == some(q.coupon_rate)
+    assert some(d.line("vol").coupon_bp) > 0
     # an independent run of the whole bumped market at the solved coupon gives the client price
     p = compile_sheet(sheet(), SPX.valuation)
     market = forward_bumped(SPX.market, dividend=0.1, repo=0.001, spot=0.0005)
@@ -141,7 +144,7 @@ def test_every_bump_has_a_small_error_and_the_client_price_is_the_target():
         p.program,
         LocalVolModel(BumpedSurface(SPX.surface, 0.005, SKEW)),
         SPX.market,
-        [{"cpn": q.coupon_rate * p.coupon_scale}],
+        [{"cpn": some(q.coupon_rate) * p.coupon_scale}],
         wrapper(sheet(), p),
         PATHS,
         q.decision.seed,
@@ -213,9 +216,9 @@ def test_a_european_sheet_has_no_noise_on_its_lines():
     s = preset("reverse_convertible", **{"downside.barrier": 0.8})
     q = quote(s, SPX, control=None, costs=CostInputs({"vol": 0.005, "skew": 0.01}))
     assert q.decision.method == "replication"
-    assert all(x.se == 0.0 for x in q.desk.lines) and q.desk.final_se == 0.0
-    assert q.desk.final_price == pytest.approx(98.0, abs=1e-9)
-    assert q.desk.line("vol").cost < 0 and abs(q.desk.line("interaction").cost) < 0.05
+    assert all(x.se == 0.0 for x in desk_of(q).lines) and desk_of(q).final_se == 0.0
+    assert desk_of(q).final_price == pytest.approx(98.0, abs=1e-9)
+    assert desk_of(q).line("vol").cost < 0 and abs(desk_of(q).line("interaction").cost) < 0.05
 
 
 @pytest.mark.slow
@@ -223,7 +226,7 @@ def test_the_buyers_cost_has_the_other_sign_and_the_same_price():
     bumps = {"vol": 0.005}
     sold, bought = lv_quote(sheet(), CostInputs(bumps, "sell")), lv_quote(sheet(), CostInputs(bumps, "buy"))
     assert sold.coupon_rate == bought.coupon_rate  # a bump applies as the trader signed it
-    assert sold.desk.line("vol").cost == pytest.approx(-bought.desk.line("vol").cost)
+    assert desk_of(sold).line("vol").cost == pytest.approx(-desk_of(bought).line("vol").cost)
     with pytest.raises(ValueError, match="side"):
         CostInputs({}, "lend")
     with pytest.raises(ValueError, match="bump"):
@@ -235,15 +238,19 @@ def test_upfront_mode_is_the_client_price():
     s = sheet(**{"wrapper.solve": "upfront", "coupon.rate": 0.06})
     plain = lv_quote(s)
     q = lv_quote(s, CostInputs({"vol": 0.01, "repo": 0.001}))
-    assert q.result.price == plain.result.price and q.upfront == pytest.approx(q.desk.final_price)
-    assert q.desk.final_price < plain.result.price and q.desk.line("vol").coupon_bp is None and q.coupon_rate is None
+    assert q.result.price == plain.result.price and q.upfront == pytest.approx(desk_of(q).final_price)
+    assert (
+        desk_of(q).final_price < plain.result.price
+        and desk_of(q).line("vol").coupon_bp is None
+        and q.coupon_rate is None
+    )
 
 
 @pytest.mark.slow
 def test_a_swap_and_a_running_product_take_their_lines_too():
     swap = sheet(**{"wrapper.format": "swap"})
     q = lv_quote(swap, CostInputs({"vol": 0.005}))
-    assert q.desk.final_price == pytest.approx(-2.0, abs=1e-9)
+    assert desk_of(q).final_price == pytest.approx(-2.0, abs=1e-9)
     running = sheet(**{"wrapper.solve": "upfront", "coupon.rate": 0.06, "general.strike_date": "2026-08-10"})
     fix = {"SPX": {"2026-08-10": 100.0}}
     got = quote(
@@ -257,7 +264,7 @@ def test_a_swap_and_a_running_product_take_their_lines_too():
         costs=CostInputs({"spot": 0.01}),
     )
     assert (
-        got.desk.line("spot").cost > 0 and got.desk.final_price > got.result.price
+        desk_of(got).line("spot").cost > 0 and desk_of(got).final_price > got.result.price
     )  # the fixing stays: a higher spot is worth more
 
 
@@ -266,7 +273,7 @@ def test_workers_give_the_same_lines(tmp_path):
     bumps = {"vol": 0.005, "repo": 0.001}
     a = lv_quote(sheet(), CostInputs(bumps), n_paths=20_000)
     b = lv_quote(sheet(), CostInputs(bumps), n_paths=20_000, workers=2)
-    assert a.coupon_rate == b.coupon_rate and a.desk.line("vol").cost == b.desk.line("vol").cost
+    assert a.coupon_rate == b.coupon_rate and desk_of(a).line("vol").cost == desk_of(b).line("vol").cost
 
 
 def test_an_extreme_bump_warns_and_the_table_prints():
@@ -294,17 +301,17 @@ def test_an_autocall_is_local_vol_plus_the_slv_gap_when_it_goes_against_the_desk
     from dataclasses import replace
 
     q = policy_quote(sheet())
-    d = q.desk
+    d = desk_of(q)
     line = d.line("slv")
     assert q.decision.model == "lv" and q.decision.provisions == ("slv",) and line.kind == "model"
     assert line.cost > 4 * line.se and line.gap == pytest.approx(line.cost) and line.used == SPX.slv.mix
     assert d.final_price == pytest.approx(98.0, abs=1e-9) and d.final_price == pytest.approx(
         d.base_price + line.cost, abs=1e-9
     )
-    assert d.coupon_final < d.coupon_base and line.coupon_bp < 0
+    assert some(d.coupon_final) < some(d.coupon_base) and some(line.coupon_bp) < 0
     assert q.result.price == pytest.approx(d.base_price)  # the result stays the base
     p = compile_sheet(sheet(), SPX.valuation)
-    kw = dict(
+    kw: dict[str, Any] = dict(
         fmt=wrapper(sheet(), p),
         n_paths=PATHS,
         seed=q.decision.seed,
@@ -313,7 +320,7 @@ def test_an_autocall_is_local_vol_plus_the_slv_gap_when_it_goes_against_the_desk
         calendar=p.calendar,
         initial_fixing=SPX.market.spot,
     )
-    cpn = {"cpn": q.coupon_rate * p.coupon_scale}
+    cpn = {"cpn": some(q.coupon_rate) * p.coupon_scale}
     alone = price_many(p.program, replace(SPX.slv, spot_driven=True), SPX.market, [cpn], **kw)[0]
     lv = price_many(p.program, SPX.model("lv"), SPX.market, [cpn], **kw)[0]
     assert lv.price == pytest.approx(d.base_price, abs=1e-9) and alone.price - lv.price == pytest.approx(
@@ -321,7 +328,7 @@ def test_an_autocall_is_local_vol_plus_the_slv_gap_when_it_goes_against_the_desk
     )
     assert line.se < 0.75 * np.hypot(alone.stderr, lv.stderr)  # the two models share their spot draws
     assert (
-        q.control.price == pytest.approx(alone.price) and q.decision.control == "slv"
+        some(q.control).price == pytest.approx(alone.price) and some(q.decision.control) == "slv"
     )  # no second simulation for the control
 
 
@@ -329,37 +336,37 @@ def test_an_autocall_is_local_vol_plus_the_slv_gap_when_it_goes_against_the_desk
 def test_a_gap_in_the_desks_favour_gives_no_provision_and_the_buyer_takes_the_other_side():
     s = sheet()
     sold, bought = policy_quote(s, CostInputs(side="sell")), policy_quote(s, CostInputs(side="buy"))
-    a, b = sold.desk.line("slv"), bought.desk.line("slv")
-    assert a.cost > 0 and b.cost == 0.0 and b.gap < 0 and "favour" in b.note
-    assert bought.desk.final_price == pytest.approx(bought.desk.base_price, abs=1e-12)  # nothing in the price
-    assert bought.coupon_rate == pytest.approx(bought.desk.coupon_base, abs=1e-12)
+    a, b = desk_of(sold).line("slv"), desk_of(bought).line("slv")
+    assert a.cost > 0 and b.cost == 0.0 and some(b.gap) < 0 and "favour" in b.note
+    assert desk_of(bought).final_price == pytest.approx(desk_of(bought).base_price, abs=1e-12)  # nothing in the price
+    assert bought.coupon_rate == pytest.approx(desk_of(bought).coupon_base, abs=1e-12)
     assert b.se > 0
 
 
 def test_the_solve_settles_which_provisions_are_on_and_says_how_many_passes():
     for margin in (0.0, 0.02, 0.1):
-        q = policy_quote(sheet(**{"wrapper.margin": margin}), n_paths=20_000)
-        assert q.desk.final_price == pytest.approx(100 * (1 - margin), abs=1e-9)
-        assert q.desk.passes <= 3
+        q = policy_quote(sheet("phoenix", **{"wrapper.margin": margin}), n_paths=20_000)
+        assert desk_of(q).final_price == pytest.approx(100 * (1 - margin), abs=1e-9)
+        assert desk_of(q).passes <= 3
 
 
 def test_a_european_product_has_no_provision_and_a_forced_model_neither():
     q = quote(preset("reverse_convertible", **{"downside.barrier": 0.8}), SPX, control=None, costs=CostInputs())
-    assert q.desk.lines == [] and q.decision.provisions == ()
+    assert desk_of(q).lines == [] and q.decision.provisions == ()
     q = lv_quote(sheet(), CostInputs())
-    assert q.decision.forced and q.decision.provisions == () and q.desk.lines == []
+    assert q.decision.forced and q.decision.provisions == () and desk_of(q).lines == []
 
 
 @pytest.mark.slow
 def test_a_mix_of_zero_is_local_vol_within_the_error_of_the_leverage():
     q = policy_quote(sheet(), CostInputs(mix=0.0), n_paths=20_000)
-    assert abs(q.desk.line("slv").gap) < 0.25 and q.desk.line("slv").used == 0.0
+    assert abs(some(desk_of(q).line("slv").gap)) < 0.25 and desk_of(q).line("slv").used == 0.0
     other = policy_quote(sheet(), CostInputs(mix=SPX.slv.mix / 2), n_paths=20_000)
-    assert other.desk.line("slv").used == SPX.slv.mix / 2
+    assert desk_of(other).line("slv").used == SPX.slv.mix / 2
 
 
 def test_a_mix_and_bumps_add_up_in_the_summary():
-    d = policy_quote(sheet(), CostInputs({"vol": -0.005, "repo": -0.001}), n_paths=20_000).desk
+    d = desk_of(policy_quote(sheet(), CostInputs({"vol": -0.005, "repo": -0.001}), n_paths=20_000))
     assert [x.key for x in d.lines] == ["slv", "vol", "repo", "interaction"]
     assert sum(x.cost for x in d.lines) == pytest.approx(d.final_price - d.base_price, abs=1e-10)
     assert "Model: SLV" in d.table()

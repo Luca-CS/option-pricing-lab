@@ -12,12 +12,17 @@ Particles are binned on a fine grid first, so a step costs O(N + bins * grid) in
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from optlab.core.heston import HestonParams
 from optlab.core.market import Market
 from optlab.core.models import Leverage, SLVModel, time_grid
 from optlab.core.ssvi import SSVI
+
+if TYPE_CHECKING:
+    from optlab.core.svi import SVISurface
 
 
 def _conditional_mean(x, v, x_eval, bandwidth, n_bins=400, regression="nadaraya_watson", positive_part=False):
@@ -56,7 +61,7 @@ def _conditional_mean(x, v, x_eval, bandwidth, n_bins=400, regression="nadaraya_
 
 def calibrate_leverage(
     params: HestonParams,
-    surface: SSVI,
+    surface: SSVI | SVISurface,
     market: Market,
     T_max: float,
     mix: float = 1.0,

@@ -9,6 +9,7 @@ variance and 1e-3 on the leverage), so they are validated within the Monte Carlo
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any, Protocol
 
 import numpy as np
 
@@ -21,6 +22,14 @@ def _uniform_interp(x, x0: float, inv_dx: float, y: np.ndarray):
     i = u.astype(np.intp)
     w = u - i
     return y[i] * (1.0 - w) + y[i + 1] * w
+
+
+class _TotalVarianceSurface(Protocol):
+    """Total implied variance w(k, T) and Dupire local variance: SVISurface, FastSVISurface and their views."""
+
+    def w(self, k, T, /) -> Any: ...
+
+    def local_var(self, k, T, /) -> Any: ...
 
 
 class UniformLeverage:
@@ -48,7 +57,7 @@ def fast_slv(model: SLVModel, n_x: int = 321) -> SLVModel:
 class TabulatedLocalVol(Model):
     """Dupire local variance tabulated per time step on x in [lo, hi] * atm_vol * sqrt(t) (flat beyond)."""
 
-    surface: object
+    surface: _TotalVarianceSurface
     n_x: int = 801
     sd_range: tuple = (-8.0, 6.0)
     _cache: dict = field(default_factory=dict, repr=False)

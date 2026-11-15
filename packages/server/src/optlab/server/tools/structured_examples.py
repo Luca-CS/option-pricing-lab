@@ -6,6 +6,7 @@ Console output only. Usage: optlab structured examples [--paths 200000] [--batch
 from __future__ import annotations
 
 import time
+from typing import cast
 
 import numpy as np
 
@@ -138,15 +139,15 @@ def worst_of(ctx, n_paths, batch):
     print("  only SPX is calibrated here: the second name, its vol and the correlation are inputs, not market data")
     single = quote(preset("phoenix"), ctx, control=None, n_paths=n_paths, batch=batch)
     print(
-        f"  single SPX (SLV)            coupon {100 * single.coupon_rate:6.3f} ± "
-        f"{100 * single.coupon_rate_se:.3f} % p.a."
+        f"  single SPX (SLV)            coupon {100 * cast(float, single.coupon_rate):6.3f} ± "
+        f"{100 * cast(float, single.coupon_rate_se):.3f} % p.a."
     )
     for rho in (0.5, 0.7, 0.9):
         basket = BasketContext.with_spx({"SX5E": (100.0, 0.03, 0.03, 0.22)}, [[1, rho], [rho, 1]], ctx)
         q = quote(preset("phoenix", **{"general.basket": "worst_of"}), basket, n_paths=n_paths, batch=batch)
         print(
-            f"  worst-of, correlation {rho:.1f}  coupon {100 * q.coupon_rate:6.3f} ± {100 * q.coupon_rate_se:.3f} "
-            f"% p.a. (LV), control BS {q.control.price:.3f} ± {q.control.stderr:.3f} % at that coupon, "
+            f"  worst-of, correlation {rho:.1f}  coupon {100 * cast(float, q.coupon_rate):6.3f} ± {100 * cast(float, q.coupon_rate_se):.3f} "
+            f"% p.a. (LV), control BS {q.control.price:.3f} ± {q.control.stderr:.3f} % at that coupon, "  # pyright: ignore[reportOptionalMemberAccess] (a basket quote prices its control)
             f"{q.seconds:.1f} s"
         )
 

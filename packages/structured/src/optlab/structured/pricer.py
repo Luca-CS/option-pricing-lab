@@ -54,7 +54,7 @@ def _program(script) -> Program:
 
 def price_many(
     script,
-    model: Model,
+    model: Model | Basket,
     market: Market,
     param_sets,
     fmt=None,
@@ -167,6 +167,7 @@ def price_many(
             own = own + [f"non-finite present values on {np.mean(~np.isfinite(d)):.2%} of the pairs"]
             LOG.warning(own[-1])
         value = MCResult(float(d.mean()), float(d.std(ddof=1) / np.sqrt(len(d))), n_paths)
+        assert tot.terminated is not None  # noqa: S101 (narrows the type for pyright: every batch adds its counts)
         term = tot.terminated / n_paths
         alive_end = 1.0 - term.sum()
         remaining = np.maximum(timeline.event_times, 0.0)  # from the valuation date, for a running product
@@ -249,7 +250,7 @@ def history_times(fixings: dict | None, name: str, clock: Clock) -> dict:
 
 def price(
     script,
-    model: Model,
+    model: Model | Basket,
     market: Market,
     fmt=None,
     n_paths: int = 100_000,

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field, replace
+from typing import cast
 
 import numpy as np
 
@@ -269,7 +270,7 @@ class _Lines:
                             self.T_obs,
                             self.fmt,
                             p,
-                            initial_fixing=self.initial,
+                            initial_fixing=cast(float, self.initial),  # replication prices one name
                             history=history,
                         )
                         for p in self.sets
@@ -382,7 +383,7 @@ class _Lines:
                             self.T_obs,
                             self.fmt,
                             p,
-                            initial_fixing=self.initial,
+                            initial_fixing=cast(float, self.initial),  # replication prices one name
                             history=history,
                             ramps=r,
                         )
@@ -649,7 +650,7 @@ def _digital_lines(digital_all, digital_run, x, base_pairs, at_base, inputs, lin
                 "digital_interaction",
                 "Interaction of the digitals",
                 "interaction",
-                None if base_pairs is None else digital_pairs - singles,
+                None if base_pairs is None else digital_pairs - singles,  # pyright: ignore[reportOperatorIssue] (the pairs exist with the base's)
                 digital_effect - total_kinds,
             )
         )
@@ -733,7 +734,7 @@ def desk_price(
     out, final_extra = _model_lines(models, x, base_pairs, inputs, lines, line, final_extra)
     if skew_up is not None:
         r, rm = skew_up.at(x), models["local_corr"].at(x)
-        pairs = None if base_pairs is None else _pct_pairs(r) - _pct_pairs(rm)
+        pairs = None if base_pairs is None else _pct_pairs(r) - _pct_pairs(rm)  # pyright: ignore[reportOptionalOperand] (the pairs exist with the base's)
         d = float(pairs.mean()) if pairs is not None else r.price - rm.price
         final_extra = final_extra + pairs
         out.append(
@@ -765,7 +766,7 @@ def desk_price(
         if everything is not None:
             pairs = None if base_pairs is None else final_pairs - base_pairs
             d = (float(pairs.mean()) if pairs is not None else r.price - at_base.price) - total_single
-            singles = None if pairs is None else sum(_pct_pairs(single[k].at(x)) - base_pairs for k in single)
+            singles = None if pairs is None else sum(_pct_pairs(single[k].at(x)) - base_pairs for k in single)  # pyright: ignore[reportOptionalOperand] (the pairs exist with the base's)
             out.append(
                 line(
                     "interaction",
@@ -790,7 +791,7 @@ def desk_price(
         final_se,
         out,
         (target - base.price(0.0)) / (base.price(1.0) - base.price(0.0)) / coupon_scale if solving else None,
-        x / coupon_scale if solving else None,
+        x / coupon_scale if solving and x is not None else None,
         time.perf_counter() - t0,
         warnings,
         passes,

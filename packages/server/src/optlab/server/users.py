@@ -17,7 +17,7 @@ from __future__ import annotations
 import sys
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     from optlab.server.cli import run
 
     return run(["users", *(sys.argv[1:] if argv is None else argv)])

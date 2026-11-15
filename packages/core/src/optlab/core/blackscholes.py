@@ -4,6 +4,7 @@ Asian and continuously monitored single barriers (Reiner-Rubinstein)."""
 from __future__ import annotations
 
 import numpy as np
+from numpy.typing import ArrayLike
 from scipy.special import ndtr
 
 SQRT_2PI = np.sqrt(2.0 * np.pi)
@@ -20,7 +21,7 @@ def _sign(cp) -> np.ndarray:
     return np.sign(np.asarray(cp, dtype=float))
 
 
-def black_price(F, K, T, vol, D=1.0, cp="call"):
+def black_price(F, K, T, vol, D: ArrayLike = 1.0, cp: str | ArrayLike = "call"):
     """Black (1976) price of a European option on the forward F, discounted with D."""
     F, K, T, vol, D = np.broadcast_arrays(*(np.asarray(a, dtype=float) for a in (F, K, T, vol, D)))
     phi = _sign(cp)
@@ -57,13 +58,13 @@ def bs_greeks(S, K, T, r, q, vol, cp="call") -> dict:
     return {"delta": delta, "gamma": gamma, "vega": vega, "theta": theta, "rho": rho}
 
 
-def black_vega(F, K, T, vol, D=1.0):
+def black_vega(F, K, T, vol, D: ArrayLike = 1.0):
     sd = vol * np.sqrt(T)
     d1 = np.log(F / K) / sd + 0.5 * sd
     return D * F * _npdf(d1) * np.sqrt(T)
 
 
-def implied_vol(price, F, K, T, D=1.0, cp="call", lo=1e-4, hi=5.0, tol=1e-10):
+def implied_vol(price, F, K, T, D: ArrayLike = 1.0, cp: str | ArrayLike = "call", lo=1e-4, hi=5.0, tol=1e-10):
     """Black implied volatility, vectorised bisection followed by Newton polishing.
 
     Returns NaN where the price is outside the no-arbitrage bounds.

@@ -25,8 +25,10 @@ import sqlite3
 import time
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
+from typing import Any
 
 from optlab.core.log import get_logger
+from optlab.server.persistence.database import Database
 
 LOG = get_logger(__name__)
 MANIFEST = "MANIFEST.json"
@@ -38,7 +40,7 @@ def stamp(now: dt.datetime | None = None) -> str:
     return f"{now:%Y%m%d-%H%M%S}-{now.microsecond // 1000:03d}"
 
 
-def fresh(folder: Path, name: str, taken) -> str:
+def fresh(folder: Path, name: str, taken: Callable[[str], bool]) -> str:
     """`name`, or `name-1`, `name-2`... when `taken(candidate)` says it is used: two copies in one millisecond (a fast
     Linux machine makes them) get two names, which still sort in the order they were made."""
     candidate, k = name, 0
@@ -57,7 +59,7 @@ def sha256(path: Path) -> str:
 
 
 # --- the database ----------------------------------------------------------------------------------------------------
-def database_copy(db, folder: Path, prefix: str = "optlab") -> Path:
+def database_copy(db: Database, folder: Path, prefix: str = "optlab") -> Path:
     """A consistent copy of `db` (a `Database`) in `folder`."""
     folder = Path(folder)
     name = fresh(folder, f"{prefix}-{stamp()}", lambda n: (folder / f"{n}.sqlite").exists())
@@ -67,7 +69,7 @@ def database_copy(db, folder: Path, prefix: str = "optlab") -> Path:
 def prune_files(folder: Path, pattern: str, keep_days: int, keep: Path | None = None) -> list[str]:
     """Remove the files of `folder` matching `pattern` older than `keep_days` (never `keep`)."""
     cutoff = time.time() - keep_days * 86400
-    removed = []
+    removed: list[str] = []
     for old in sorted(Path(folder).glob(pattern)):
         if old != keep and old.stat().st_mtime < cutoff:
             old.unlink()
@@ -86,7 +88,7 @@ def known_revisions() -> set[str]:
     return {r.revision for r in ScriptDirectory.from_config(cfg).walk_revisions()}
 
 
-def check_database_copy(path: Path) -> dict:
+def check_database_copy(path: Path) -> dict[str, Any]:
     """What a copy holds, or ValueError when it is not one this code can restore."""
     path = Path(path)
     if not path.is_file():
@@ -112,7 +114,7 @@ def check_database_copy(path: Path) -> dict:
     return {"file": str(path), "revision": revision, "bytes": path.stat().st_size, **counts}
 
 
-def restore_database(source: Path, target: Path, backups: Path) -> dict:
+def restore_database(source: Path, target: Path, backups: Path) -> dict[str, Any]:
     """Put the copy `source` in place of the database `target` (see the module's docstring)."""
     from optlab.server.jobs import Workers
     from optlab.server.persistence import Database
@@ -176,11 +178,13 @@ def lake_snapshots(folder: Path) -> list[Path]:
     return sorted(p for p in folder.iterdir() if p.is_dir() and (p / MANIFEST).is_file())
 
 
-def _manifest(snapshot: Path) -> dict:
+def _manifest(snapshot: Path) -> dict[str, Any]:
     return json.loads((Path(snapshot) / MANIFEST).read_text(encoding="utf-8"))
 
 
-def lake_snapshot(lake_root: Path, folder: Path, keep: int = 4, log: Callable[[str], None] = LOG.info) -> dict:
+def lake_snapshot(
+    lake_root: Path, folder: Path, keep: int = 4, log: Callable[[str], None] = LOG.info
+) -> dict[str, Any]:
     """Copy the lake into `folder/<stamp>/`, linking what the last copy already holds; keep the last `keep` copies."""
     from optlab.core import progress
 
@@ -191,10 +195,10 @@ def lake_snapshot(lake_root: Path, folder: Path, keep: int = 4, log: Callable[[s
     folder.mkdir(parents=True, exist_ok=True)
     copies = lake_snapshots(folder)
     previous = copies[-1] if copies else None
-    before = _manifest(previous)["files"] if previous else {}
+    before: dict[str, Any] = _manifest(previous)["files"] if previous else {}  # path -> its entry
     name = fresh(folder, stamp(), lambda n: (folder / n).exists() or (folder / f".{n}.partial").exists())
     work = folder / f".{name}.partial"
-    files: dict[str, dict] = {}
+    files: dict[str, dict[str, Any]] = {}
     linked = copied = copied_bytes = 0
     sources = sorted(p for p in root.rglob("*") if p.is_file() and p.suffix != ".tmp")
     for i, path in enumerate(sources):
@@ -226,7 +230,7 @@ def lake_snapshot(lake_root: Path, folder: Path, keep: int = 4, log: Callable[[s
     (work / MANIFEST).write_text(json.dumps(manifest, indent=0, sort_keys=True), encoding="utf-8")
     target = folder / name
     work.rename(target)
-    removed = []
+    removed: list[str] = []
     for old_copy in lake_snapshots(folder)[:-keep] if keep > 0 else []:
         shutil.rmtree(old_copy)
         removed.append(old_copy.name)
@@ -274,7 +278,7 @@ def verify_lake_snapshot(snapshot: Path) -> list[str]:
     problems = [
         f"not a file inside the copy: {rel!r}" for rel in files if not _inside(rel) or not _contained(snapshot, rel)
     ]
-    found = set()
+    found: set[str] = set()
     for p in snapshot.rglob("*"):
         rel = p.relative_to(snapshot).as_posix()
         if p.is_symlink():
@@ -295,7 +299,7 @@ def verify_lake_snapshot(snapshot: Path) -> list[str]:
     return problems
 
 
-def restore_lake(snapshot: Path, lake_root: Path) -> dict:
+def restore_lake(snapshot: Path, lake_root: Path) -> dict[str, Any]:
     """Put a checked copy in place of the lake; the current lake is moved beside it, not deleted."""
     snapshot, root = Path(snapshot), Path(lake_root)
     problems = verify_lake_snapshot(snapshot)

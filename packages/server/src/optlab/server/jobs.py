@@ -21,12 +21,13 @@ import hashlib
 import json
 import secrets
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
+from typing import Any
 
-from sqlalchemy import and_, delete, func, insert, literal_column, select, update
+from sqlalchemy import ColumnClause, and_, delete, func, insert, literal_column, select, update
 
 from optlab.server.persistence.database import Database
 from optlab.server.persistence.schema import jobs, workers
@@ -39,7 +40,9 @@ INTERRUPTED = {
     "message": "the worker stopped while this job ran (a restart or a crash): run it again",
 }
 STALE_SECONDS = 15.0  # a worker that has not beaten for this long is gone
-ROWID = literal_column("jobs.rowid")  # the order of submission when two share a clock tick (15 ms on Windows)
+ROWID: ColumnClause[Any] = literal_column(
+    "jobs.rowid"
+)  # the order of submission when two share a clock tick (15 ms on Windows)
 
 
 class IdempotencyConflict(ValueError):
@@ -57,7 +60,7 @@ _SUBMITTER: ContextVar[Submitter | None] = ContextVar("optlab_submitter", defaul
 
 
 @contextmanager
-def submitting(user_id: str | None, idem_key: str | None = None, schedule: str | None = None) -> Iterator[None]:
+def submitting(user_id: str | None, idem_key: str | None = None, schedule: str | None = None) -> Generator[None]:
     """Jobs submitted inside belong to this user (None: the system) and carry this key."""
     token = _SUBMITTER.set(Submitter(user_id, idem_key, schedule))
     try:
@@ -70,15 +73,15 @@ def current_submitter() -> Submitter | None:
     return _SUBMITTER.get()
 
 
-def canonical(x) -> str:
+def canonical(x: Any) -> str:
     return json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
 
 
-def fingerprint(kind: str, params: dict, context: dict) -> str:
+def fingerprint(kind: str, params: dict[str, Any], context: dict[str, Any]) -> str:
     return hashlib.sha256(canonical({"kind": kind, "params": params, "context": context}).encode()).hexdigest()
 
 
-def _loads(text: str | None):
+def _loads(text: str | None) -> Any:
     return None if text is None else json.loads(text)
 
 
@@ -86,7 +89,7 @@ def iso(t: float | None) -> str | None:
     return None if t is None else dt.datetime.fromtimestamp(t, dt.UTC).isoformat(timespec="milliseconds")
 
 
-def view(row, now: float | None = None) -> dict:
+def view(row: Any, now: float | None = None) -> dict[str, Any]:  # a jobs row
     """A job as the API shows it: no parameters, no context; times in ISO 8601, durations in seconds."""
     now = time.time() if now is None else now
     started, finished = row.started_at, row.finished_at
@@ -117,7 +120,7 @@ class JobQueue:
         self.db, self.clock = db, clock
 
     # --- the api ---------------------------------------------------------------------------------------------------
-    def submit(self, kind: str, params: dict, context: dict) -> tuple[str, bool]:
+    def submit(self, kind: str, params: dict[str, Any], context: dict[str, Any]) -> tuple[str, bool]:
         """(job id, whether an existing job was given back)."""
         sub = _SUBMITTER.get() or Submitter()
         fp = fingerprint(kind, params, context)
@@ -167,18 +170,18 @@ class JobQueue:
             raise KeyError(f"no job {job_id!r}")
         return row
 
-    def get(self, job_id: str) -> dict:
+    def get(self, job_id: str) -> dict[str, Any]:
         return view(self._row(job_id), self.clock())
 
     def owner(self, job_id: str) -> str | None:
         return self._row(job_id).user_id
 
-    def payload(self, job_id: str) -> tuple[str, dict, dict]:
+    def payload(self, job_id: str) -> tuple[str, dict[str, Any], dict[str, Any]]:
         """(kind, params, context) of a job, for the worker."""
         row = self._row(job_id)
         return row.kind, json.loads(row.params), json.loads(row.context)
 
-    def active(self, user_id: str | None = None, everyone: bool = False) -> list[dict]:
+    def active(self, user_id: str | None = None, everyone: bool = False) -> list[dict[str, Any]]:
         q = select(jobs.c.job_id, jobs.c.kind, jobs.c.state, jobs.c.progress, jobs.c.step).where(
             jobs.c.state.in_(ACTIVE)
         )
@@ -192,7 +195,7 @@ class JobQueue:
 
     def history(
         self, user_id: str | None = None, everyone: bool = False, kind: str | None = None, limit: int = 1000
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Jobs newest first, without their results (a page of the admin's or the user's list)."""
         cols = [jobs.c[k] for k in ("job_id", "kind", "state", "user_id", "schedule", "submitted_at")]
         cols += [jobs.c[k] for k in ("started_at", "finished_at", "engine", "progress", "step", "error")]
@@ -221,7 +224,9 @@ class JobQueue:
             for r in rows
         ]
 
-    def latest(self, kind: str, match: Callable[[dict], bool] | None = None, scan: int = 20) -> dict | None:
+    def latest(
+        self, kind: str, match: Callable[[dict[str, Any]], bool] | None = None, scan: int = 20
+    ) -> dict[str, Any] | None:
         """The result of the newest finished job of a kind whose context passes `match`."""
         with self.db.read() as c:
             rows = c.execute(
@@ -297,10 +302,17 @@ class JobQueue:
         with self.db.read() as c:
             return bool(c.execute(select(jobs.c.cancel_requested).where(jobs.c.job_id == job_id)).scalar())
 
-    def finish(self, job_id: str, state: str, result: dict | None = None, error: dict | None = None) -> None:
+    def finish(
+        self, job_id: str, state: str, result: dict[str, Any] | None = None, error: dict[str, Any] | None = None
+    ) -> None:
         if state not in FINAL:
             raise ValueError(f"a job ends in {', '.join(FINAL)}, not {state!r}")
-        values: dict = {"state": state, "finished_at": self.clock(), "version": jobs.c.version + 1, "eta": None}
+        values: dict[str, Any] = {
+            "state": state,
+            "finished_at": self.clock(),
+            "version": jobs.c.version + 1,
+            "eta": None,
+        }
         if result is not None:
             values["result"] = canonical(result)
         if error is not None:
@@ -351,7 +363,7 @@ class JobQueue:
             )
         return res.rowcount or 0
 
-    def counts(self) -> dict:
+    def counts(self) -> dict[str, Any]:
         with self.db.read() as c:
             rows = c.execute(select(jobs.c.state, func.count()).group_by(jobs.c.state)).all()
         return {r[0]: r[1] for r in rows}
@@ -393,8 +405,8 @@ class Workers:
             )
         return True
 
-    def beat(self, worker_id: str, info: dict | None = None) -> None:
-        values: dict = {"heartbeat_at": self.clock()}
+    def beat(self, worker_id: str, info: dict[str, Any] | None = None) -> None:
+        values: dict[str, Any] = {"heartbeat_at": self.clock()}
         if info is not None:
             values["info"] = canonical(info)
         with self.db.write() as c:
@@ -404,7 +416,7 @@ class Workers:
         with self.db.write() as c:
             c.execute(update(workers).where(workers.c.worker_id == worker_id).values(stopped_at=self.clock()))
 
-    def alive(self) -> list[dict]:
+    def alive(self) -> list[dict[str, Any]]:
         now = self.clock()
         with self.db.read() as c:
             rows = c.execute(
@@ -414,14 +426,14 @@ class Workers:
             ).all()
         return [self._row(r, now) for r in rows]
 
-    def recent(self, limit: int = 10) -> list[dict]:
+    def recent(self, limit: int = 10) -> list[dict[str, Any]]:
         now = self.clock()
         with self.db.read() as c:
             rows = c.execute(select(workers).order_by(workers.c.started_at.desc()).limit(limit)).all()
         return [self._row(r, now) for r in rows]
 
     @staticmethod
-    def _row(r, now: float) -> dict:
+    def _row(r: Any, now: float) -> dict[str, Any]:  # a workers row
         alive = r.stopped_at is None and r.heartbeat_at > now - STALE_SECONDS
         return {
             "worker_id": r.worker_id,

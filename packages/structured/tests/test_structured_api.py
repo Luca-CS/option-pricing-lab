@@ -4,6 +4,7 @@ import datetime as dt
 
 import numpy as np
 import pytest
+from _quotes import some
 from _structured_refs import flat_context
 
 from optlab.structured import TermSheetError, preset, quote
@@ -62,7 +63,7 @@ def test_tables_name_every_underlying_and_the_implied_margin():
     )
     assert q.table().splitlines()[0].startswith("Autocallable on SPX, SX5E")
     cpn = quote(preset("capital_protected"), CTX, control=None)
-    assert f"implied margin at par {100 - cpn.upfront:.2f} %" in cpn.table()
+    assert f"implied margin at par {100 - some(cpn.upfront):.2f} %" in cpn.table()
 
 
 def test_validation_errors_carry_the_column():
@@ -77,8 +78,8 @@ def test_quote_greeks_of_a_running_product_go_through_a_book():
     fixings = {"SPX": {d: 100.0 for d in business_days(strike, CTX.valuation)}}
     q = quote(sheet, CTX, model="bs", control=None, n_paths=20_000, batch=10_000, fixings=fixings, with_greeks=True)
     g = Book([Position("b", sheet, 1.0, fixings=fixings)]).greeks(CTX, model="bs", n_paths=20_000, batch=10_000)
-    assert q.greeks.delta == pytest.approx(g["delta"]["positions"][0], rel=1e-12)  # notional 100: % = currency
-    assert q.greeks.delta > 0 and q.greeks.units == {"delta": UNITS["delta"], "vega": UNITS["vega"]}
+    assert some(q.greeks).delta == pytest.approx(g["delta"]["positions"][0], rel=1e-12)  # notional 100: % = currency
+    assert some(q.greeks).delta > 0 and some(q.greeks).units == {"delta": UNITS["delta"], "vega": UNITS["vega"]}
 
 
 def test_quote_greeks_of_a_basket_are_summed_over_the_names():
@@ -97,9 +98,9 @@ def test_quote_greeks_of_a_basket_are_summed_over_the_names():
         batch=10_000,
         with_greeks=True,
     )
-    per = q.greeks.per_name
+    per = some(some(q.greeks).per_name)
     assert set(per) == {"SPX", "SX5E"} and all(v["delta"] > 0 for v in per.values())
-    assert q.greeks.delta == pytest.approx(sum(v["delta"] for v in per.values()), rel=1e-12)
+    assert some(q.greeks).delta == pytest.approx(sum(v["delta"] for v in per.values()), rel=1e-12)
 
 
 def test_book_greeks_carry_their_units():

@@ -25,6 +25,8 @@ stores what they give.
 
 from __future__ import annotations
 
+from typing import cast
+
 import numpy as np
 import pandas as pd
 
@@ -59,7 +61,7 @@ def pair_horizon(a: str, b: str) -> int:
 def rolling_pair(closes: pd.DataFrame, a: str, b: str, window: int) -> pd.Series:
     h = pair_horizon(a, b)
     both = closes[[a, b]].dropna()
-    r = np.log(both).diff(h).dropna()
+    r = cast(pd.DataFrame, np.log(both)).diff(h).dropna()
     return r[a].rolling(window).corr(r[b]).dropna()
 
 

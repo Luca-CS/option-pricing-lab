@@ -19,7 +19,9 @@ class Rule:
     model: str  # the base: surface (replication), or lv
     control: str | None  # second model priced for comparison, when no cost is asked
     reason: str
-    provisions: tuple = ()  # models whose gap to the base is kept as a fixed provision when it goes against the desk
+    provisions: tuple[
+        str, ...
+    ] = ()  # models whose gap to the base is kept as a fixed provision when it goes against the desk
 
 
 RULES = {
@@ -68,11 +70,11 @@ class PricingDecision:
     control: str | None
     reason: str
     n_paths: int
-    batch: int
+    batch: int | None  # None: one batch
     seed: int
     forced: bool = False
     warnings: list = field(default_factory=list)
-    provisions: tuple = ()
+    provisions: tuple[str, ...] = ()
 
     @property
     def label(self) -> str:
@@ -92,7 +94,7 @@ def decide(
     model: str | None = None,
     control: str | None = "default",
     n_paths: int = 200_000,
-    batch: int = 25_000,
+    batch: int | None = 25_000,
     seed: int = DEFAULT_SEED,
     rules: dict | None = None,
     has_surfaces: bool = True,
@@ -124,6 +126,7 @@ def decide(
         raise ValueError(f"unknown model {model!r}, expected surface or one of {', '.join(MODELS)}")
     if control == "default":
         control = rule.control if rule.control != model else None
+    assert model is not None  # noqa: S101 (narrows the type for pyright: the rule's model when none is forced)
     reason = rule.reason if not forced else f"forced by the user (policy default: {rule.model}, {rule.method})"
     return PricingDecision(
         prof.product_class,

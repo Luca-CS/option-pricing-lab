@@ -18,42 +18,58 @@ priced on independent paths) and a quote's `control_gap_se` (a gap counted in st
 from __future__ import annotations
 
 from numbers import Real
+from typing import Any, cast
 
 SUFFIXES = ("_se", "_stderr")
 RISK_MAPS = ("greeks", "book", "gross", "values", "pnl", "factors")
 RISK_PAIRS = ("book", "smoothing_bias")
 
 
-def _num(x) -> bool:
-    return isinstance(x, Real) and not isinstance(x, bool)
+def _num(x: Any) -> bool:
+    return isinstance(x, Real) and not isinstance(x, bool)  # pyright: ignore[reportUnnecessaryIsInstance] (bool is a Real through numbers' registration)
 
 
-def _pairable(x) -> bool:
+def _as_map(x: Any) -> dict[str, Any] | None:
+    """x as a JSON object, or None."""
+    return cast(dict[str, Any], x) if isinstance(x, dict) else None
+
+
+def _as_list(x: Any) -> list[Any] | None:
+    """x as a JSON array, or None."""
+    return cast(list[Any], x) if isinstance(x, list) else None
+
+
+def _pairable(x: Any) -> bool:
     return x is None or _num(x)
 
 
-def estimate(value, se):
+def estimate(value: Any, se: Any) -> Any:
     """{value, se}, element by element through maps and lists of the same shape."""
-    if isinstance(value, dict) and isinstance(se, dict):
-        return {k: estimate(v, se.get(k)) for k, v in value.items()}
-    if isinstance(value, list) and isinstance(se, list) and len(value) == len(se):
-        return [estimate(v, s) for v, s in zip(value, se)]
+    values, ses = _as_map(value), _as_map(se)
+    if values is not None and ses is not None:
+        return {k: estimate(v, ses.get(k)) for k, v in values.items()}
+    items, se_items = _as_list(value), _as_list(se)
+    if items is not None and se_items is not None and len(items) == len(se_items):
+        return [estimate(v, s) for v, s in zip(items, se_items)]
     if value is None:
         return None
     return {"value": value, "se": se if _pairable(se) else None}
 
 
-def _is_pair(x) -> bool:
-    return isinstance(x, list) and len(x) == 2 and _num(x[0]) and _pairable(x[1])
+def _is_pair(x: Any) -> bool:
+    items = _as_list(x)
+    return items is not None and len(items) == 2 and _num(items[0]) and _pairable(items[1])
 
 
-def estimates(x, risk: bool = False):
+def estimates(x: Any, risk: bool = False) -> Any:
     """The payload with every Monte Carlo number as {value, se} (rules above); `risk` turns on rule 3."""
-    if isinstance(x, list):
-        return [estimates(v, risk) for v in x]
-    if not isinstance(x, dict):
+    items = _as_list(x)
+    if items is not None:
+        return [estimates(v, risk) for v in items]
+    fields = _as_map(x)
+    if fields is None:
         return x
-    out = {k: estimates(v, risk) for k, v in x.items()}
+    out = {k: estimates(v, risk) for k, v in fields.items()}
     _pair_suffixes(out)
     _pair_named(out)
     if risk:
@@ -61,7 +77,7 @@ def estimates(x, risk: bool = False):
     return out
 
 
-def _pair_suffixes(out: dict) -> None:
+def _pair_suffixes(out: dict[str, Any]) -> None:
     """Rule 1: `x` beside `x_se` or `x_stderr` (in place)."""
     for key in list(out):
         if key not in out:
@@ -73,7 +89,7 @@ def _pair_suffixes(out: dict) -> None:
                 break
 
 
-def _pair_named(out: dict) -> None:
+def _pair_named(out: dict[str, Any]) -> None:
     """Rule 2: the named pairs of the library's results (in place)."""
     for key in list(out):  # base_price beside base_se (the desk price's lines of costs.py)
         if key.endswith("_price") and f"{key[:-6]}_se" in out and _pairable(out[key]):
@@ -88,11 +104,11 @@ def _pair_named(out: dict) -> None:
             out[base] = estimate(out[base], out.pop("stderr"))
 
 
-def _pair_risk(out: dict) -> None:
+def _pair_risk(out: dict[str, Any]) -> None:
     """Rule 3: the [value, se] pairs of the risk engine's payloads (in place)."""
     for key in RISK_MAPS:
-        v = out.get(key)
-        if isinstance(v, dict):
+        v = _as_map(out.get(key))
+        if v is not None:
             out[key] = {k: ({"value": p[0], "se": p[1]} if _is_pair(p) else p) for k, p in v.items()}
     for key in RISK_PAIRS:
         if _is_pair(out.get(key)):
@@ -102,7 +118,7 @@ def _pair_risk(out: dict) -> None:
 RISK_KINDS = ("risk", "ladder", "scenarios", "var", "eod")
 
 
-def result(kind: str, envelope: dict | None) -> dict | None:
+def result(kind: str, envelope: dict[str, Any] | None) -> dict[str, Any] | None:
     """A job's stored envelope {market, method, result} as the API shows it."""
     if envelope is None:
         return None

@@ -5,6 +5,7 @@ import datetime as dt
 import numpy as np
 from _paths import SPX_CALIBRATION
 from _structured_refs import FLAT, S0, VOL, Q, R, flat_surface
+from numpy.typing import ArrayLike
 
 from optlab.core import engines
 from optlab.structured.context import PricingContext
@@ -57,7 +58,7 @@ def engine_name() -> str:
     return "cpu" if eng is not None and eng.available() else "numpy"
 
 
-def within(value, ref, se, k=4.0, floor=0.0):
+def within(value, ref, se, k=4.0, floor: ArrayLike = 0.0):
     assert abs(value - ref) <= k * se + floor, (
         f"{value} vs {ref}: {abs(value - ref) / max(se, 1e-300):.1f} SE (se {se})"
     )

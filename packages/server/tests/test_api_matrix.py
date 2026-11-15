@@ -38,7 +38,7 @@ def _url(path: str) -> str:
 
 
 def _call(client, op):
-    kwargs = {"json": {}} if op["method"] in ("POST", "PUT", "PATCH") else {}
+    kwargs: dict[str, Any] = {"json": {}} if op["method"] in ("POST", "PUT", "PATCH") else {}
     return client.request(op["method"], _url(op["path"]), **kwargs)
 
 

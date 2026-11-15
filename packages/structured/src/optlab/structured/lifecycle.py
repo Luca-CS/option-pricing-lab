@@ -86,9 +86,11 @@ class _MissingAsNaN:
     """Past fixings that are not given read as NaN (recorded): after a call the product observes nothing, and the
     evaluator only objects when a missing fixing matters."""
 
+    missing: list
+
     def _past(self, name, t):
         try:
-            return super()._past(name, t) if isinstance(self, BasketScenario) else super()._past(t)
+            return super()._past(name, t) if isinstance(self, BasketScenario) else super()._past(t)  # pyright: ignore[reportAttributeAccessIssue] (a mixin: Scenario or BasketScenario comes next)
         except KeyError:
             self.missing.append((name, t))
             return np.nan
@@ -99,7 +101,7 @@ class _Lenient(_MissingAsNaN, Scenario):
         super().__init__(*args)
         self.missing = []
 
-    def _past(self, t):
+    def _past(self, t):  # pyright: ignore[reportIncompatibleMethodOverride] (Scenario's signature, which the evaluator calls)
         return _MissingAsNaN._past(self, self.name, t)
 
 

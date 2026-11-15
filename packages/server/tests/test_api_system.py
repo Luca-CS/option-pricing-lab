@@ -1,6 +1,7 @@
 """API v1, system router: health, readiness, who am I, and jobs (state, owner, cancel, the SSE stream)."""
 
 import json
+from typing import Any
 
 import pytest
 from _api import SCRIPT_EXAMPLE, api
@@ -161,7 +162,7 @@ def test_submission_is_idempotent(a):
 
 def test_idempotency_key_on_a_route(a):
     s = a.client("structurer")
-    body = {"script": SCRIPT_EXAMPLE, "model": "bs", "n_paths": 2000}
+    body: dict[str, Any] = {"script": SCRIPT_EXAMPLE, "model": "bs", "n_paths": 2000}
     r1 = s.post("/api/v1/structuring/script/price", json=body, headers={"Idempotency-Key": "quote-1"})
     r2 = s.post("/api/v1/structuring/script/price", json=body, headers={"Idempotency-Key": "quote-1"})
     assert r1.status_code == r2.status_code == 202 and r1.json()["job_id"] == r2.json()["job_id"]

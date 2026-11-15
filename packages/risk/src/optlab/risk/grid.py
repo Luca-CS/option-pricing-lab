@@ -20,6 +20,7 @@ Both families add up to one everywhere: the sum of all node bumps of size h is t
 from __future__ import annotations
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 STRIKES = (0.6, 0.7, 0.8, 0.9, 0.95, 1.0, 1.05, 1.1, 1.2, 1.4)  # forward moneyness K / F
 TENORS = (1 / 12, 0.25, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0)  # years
@@ -114,7 +115,7 @@ def smoothing_width(k, T):
     return c * root, ck * root, ckk * root, np.where(held, 0.0, 0.5 * c / root)
 
 
-def strike_tents(k, T=1.0, rows=None):
+def strike_tents(k, T: ArrayLike = 1.0, rows=None):
     """Strike tents at log forward moneyness k and maturity T: (phi, dphi/dk, d2phi/dk2, dphi/dT), each (n_strikes, *shape).
 
     The hats are smoothed by a Gaussian whose width l(k, T) depends on the point where it is read: the result is still a

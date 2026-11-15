@@ -11,6 +11,7 @@ import base64
 import hashlib
 from contextlib import asynccontextmanager
 from importlib.metadata import version
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
@@ -28,9 +29,9 @@ PREFIX = "/api/v1"
 METHODS = ("get", "post", "put", "patch", "delete")
 
 
-def operations(app: FastAPI) -> list[dict]:
+def operations(app: FastAPI) -> list[dict[str, Any]]:
     """Every operation of the API from its OpenAPI document: method, path, operationId and the roles it allows."""
-    out = []
+    out: list[dict[str, Any]] = []
     for path, item in app.openapi()["paths"].items():
         for method in METHODS:
             op = item.get(method)
@@ -70,7 +71,7 @@ def api_app(docs: bool = False) -> FastAPI:
         app.include_router(module.router, prefix=PREFIX)
     base = app.openapi
 
-    def openapi() -> dict:
+    def openapi() -> dict[str, Any]:
         if app.openapi_schema is None:
             describe_problems(base())  # base() keeps the document in app.openapi_schema
         doc = app.openapi_schema
@@ -130,7 +131,7 @@ IDEMPOTENCY_PARAMETER = {
 }
 
 
-def describe_problems(doc: dict) -> None:
+def describe_problems(doc: dict[str, Any]) -> None:
     """Errors as the API sends them (RFC 9457), not FastAPI's default 422 body: a `Problem` schema, 422 on every
     operation that reads input, 401 and 403 on every one that needs a session."""
     schemas = doc.setdefault("components", {}).setdefault("schemas", {})

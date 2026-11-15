@@ -33,8 +33,11 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
+
+from optlab.core.models import Leverage
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -68,7 +71,7 @@ def digest(a: np.ndarray) -> dict:
     }
 
 
-def plain(x):
+def plain(x) -> Any:
     """Numbers and containers as JSON-ready values, floats at full precision (repr round-trips)."""
     if isinstance(x, dict):
         return {str(k): plain(v) for k, v in x.items()}
@@ -104,7 +107,7 @@ def plain(x):
     raise TypeError(f"no golden form for {type(x).__name__}")
 
 
-def numbers_only(x):
+def numbers_only(x) -> Any:
     """Drop timings and identifiers that change from one run to the next: a golden holds results, not clocks."""
     skip = ("seconds", "timings", "elapsed", "run_id", "created_at", "code", "started", "finished", "time_s", "_s")
     if isinstance(x, dict):
@@ -224,7 +227,10 @@ def mc_products() -> dict:
         rng=2,
     )
     out: dict = {
-        "slv_leverage": {"times": models["slv"].leverage.times, "values_head": models["slv"].leverage.values[:3]}
+        "slv_leverage": {
+            "times": models["slv"].leverage.times,
+            "values_head": cast(Leverage, models["slv"].leverage).values[:3],
+        }
     }
     n = 20_000
     for name, model in models.items():
@@ -439,7 +445,8 @@ def _native_case(backend: str) -> dict:
         hes, m, 100.0, 80.0, 1.0, n_monitor=52, n_paths=n, seed=11, backend=backend
     )
     lev = native.calibrate_leverage(ctx.heston, ctx.surface, ctx.market, 1.0, 0.5, 20_000, rng=5, backend=backend)
-    out["leverage"] = {"times": lev.leverage.times, "x_grids": lev.leverage.x_grids, "values": lev.leverage.values}
+    fitted = cast(Leverage, lev.leverage)
+    out["leverage"] = {"times": fitted.times, "x_grids": fitted.x_grids, "values": fitted.values}
     engines.set_default(backend)  # a quote takes the process default, as on the desk
     try:
         out["phoenix"] = _quote_numbers(quote(preset("phoenix"), ctx, n_paths=20_000, batch=10_000))

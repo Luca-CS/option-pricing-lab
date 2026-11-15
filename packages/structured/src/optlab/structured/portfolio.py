@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from typing import Any, overload
 
 import numpy as np
 
@@ -62,7 +63,7 @@ class Position:
     the investor side. One unit pays the script's flows on its notional N."""
 
     name: str
-    product: object
+    product: Any  # a TermSheet, a script, a Program or a Quote
     quantity: float = 1.0
     params: dict = field(default_factory=dict)
     fixings: dict | None = None
@@ -181,9 +182,44 @@ class Book:
         )
         return decide(prof, ctx.t_max, model, control=None, has_surfaces=getattr(ctx, "has_surfaces", True))
 
+    @overload
     def price(
         self,
-        ctx: PricingContext | None = None,
+        ctx: PricingContext | BasketContext | None = ...,
+        model: str | None = ...,
+        n_paths: int = ...,
+        seed: int = ...,
+        batch: int | None = ...,
+        smoothing: float = ...,
+        market=...,
+        surface=...,
+        initial_fixing: float | dict | None = ...,
+        sim_model=...,
+        workers: int | None = ...,
+        spot_factors: None = ...,
+    ) -> BookResult: ...
+
+    @overload
+    def price(
+        self,
+        ctx: PricingContext | BasketContext | None = ...,
+        model: str | None = ...,
+        n_paths: int = ...,
+        seed: int = ...,
+        batch: int | None = ...,
+        smoothing: float = ...,
+        market=...,
+        surface=...,
+        initial_fixing: float | dict | None = ...,
+        sim_model=...,
+        workers: int | None = ...,
+        *,
+        spot_factors: list,
+    ) -> list[BookResult]: ...
+
+    def price(
+        self,
+        ctx: PricingContext | BasketContext | None = None,
         model: str | None = None,
         n_paths: int = 200_000,
         seed: int = DEFAULT_SEED,
@@ -195,7 +231,7 @@ class Book:
         sim_model=None,
         workers: int | None = None,
         spot_factors: list | None = None,
-    ):
+    ) -> BookResult | list[BookResult]:
         """Value of the book. `model` forces one model for every position ('bs', 'lv', 'heston', 'slv', or
         'surface' for an all-European book); `market`/`surface` override the context (bumps); `workers` runs the
         batches on a process pool (same numbers bit for bit). With `spot_factors` (Monte Carlo only), a list of
@@ -217,6 +253,7 @@ class Book:
         warnings = list(d.warnings)
         history = merged_history(items, ctx, market)
         if d.method == "replication":
+            assert not isinstance(initial_fixing, dict)  # noqa: S101 (narrows the type for pyright: replication prices one name)
             results, values = [], []
             for it in items:
                 tl = it["timeline"]
@@ -254,6 +291,7 @@ class Book:
         horizon = max(it["profile"].horizon for it in items)
         times = np.unique(np.concatenate([it["timeline"].sim_times for it in items]))
         if basket:
+            assert initial_fixing is None or isinstance(initial_fixing, dict)  # noqa: S101 (narrows the type for pyright: a basket's fixing is per name)
             names = tuple(n for n in ctx.names if n in d_names)
             sim, name, hist = ctx.model(d.model, horizon, names), names[0], history
             spot0 = {n: (initial_fixing or {}).get(n, ctx.markets[n].spot) for n in names}
@@ -312,7 +350,7 @@ class Book:
 
     def greeks(
         self,
-        ctx: PricingContext | None = None,
+        ctx: PricingContext | BasketContext | None = None,
         model: str | None = None,
         n_paths: int = 200_000,
         seed: int = DEFAULT_SEED,
@@ -336,7 +374,7 @@ class Book:
         d = self.decision(ctx, items, model)
         eps = 0.0 if d.method == "replication" else smoothing
         S0 = ctx.market.spot
-        kw = dict(
+        kw: dict[str, Any] = dict(
             ctx=ctx,
             model=model,
             n_paths=n_paths,
@@ -381,7 +419,7 @@ class Book:
         d = self.decision(ctx, items, model)
         names = [n for n in ctx.names if any(n in it["underlyings"] for it in items)]
         fixing = {n: ctx.markets[n].spot for n in names}
-        kw = dict(
+        kw: dict[str, Any] = dict(
             model=model,
             n_paths=n_paths,
             seed=seed,
@@ -421,6 +459,7 @@ def _bump(a: BookResult, b: BookResult, scale: float):
     if a.pairs is None:
         per = [scale * (x.value - y.value) for x, y in zip(a.positions, b.positions)]
         return per, [0.0] * len(per), scale * (a.value - b.value), 0.0
+    assert a.position_pairs is not None and b.position_pairs is not None  # noqa: S101 (narrows the type for pyright: pairs come with their positions')
     per = [scale * (x - y) for x, y in zip(a.position_pairs, b.position_pairs)]
     tot = scale * (a.pairs - b.pairs)
     se = [float(p.std(ddof=1) / np.sqrt(len(p))) for p in per]

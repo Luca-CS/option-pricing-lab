@@ -19,12 +19,16 @@ from __future__ import annotations
 import os
 from collections import OrderedDict
 from dataclasses import asdict, dataclass
+from typing import TYPE_CHECKING, Any, overload
 
 import numpy as np
 
 from optlab.core.engines import EngineError, default_engine, seed64
 from optlab.core.models import BlackScholesModel, HestonModel, Leverage, LocalVolModel, Model, SLVModel, time_grid
 from optlab.native import gpu as _gpu
+
+if TYPE_CHECKING:
+    from optlab.structured.multiasset import Basket
 
 __all__ = [
     "MAX_NAMES",
@@ -261,15 +265,17 @@ def plan(model, market, times, dt_max=1 / 252, dt_min=1 / 2000, n_x: int = N_X) 
     for a, m in enumerate(models):
         kind[a], cvar[a], hes[a], rows, step = _describe(m, t0, n_x)
         if rows is not None:
+            assert step is not None  # noqa: S101 (narrows the type for pyright: a table comes with its steps)
             lo.append(rows[0]), inv.append(rows[1]), tab.append(rows[2])
             rows_of[a] = step + offset
             offset += len(rows[0])
     fwd = np.stack([np.asarray(mk.F(times), dtype=float) for mk in markets]) if len(times) else np.zeros((k, 0))
     mixer, mix, low = 0, (0.0,) * 8, None
     if isinstance(model, Basket) and model.mixer is not None:
-        from optlab.structured.localcorr import aligned_factors
+        from optlab.structured.localcorr import LocalCorrelation, aligned_factors
 
         mx = model.mixer
+        assert isinstance(mx, LocalCorrelation)  # noqa: S101 (narrows the type for pyright: unsupported() refused the others)
         low, sign, turn = aligned_factors(model.corr, model.root, mx.w0)
         mixer, mix = 1, (mx.w0, mx.level, mx.down, mx.up, mx.sigma, sign, np.cos(turn), np.sin(turn))
         low = np.ascontiguousarray(low, dtype=float)
@@ -367,6 +373,36 @@ def run(
     return spots, extremes, {"kernel_ms": kernel_ms, "total_ms": total_ms, "backend": backend}
 
 
+@overload
+def simulate(
+    model: Basket,
+    market,
+    times,
+    n_paths: int,
+    seed=...,
+    dt_max=...,
+    dt_min=...,
+    backend: str = ...,
+    first_pair: int = ...,
+    threads: int = ...,
+) -> dict[str, np.ndarray]: ...
+
+
+@overload
+def simulate(
+    model: Model,
+    market,
+    times,
+    n_paths: int,
+    seed=...,
+    dt_max=...,
+    dt_min=...,
+    backend: str = ...,
+    first_pair: int = ...,
+    threads: int = ...,
+) -> np.ndarray: ...
+
+
 def simulate(
     model,
     market,
@@ -459,7 +495,7 @@ def calibrate_leverage(
     return SLVModel(params, Leverage(t0, xg, vals), mix)
 
 
-def summary() -> dict:
+def summary() -> dict[str, Any]:
     """What this machine offers the engine: the library, its CUDA build, the devices and the CPU threads."""
     lib = _lib()
     return {

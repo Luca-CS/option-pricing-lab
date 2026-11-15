@@ -354,7 +354,7 @@ class Desk:
         )
 
     def model_risk(self) -> dict:
-        path = self.files.get(self.ctx.snapshot_id)
+        path = self.files.get(self.ctx.snapshot_id) if self.ctx.snapshot_id else None
         if path is None or not path.exists():
             return {"exotics": {}, "errors": [], "note": "no model-risk table stored with this snapshot"}
         cal = json.loads(path.read_text(encoding="utf-8"))
@@ -833,9 +833,11 @@ class Desk:
         }
 
     def _context_for(self, sheet: TermSheet, ctx: PricingContext, settings: dict | None = None):
-        if len(sheet.underlyings) > 1:
-            return self._basket_ctx(sheet.underlyings, settings, ctx=ctx, payment=sheet.payment_currency)
-        return self._single_ctx(sheet.underlyings[0], ctx, sheet.payment_currency)
+        names = sheet.underlyings
+        first = names[0]  # read before the length test, which pyright narrows to an empty tuple
+        if len(names) > 1:
+            return self._basket_ctx(names, settings, ctx=ctx, payment=sheet.payment_currency)
+        return self._single_ctx(first, ctx, sheet.payment_currency)
 
     def _single_ctx(self, name: str, ctx: PricingContext, payment: str | None = None):
         """A name on the market in use when it is that name's, else on the lake's at the same date (its quanto market when it
@@ -1143,7 +1145,9 @@ class Desk:
             return None
         if not desk:
             return None
-        return frozen(desk, trade.strike_date, compile_sheet(trade.term_sheet(), trade.strike_date).maturity, quote_id)
+        sheet = trade.term_sheet()
+        assert sheet is not None  # noqa: S101 (narrows the type for pyright: a quote is a term sheet's)
+        return frozen(desk, trade.strike_date, compile_sheet(sheet, trade.strike_date).maturity, quote_id)
 
     def update_trade(self, trade_id: str, body: dict) -> dict:
         old = self.repo.trade(trade_id)
@@ -1180,12 +1184,13 @@ class Desk:
                 else None
             )
             pay = sheet.payment_currency if sheet is not None else None
+            first = observed[0]  # read before the length test, which pyright narrows to an empty tuple
             if len(observed) > 1:
                 positions, names = baskets.setdefault(pay, ([], []))
                 positions.append(t.to_position(fix))
                 names += [n for n in observed if n not in names]
             else:
-                singles.setdefault((observed[0], pay), []).append(t.to_position(fix))
+                singles.setdefault((first, pay), []).append(t.to_position(fix))
         return singles, baskets
 
     def price_book(self, body: dict) -> dict:
@@ -1288,6 +1293,7 @@ class Desk:
         ctx = self.ctx
         trade = self.repo.trade(trade_id)
         sheet = trade.term_sheet()
+        assert sheet is not None  # noqa: S101 (narrows the type for pyright: the trades screen lists term sheets' events)
         compiled = compile_sheet(sheet, ctx.valuation)
         upcoming = [
             {"observation": ev.when.value, "payment": ev.pay.value if ev.pay else None}
@@ -1321,9 +1327,12 @@ class Desk:
         horizon = ctx.valuation + dt.timedelta(days=int(days))
         rows = []
         for t in self.repo.trades():
-            if t.status != "live" or t.term_sheet() is None:
+            if t.status != "live":
                 continue
-            compiled = compile_sheet(t.term_sheet(), ctx.valuation)
+            sheet = t.term_sheet()
+            if sheet is None:
+                continue
+            compiled = compile_sheet(sheet, ctx.valuation)
             for ev in compiled.program.events[1:]:
                 d = dt.date.fromisoformat(ev.when.value)
                 if ctx.valuation <= d <= horizon:

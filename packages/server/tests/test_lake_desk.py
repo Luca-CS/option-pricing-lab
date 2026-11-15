@@ -2,11 +2,13 @@
 
 import datetime as dt
 import json
+from typing import Any
 
 import pandas as pd
 import pytest
 from _desk import wait
 from _quote_fixture import DAY, curve_rows, synthetic_rows
+from _quotes import some
 
 from optlab.marketdata.ingest import as_rows
 from optlab.marketdata.lake import Lake
@@ -187,7 +189,7 @@ def test_showcase_seed_fills_a_store_with_trades_struck_on_their_own_markets(tmp
         assert desk.ctx.valuation == day and desk.ctx.market.spot == 100.0
         trades = {t.trade_id: t for t in desk.repo.trades()}
         assert trades["SHOW-A"].strike_date.isoformat() == "2020-06-15" and trades["SHOW-A"].quantity == -1.0
-        sheet = trades["SHOW-A"].term_sheet()
+        sheet = some(trades["SHOW-A"].term_sheet())
         assert sheet.get("wrapper.solve") == "upfront" and 0 < sheet.get("coupon.rate") < 1
         assert sheet.get("wrapper.issuer_spread") == pytest.approx(spread_at(lake, "2020-06-15", 2.0))
         stored = desk.repo.fixings("SPX")["SPX"]
@@ -199,6 +201,7 @@ def test_showcase_seed_fills_a_store_with_trades_struck_on_their_own_markets(tmp
         got = desk.trade_events("SHOW-A")
         assert got["missing"] is None and got["past"]
         job = desk.price_book({"options": {"precision": "fast", "greeks": False}})["job"]
+        state: dict = {}
         for _ in range(240):
             state = desk.job(job)
             if state["state"] in ("done", "error"):
@@ -222,7 +225,7 @@ def test_data_screen_shows_the_latest_basket_spreads_as_synthetic(tmp_path):
     desk = Desk(tmp_path / "store" / "optlab.sqlite", lake=tmp_path / "lake")
     try:
         assert desk.data_baskets() == {"rows": [], "day": None}
-        row = {
+        row: dict[str, Any] = {
             "basket": "SPX+NDX",
             "kind": "cvc",
             "strike": 1.1,

@@ -53,7 +53,7 @@ def test_curve_rows_put_the_overnight_rate_first_and_are_consistent():
     overnight = pd.DataFrame({"obs_date": [dt.date(2020, 3, 2)], "rate": [1.5]})
     usd = par_curve_rows(treasury, overnight, USD_CURVE)
     assert usd["curve"].iloc[0] == USD_CURVE and usd["tenor"].iloc[0] == pytest.approx(1 / 365)
-    assert usd["discount"].to_numpy() == pytest.approx(np.exp(-usd["zero_rate"] * usd["tenor"]).to_numpy())
+    assert usd["discount"].to_numpy() == pytest.approx(np.exp(-usd["zero_rate"].to_numpy() * usd["tenor"].to_numpy()))
     aaa = pd.DataFrame({"obs_date": ["2020-03-02"] * 2, "tenor": [1.0, 2.0], "rate": [-0.5, -0.4]})
     eur = zero_curve_rows(aaa, overnight.iloc[:0], EUR_CURVE)
     assert eur["curve"].iloc[0] == EUR_CURVE and eur["zero_rate"].iloc[0] == pytest.approx(-0.005)

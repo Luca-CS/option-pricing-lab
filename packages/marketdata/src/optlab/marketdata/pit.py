@@ -17,6 +17,7 @@ import pandas as pd
 
 from optlab.core.instruments import instrument
 from optlab.core.market import Market
+from optlab.core.models import Leverage
 from optlab.core.snapshot import MarketSnapshot
 from optlab.marketdata.derive.carry import DividendStream, dividend_stream
 from optlab.marketdata.derive.correl import correlation_at
@@ -148,6 +149,7 @@ def market_at(
         fit = calibrate_leverage(
             HestonParams(**h), got.surface, market, T_max, mix=mix, n_particles=n_particles, rng=seed
         )
+        assert isinstance(fit.leverage, Leverage)  # noqa: S101 (narrows the type for pyright: calibrate_leverage builds one)
         lev = fit.leverage.to_dict()
     else:
         lev = flat_leverage(T_max)
@@ -234,5 +236,5 @@ def truncated_copy(lake: Lake, target, day, tables=None, where_extra: dict | Non
         )
         rows = lake.read(table, where=clause)
         for (source, origin), group in rows.groupby(["source", "origin"]):
-            target.ingest(table, group, source, origin)
+            target.ingest(table, group, str(source), str(origin))
     return target

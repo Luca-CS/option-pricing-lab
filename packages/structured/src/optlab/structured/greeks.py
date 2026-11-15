@@ -222,6 +222,7 @@ def greeks(
         if strike_bump:
             surface = StickyStrikeSurface(surface, spot_factor - 1.0)
         if method == "replication":
+            assert T_obs is not None  # noqa: S101 (narrows the type for pyright: set above for replication)
             return replication_result(program, timeline, surface, market, T_obs, fmt, params, initial_fixing=S0)
         if model == "bs":
             m = BlackScholesModel(ctx.atm_vol(horizon) + vol_shift)
@@ -259,9 +260,11 @@ def greeks(
         up, down = run(1 + h_spot, eps=0.0), run(1 - h_spot, eps=0.0)
     elif convention == "strike" and not homogeneous:  # the bumped models differ: two more simulations
         p = params or {}
+        base_model = mc_model()
+        assert base_model is not None  # noqa: S101 (narrows the type for pyright: only a vol bump can lack a model)
         base_exact, base = price_many(
             program,
-            mc_model(),
+            base_model,
             ctx.market,
             [p, p],
             fmt,
@@ -280,9 +283,11 @@ def greeks(
         up, down = run(1 + h_spot, eps=eps), run(1 - h_spot, eps=eps)
     else:
         p = params or {}
+        base_model = mc_model()
+        assert base_model is not None  # noqa: S101 (narrows the type for pyright: only a vol bump can lack a model)
         base_exact, base, up, down = price_many(
             program,
-            mc_model(),
+            base_model,
             ctx.market,
             [p, p, p, p],
             fmt,
