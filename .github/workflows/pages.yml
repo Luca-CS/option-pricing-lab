@@ -1,0 +1,70 @@
+# The public demo on GitHub Pages (ADR-0002: the only public face), published by this workflow and not by a branch
+# build: the site holds the demo page and what it loads, nothing else of docs/ (the architecture notes stay in the
+# repository). The page computes in the browser from recorded parameters: it calls no server.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/index.html
+      - docs/style.css
+      - docs/lab.js
+      - docs/pricer-data.js
+      - docs/figures/**
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false  # a deployment in progress finishes
+
+jobs:
+  build:
+    name: the demo's files
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Assemble the site
+        run: |
+          mkdir -p _site/figures
+          cp docs/index.html docs/style.css docs/lab.js docs/pricer-data.js _site/
+          cp docs/figures/*.png _site/figures/
+          touch _site/.nojekyll
+      - name: The page loads only its own files and calls no machine
+        run: |
+          python3 - <<'EOF'
+          import pathlib, re, sys
+          site = pathlib.Path("_site")
+          page = (site / "index.html").read_text(encoding="utf-8")
+          missing = [r for r in re.findall(r'(?:src|href)="([^"#:]+)"', page) if not (site / r).is_file()]
+          text = "".join(p.read_text(encoding="utf-8") for p in site.iterdir() if p.suffix in (".html", ".js", ".css"))
+          calls = re.findall(r"localhost|127\.0\.0\.1|192\.168\.|\bfetch\(|XMLHttpRequest|WebSocket|EventSource", text)
+          if missing or calls:
+              sys.exit(f"missing files: {missing}; network calls: {sorted(set(calls))}")
+          print("files:", sorted(p.name for p in site.rglob("*") if p.is_file()))
+          EOF
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0
+        with:
+          path: _site
+
+  deploy:
+    name: publish
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write  # this job only: it publishes the artifact built above
+      id-token: write  # the deployment's proof of origin
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346  # v5.0.1
