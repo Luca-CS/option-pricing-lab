@@ -212,6 +212,58 @@ def test_one_address_is_throttled(tmp_path):
         assert codes[:5] == [401] * 5 and codes[5] == 429
 
 
+def test_a_burst_of_guesses_gets_no_more_than_the_same_guesses_in_a_row(tmp_path):
+    """Found by the probe in A9: the count of failures was read, then written after the hash, so guesses sent together
+    were all evaluated and counted as one; the account was not even locked afterwards."""
+    import threading
+
+    with api(tmp_path, login_max_failures=3, login_per_address=50) as t:
+        t.state.accounts.create("eve", PASSWORD, ["viewer"])
+        clients = [t.client() for _ in range(12)]
+        codes: list[int] = []
+
+        def guess(c, i):
+            codes.append(_login(c, "eve", f"not-the-password-{i}").status_code)
+
+        threads = [threading.Thread(target=guess, args=(c, i)) for i, c in enumerate(clients)]
+        for th in threads:
+            th.start()
+        for th in threads:
+            th.join()
+        assert codes.count(401) == 3 and codes.count(423) == 9, codes  # three evaluated, the others never hashed
+        assert _login(clients[0], "eve").status_code == 423  # locked, even for the right password
+        assert t.state.accounts.get("eve")["locked_until"]
+
+
+def test_the_throttle_counts_every_failed_attempt_and_bounds_the_audit_log(tmp_path):
+    with api(tmp_path, login_max_failures=3, login_per_address=6) as t:
+        t.state.accounts.create("fay", PASSWORD, ["viewer"])
+        c = t.client()
+        assert _login(c, "fay").status_code == 200  # a success gives its attempt back
+        codes = [_login(c, "fay", f"wrong-password-{i}").status_code for i in range(10)]
+        assert codes == [401] * 3 + [423] * 3 + [429] * 4  # attempts on a locked account count too
+        failed = [e for e in t.state.audit.entries(200) if e["action"] == "login_failed"]
+        assert len(failed) == 6  # the throttled ones write nothing: an address cannot fill the log
+        assert _login(c, "fay").status_code == 429
+
+
+def test_the_guard_reads_a_request_one_way(a, trader):
+    """Found by the probe in A9: a chunked body without a type passed the content-type rule, a request could carry
+    both a length and a chunked encoding, and a Host with user info was read as its host part."""
+    before = fixings(a)
+    r = trader.post("/api/v1/trading/fixings", content=iter([b'{"underlying": "SPX", "text": "2025-01-08 1"}']))
+    assert r.status_code == 415, r.text
+    both = {"content-type": "application/json", "transfer-encoding": "chunked", "content-length": "2"}
+    r = trader.post("/api/v1/trading/fixings", content=b"{}", headers=both)
+    assert r.status_code == 400 and "not both" in r.json()["detail"]
+    assert trader.get("/api/v1/health", headers={**both, "content-type": ""}).status_code == 400
+    for host in ("evil@127.0.0.1", "127.0.0.1:8765@evil.example", "127.0.0.1 evil.example", "127.0.0.1/evil", ""):
+        r = trader.get("/api/v1/trading/trades", headers={"host": host})
+        assert r.status_code == 403, host
+        assert r.headers["cache-control"] == "no-store" and r.headers["content-type"] == "application/problem+json"
+    assert fixings(a) == before
+
+
 def test_sessions_expire_when_idle_or_old(a, monkeypatch):
     a.state.accounts.create("dan", PASSWORD, ["viewer"])
     c = a.client()

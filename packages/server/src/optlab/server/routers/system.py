@@ -90,7 +90,8 @@ def login(body: LoginIn, request: Request, response: Response):
     try:
         user = st.accounts.authenticate(body.name, body.password, address)
     except LoginError as exc:
-        st.audit.record(None, "login_failed", body.name[:64], detail={"address": address, "status": exc.status})
+        if exc.status != 429:  # the throttle bounds what an address without an account can write here
+            st.audit.record(None, "login_failed", body.name[:64], detail={"address": address, "status": exc.status})
         raise Problem(exc.status, str(exc)) from None
     old = request.cookies.get(COOKIE)
     if old:  # a new session at every login: an old cookie cannot be fixed on someone

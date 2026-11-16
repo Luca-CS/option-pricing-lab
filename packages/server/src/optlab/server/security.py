@@ -4,7 +4,9 @@
   parameters change. A login that fails says only "wrong name or password", and an unknown name costs the same hash
   as a known one, so neither the answer nor its time tells whether an account exists.
 - An account is locked for `login_lockout_minutes` after `login_max_failures` failures in a row; a client address
-  gets `login_per_address` attempts per 10 minutes.
+  gets `login_per_address` failed attempts per 10 minutes. Both are counted before the password is hashed and given
+  back when it was right, so attempts sent at the same time count one by one: a burst gets no more guesses than the
+  same attempts in a row.
 - A session is a random 256-bit value in an `HttpOnly`, `SameSite=Strict` cookie (`Secure` under TLS); the database
   keeps its sha256 only. It ends after `session_idle_minutes` unused or `session_absolute_hours` after its login, at
   logout, and for every session of a user whose password, roles or account change.
@@ -169,52 +171,62 @@ class Accounts:
             c.execute(update(sessions).where(sessions.c.user_id == uid).values(revoked=1))
 
     # --- login ----------------------------------------------------------------------------------------------------
-    def _failures(self, address: str) -> deque[float]:
+    def _take(self, address: str) -> float | None:
+        """Count one attempt of this address, before its password is hashed; None when the address already has
+        `login_per_address` of them in the last 10 minutes."""
         now, window = time.monotonic(), 600.0
-        q = self._attempts.setdefault(address, deque[float]())
-        while q and now - q[0] > window:
-            q.popleft()
-        return q
+        with self._lock:
+            for other in [a for a, q in self._attempts.items() if not q or now - q[-1] > window]:
+                del self._attempts[other]  # addresses with nothing left to remember
+            q = self._attempts.setdefault(address, deque[float]())
+            while q and now - q[0] > window:
+                q.popleft()
+            if len(q) >= self.settings.login_per_address:
+                return None
+            q.append(now)
+            return now
+
+    def _give_back(self, address: str, taken: float) -> None:
+        with self._lock:
+            q = self._attempts.get(address)
+            if q is not None and taken in q:
+                q.remove(taken)
 
     def authenticate(self, name: str, password: str, address: str) -> User:
         """The user, or LoginError: 401 (one message whatever was wrong), 423 (locked), 429 (this address failed
-        `login_per_address` times in 10 minutes; successful logins do not count, so users behind one address do not
-        block each other)."""
-        with self._lock:
-            if len(self._failures(address)) >= self.settings.login_per_address:
-                raise LoginError("too many failed logins from this address; wait a few minutes", 429)
-        try:
-            return self._authenticate(name, password)
-        except LoginError as exc:
-            if exc.status == 401:
-                with self._lock:
-                    self._failures(address).append(time.monotonic())
-            raise
+        `login_per_address` times in 10 minutes; a successful login gives its attempt back, so users behind one
+        address do not block each other)."""
+        taken = self._take(address)
+        if taken is None:
+            raise LoginError("too many failed logins from this address; wait a few minutes", 429)
+        user = self._authenticate(name, password)
+        self._give_back(address, taken)
+        return user
 
     def _authenticate(self, name: str, password: str) -> User:
-        with self.db.read() as c:
+        with self.db.write() as c:  # one at a time: the attempt is counted before its hash, whatever arrives beside it
             row = c.execute(select(users).where(users.c.name == name)).first()
+            now = _now()
+            if row is not None:
+                if row.locked_until and dt.datetime.fromisoformat(row.locked_until) > now:
+                    raise LoginError("this account is locked for a few minutes after failed logins", 423)
+                failures = row.failed_logins + 1
+                counted: dict[str, Any] = {"failed_logins": failures}
+                if (
+                    failures >= self.settings.login_max_failures
+                ):  # the last attempt before the lock: locked unless right
+                    until = now + dt.timedelta(minutes=self.settings.login_lockout_minutes)
+                    counted = {"failed_logins": 0, "locked_until": _iso(until)}
+                c.execute(update(users).where(users.c.user_id == row.user_id).values(**counted))
         if row is None:
             try:
                 self.hasher.verify(self._dummy, password)
             except VerificationError, InvalidHashError:
                 pass
             raise LoginError(WRONG)
-        now = _now()
-        if row.locked_until and dt.datetime.fromisoformat(row.locked_until) > now:
-            raise LoginError("this account is locked for a few minutes after failed logins", 423)
         try:
             self.hasher.verify(row.password_hash, password)
         except VerifyMismatchError, InvalidHashError:
-            failures = row.failed_logins + 1
-            values: dict[str, Any] = {"failed_logins": failures}
-            if failures >= self.settings.login_max_failures:
-                values = {
-                    "failed_logins": 0,
-                    "locked_until": _iso(now + dt.timedelta(minutes=self.settings.login_lockout_minutes)),
-                }
-            with self.db.write() as c:
-                c.execute(update(users).where(users.c.user_id == row.user_id).values(**values))
             raise LoginError(WRONG) from None
         if row.disabled:
             raise LoginError(WRONG)

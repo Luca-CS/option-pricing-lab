@@ -3,9 +3,10 @@ what. Routers live in `optlab.server.routers`; `optlab.server.app.create_app` pu
 
 The guard refuses, before any route runs:
 - a `Host` that is not this machine when the LAN profile is off, nor one of its LAN names when it is on (a page
-  that rebinds its name to the desk's address);
+  that rebinds its name to the desk's address), and a `Host` that is not a plain name and port;
+- a request that carries both a `Content-Length` and a `Transfer-Encoding` (two readers could cut it differently);
 - a state-changing request whose `Origin` is another site (`null` included);
-- a body that is not `application/json`, and a body larger than `Settings.max_body_bytes`.
+- a body that is not `application/json` (a chunked one included), and a body larger than `Settings.max_body_bytes`.
 Every route then declares who may call it with `access(...)`: a session cookie, the CSRF token in `X-CSRF-Token` on
 state-changing methods, and one of the roles named (admin may do everything; none named: any signed-in user).
 """
@@ -14,6 +15,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -179,7 +181,13 @@ def current_user(request: Request) -> User:
 
 
 # --- the guard ------------------------------------------------------------------------------------------------------
+HOST = re.compile(r"^(?:[A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::[0-9]{1,5})?$")  # a name or an address, and a port
+
+
 def _host(netloc: str) -> str | None:
+    """The name of a Host header, or None when it is not a plain `name[:port]` (user info, spaces, a path)."""
+    if not HOST.fullmatch(netloc):
+        return None
     try:
         return urlsplit(f"//{netloc}").hostname
     except ValueError:
@@ -249,6 +257,9 @@ class Guard:
             return 403, "this server answers on 127.0.0.1 or localhost only"
         if self.settings.lan and name not in LOOPBACK and name not in self.settings.lan_hosts:
             return 403, "this server answers on its LAN names only"  # a rebound name (security.md, finding 17)
+        chunked = "transfer-encoding" in headers
+        if chunked and "content-length" in headers:
+            return 400, "a request has a Content-Length or a Transfer-Encoding, not both"
         if method in SAFE:
             return None
         origin = headers.get("origin")
@@ -261,7 +272,7 @@ class Guard:
         if length > self.settings.max_body_bytes:
             return 413, f"the body exceeds {self.settings.max_body_bytes} bytes"
         ctype = (headers.get("content-type") or "").split(";")[0].strip().lower()
-        if (length or ctype) and ctype != "application/json":
+        if (length or chunked or ctype) and ctype != "application/json":
             return 415, "the body must be application/json"
         return None
 
@@ -271,7 +282,7 @@ class Guard:
         ).encode()
         headers = [(b"content-type", PROBLEM.encode()), (b"content-length", str(len(body)).encode())]
         headers += [(k.encode(), v.encode()) for k, v in HEADERS.items()]
-        headers.append((b"content-security-policy", CSP_API.encode()))
+        headers += [(b"content-security-policy", CSP_API.encode()), (b"cache-control", b"no-store")]
         await send({"type": "http.response.start", "status": status, "headers": headers})
         await send({"type": "http.response.body", "body": body})
 
