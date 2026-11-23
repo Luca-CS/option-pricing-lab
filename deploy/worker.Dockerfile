@@ -8,7 +8,7 @@
 #     docker build -f deploy/worker.Dockerfile -t optlab-worker .
 FROM ghcr.io/astral-sh/uv:0.13.8@sha256:5cc1805e2426484abca4ad46ea783bab281fdb225fd82d8ce6d66a81254bac85 AS uv
 
-FROM nvidia/cuda:12.9.1-devel-ubuntu24.04@sha256:020bc241a628776338f4d4053fed4c38f6f7f3d7eb5919fecb8de313bb8ba47c AS build
+FROM nvidia/cuda:13.5.0-devel-ubuntu24.04@sha256:d3fa71793540a2b76ab227ee00016e754da2758b7a51b49bc8a72543af5a8bc2 AS build
 RUN apt-get update \
  && apt-get install -y --no-install-recommends g++ make cmake ca-certificates \
  && rm -rf /var/lib/apt/lists/*
@@ -24,7 +24,7 @@ RUN uv sync --locked --no-dev --no-editable --extra yahoo --python 3.14.7 \
            /opt/python/*/lib/python3.14/ensurepip/_bundled /opt/python/*/bin/pip*
 # no pip at run time: the venv is uv's, and pip carries its own copies of certifi, urllib3 and others
 
-FROM nvidia/cuda:12.9.1-base-ubuntu24.04@sha256:29e5e3425e2e0f5a4e97c9fb4695ba4887cd78210a43cf94c3bcafc6ab01c5e6
+FROM nvidia/cuda:13.5.0-base-ubuntu24.04@sha256:8c30b31b13a97ee353c21e666b227dea44f4331d38a221f257de70fc04b437d0
 # the distribution's security updates since the base image was built (July 2025)
 RUN apt-get update \
  && apt-get upgrade -y --no-install-recommends \
