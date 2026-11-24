@@ -1,0 +1,47 @@
+.page {
+  padding: 20px 24px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 1440px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--ol-muted);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.specimens {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  gap: 8px 24px;
+  align-items: baseline;
+  color: var(--ol-muted);
+  font-size: 13px;
+}
+
+.specimens > :nth-child(even) {
+  font-size: 15px;
+  text-align: right;
+}
