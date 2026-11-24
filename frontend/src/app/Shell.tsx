@@ -22,11 +22,10 @@ function RailLink({ space, other }: { space: Space; other?: boolean }) {
       className={({ isActive }) =>
         [classes.space, other ? classes.other : "", isActive ? classes.active : ""].join(" ")
       }
-      aria-label={space.label}
       title={`${space.label} (g ${space.key})`}
     >
       <Icon size={19} stroke={1.7} aria-hidden="true" />
-      <span aria-hidden="true">{space.label.length > 8 ? space.label.slice(0, 6) : space.label}</span>
+      <span>{space.label}</span>
     </NavLink>
   );
 }

@@ -14,8 +14,9 @@ export const test = base.extend<{ page: Page }>({
     });
     page.on("pageerror", (e) => problems.push(e.message));
     await use(page);
-    // a 401 is how the app learns it has no session: the browser logs it, it is not a fault
-    expect(problems.filter((p) => !p.includes("401"))).toEqual([]);
+    // the browser logs every 4xx it receives; a 401 (no session) and a 422 (a field in error, shown under the field)
+    // are answers the app reads, not faults
+    expect(problems.filter((p) => !/status of (401|422)[^0-9]/.test(`${p} `) && !p.includes("401"))).toEqual([]);
   },
 });
 
@@ -40,7 +41,7 @@ export async function ensureUsers(baseURL: string, roles: string[]): Promise<voi
   const { csrf_token } = (await login.json()) as { csrf_token: string };
   for (const role of roles) {
     const r = await ctx.post("/api/v1/admin/users", {
-      data: { name: `e2e-${role}`, password: passwordOf(role), roles: [role] },
+      data: { name: accountOf(role), password: passwordOf(role), roles: role.split("+") },
       headers: { "X-CSRF-Token": csrf_token },
     });
     expect([201, 200, 409]).toContain(r.status());
@@ -48,10 +49,15 @@ export async function ensureUsers(baseURL: string, roles: string[]): Promise<voi
   await ctx.dispose();
 }
 
+/** The test account of a role, or of roles joined by "+" ("structurer+trader"). */
+export function accountOf(role: string): string {
+  return `e2e-${role.replaceAll("+", "-")}`;
+}
+
 /** Signed in as the test account of a role, landed on its home. */
 export async function signInAs(page: Page, role: string): Promise<void> {
   await page.goto("/sign-in");
-  await signIn(page, `e2e-${role}`, passwordOf(role));
+  await signIn(page, accountOf(role), passwordOf(role));
   await expect(page).not.toHaveURL(/sign-in/);
 }
 
@@ -59,5 +65,13 @@ export async function signInAs(page: Page, role: string): Promise<void> {
 export async function accessible(page: Page): Promise<void> {
   const results = await new AxeBuilder({ page }).analyze();
   const bad = results.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
-  expect(bad.map((v) => `${v.id}: ${v.help} (${v.nodes.length})`)).toEqual([]);
+  expect(
+    bad.map(
+      (v) =>
+        `${v.id}: ${v.help} (${v.nodes.length}): ${v.nodes
+          .slice(0, 3)
+          .map((n) => `${n.target.join(" ")} ${n.html.slice(0, 160)}`)
+          .join(" | ")}`,
+    ),
+  ).toEqual([]);
 }

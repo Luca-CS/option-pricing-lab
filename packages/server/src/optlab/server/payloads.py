@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic.json_schema import models_json_schema
 
 
 class Doc(BaseModel):
@@ -20,9 +21,11 @@ class Doc(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
-def documented(model: type[BaseModel], description: str = "the answer") -> dict[int | str, dict[str, Any]]:
-    """The `responses` of a route whose 200 the model describes (the document only; the route sends its dict)."""
-    return {200: {"model": model, "description": description}}
+def documented(
+    model: type[BaseModel], description: str = "the answer", status: int = 200
+) -> dict[int | str, dict[str, Any]]:
+    """The `responses` of a route whose answer the model describes (the document only; the route sends its dict)."""
+    return {status: {"model": model, "description": description}}
 
 
 class Next(Doc):
@@ -160,6 +163,165 @@ class QuoteItem(Doc):
 
 class QuotePage(Next):
     items: list[QuoteItem]
+
+
+class Estimate(Doc):
+    """A Monte Carlo number: its value and its standard error (null where the library gives none)."""
+
+    value: float
+    se: float | None = None
+
+
+class FormField(Doc):
+    name: str
+    path: str = Field(..., description="section.field, the key of `bounds` and of a problem's `errors[].field`")
+    label: str
+    kind: str = Field(..., description="choice, number, int, date, bool, names")
+    unit: str = Field("", description="what one unit of the value is: per annum, of initial, bp, vol points, months...")
+    choices: list[Any] = []
+    value: Any = None
+    read_only: bool = False
+    optional: bool = False
+
+
+class FormSection(Doc):
+    name: str
+    label: str
+    fields: list[FormField]
+
+
+class SheetForm(Doc):
+    """The visible form of a sheet: the server decides which fields show (`visible_if`), the front draws them."""
+
+    type: str
+    label: str
+    sections: list[FormSection]
+
+
+class Bound(Doc):
+    min: float | None = None
+    max: float | None = None
+    default: Any = None
+
+
+class TermSheetFormOut(Doc):
+    type: str
+    sheet: dict[str, Any] = Field(..., description="the validated sheet, flat: section -> field -> value")
+    form: SheetForm
+    bounds: dict[str, Bound]
+    error: str | None = None
+    costs: dict[str, Any] = Field({}, description="the cost table's parameters that apply to this sheet")
+
+
+class Pricing(Doc):
+    """A Monte Carlo run of the quote: the price and how it was got."""
+
+    price: Estimate
+    expected_life: float | None = None
+    method: str
+    n_paths: int | None = None
+    numerical_error: float | None = None
+    seconds: float | None = None
+    warnings: list[str] = []
+
+
+class DeskLine(Doc):
+    """One line of the desk price: a provision, a bump, a digital or an interaction, on the base's random numbers."""
+
+    key: str
+    kind: str = Field(..., description="model, bump, digital, interaction")
+    label: str
+    cost: Estimate = Field(..., description="% of nominal")
+    coupon_bp: float | None = Field(None, description="what it costs the coupon, bp per annum")
+    in_price: bool
+    overridden: bool = False
+    note: str = ""
+
+
+class DeskPrice(Doc):
+    base_price: Estimate
+    final_price: Estimate
+    coupon_base: float | None = Field(None, description="the coupon before the desk's lines (fraction per annum)")
+    coupon_final: float | None = Field(None, description="the client's coupon (fraction per annum)")
+    lines: list[DeskLine]
+    side: str
+    seconds: float | None = None
+
+
+class Policy(Doc):
+    """Why this method and model: the product's class, the base model and its provisions."""
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+    class_: str = Field(..., alias="class")
+    label: str
+    reason: str
+    description: str | None = None
+    method: str
+    model: str
+    n_paths: int | None = None
+    control: str | None = None
+    provisions: list[str] = []
+    forced: bool = False
+
+
+class QuoteGreeks(Doc):
+    delta: Estimate | None = None
+    vega: Estimate | None = None
+    units: dict[str, str] = {}
+    method: str | None = None
+    model: str | None = None
+    note: str | None = None
+
+
+class ScheduleRow(Doc):
+    observation: str
+    payment: str | None = None
+    t: float
+    p_end: float = Field(..., description="probability that the product ends at this date")
+    p_redeemed: float | None = None
+    flows: dict[str, float] = Field({}, description="expected flows at this date, % of nominal, by kind")
+
+
+class Product(Doc):
+    label: str
+    type: str
+    format: str | None = None
+    maturity: str | None = None
+    maturity_months: int | None = None
+    strike_date: str | None = None
+    underlyings: list[str] = []
+    script: str | None = Field(None, description="the payoff script the sheet compiles to")
+
+
+class QuoteResult(Doc):
+    """A quote, as the job returns it (`result` of its envelope) and as it is stored."""
+
+    quote_id: str | None = None
+    snapshot_id: str | None = None
+    headline: Headline
+    coupon_rate: Estimate | None = None
+    upfront: Estimate | None = None
+    target: float | None = None
+    margin: float | None = None
+    result: Pricing
+    control: Pricing | None = None
+    control_gap_se: float | None = None
+    desk: DeskPrice | None = None
+    policy: Policy
+    greeks: QuoteGreeks | None = None
+    schedule: list[ScheduleRow] = []
+    product: Product
+    sheet: dict[str, Any]
+    options: dict[str, Any] = {}
+    seconds: float | None = None
+    warnings: list[str] = []
+
+
+class SavedQuote(Doc):
+    quote_id: str
+    created_at: str
+    sheet: Sheet
+    result: QuoteResult
 
 
 # --- trading -----------------------------------------------------------------------------------------------------------
@@ -355,3 +517,23 @@ class JobRow(Doc):
 
 class JobRowPage(Next):
     items: list[JobRow]
+
+
+# --- job results -------------------------------------------------------------------------------------------------------
+# The `result` of a job's envelope by its kind. A job route answers 202 and the result comes later on GET /jobs/{id},
+# whose `result.result` is open in the document: these schemas are added to the document's components (and listed
+# under `x-job-results`) so the front types a finished job by its kind.
+JOB_RESULTS: dict[str, type[BaseModel]] = {
+    "quote": QuoteResult,
+}
+
+
+def describe_results(doc: dict[str, Any]) -> None:
+    """Add the job results' schemas to the document, and the map kind -> schema under `x-job-results`."""
+    _, top = models_json_schema(
+        [(m, "serialization") for m in JOB_RESULTS.values()], ref_template="#/components/schemas/{model}"
+    )
+    schemas = doc.setdefault("components", {}).setdefault("schemas", {})
+    for name, schema in top.get("$defs", {}).items():
+        schemas.setdefault(name, schema)
+    doc["x-job-results"] = {kind: {"$ref": f"#/components/schemas/{m.__name__}"} for kind, m in JOB_RESULTS.items()}

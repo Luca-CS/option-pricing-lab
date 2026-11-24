@@ -34,17 +34,14 @@ function UserMenu() {
   return (
     <Menu position="bottom-end" width={260} withinPortal closeOnItemClick={false}>
       <Menu.Target>
-        <UnstyledButton
-          aria-label={`${me?.name}, preferences and sign out`}
-          className={classes.search}
-          style={{ minWidth: 0 }}
-        >
-          <Avatar size={24} radius="xl" color="gray">
+        <UnstyledButton className={classes.search} style={{ minWidth: 0 }}>
+          <Avatar size={24} radius="xl" color="gray" aria-hidden="true">
             {initials}
           </Avatar>
-          <span className={classes.hideNarrow}>
-            {me?.name} <span style={{ color: "var(--ol-faint)" }}>{me?.roles.join(", ")}</span>
+          <span className={classes.srNarrow}>
+            {me?.name} <span style={{ color: "var(--ol-muted)" }}>{me?.roles.join(", ")}</span>
           </span>
+          <span className="visually-hidden">, preferences and sign out</span>
         </UnstyledButton>
       </Menu.Target>
       <Menu.Dropdown>
@@ -137,9 +134,9 @@ export function ContextBar({ onMarket, jobs }: { onMarket: () => void; jobs: Rea
         </span>
       )}
       <span className={classes.spacer} />
-      <button type="button" className={classes.search} onClick={() => spotlight.open()} aria-label="Search (Ctrl K)">
+      <button type="button" className={classes.search} onClick={() => spotlight.open()}>
         <IconSearch size={14} aria-hidden="true" />
-        <span className={classes.hideNarrow}>Trades, quotes, screens</span>
+        <span className={classes.srNarrow}>Search trades, quotes, screens</span>
         <span className={`${classes.kbd} ${classes.hideNarrow}`}>Ctrl K</span>
       </button>
       {jobs}

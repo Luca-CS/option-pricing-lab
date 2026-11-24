@@ -38,7 +38,7 @@
 }
 
 .space {
-  width: 56px;
+  width: 60px;
   min-height: 50px;
   border-radius: 8px;
   display: flex;
@@ -47,9 +47,11 @@
   justify-content: center;
   gap: 3px;
   color: var(--ol-muted);
-  font-size: 10.5px;
+  font-size: 9.5px;
   text-decoration: none;
   flex: none;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .space:hover {
@@ -65,7 +67,7 @@
 }
 
 .other {
-  opacity: 0.7;
+  color: var(--ol-faint);
 }
 
 .divider {
@@ -216,6 +218,16 @@
 
   .hideNarrow {
     display: none;
+  }
+
+  /* gone from the screen, still read: a control's name stays whole */
+  .srNarrow {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
   }
 
   .content {

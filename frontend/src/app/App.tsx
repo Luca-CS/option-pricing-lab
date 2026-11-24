@@ -54,8 +54,35 @@ const HOMES: Record<string, ReactNode> = {
   admin: <AdminHome />,
 };
 
+// each space's screens load with the space (HANDOFF_REFACTOR_2_UX.md §7: the first page stays small)
+const structuring = () => import("../spaces/structuring");
+const LAZY: Record<string, ReturnType<typeof lazy>> = {
+  "/structuring/builder": lazy(() => structuring().then((m) => ({ default: m.Builder }))),
+  "/structuring/quotes": lazy(() => structuring().then((m) => ({ default: m.QuotesPage }))),
+  "/structuring/quotes/:id": lazy(() => structuring().then((m) => ({ default: m.QuotePage }))),
+  "/structuring/compare": lazy(() => structuring().then((m) => ({ default: m.ComparePage }))),
+};
+
+function Lazy({ path }: { path: string }) {
+  const Page = LAZY[path];
+  if (!Page) return <Soon />;
+  return (
+    <Suspense fallback={<SpaceLoading />}>
+      <Page />
+    </Suspense>
+  );
+}
+
+function SpaceLoading() {
+  return (
+    <Center h={240}>
+      <Loader size="sm" aria-label="Loading the screen" />
+    </Center>
+  );
+}
+
 function screen(spaceId: string, path: string): ReactNode {
-  const page = path === `/${spaceId}` ? HOMES[spaceId] : <Soon />;
+  const page = path === `/${spaceId}` ? HOMES[spaceId] : <Lazy path={path} />;
   return spaceId === "admin" ? <AdminOnly>{page}</AdminOnly> : page;
 }
 
@@ -84,7 +111,7 @@ const router = createBrowserRouter([
         children: [
           { path: "/", element: <Home /> },
           ...SPACES.flatMap((space) => space.screens.map((s) => ({ path: s.path, element: screen(space.id, s.path) }))),
-          ...ENTITY_PAGES.map((p) => ({ path: p.path, element: <Soon /> })),
+          ...ENTITY_PAGES.map((p) => ({ path: p.path, element: <Lazy path={p.path} /> })),
           { path: "/jobs/:id", element: <JobPage /> },
           { path: "*", element: <NotFound /> },
         ],

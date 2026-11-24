@@ -9,7 +9,11 @@ const Waterfall = lazy(() => charts().then((m) => ({ default: m.WaterfallChart }
 const Curves = lazy(() => charts().then((m) => ({ default: m.CurveChart })));
 
 function Wait({ height = 260 }: { height?: number | undefined }) {
-  return <Skeleton height={height} radius="sm" aria-label="Loading the chart" />;
+  return (
+    <div role="status" aria-label="Loading the chart">
+      <Skeleton height={height} radius="sm" />
+    </div>
+  );
 }
 
 export function LadderChart(props: ComponentProps<typeof L>) {
