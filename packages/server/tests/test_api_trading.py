@@ -127,3 +127,4 @@ def test_value_a_trade_and_the_book(a, trader):
     book = env["result"]
     assert book["positions"] and any(p["name"] == tid for p in book["positions"]) and book["value"]["se"] > 0
     assert env["method"]["groups"] >= 1 and raw_errors(env) == []
+    assert book["greeks"] is not None  # on by default for the book (schemas.BookPricingOptions)

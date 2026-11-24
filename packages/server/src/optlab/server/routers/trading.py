@@ -9,7 +9,16 @@ from fastapi.responses import HTMLResponse
 
 from optlab.server.report import book_report, desk_snapshot
 from optlab.server.routers._common import ACCEPTED, Id, Page, audited, desk, page, report, submit
-from optlab.server.schemas import CostDefaultsIn, FixingsFromLakeIn, FixingsIn, TradeIn, TradeUpdate, ValuationIn, body
+from optlab.server.schemas import (
+    BookValuationIn,
+    CostDefaultsIn,
+    FixingsFromLakeIn,
+    FixingsIn,
+    TradeIn,
+    TradeUpdate,
+    ValuationIn,
+    body,
+)
 from optlab.server.web import access
 
 router = APIRouter(prefix="/trading", tags=["trading"])
@@ -81,7 +90,7 @@ def trade_events(trade_id: Id, request: Request):
 
 # --- the book -------------------------------------------------------------------------------------------------------
 @router.post("/book/valuations", **access(), status_code=202, responses=ACCEPTED)
-def value_book(v: ValuationIn, request: Request):
+def value_book(v: BookValuationIn, request: Request):
     """Value the book in independent groups, with delta, vega and the reserves held at issue."""
     return submit(request, "value_book", lambda: desk(request).price_book(body(v)))
 
@@ -134,9 +143,8 @@ def delete_fixing(underlying: str, date: dt.date, request: Request):
 def fixings_from_lake(f: FixingsFromLakeIn, request: Request):
     """Real closes of the lake as fixings, converted to the model's scale."""
     d = desk(request)
-    return audited(
-        request, "fixings_from_lake", f.underlying, lambda: d.fixings_from_lake(body(f)), before=d.fixings(f.underlying)
-    )
+    name = f.underlying or d.ctx.underlying
+    return audited(request, "fixings_from_lake", name, lambda: d.fixings_from_lake(body(f)), before=d.fixings(name))
 
 
 # --- pricing policy -------------------------------------------------------------------------------------------------
