@@ -248,7 +248,7 @@ def _password(stdin: bool) -> str:
     import getpass
 
     if stdin:
-        return sys.stdin.readline().rstrip("\n")
+        return sys.stdin.readline().rstrip("\r\n")  # a file written on Windows ends its line with a CR too
     first = getpass.getpass("password (12 characters at least): ")
     if getpass.getpass("again: ") != first:
         raise ValueError("the two passwords differ")
@@ -797,7 +797,7 @@ def demo_data_cmd(
     """Build the demo folder (made-up numbers only): then `optlab --data <folder> serve` or `optlab serve --demo-data`."""
     from optlab.server import demo
 
-    password = sys.stdin.readline().rstrip("\n") if password_stdin else None
+    password = sys.stdin.readline().rstrip("\r\n") if password_stdin else None
     out = demo.build(to, password=password, n_paths=n_paths, rebuild=rebuild, log=say)
     say(f"demo data in {out['folder']}: market {out['market']}, trades {', '.join(out['trades'])}")
     if "password" in out:
