@@ -66,6 +66,7 @@ services:
       OPTLAB_LAN: ${OPTLAB_LAN:-false}  # the same LAN rule as the api's for what a job returns (desk.shared)
       OPTLAB_LAN_NAMES: ${OPTLAB_LAN_NAMES:-}
     gpus: all
+    stop_grace_period: 30s  # SIGTERM stops the worker as Ctrl+C does: running jobs end interrupted, the lease is freed
     shm_size: 1g  # the process pools of the VaR (spawn) and their semaphores
     volumes:
       - store:/data/store

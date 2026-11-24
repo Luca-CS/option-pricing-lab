@@ -20,6 +20,7 @@ input with `--stdin`, for scripts and tests): never an argument, so it never lan
 from __future__ import annotations
 
 import os
+import signal
 import sys
 import threading
 import time
@@ -213,6 +214,7 @@ def worker(
         say("another worker holds the lease: waiting for it to expire")
         time.sleep(2)
     say(f"worker {w.worker_id} on {desk.db.path}: {w.concurrency} job(s) at a time, Ctrl+C to stop")
+    signal.signal(signal.SIGTERM, _interrupt)  # `docker stop`: the same clean stop as Ctrl+C (the lease released)
     try:
         while True:
             time.sleep(1)
@@ -221,6 +223,10 @@ def worker(
     finally:
         w.stop()
         desk.close()
+
+
+def _interrupt(signum: int, frame: object) -> None:
+    raise KeyboardInterrupt
 
 
 # --- accounts ----------------------------------------------------------------------------------------------------------

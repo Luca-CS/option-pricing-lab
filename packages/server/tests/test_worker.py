@@ -8,6 +8,7 @@ import sys
 import time
 from typing import Any
 
+import pytest
 from _api import SCRIPT_EXAMPLE, api
 
 from optlab.server.jobs import INTERRUPTED, Workers
@@ -74,3 +75,29 @@ def test_an_external_worker_its_crash_and_the_next_one(tmp_path):
         finally:
             two.kill()
             two.wait(30)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no SIGTERM to send: terminate() kills the process")
+def test_docker_stop_s_sigterm_is_a_clean_stop(tmp_path):
+    """`docker stop` sends SIGTERM: the worker stops as on Ctrl+C, so its running job ends interrupted at once and its
+    lease is free for the next process (a restoration right after a deploy's stop needs it), not 15 s later."""
+    import signal
+
+    with api(tmp_path, worker="external") as a:
+        s = a.client("structurer")
+        desk = a.state.desk
+        one = _worker(tmp_path)
+        try:
+            _until(lambda: Workers(desk.db).alive(), 90, "no worker")
+            long = {"script": SCRIPT_EXAMPLE, "model": "lv", "n_paths": 500_000}
+            job = s.post("/api/v1/structuring/script/price", json=long).json()["job_id"]
+            _until(lambda: s.get(f"/api/v1/jobs/{job}").json()["state"] == "running", 60, "never ran")
+            one.send_signal(signal.SIGTERM)
+            assert one.wait(30) == 0
+        finally:
+            if one.poll() is None:
+                one.kill()
+                one.wait(30)
+        assert Workers(desk.db).alive() == []  # released, not left to expire
+        j = s.get(f"/api/v1/jobs/{job}").json()
+        assert j["state"] == "error" and j["error"] == INTERRUPTED
