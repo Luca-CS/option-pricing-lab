@@ -179,7 +179,7 @@ def build_fx_correl(lake: Lake, names=None, pairs=None) -> list[dict]:
 def _latest(rows: pd.DataFrame, what: str, day: pd.Timestamp):
     if rows.empty or (day - pd.Timestamp(rows["obs_date"].iloc[0])).days > READ_MAX_AGE:
         raise KeyError(
-            f"no {what} in the {READ_MAX_AGE} days up to {day.date()}: run scripts/lake_update.py --only fx and scripts/lake_derive.py --only fx"
+            f"no {what} in the {READ_MAX_AGE} days up to {day.date()}: run optlab lake update --only fx and optlab lake derive --only fx"
         )
     return rows.iloc[0]
 

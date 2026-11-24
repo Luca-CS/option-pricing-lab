@@ -9,19 +9,14 @@ missing. The import:
 - is idempotent: rows are inserted when their key is new, so a second run adds nothing;
 - checks at the end that every key of the source is in the target with the same payload, and says what it did.
 
-    python -m optlab.server.persistence.migrate_v0 <v0 folder> <database file> [--backup <folder>]
-
-`--backup` first copies the v0 folder (a dated sub-folder of the one given), as the handoff asks before a migration.
+    optlab migrate --v0 <v0 folder> [--store <database file>]
 """
 
 from __future__ import annotations
 
-import argparse
 import datetime as dt
 import json
-import shutil
 import sqlite3
-import sys
 from pathlib import Path
 
 from sqlalchemy import Table, insert, select
@@ -165,29 +160,3 @@ def _check(db: Database, expected: dict) -> dict:
                     raise AssertionError(f"{name} {key}: {col} differs after the import")
         counts[name] = len(rows)
     return counts
-
-
-def backup(folder: Path, into: Path) -> Path:
-    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
-    target = into / f"{folder.name}-v0-{stamp}"
-    shutil.copytree(folder, target)
-    return target
-
-
-def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("folder", type=Path, help="the v0 folder (desk.sqlite, risk.sqlite, market/, replay/)")
-    ap.add_argument("target", type=Path, help="the database file to create or complete")
-    ap.add_argument("--backup", type=Path, help="copy the v0 folder under this folder first")
-    args = ap.parse_args(argv)
-    if args.backup:
-        print(f"backup: {backup(args.folder, args.backup)}")
-    report = migrate(args.folder, args.target)
-    for name, t in report["tables"].items():
-        print(f"{name:14s} {t['source']:6d} in the v0 store, {t['inserted']:6d} inserted")
-    print(f"checked: every row of the v0 store is in {args.target}")
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

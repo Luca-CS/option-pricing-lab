@@ -61,7 +61,7 @@ def _refuse_v0(path: Path) -> None:
     if names and "alembic_version" not in names:
         raise ValueError(
             f"{path} is a v0 store ({', '.join(sorted(names))}), not an optlab database: import it with "
-            "`python -m optlab.server.persistence.migrate_v0 <its folder> <new database file>`"
+            "`optlab migrate --v0 <its folder> --store <new database file>`"
         )
 
 

@@ -103,7 +103,7 @@ inject an event. `GET /jobs` lists the caller's jobs only (v0's status bar showe
 ### Found in A7, the command line (the `security-review` pass: nothing above its bar)
 
 Checked and sound: `VACUUM INTO` takes a bound parameter, the table names of a copy's check are fixed, and a copy is
-opened read-only; `optlab check` runs this interpreter with fixed arguments and no shell; the new admin listing of
+opened read-only; `optlab check` (removed in A9) ran this interpreter with fixed arguments and no shell; the new admin listing of
 the lake's copies and the `lake_backup` schedule are admin only, with `keep` bounded (1 to 52) and no path from a
 request; jobs submitted from the console are the system's (a 404 to API users); the demo account's password comes
 from `secrets` and is printed once, never logged or written; no pickle, `eval` or YAML.

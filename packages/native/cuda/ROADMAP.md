@@ -21,7 +21,7 @@ GTX 10xx (sm_61) to RTX 50xx (sm_120) plus PTX for newer cards. Kernels launch i
 display GPU (laptops, desktops driving a screen) never meets the Windows watchdog; output buffers take at most a
 quarter of the free memory, so 4 GB laptop GPUs work with smaller chunks. The engine is opt-in in the library
 (`engine=` on a pricer, `optlab.native.set_default`, or `$OPTLAB_ENGINE`) and on by default in the desk
-(`python -m optlab.app --engine auto`).
+(`optlab serve --engine auto`).
 
 ## Results so far
 

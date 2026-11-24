@@ -9,11 +9,11 @@ uv sync --locked --all-extras                          # .venv from uv.lock (has
 uv run pytest -q packages/core/tests/test_closed_forms.py   # fast sanity check (seconds)
 uv run pytest packages/core/tests/test_monte_carlo.py::test_heston_mc_matches_fourier   # single test
 uv run pytest -m "not slow and not gpu and not lake and not native" -n auto --dist loadfile   # what CI runs (a few minutes)
-uv run pytest -n 6 --dist loadfile                     # full suite, 941 tests in about 13 min (real lake, GPU, node when present)
+uv run pytest -n 6 --dist loadfile                     # full suite, 946 tests in about 13 min (real lake, GPU, node when present)
 uv run python tests/golden/golden.py check [--local]   # golden numbers, bit for bit (local: lake, showcase, GPU)
 uv run pre-commit install                              # ruff, ruff-format, gitleaks and file checks before each commit
 uv run lint-imports                                    # the package layers of ADR-0004
-uv run python tools/pyright_baseline.py               # pyright at zero: the baseline file is empty, any new error fails
+uv run pyright                                         # at zero: any error fails (standard everywhere, strict on the server's core)
 ```
 
 Tests live beside their package (`packages/<name>/tests`); fixtures shared across packages are in `tests/helpers`
@@ -73,7 +73,7 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
 - Lint config: ruff, line length 120, absolute imports only, bandit (S), bugbear (B), pyupgrade (UP) and complexity
   (C901, at most 15) (`pyproject.toml`, ADR-0014). No build step for `docs/` (static, dependency-free JS).
 - Types: pyright in standard mode everywhere (tests included) and strict on the server's security and contract core (the
-  16 modules listed in `pyproject.toml`); `pandas-stubs` in the dev group, `py.typed` in every package. The rest of
+  15 modules listed in `pyproject.toml`); `pandas-stubs` in the dev group, `py.typed` in every package. The rest of
   `optlab.server` stays in standard mode (Luca's decision of 15 November 2026: strict there means TypedDicts for every
   JSON payload).
 
@@ -147,7 +147,7 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
   (floating funding leg until redemption), `multiasset.py` (`Basket` of correlated names, `BasketContext`, SLV with a leverage per name), and past `fixings` for running products.
   Batches run through `engine.py` (`Evaluation`s on each simulated batch, sequential or `workers=` on a persistent
   spawn process pool, same numbers bit for bit; spot factors scale the paths for the Greeks). Also `trade.py`,
-  `calendars.py` (NYSE), `lifecycle.py`, `surfaces.py` (`FastSVISurface`, bit-identical), `fastmodels.py` and
+  `calendars.py` (NYSE), `lifecycle.py`, `surfaces.py` (`BumpedSurface`: vol and skew bumps with exact derivatives), `fastmodels.py` and
   `qmc.py` (opt-in, validated within the Monte Carlo error), `units.py`; `optlab.core.config`, `optlab.core.log`, `optlab.core.snapshot` and
   `optlab.marketdata.store` (the storage protocol of snapshots; the server stores them). A script with a NaN condition or a
   non-finite payment on a live path raises `ScriptError` with its line.
@@ -159,7 +159,7 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
   `**access(...)`; `schemas.py` the request models (unknown fields refused, costly fields bounded) and the response
   models the server shapes; `web.py` the problem+json handlers, `access()` and `Guard` (Host allow-list, same-origin
   writes, JSON only, body limit, security headers and CSPs); `security.py` accounts (argon2id) and sessions (cookie
-  `optlab_session`, `X-CSRF-Token`), `audit.py` the audit log, `users.py` the accounts command line, `openapi.py` the
+  `optlab_session`, `X-CSRF-Token`), `audit.py` the audit log, `openapi.py` the
   versioned document. Jobs (ADR-0006): `jobs.py` the persistent queue (`JobQueue`: submit with idempotency, claim,
   progress, cancel, the sweep of a dead worker's jobs; `Workers`: the one-worker lease), `tasks.py` what a job carries
   (`Frozen`: the market in use by snapshot id, the basket settings, the cost table's version, trades by version, their

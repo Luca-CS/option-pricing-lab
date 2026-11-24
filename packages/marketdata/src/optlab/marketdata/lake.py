@@ -1,6 +1,6 @@
 """The historical data lake: immutable raw files with a manifest, curated Parquet, DuckDB for reading.
 
-Layers (the desk's DESIGN.md, packages/server/src/optlab/server/DESIGN.md, section 8):
+Layers:
 - raw/: files as downloaded, one per content hash, listed in raw/manifest.jsonl (URL, date, sha256);
 - curated/<table>/[underlying=X/]year=YYYY/<run>.parquet: normalised rows, append-only;
 - DuckDB reads the Parquet directly (in memory, nothing to administer). The desk's SQLite stays the operational store.

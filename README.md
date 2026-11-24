@@ -143,7 +143,7 @@ rebuilt on that API; the v0 page is kept as the reference in `legacy/desk-static
 
 ```bash
 uv sync --locked --all-extras                       # https://docs.astral.sh/uv/ ; builds the native engine (CUDA if found)
-uv run pytest -n 6 --dist loadfile                  # 941 tests; without the lake, a GPU or node, those parts skip
+uv run pytest -n 6 --dist loadfile                  # 946 tests; without the lake, a GPU or node, those parts skip
 uv run optlab --help                                # serve, worker, users, backup, calib, lake, risk, structured, bench
 ```
 
@@ -180,7 +180,7 @@ It listens on 127.0.0.1 only. The LAN profile is an explicit choice, and the ins
 
 ## How it is checked
 
-- **941 tests**, each stochastic pricer against an independent reference within 4 standard errors. The references
+- **946 tests**, each stochastic pricer against an independent reference within 4 standard errors. The references
   include:
   - put-call parity and the closed forms;
   - a CRR tree for the American;

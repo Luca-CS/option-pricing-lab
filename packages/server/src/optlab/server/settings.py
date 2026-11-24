@@ -117,7 +117,7 @@ class Settings(BaseSettings):
     # --- jobs and schedules (ADR-0006) -----------------------------------------------------------------------------
     worker: Literal["embedded", "external"] = Field(
         "embedded",
-        description="the job worker runs in the api process (embedded), or as python -m optlab.server.worker",
+        description="the job worker runs in the api process (embedded), or as `optlab worker`",
     )
     job_concurrency: int = Field(2, ge=1, le=8, description="jobs a worker runs at a time")
     job_keep_days: int = Field(30, ge=1, le=3650, description="finished jobs older than this are removed")

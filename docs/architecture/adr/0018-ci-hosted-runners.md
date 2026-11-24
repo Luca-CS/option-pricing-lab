@@ -10,7 +10,7 @@ a stranger, on Luca's machine. GitHub is the only external service allowed.
 
 ## Decision
 
-- **Hosted runners only, never self-hosted.** GPU and real-lake tests run locally (`optlab check gpu`, `check full`).
+- **Hosted runners only, never self-hosted.** GPU and real-lake tests run locally (the whole `pytest` suite, `tests/golden/golden.py check --local`).
 - `ci.yml` (pull requests and pushes to `main`), Linux and Windows: `uv sync --locked`, `ruff check`, `ruff format
   --check`, `pyright`, `lint-imports`, `pytest -m "not slow and not gpu and not lake"` with xdist, the CPU build of
   the engine and its tests, the OpenAPI drift and the TypeScript client trial, the image build (Linux).

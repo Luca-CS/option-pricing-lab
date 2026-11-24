@@ -189,9 +189,7 @@ workers = Table(
     Column("worker_id", String, primary_key=True),
     Column("host", String, nullable=False),
     Column("pid", Integer, nullable=False),
-    Column(
-        "role", String, nullable=False
-    ),  # embedded (in the api process) or external (python -m optlab.server.worker)
+    Column("role", String, nullable=False),  # embedded (in the api process) or external (optlab worker)
     Column("engine", String),
     Column("concurrency", Integer, nullable=False),
     Column("started_at", Float, nullable=False),

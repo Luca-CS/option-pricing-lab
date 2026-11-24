@@ -5,22 +5,21 @@
     optlab users create|list|roles|password|disable|enable
     optlab backup [--lake] | restore PATH [--lake] | migrate [--v0 FOLDER] | jobs list|show|wait|cancel
     optlab api export|check                  the versioned OpenAPI document
-    optlab check fast|full|gpu|golden        the test suites (from a checkout)
     optlab lake update|derive|fx-check|surface-test|regime-test|replay
     optlab risk eod|backfill|pnl|var|ladder
     optlab calib run|report|download-spx     optlab structured examples|pricing-report
     optlab demo data|seed-showcase|widget-data      optlab bench accel|numpy     optlab version
 
 `--data DIR` before the command (or `OPTLAB_DATA`) picks the data folder; every other path comes from its settings
-(`<data>/config/optlab.env`). `python -m optlab.server`, `python -m optlab.server.worker`, `.users` and `.openapi`
-stay as aliases of `serve`, `worker`, `users` and `api`. Each inventory row of a v0 script names its command here
-(`docs/architecture/feature-inventory.md` §3).
+(`<data>/config/optlab.env`). Where the console script is not on the PATH, `python -m optlab.server.cli ...` is the
+same command line. Each inventory row of a v0 script names its command here
+(`docs/architecture/feature-inventory.md` §3). The accounts commands read a password with `getpass` (or from standard
+input with `--stdin`, for scripts and tests): never an argument, so it never lands in a shell history or a process list.
 """
 
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
 import threading
 import time
@@ -53,7 +52,6 @@ def _group(name: str, help: str) -> typer.Typer:
 
 users_app = _group("users", "Accounts (ADR-0020): every change is in the audit log, as the system.")
 api_app = _group("api", "The versioned OpenAPI document, api/openapi.json.")
-check_app = _group("check", "The test suites and the golden numbers (from a checkout).")
 jobs_app = _group("jobs", "The job queue of the database: list, show, wait for, cancel.")
 lake_app = _group("lake", "The historical lake: updates, derived tables, checks and replays.")
 risk_app = _group("risk", "Risk runs on a desk database: EOD, backfill, P&L, VaR, ladder.")
@@ -493,7 +491,7 @@ def jobs_cancel(job_id: str, store: Annotated[Path | None, typer.Option(help="th
         db.close()
 
 
-# --- the API document and the checks ------------------------------------------------------------------------------------
+# --- the API document ------------------------------------------------------------------------------------
 @api_app.command("export")
 def api_export(
     out: Annotated[Path | None, typer.Option(help="default: api/openapi.json of the checkout")] = None,
@@ -523,77 +521,6 @@ def api_check(
         print(f"{target} is not the code's document: run optlab api export", file=sys.stderr)
         raise typer.Exit(1)
     say(f"{target} is up to date")
-
-
-PASS = {"allow_extra_args": True, "ignore_unknown_options": True}  # what follows goes to pytest or golden.py
-
-
-def _repo() -> Path:
-    from optlab.server.settings import repository_root
-
-    repo = repository_root()
-    if repo is None:
-        raise RuntimeError("the checks run from a checkout of the repository (an installed wheel has no tests)")
-    return repo
-
-
-def _run(argv: list[str]) -> None:
-    say("$ " + " ".join(argv[1:]))
-    code = subprocess.run(argv, cwd=_repo(), check=False).returncode  # noqa: S603 (this interpreter, fixed arguments)
-    if code:
-        raise typer.Exit(code)
-
-
-@check_app.command("fast", context_settings=PASS)
-def check_fast(ctx: typer.Context) -> None:
-    """What the CI runs: no slow, GPU, lake or engine test, on every core (a few minutes)."""
-    _run(
-        [
-            sys.executable,
-            "-m",
-            "pytest",
-            "-m",
-            "not slow and not gpu and not lake and not native",
-            "-n",
-            "auto",
-            "--dist",
-            "loadfile",
-            *ctx.args,
-        ]
-    )
-
-
-@check_app.command("full", context_settings=PASS)
-def check_full(ctx: typer.Context) -> None:
-    """The whole suite, with the real lake, the engine, the GPU and node when present (about 30 minutes)."""
-    _run([sys.executable, "-m", "pytest", "-n", "4", "--dist", "loadfile", *ctx.args])
-
-
-@check_app.command("gpu", context_settings=PASS)
-def check_gpu(ctx: typer.Context) -> None:
-    """The engine's tests (CPU and GPU), then the golden numbers of the engine."""
-    _run([sys.executable, "-m", "pytest", "-m", "gpu or native", *ctx.args])
-    _run(
-        [
-            sys.executable,
-            "tests/golden/golden.py",
-            "check",
-            "--local",
-            "--group",
-            "native_cpu",
-            "native_gpu",
-            "presets_spx_gpu",
-        ]
-    )
-
-
-@check_app.command("golden", context_settings=PASS)
-def check_golden(
-    ctx: typer.Context,
-    local: Annotated[bool, typer.Option("--local", help="with the engine, lake and showcase groups")] = False,
-) -> None:
-    """The golden numbers, bit for bit (tests/golden/golden.py check; more options after the command)."""
-    _run([sys.executable, "tests/golden/golden.py", "check", *(["--local"] if local else []), *ctx.args])
 
 
 # --- the lake ----------------------------------------------------------------------------------------------------------

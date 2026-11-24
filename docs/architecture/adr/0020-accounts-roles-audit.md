@@ -55,5 +55,5 @@ string (`?token=`), in a cookie and in a header. Scenarios carry a free-text `si
   a detail without secrets), including logins, failed logins, job submissions and cancels, and the commands of
   `optlab users` (as the system). Read by admins on `GET /admin/audit`.
 - The command line is `optlab users create|list|roles|password|disable|enable` (`python -m optlab.server.users` before
-  A7, an alias since): the password is read with `getpass` (or standard input with `--stdin`), never an argument. A lost admin
+  A7): the password is read with `getpass` (or standard input with `--stdin`), never an argument. A lost admin
   password is reset there (`password <name>`).

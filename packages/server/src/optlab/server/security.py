@@ -94,7 +94,7 @@ class Accounts:
         self._attempts: dict[str, deque[float]] = {}  # monotonic times of the failed logins per address
         self._lock = threading.Lock()
 
-    # --- accounts (the CLI `optlab.server.users`, and the admin routes) ---------------------------------------------
+    # --- accounts (the command line `optlab users`, and the admin routes) ---------------------------------------------
     def create(self, name: str, password: str, roles: Iterable[str]) -> User:
         if not NAME.match(name):
             raise ValueError("a name is 2 to 32 lower-case letters, digits, '.', '_' or '-', starting with a letter")

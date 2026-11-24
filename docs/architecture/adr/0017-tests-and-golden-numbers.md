@@ -11,8 +11,7 @@ within 4 standard errors. The refactor moves every file: something must prove th
 
 ## Decision
 
-- **Golden numbers, recorded in A0 before any change** (`tests/golden/golden.py record`, later `optlab check golden
-  --record`). Groups:
+- **Golden numbers, recorded in A0 before any change** (`tests/golden/golden.py record`). Groups:
   - versioned in `tests/golden/` (synthetic inputs only, runnable in CI): closed forms, CRR, Heston Fourier; the
     Monte Carlo pricers of `products.py` under BS, Heston, LV and SLV on fixed seeds; the calibration pipeline on the
     simulated market; the presets quoted on that market (NumPy), forced models, the desk's cost lines, Greeks and a
@@ -65,8 +64,8 @@ within 4 standard errors. The refactor moves every file: something must prove th
   paths and the quote priced on them stay bit for bit, and so does `presets_spx_gpu`.
 - **CI under 5 minutes**, measured: `pytest -m "not slow and not gpu and not lake"` with xdist on a synthetic
   mini-lake generated deterministically by the tests (no binary fixture), plus the CI golden groups.
-- **The full suite and the GPU on the machine**: `optlab check full` (the real lake, about 30 minutes) and `optlab check
-  gpu`, at the end of every step, their results in the PR.
+- **The full suite and the GPU on the machine**: `pytest -n 6 --dist loadfile` (the real lake, the GPU; about 13
+  minutes) and `tests/golden/golden.py check --local`, at the end of every step, their results in the PR.
 - The 817 tests stay green or are replaced by a named equivalent in the PR; no independent reference is lost; the
   stochastic ones stay at 4 SE.
 

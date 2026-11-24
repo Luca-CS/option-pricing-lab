@@ -15,7 +15,6 @@ import os
 import time
 
 from optlab.core import engines, progress
-from optlab.core.config import DEFAULT_SEED
 from optlab.core.log import get_logger
 from optlab.risk import RiskGroup, RiskSettings
 from optlab.risk import scenarios as sc
@@ -26,7 +25,6 @@ from optlab.server.api import PRECISION, ApiError
 from optlab.server.persistence.risk import RiskRepository
 from optlab.server.serialize import clean
 from optlab.server.tasks import Frozen, envelope, register
-from optlab.structured.portfolio import Book
 
 LOG = get_logger(__name__)
 
@@ -42,21 +40,8 @@ class RiskApi:
         desk = self.desk
         frozen = frozen or desk.freeze_book()
         ctx = desk.context_of(frozen)
-        singles, baskets = desk._positions_by_market(ctx, desk._trades_of(frozen), frozen.fixings_by_date() or {})
-        if not singles and not baskets:
-            raise ApiError("no live trade in the book", 422)
-        out = []
-        key = lambda x: (x[0][0] != ctx.underlying, x[0][0], str(x[0][1]))  # noqa: E731
-        for k, ((name, pay), positions) in enumerate(sorted(singles.items(), key=key)):
-            gctx, _ = desk._single_ctx(name, ctx, pay)
-            if gctx.underlying != name:
-                raise ApiError(f"no market of {name} on {ctx.valuation}, from the lake or in use", 422)
-            out.append(RiskGroup(name, Book(positions), gctx, DEFAULT_SEED + k))
-        for pay, (positions, names) in sorted(baskets.items(), key=lambda x: str(x[0])):
-            bctx, _ = desk._basket_ctx(names, frozen.basket, ctx=ctx, payment=pay)
-            label = "worst-of" if len(baskets) == 1 else f"worst-of ({pay})"
-            out.append(RiskGroup(label, Book(positions), bctx, DEFAULT_SEED + len(out)))
-        return out
+        groups = desk.book_groups(ctx, desk._trades_of(frozen), frozen)
+        return [RiskGroup(label, book, gctx, seed) for label, book, gctx, _, seed, _ in groups]
 
     def _settings(self, opts: dict, smoothing: float = 0.0) -> RiskSettings:
         n_paths, batch = PRECISION.get(opts.get("precision", "standard"), PRECISION["standard"])
