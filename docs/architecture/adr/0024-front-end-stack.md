@@ -35,9 +35,10 @@ licences, few npm dependencies, a lock file and `npm ci --ignore-scripts`.
 
 ### Keeping the CSP without `'unsafe-inline'`
 
-Mantine writes `<style>` elements at run time in two cases, and the page CSP refuses them:
+Mantine writes `<style>` elements at run time in three cases, and the page CSP refuses them:
 - its CSS variables and global classes, from the provider;
 - the responsive style props of `Box`, and `SimpleGrid`, `Grid`, `Flex` and `AppShell`, which always write one.
+- the scroll lock of `Modal` and `Drawer` (react-remove-scroll), so the palette too.
 
 The app therefore:
 - runs the provider with `withCssVariables={false}` and `withGlobalClasses={false}`;
@@ -45,6 +46,7 @@ The app therefore:
   as `virtual:mantine-vars.css`);
 - lays out with CSS modules instead of the components that write styles. Biome refuses their import
   (`noRestrictedImports`) and `dangerouslySetInnerHTML` everywhere.
+- turns the scroll lock of modals and drawers off in the theme (`lockScroll: false`): the page behind may scroll.
 
 Style properties that React sets through the DOM (`element.style`) are not inline styles for the CSP, so they are
 allowed: component variables, positions of popovers, ECharts' tooltips.

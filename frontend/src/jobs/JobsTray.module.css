@@ -1,0 +1,32 @@
+.job {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.name {
+  color: var(--ol-accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.name:hover {
+  text-decoration: underline;
+}
+
+.id {
+  font-family: var(--mantine-font-family-monospace);
+  color: var(--ol-faint);
+  font-size: 11px;
+}
+
+.x {
+  margin-left: auto;
+  color: var(--ol-faint);
+}

@@ -8,7 +8,8 @@ import datetime as dt
 from fastapi import APIRouter, Query, Request
 from fastapi import Path as PathParam
 
-from optlab.server.routers._common import ACCEPTED, Page, audited, desk, page, submit
+from optlab.server.payloads import LakeCoverage, LakeQuality, MarketContext, SnapshotPage, Universe, documented
+from optlab.server.routers._common import ACCEPTED, audited, desk, page, submit
 from optlab.server.schemas import MarketFromLakeIn, MarketInUse, OtherUnderlyingsIn, body
 from optlab.server.web import access
 
@@ -16,13 +17,13 @@ router = APIRouter(prefix="/market", tags=["market"])
 SNAPSHOT = r"^[\w.+-]{1,128}$"
 
 
-@router.get("/context", **access())
+@router.get("/context", **access(), responses=documented(MarketContext))
 def context(request: Request):
     """The market in use: valuation date, spot, curves, ATM vols, its snapshot and origin."""
     return desk(request).context()
 
 
-@router.get("/snapshots", **access(), response_model=Page)
+@router.get("/snapshots", **access(), response_model=None, responses=documented(SnapshotPage))
 def list_snapshots(request: Request, cursor: str | None = None, limit: int = Query(100, ge=1, le=200)):
     """Stored market snapshots, the one in use flagged `active`."""
     items = desk(request).snapshots()["snapshots"]
@@ -73,21 +74,21 @@ def _overview(request: Request) -> dict:
     return desk(request).data_overview()
 
 
-@router.get("/lake/coverage", **access())
+@router.get("/lake/coverage", **access(), responses=documented(LakeCoverage))
 def lake_coverage(request: Request):
     """What the lake holds, table by table: first and last dates, rows, origin and source."""
     o = _overview(request)
     return {k: o.get(k) for k in ("available", "hint", "coverage", "raw_files", "lake") if k in o}
 
 
-@router.get("/universe", **access())
+@router.get("/universe", **access(), responses=documented(Universe))
 def universe(request: Request):
     """The instrument registry and, for each name, the last close the lake holds."""
     o = _overview(request)
     return {"available": o.get("available", False), "instruments": o.get("instruments", [])}
 
 
-@router.get("/lake/quality", **access())
+@router.get("/lake/quality", **access(), responses=documented(LakeQuality))
 def lake_quality(request: Request):
     """Open data-quality issues by table and check, and the latest ones."""
     o = _overview(request)

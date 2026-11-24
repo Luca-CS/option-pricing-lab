@@ -35,11 +35,6 @@ class JobAccepted(BaseModel):
 ACCEPTED: dict[int | str, dict[str, Any]] = {202: {"model": JobAccepted, "description": "a job computes it"}}
 
 
-class Page(BaseModel):
-    items: list[dict]
-    next: str | None = Field(None, description="the cursor of the next page, or null on the last one")
-
-
 def desk(request: Request):
     return state(request).desk
 

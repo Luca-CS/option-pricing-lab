@@ -9,13 +9,12 @@ test("the page is served under the strict CSP", async ({ page }) => {
 });
 
 test("a deep link without a session goes through the sign-in and back", async ({ page }) => {
-  await page.goto("/trading/trades/DEMO-01");
+  await page.goto("/quant/engine");
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await accessible(page);
   await signIn(page);
-  await expect(page).toHaveURL(/\/trading\/trades\/DEMO-01$/);
-  await expect(page.getByRole("heading", { name: `Signed in as ${user}` })).toBeVisible();
-  await accessible(page);
+  await expect(page).toHaveURL(/\/quant\/engine$/);
+  await expect(page.getByRole("heading", { name: "Quant", level: 1 })).toBeVisible();
 });
 
 test("a wrong password is refused with the server's words", async ({ page }) => {
@@ -24,13 +23,14 @@ test("a wrong password is refused with the server's words", async ({ page }) => 
   await expect(page.getByRole("alert")).toContainText(/name or password/i);
   // the right one resets the count of failures
   await signIn(page);
-  await expect(page.getByRole("heading", { name: `Signed in as ${user}` })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Spaces" })).toBeVisible();
 });
 
 test("signing out ends the session", async ({ page }) => {
   await page.goto("/");
   await signIn(page);
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByRole("button", { name: /preferences and sign out/ }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();

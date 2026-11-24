@@ -12,7 +12,8 @@ from fastapi import Path as PathParam
 from optlab.server.backups import lake_snapshots
 from optlab.server.jobs import Workers, iso
 from optlab.server.netcheck import lan_blockers
-from optlab.server.routers._common import ACCEPTED, Page, audited, desk, page, submit
+from optlab.server.payloads import JobRowPage, SystemInfo, documented
+from optlab.server.routers._common import ACCEPTED, audited, desk, page, submit
 from optlab.server.schedules import Schedules
 from optlab.server.schemas import (
     AuditPage,
@@ -40,7 +41,7 @@ def _lake_backups(folder: Path) -> list[dict]:
     return [{"folder": c.name, "at": iso((c / "MANIFEST.json").stat().st_mtime)} for c in copies[:10]]
 
 
-@router.get("/system", **access("admin"))
+@router.get("/system", **access("admin"), responses=documented(SystemInfo))
 def system(request: Request):
     """Version, market in use, the workers (with the engine and the GPU as each sees them), the jobs by state, the
     last backups of the database and of the lake, the paths of the settings."""
@@ -122,7 +123,7 @@ def run_pipeline(request: Request, name: str = NAME):
     return submit(request, "run_pipeline", lambda: sch.submit(name, user.user_id), target=name)
 
 
-@router.get("/jobs", **access("admin"), response_model=Page)
+@router.get("/jobs", **access("admin"), response_model=None, responses=documented(JobRowPage))
 def all_jobs(
     request: Request,
     kind: str | None = Query(None, pattern=r"^[a-z_]{1,32}$"),

@@ -5,16 +5,17 @@ from __future__ import annotations
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
 
+from optlab.server.payloads import PresetList, QuotePage, documented
 from optlab.server.present import estimates
 from optlab.server.report import quote_report
-from optlab.server.routers._common import ACCEPTED, Id, Page, desk, page, report, submit
+from optlab.server.routers._common import ACCEPTED, Id, desk, page, report, submit
 from optlab.server.schemas import QuoteIn, ScriptIn, ScriptPriceIn, TermSheetIn, body
 from optlab.server.web import access, problem
 
 router = APIRouter(prefix="/structuring", tags=["structuring"])
 
 
-@router.get("/presets", **access())
+@router.get("/presets", **access(), responses=documented(PresetList))
 def presets(request: Request):
     """The presets and their filled term sheets."""
     return desk(request).presets()
@@ -49,7 +50,7 @@ def create_quote(q: QuoteIn, request: Request):
     return submit(request, "create_quote", lambda: desk(request).quote(body(q)), detail={"type": q.sheet.type})
 
 
-@router.get("/quotes", **access(), response_model=Page)
+@router.get("/quotes", **access(), response_model=None, responses=documented(QuotePage))
 def list_quotes(request: Request, cursor: str | None = None, limit: int = Query(20, ge=1, le=200)):
     """Saved quotes, the latest first."""
     items = desk(request).repo.quotes(limit=10_000)
