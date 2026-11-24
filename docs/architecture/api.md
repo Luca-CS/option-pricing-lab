@@ -212,10 +212,13 @@ npx openapi-typescript ../api/openapi.json --default-non-nullable false -o src/a
   does not run TypeScript's excess-property check: type a body with its schema
   (`const body: components["schemas"]["FixingsIn"] = ...`) to get it (`frontend/src/api/contract.ts`).
 - Typed: the models the server shapes itself (`Me`, `Job`, `JobList`, `JobAccepted`, `JobResult` with `MarketRef` and
-  `Method`, `CancelOut`, `Pipeline`, `Page`, `UserOut`, `AuditPage`, `Problem`) and `Estimate`. The domain payload
-  inside `JobResult.result` (a quote, a book valuation, a risk run) is an object whose fields are described here and
-  by the routers' tests (`packages/server/tests/test_api_*.py` read them field by field). Session 2 adds response
-  models for the ones its screens read, without changing a field.
+  `Method`, `CancelOut`, `Pipeline`, `UserOut`, `AuditPage`, `Problem`) and `Estimate`.
+- Described: the domain answers a screen reads (`optlab.server.payloads`: the market context, snapshots, the lake's
+  coverage, universe and quality, presets, quotes, trades, upcoming events, risk runs, the P&L history, the engine,
+  the system, the admin's jobs). A route names its model in `responses`, which changes the document only, never what
+  the route sends; each model allows fields it does not name, and `test_api_payloads.py` checks the real answers
+  against them. Answers not yet described are open objects in the document; session 2 describes them as its screens
+  read them, without changing a field.
 
 ## 11. Adding a route (session 2 may)
 

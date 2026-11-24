@@ -7,8 +7,9 @@ import datetime as dt
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
 
+from optlab.server.payloads import TradePage, Upcoming, documented
 from optlab.server.report import book_report, desk_snapshot
-from optlab.server.routers._common import ACCEPTED, Id, Page, audited, desk, page, report, submit
+from optlab.server.routers._common import ACCEPTED, Id, audited, desk, page, report, submit
 from optlab.server.schemas import (
     BookValuationIn,
     CostDefaultsIn,
@@ -25,7 +26,7 @@ router = APIRouter(prefix="/trading", tags=["trading"])
 
 
 # --- trades ---------------------------------------------------------------------------------------------------------
-@router.get("/trades", **access(), response_model=Page)
+@router.get("/trades", **access(), response_model=None, responses=documented(TradePage))
 def list_trades(
     request: Request,
     book: str | None = None,
@@ -95,7 +96,7 @@ def value_book(v: BookValuationIn, request: Request):
     return submit(request, "value_book", lambda: desk(request).price_book(body(v)))
 
 
-@router.get("/events/upcoming", **access())
+@router.get("/events/upcoming", **access(), responses=documented(Upcoming))
 def upcoming(request: Request, days: int = Query(45, ge=1, le=3660)):
     """Observations and payments to come."""
     return desk(request).upcoming(days)

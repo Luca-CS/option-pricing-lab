@@ -1,0 +1,28 @@
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 12px 0 0;
+}
+
+.facts dt {
+  color: var(--ol-faint);
+}
+
+.facts dd {
+  margin: 0;
+  font-family: var(--mantine-font-family-monospace);
+}
+
+.method {
+  color: var(--ol-muted);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.raw {
+  max-height: 420px;
+  overflow: auto;
+  font-size: 11px;
+}

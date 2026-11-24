@@ -8,6 +8,7 @@ from fastapi import APIRouter, Query, Request
 from fastapi import Path as PathParam
 
 from optlab import native
+from optlab.server.payloads import EngineInfo, documented
 from optlab.server.present import estimates
 from optlab.server.routers._common import ACCEPTED, desk, submit
 from optlab.server.schemas import FitIn, ReplayIn, body
@@ -77,7 +78,7 @@ def replay_get(
     return estimates(desk(request).replay_get(run_id))
 
 
-@router.get("/engine", **access())
+@router.get("/engine", **access(), responses=documented(EngineInfo))
 def engine(request: Request):
     """The Monte Carlo engines of this machine: the compiled one, its CUDA build, the devices and the CPU threads."""
     return native.summary()

@@ -7,9 +7,10 @@ import datetime as dt
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
 
+from optlab.server.payloads import PnlHistory, RiskRunPage, documented
 from optlab.server.present import estimates
 from optlab.server.report import risk_report
-from optlab.server.routers._common import ACCEPTED, Id, Page, audited, desk, page, report, submit
+from optlab.server.routers._common import ACCEPTED, Id, audited, desk, page, report, submit
 from optlab.server.schemas import EodIn, GreeksIn, LadderIn, ScenarioRunIn, ScenariosIn, VarIn, body
 from optlab.server.web import access, current_user
 
@@ -26,7 +27,7 @@ def greeks(g: GreeksIn, request: Request):
     return submit(request, "greeks", lambda: _risk(request).run(body(g)))
 
 
-@router.get("/runs", **access(), response_model=Page)
+@router.get("/runs", **access(), response_model=None, responses=documented(RiskRunPage))
 def list_runs(
     request: Request, kind: str | None = None, cursor: str | None = None, limit: int = Query(100, ge=1, le=200)
 ):
@@ -72,7 +73,7 @@ def var(v: VarIn, request: Request):
     return submit(request, "var", lambda: _risk(request).var(body(v)), detail={"days": v.days})
 
 
-@router.get("/pnl", **access())
+@router.get("/pnl", **access(), responses=documented(PnlHistory))
 def pnl(
     request: Request, start: dt.date | None = Query(None, alias="from"), end: dt.date | None = Query(None, alias="to")
 ):

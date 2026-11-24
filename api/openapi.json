@@ -564,10 +564,12 @@
         "operationId": "presets",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/PresetList"
+                }
               }
             }
           },
@@ -880,11 +882,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page"
+                  "$ref": "#/components/schemas/QuotePage"
                 }
               }
             }
@@ -1350,11 +1352,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page"
+                  "$ref": "#/components/schemas/TradePage"
                 }
               }
             }
@@ -2127,10 +2129,12 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/Upcoming"
+                }
               }
             }
           },
@@ -2782,10 +2786,12 @@
         "operationId": "context",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MarketContext"
+                }
               }
             }
           },
@@ -2870,11 +2876,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page"
+                  "$ref": "#/components/schemas/SnapshotPage"
                 }
               }
             }
@@ -3418,10 +3424,12 @@
         "operationId": "lake_coverage",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/LakeCoverage"
+                }
               }
             }
           },
@@ -3476,10 +3484,12 @@
         "operationId": "universe",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/Universe"
+                }
               }
             }
           },
@@ -3534,10 +3544,12 @@
         "operationId": "lake_quality",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/LakeQuality"
+                }
               }
             }
           },
@@ -3887,11 +3899,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page"
+                  "$ref": "#/components/schemas/RiskRunPage"
                 }
               }
             }
@@ -4491,10 +4503,12 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/PnlHistory"
+                }
               }
             }
           },
@@ -5437,10 +5451,12 @@
         "operationId": "engine",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/EngineInfo"
+                }
               }
             }
           },
@@ -5495,10 +5511,12 @@
         "operationId": "system",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SystemInfo"
+                }
               }
             }
           },
@@ -5851,11 +5869,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page"
+                  "$ref": "#/components/schemas/JobRowPage"
                 }
               }
             }
@@ -6411,6 +6429,30 @@
         ],
         "title": "AuditPage"
       },
+      "Backup": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "title": "File"
+          },
+          "bytes": {
+            "type": "integer",
+            "title": "Bytes"
+          },
+          "at": {
+            "type": "string",
+            "title": "At"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "file",
+          "bytes",
+          "at"
+        ],
+        "title": "Backup"
+      },
       "BookPricingOptions": {
         "properties": {
           "precision": {
@@ -6620,6 +6662,221 @@
         ],
         "title": "CostDefaultsIn"
       },
+      "CoverageRow": {
+        "properties": {
+          "dataset": {
+            "type": "string",
+            "title": "Dataset"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "n": {
+            "type": "integer",
+            "title": "N"
+          },
+          "first": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First"
+          },
+          "last": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last"
+          },
+          "ingested": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingested"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "dataset",
+          "n"
+        ],
+        "title": "CoverageRow"
+      },
+      "Device": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "compute_capability": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compute Capability"
+          },
+          "sm_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sm Count"
+          },
+          "clock_mhz": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clock Mhz"
+          },
+          "memory_gb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Gb"
+          },
+          "free_gb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Free Gb"
+          },
+          "integrated": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Integrated"
+          },
+          "watchdog": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Watchdog"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "Device"
+      },
+      "EngineInfo": {
+        "properties": {
+          "engine": {
+            "type": "string",
+            "title": "Engine",
+            "description": "the engine asked for: auto, gpu, cpu or numpy"
+          },
+          "compiled": {
+            "type": "boolean",
+            "title": "Compiled"
+          },
+          "cuda_build": {
+            "type": "boolean",
+            "title": "Cuda Build"
+          },
+          "devices": {
+            "items": {
+              "$ref": "#/components/schemas/Device"
+            },
+            "type": "array",
+            "title": "Devices",
+            "default": []
+          },
+          "cpu_threads": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Threads"
+          },
+          "resolved": {
+            "type": "string",
+            "title": "Resolved",
+            "description": "the engine that runs: gpu, cpu or numpy"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "engine",
+          "compiled",
+          "cuda_build",
+          "resolved"
+        ],
+        "title": "EngineInfo"
+      },
       "EodIn": {
         "properties": {
           "from": {
@@ -6799,6 +7056,81 @@
         ],
         "title": "FixingsIn"
       },
+      "GpuState": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "memory_total_mb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Total Mb"
+          },
+          "memory_used_mb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Used Mb"
+          },
+          "sm_clock_mhz": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sm Clock Mhz"
+          },
+          "temperature_c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature C"
+          },
+          "utilization": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utilization",
+            "description": "fraction of the time the card was busy"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "GpuState",
+        "description": "A card as `nvidia-smi` saw it at the worker's last heartbeat."
+      },
       "GreeksIn": {
         "properties": {
           "options": {
@@ -6819,6 +7151,47 @@
         "type": "object",
         "title": "GreeksIn"
       },
+      "Headline": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "se": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Se"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "kind",
+          "value",
+          "unit",
+          "label"
+        ],
+        "title": "Headline",
+        "description": "A quote's headline: what it solved (a coupon, a price) as `{kind, value, se, unit, label}`."
+      },
       "Health": {
         "properties": {
           "ok": {
@@ -6829,6 +7202,97 @@
         },
         "type": "object",
         "title": "Health"
+      },
+      "Instrument": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "asset_class": {
+            "type": "string",
+            "title": "Asset Class"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "place": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Place"
+          },
+          "vol_index": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vol Index"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          },
+          "last": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last",
+            "description": "the last close in the lake"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N",
+            "description": "closes in the lake"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "asset_class",
+          "currency"
+        ],
+        "title": "Instrument"
       },
       "Job": {
         "properties": {
@@ -7121,6 +7585,154 @@
         "title": "JobResult",
         "description": "Every job result (api.md §5): the market, the method, and the result, whose Monte Carlo numbers are\n`{value, se}`."
       },
+      "JobRow": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule"
+          },
+          "submitted_at": {
+            "type": "string",
+            "title": "Submitted At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "engine": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "state",
+          "submitted_at"
+        ],
+        "title": "JobRow",
+        "description": "A job of the queue as the admin's list shows it (the result is on GET /jobs/{id})."
+      },
+      "JobRowPage": {
+        "properties": {
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next",
+            "description": "the cursor of the next page, or null on the last one"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/JobRow"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "JobRowPage"
+      },
       "LadderIn": {
         "properties": {
           "options": {
@@ -7215,6 +7827,79 @@
         "type": "object",
         "title": "LadderSpec"
       },
+      "LakeBackup": {
+        "properties": {
+          "folder": {
+            "type": "string",
+            "title": "Folder"
+          },
+          "at": {
+            "type": "string",
+            "title": "At"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "folder",
+          "at"
+        ],
+        "title": "LakeBackup"
+      },
+      "LakeCoverage": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "coverage": {
+            "items": {
+              "$ref": "#/components/schemas/CoverageRow"
+            },
+            "type": "array",
+            "title": "Coverage",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "available"
+        ],
+        "title": "LakeCoverage"
+      },
+      "LakeQuality": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "issues": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Issues",
+            "default": []
+          },
+          "recent_issues": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Recent Issues",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "available"
+        ],
+        "title": "LakeQuality"
+      },
       "LoginIn": {
         "properties": {
           "name": {
@@ -7249,6 +7934,114 @@
         },
         "type": "object",
         "title": "LogoutIn"
+      },
+      "MarketContext": {
+        "properties": {
+          "snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Id"
+          },
+          "valuation": {
+            "type": "string",
+            "title": "Valuation",
+            "description": "the valuation date (ISO 8601)"
+          },
+          "underlying": {
+            "type": "string",
+            "title": "Underlying"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/Origin"
+          },
+          "spot": {
+            "type": "number",
+            "title": "Spot",
+            "description": "the model's spot: 100, real levels cross at the boundary"
+          },
+          "t_max": {
+            "type": "number",
+            "title": "T Max",
+            "description": "the last calibrated maturity (years)"
+          },
+          "maturities": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Maturities"
+          },
+          "atm_vols": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Atm Vols",
+            "description": "ATM implied vol (fraction) by maturity in years"
+          },
+          "zero_rates": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Zero Rates",
+            "description": "zero rate (fraction) by maturity in years"
+          },
+          "carry": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Carry",
+            "description": "carry (dividend and repo, fraction) by maturity in years"
+          },
+          "slv_mix": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slv Mix"
+          },
+          "heston": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heston"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "snapshot_id",
+          "valuation",
+          "underlying",
+          "origin",
+          "spot",
+          "t_max",
+          "maturities",
+          "atm_vols",
+          "zero_rates",
+          "carry"
+        ],
+        "title": "MarketContext"
       },
       "MarketFromLakeIn": {
         "properties": {
@@ -7417,6 +8210,102 @@
         "type": "object",
         "title": "Ok"
       },
+      "Origin": {
+        "properties": {
+          "surface": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surface"
+          },
+          "layer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Layer"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "extrapolated_from": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extrapolated From"
+          },
+          "carry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Carry"
+          },
+          "discount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discount"
+          },
+          "heston": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heston"
+          },
+          "leverage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leverage"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "Origin",
+        "description": "How much of a market was observed: each part's origin (observed, derived, reconstructed, synthetic, ...)."
+      },
       "OtherUnderlyingsIn": {
         "properties": {
           "names": {
@@ -7451,35 +8340,6 @@
         "additionalProperties": false,
         "type": "object",
         "title": "OtherUnderlyingsIn"
-      },
-      "Page": {
-        "properties": {
-          "items": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "array",
-            "title": "Items"
-          },
-          "next": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next",
-            "description": "the cursor of the next page, or null on the last one"
-          }
-        },
-        "type": "object",
-        "required": [
-          "items"
-        ],
-        "title": "Page"
       },
       "Pipeline": {
         "properties": {
@@ -7697,6 +8557,121 @@
         "type": "object",
         "title": "PipelineUpdate"
       },
+      "PnlHistory": {
+        "properties": {
+          "daily": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Daily",
+            "default": []
+          },
+          "days": {
+            "items": {},
+            "type": "array",
+            "title": "Days",
+            "default": []
+          },
+          "curve": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Curve",
+            "default": []
+          },
+          "runs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Runs",
+            "default": []
+          },
+          "eod": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Eod",
+            "default": []
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "PnlHistory",
+        "description": "The explained P&L cumulated from the EOD runs (`note` says why it is empty)."
+      },
+      "Preset": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "sheet": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Sheet",
+            "description": "the term sheet, flat: section -> field -> value"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name",
+          "type",
+          "label",
+          "sheet"
+        ],
+        "title": "Preset"
+      },
+      "PresetList": {
+        "properties": {
+          "presets": {
+            "items": {
+              "$ref": "#/components/schemas/Preset"
+            },
+            "type": "array",
+            "title": "Presets"
+          },
+          "masks": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Masks"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "presets",
+          "masks"
+        ],
+        "title": "PresetList"
+      },
       "PricingOptions": {
         "properties": {
           "precision": {
@@ -7806,6 +8781,68 @@
         ],
         "title": "QuoteIn"
       },
+      "QuoteItem": {
+        "properties": {
+          "quote_id": {
+            "type": "string",
+            "title": "Quote Id"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "sheet": {
+            "$ref": "#/components/schemas/Sheet"
+          },
+          "headline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Headline"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "quote_id",
+          "created_at",
+          "sheet"
+        ],
+        "title": "QuoteItem"
+      },
+      "QuotePage": {
+        "properties": {
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next",
+            "description": "the cursor of the next page, or null on the last one"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/QuoteItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "QuotePage"
+      },
       "ReplayIn": {
         "properties": {
           "preset": {
@@ -7898,6 +8935,111 @@
         ],
         "title": "ReplayIn"
       },
+      "ReserveLine": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "cost": {
+            "type": "number",
+            "title": "Cost",
+            "description": "% of nominal, as frozen at issue"
+          },
+          "se": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Se"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "key",
+          "kind",
+          "label",
+          "cost"
+        ],
+        "title": "ReserveLine"
+      },
+      "Reserves": {
+        "properties": {
+          "base_price": {
+            "type": "number",
+            "title": "Base Price"
+          },
+          "client_price": {
+            "type": "number",
+            "title": "Client Price"
+          },
+          "total": {
+            "type": "number",
+            "title": "Total"
+          },
+          "issue": {
+            "type": "string",
+            "title": "Issue"
+          },
+          "end": {
+            "type": "string",
+            "title": "End"
+          },
+          "side": {
+            "type": "string",
+            "title": "Side"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "quote_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote Id"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/ReserveLine"
+            },
+            "type": "array",
+            "title": "Lines",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "base_price",
+          "client_price",
+          "total",
+          "issue",
+          "end",
+          "side",
+          "method"
+        ],
+        "title": "Reserves",
+        "description": "What the trade froze at issue: the desk price over the base, line by line (% of nominal)."
+      },
       "RiskOptions": {
         "properties": {
           "precision": {
@@ -7989,6 +9131,103 @@
         "additionalProperties": false,
         "type": "object",
         "title": "RiskOptions"
+      },
+      "RiskRunItem": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "risk, ladder, scenarios, var, eod, pnl"
+          },
+          "day": {
+            "type": "string",
+            "title": "Day"
+          },
+          "run_key": {
+            "type": "string",
+            "title": "Run Key"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params",
+            "default": {}
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "run_id",
+          "kind",
+          "day",
+          "run_key",
+          "version",
+          "created_at"
+        ],
+        "title": "RiskRunItem"
+      },
+      "RiskRunPage": {
+        "properties": {
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next",
+            "description": "the cursor of the next page, or null on the last one"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RiskRunItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "RiskRunPage"
       },
       "ScenarioRunIn": {
         "properties": {
@@ -8103,6 +9342,337 @@
         ],
         "title": "ScriptPriceIn"
       },
+      "Sheet": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "general": {
+            "$ref": "#/components/schemas/SheetGeneral"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "type",
+          "general"
+        ],
+        "title": "Sheet",
+        "description": "A term sheet as the library writes it (section -> field -> value; GET /structuring/schema has every field)."
+      },
+      "SheetGeneral": {
+        "properties": {
+          "basket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basket"
+          },
+          "underlying": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Underlying"
+          },
+          "underlyings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Underlyings"
+          },
+          "notional": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notional"
+          },
+          "maturity_months": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maturity Months"
+          },
+          "strike_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strike Date"
+          },
+          "payment_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Currency"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "SheetGeneral"
+      },
+      "Snapshot": {
+        "properties": {
+          "snapshot_id": {
+            "type": "string",
+            "title": "Snapshot Id"
+          },
+          "underlying": {
+            "type": "string",
+            "title": "Underlying"
+          },
+          "valuation": {
+            "type": "string",
+            "title": "Valuation"
+          },
+          "asof": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asof"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active",
+            "default": false
+          },
+          "file": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "snapshot_id",
+          "underlying",
+          "valuation"
+        ],
+        "title": "Snapshot"
+      },
+      "SnapshotPage": {
+        "properties": {
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next",
+            "description": "the cursor of the next page, or null on the last one"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Snapshot"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "SnapshotPage"
+      },
+      "SystemInfo": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Id"
+          },
+          "valuation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valuation"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Origin"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "workers": {
+            "items": {
+              "$ref": "#/components/schemas/WorkerRow"
+            },
+            "type": "array",
+            "title": "Workers",
+            "default": []
+          },
+          "jobs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Jobs",
+            "default": []
+          },
+          "job_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Job Counts",
+            "default": {}
+          },
+          "worker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worker"
+          },
+          "store": {
+            "type": "string",
+            "title": "Store"
+          },
+          "started": {
+            "type": "string",
+            "title": "Started"
+          },
+          "engine": {
+            "$ref": "#/components/schemas/EngineInfo"
+          },
+          "database_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Database Revision"
+          },
+          "settings": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Settings",
+            "default": {}
+          },
+          "backups": {
+            "items": {
+              "$ref": "#/components/schemas/Backup"
+            },
+            "type": "array",
+            "title": "Backups",
+            "default": []
+          },
+          "lake_backups": {
+            "items": {
+              "$ref": "#/components/schemas/LakeBackup"
+            },
+            "type": "array",
+            "title": "Lake Backups",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "ok",
+          "version",
+          "store",
+          "started",
+          "engine"
+        ],
+        "title": "SystemInfo"
+      },
       "TermSheetIn": {
         "properties": {
           "type": {
@@ -8127,6 +9697,96 @@
         "additionalProperties": false,
         "type": "object",
         "title": "TermSheetIn"
+      },
+      "Trade": {
+        "properties": {
+          "trade_id": {
+            "type": "string",
+            "title": "Trade Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "book": {
+            "type": "string",
+            "title": "Book"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "live, called, matured, knocked_out, deleted, ..."
+          },
+          "quantity": {
+            "type": "number",
+            "title": "Quantity"
+          },
+          "trade_date": {
+            "type": "string",
+            "title": "Trade Date"
+          },
+          "strike_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strike Date"
+          },
+          "counterparty": {
+            "type": "string",
+            "title": "Counterparty",
+            "default": ""
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
+          },
+          "product": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Product"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TradeSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reserves": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Reserves"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "trade_id",
+          "version",
+          "book",
+          "status",
+          "quantity",
+          "trade_date",
+          "product"
+        ],
+        "title": "Trade"
       },
       "TradeIn": {
         "properties": {
@@ -8218,6 +9878,125 @@
         ],
         "title": "TradeIn"
       },
+      "TradePage": {
+        "properties": {
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next",
+            "description": "the cursor of the next page, or null on the last one"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Trade"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "TradePage"
+      },
+      "TradeSummary": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "underlyings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Underlyings"
+          },
+          "maturity_months": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maturity Months"
+          },
+          "coupon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coupon"
+          },
+          "coupon_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coupon Rate",
+            "description": "fraction per annum"
+          },
+          "downside": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Downside"
+          },
+          "barrier": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barrier",
+            "description": "fraction of the initial level"
+          },
+          "format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "type",
+          "underlyings"
+        ],
+        "title": "TradeSummary"
+      },
       "TradeUpdate": {
         "properties": {
           "quantity": {
@@ -8279,6 +10058,85 @@
         "type": "object",
         "title": "TradeUpdate",
         "description": "What an edit may change; every edit is a new version of the trade."
+      },
+      "Universe": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "instruments": {
+            "items": {
+              "$ref": "#/components/schemas/Instrument"
+            },
+            "type": "array",
+            "title": "Instruments",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "available"
+        ],
+        "title": "Universe"
+      },
+      "Upcoming": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/UpcomingEvent"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "until": {
+            "type": "string",
+            "title": "Until"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "events",
+          "until"
+        ],
+        "title": "Upcoming"
+      },
+      "UpcomingEvent": {
+        "properties": {
+          "trade_id": {
+            "type": "string",
+            "title": "Trade Id"
+          },
+          "observation": {
+            "type": "string",
+            "title": "Observation"
+          },
+          "payment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment"
+          },
+          "final": {
+            "type": "boolean",
+            "title": "Final"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "trade_id",
+          "observation",
+          "final"
+        ],
+        "title": "UpcomingEvent"
       },
       "UserIn": {
         "properties": {
@@ -8496,6 +10354,132 @@
         "additionalProperties": false,
         "type": "object",
         "title": "VarIn"
+      },
+      "WorkerInfo": {
+        "properties": {
+          "engine": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EngineInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gpu": {
+            "items": {
+              "$ref": "#/components/schemas/GpuState"
+            },
+            "type": "array",
+            "title": "Gpu",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "WorkerInfo"
+      },
+      "WorkerRow": {
+        "properties": {
+          "worker_id": {
+            "type": "string",
+            "title": "Worker Id"
+          },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host"
+          },
+          "pid": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pid"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "engine": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine"
+          },
+          "concurrency": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Concurrency"
+          },
+          "started_at": {
+            "type": "string",
+            "title": "Started At"
+          },
+          "heartbeat_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heartbeat At"
+          },
+          "stopped_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stopped At"
+          },
+          "alive": {
+            "type": "boolean",
+            "title": "Alive"
+          },
+          "info": {
+            "$ref": "#/components/schemas/WorkerInfo",
+            "default": {
+              "gpu": []
+            }
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "worker_id",
+          "role",
+          "started_at",
+          "alive"
+        ],
+        "title": "WorkerRow"
       },
       "FieldError": {
         "type": "object",

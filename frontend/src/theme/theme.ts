@@ -91,6 +91,12 @@ export const theme = createTheme({
   defaultRadius: "sm",
   focusRing: "auto",
   cursorType: "pointer",
+  components: {
+    // a modal or a drawer locks the page's scroll through react-remove-scroll, which writes a <style> element: the
+    // page CSP refuses it (ADR-0024), so they leave the page as it is (the palette is a modal too)
+    Modal: { defaultProps: { lockScroll: false } },
+    Drawer: { defaultProps: { lockScroll: false } },
+  },
 });
 
 export const cssVariablesResolver: CSSVariablesResolver = () => ({
