@@ -5,11 +5,11 @@
 // what MantineCssVariables and MantineClasses would have written.
 import {
   convertCssVariables,
+  DEFAULT_THEME,
   defaultCssVariablesResolver,
   em,
   keys,
   mergeMantineTheme,
-  DEFAULT_THEME,
   px,
 } from "@mantine/core";
 import type { Plugin } from "vite";
