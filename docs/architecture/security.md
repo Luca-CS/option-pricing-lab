@@ -144,6 +144,40 @@ Checked and sound:
 | 42 | Behind `netsh portproxy`, every LAN client reaches Caddy from the Windows host's address: the login throttle by address and the audit log's addresses collapse into one | Info (off; the per-account lockout still holds) | kept, written in operations.md's LAN section |
 | 43 | Docker's and NVIDIA's signing keys are fetched over HTTPS without a fingerprint check, as their documentation does | Info | kept: the apt repositories then check every package against them |
 
+### Found in A9, from the outside (`deploy/probe.py`)
+
+The probe talks to a running desk over HTTP, raw where it matters (a missing or doubled `Host`, a chunked body
+without a type, a length and a chunked encoding together, bursts of concurrent logins), as a neighbour on the network
+would. It creates its own accounts for the roles through the admin API, with generated passwords, and disables them at
+the end. Run on a throwaway instance (an empty data folder, `127.0.0.1:8766`) on 16 November 2026: **7 failures before
+the fixes, 73 checks out of 73 after them** (`127.0.0.1:8767`, the fixed code).
+
+Held from the first run, without a change:
+- the 71 operations that are not public answer 401 without a session; garbage, oversized and guessed cookies too;
+- every state-changing operation refuses a valid session without its CSRF token, or with another session's;
+- `Origin` of another site, `null`, a look-alike name, or user info in it: 403 with a valid session and token;
+- bodies typed `text/plain`, form, multipart or untyped: 415; a body over the limit: 413, with or without a length;
+- the roles matrix over HTTP: a viewer, a trader and a structurer are refused on each operation their role does not
+  name (33, 19 and 31 of them); someone else's job is a 404 on read, cancel and events;
+- a cookie planted before a login is not adopted; a cookie replayed after its logout, or after its user's roles
+  changed, opens nothing;
+- a wrong password and an unknown name get the same answer in the same time (92 ms against 92 ms);
+- JSON nested 200,000 deep is a 400; a header of 200 KB, two `Host` headers or none: 400; ids of `../`, `%2e%2e`,
+  `%00` or 300 characters reach no file; SQL in a filter is a value; unknown fields and out-of-bound costs: 422;
+- every error is problem+json without a trace or a path; no `Server` header; no CORS answer to another origin.
+
+| # | Finding | Severity | Fate |
+|---|---|---|---|
+| 44 | **A burst of guesses was not counted**: the account's failures were read, then written after the hash, so 15 wrong passwords sent at once were all evaluated and counted as one; the account was not locked afterwards and its real password still opened it. The address throttle had the same gap (checked before the hash, counted after) | Medium (it multiplies the guesses an attacker gets per lockout window by the number of parallel requests) | fixed: an attempt is counted before its hash, in a write transaction for the account and under a lock for the address, and given back when it was right. The same burst now: 5 evaluated, 10 answered 423, the account locked. Test |
+| 45 | **A script nested 9,000 deep** (20,000 characters, within the size bound) ended in Python's recursion limit: a 500. A sum of thousands of terms would do the same in the passes that walk the tree | Low (local DoS of one request; the 500 carried no trace) | fixed: the parser bounds nesting (40) and the tree's height (150), with a `ScriptError` at its line. Test |
+| 46 | A chunked body without a `Content-Type` passed the guard's JSON rule (FastAPI then read it as JSON) | Low (a browser's cross-site request sends a type, and the CSRF header is still required) | fixed: 415. Test |
+| 47 | A request with both a `Content-Length` and a `Transfer-Encoding` was read (uvicorn takes the chunked one) | Low (no proxy in front by default; Caddy refuses it too) | fixed: 400, before any route. Test |
+| 48 | `Host: evil@127.0.0.1` was read as `127.0.0.1` | Info (a browser never sends it; the cookie stays tied to the real name) | fixed: a `Host` must be a plain `name[:port]`. Test |
+| 49 | The guard's own refusals (403, 413, 415) had no `Cache-Control: no-store` | Info | fixed. Test |
+| 50 | Every failed login wrote an audit line, the throttled ones included: an address without an account could grow the log at will; the attempts on a locked account did not count for the address; the per-address memory kept every address forever | Low | fixed: a throttled attempt (429) writes nothing, a locked one (423) counts, addresses without an attempt in 10 minutes are forgotten. Test |
+| 51 | A viewer may submit valuations of a trade or of the book (jobs on the GPU) | Info | kept: a valuation writes nothing, a viewer is a signed-in colleague, and two jobs run at a time whatever is queued |
+| 52 | Many SSE streams held open by one user each poll the job row four times a second | Info | kept: denial of service by volume against the local instance is out of scope (`SECURITY.md`); the stream ends with its session and after an hour |
+
 ## 6. Secrets
 
 None today (checked in A0: no key, token or password in the tree; gitleaks in A1 checks the history). Future secrets
