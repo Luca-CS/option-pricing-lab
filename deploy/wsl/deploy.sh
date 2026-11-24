@@ -13,6 +13,8 @@
 # new images; (6) /api/v1/ready must answer 200 within OPTLAB_READY_SECONDS (180). If any step after (2) fails, the
 # previous images come back with the copy of (2), and the script exits 1. Nothing leaves the machine but the pulls.
 set -eu
+# Every function declares its variables `local` (dash and bash have it): sh's are global otherwise, and a helper that
+# sets `tag` would change the caller's (the drill of A9 deployed the running version again that way).
 
 REPO_SLUG=${OPTLAB_REPOSITORY:-Luca-CS/option-pricing-lab}
 REGISTRY=${OPTLAB_REGISTRY:-ghcr.io/luca-cs}
@@ -30,7 +32,7 @@ mkdir -p "$STATE"
 chmod 700 "$STATE" "$(dirname "$STATE")"
 
 pull() {  # pull a release's images by the digests of its GitHub release, and tag them here by the release's name
-  tag=$1
+  local tag=$1 notes image digest
   notes=$(curl -fsSL "https://api.github.com/repos/$REPO_SLUG/releases/tags/$tag") || fail "no GitHub release $tag"
   for image in api worker; do
     digest=$(printf '%s' "$notes" | grep -o "$image=sha256:[0-9a-f]\{64\}" | head -1 | cut -d= -f2)
@@ -46,8 +48,8 @@ has_images() {
 }
 
 copy_database() {  # SQLite's online backup of the live database, by any image (no optlab code: no migration on open)
-  tag=$1 name=$2
-  OPTLAB_TAG=$tag compose run --rm --no-deps -T --entrypoint python worker -c "
+  local image_tag=$1 name=$2
+  OPTLAB_TAG=$image_tag compose run --rm --no-deps -T --entrypoint python worker -c "
 import os, sqlite3
 if not os.path.exists('/data/store/optlab.sqlite'):
     raise SystemExit(3)  # nothing to copy yet: a first deploy
@@ -60,9 +62,9 @@ dst.close(); src.close()
 }
 
 ready() {  # /ready answers 200 (the database, and a worker that serves the queue) within READY_SECONDS
-  waited=0
+  local waited=0
   while [ "$waited" -lt "$READY_SECONDS" ]; do
-    if curl -fsS -o /dev/null "http://127.0.0.1:$PORT/api/v1/ready"; then
+    if curl -fs -o /dev/null "http://127.0.0.1:$PORT/api/v1/ready"; then
       return 0
     fi
     sleep 5
@@ -75,20 +77,20 @@ start() {  # api and worker on the images of a tag
   OPTLAB_TAG=$1 compose up -d --no-build api worker
 }
 
-restore_and_start() {  # the images of `tag`, the database of `copy` (a file of backups/manual)
-  tag=$1 copy=$2
+restore_and_start() {  # the images of `back_tag`, the database of `back_copy` (a file of backups/manual)
+  local back_tag=$1 back_copy=$2
   compose stop api worker >/dev/null 2>&1 || true
-  if [ -n "$copy" ]; then
-    say "restore backups/manual/$copy with $tag"
-    OPTLAB_TAG=$tag compose run --rm --no-deps -T worker restore "/data/backups/manual/$copy" --yes
+  if [ -n "$back_copy" ]; then
+    say "restore backups/manual/$back_copy with $back_tag"
+    OPTLAB_TAG=$back_tag compose run --rm --no-deps -T worker restore "/data/backups/manual/$back_copy" --yes
   fi
-  start "$tag"
-  ready || fail "$tag does not answer /ready either: see docker compose -p $PROJECT logs"
-  say "back on $tag"
+  start "$back_tag"
+  ready || fail "$back_tag does not answer /ready either: see docker compose -p $PROJECT logs"
+  say "back on $back_tag"
 }
 
 deploy() {
-  tag=$1 local_only=$2
+  local tag=$1 local_only=$2 current copy stamp status
   current=$(read_state current)
   [ "$tag" != "$current" ] || fail "$tag already runs"
   if [ "$local_only" = no ]; then pull "$tag"; fi
@@ -114,7 +116,7 @@ deploy() {
     say "$tag deployed and ready on 127.0.0.1:$PORT (rollback: sh deploy/wsl/deploy.sh --rollback)"
     return 0
   fi
-  say "$tag failed: back to ${current:-nothing}"
+  say "$tag failed: back to ${current:-nothing} (its logs: docker compose -p $PROJECT logs --tail 50 api worker)"
   if [ -n "$current" ]; then
     restore_and_start "$current" "$copy"
   else
@@ -124,6 +126,7 @@ deploy() {
 }
 
 rollback() {
+  local current previous copy
   current=$(read_state current) previous=$(read_state previous) copy=$(read_state copy)
   [ -n "$previous" ] || fail "nothing to go back to (current: ${current:-none})"
   has_images "$previous" || fail "the images of $previous are gone: deploy it again instead"
