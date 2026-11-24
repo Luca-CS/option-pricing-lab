@@ -12,31 +12,37 @@ from _quotes import some
 from optlab.core.models import Leverage, LocalVolModel
 from optlab.core.svi import SVISurface
 from optlab.structured import PricingContext, compile_sheet, preset, price
-from optlab.structured.surfaces import FastSVISurface
 
 SPX = PricingContext.from_calibration(SPX_CALIBRATION)
 SURFACE = json.loads(SPX_CALIBRATION.read_text())["surface"]
 
 
-def test_fast_surface_derivatives_are_bit_identical():
-    base, fast = SVISurface.from_dict(SURFACE), FastSVISurface.from_dict(SURFACE)
+class GeneralBranch(SVISurface):
+    """The surface without its branch for one time: every call broadcasts the time over the strikes."""
+
+    def derivatives(self, k, T):
+        return super().derivatives(k, np.broadcast_to(np.asarray(T, dtype=float), np.shape(k)))
+
+
+def test_the_surface_at_one_time_is_bit_identical_to_the_general_branch():
+    fast, base = SVISurface.from_dict(SURFACE), GeneralBranch.from_dict(SURFACE)
     k = np.linspace(-3, 1.5, 2001)
     times = [*base.maturities, 1 / 365, 0.3, 1.2, 2.5, *np.linspace(0.003, 2.4, 40)]
     for T in times:
         for a, b in zip(base.derivatives(k, T), fast.derivatives(k, T)):
             assert np.array_equal(a, b)
         assert np.array_equal(base.local_var(k, T), fast.local_var(k, T))
-    T = np.full_like(k, 0.7)  # array times take the general branch
+    T = np.full_like(k, 0.7)  # array times take the general branch in both
     for a, b in zip(base.derivatives(k, T), fast.derivatives(k, T)):
         assert np.array_equal(a, b)
 
 
-def test_local_vol_prices_do_not_move_with_the_fast_surface():
-    assert isinstance(SPX.surface, FastSVISurface)
+def test_local_vol_prices_do_not_move_with_the_branch_for_one_time():
+    assert type(SPX.surface) is SVISurface
     p = compile_sheet(
         preset("phoenix", **{"downside.observation": "daily", "general.maturity_months": 12}), SPX.valuation
     )
-    slow = SVISurface.from_dict(SURFACE)
+    slow = GeneralBranch.from_dict(SURFACE)
     a = price(p.program, LocalVolModel(slow), SPX.market, n_paths=4_000, seed=3, valuation=SPX.valuation)
     b = price(p.program, LocalVolModel(SPX.surface), SPX.market, n_paths=4_000, seed=3, valuation=SPX.valuation)
     assert a.value.price == b.value.price and a.value.stderr == b.value.stderr

@@ -25,7 +25,7 @@ def _uniform_interp(x, x0: float, inv_dx: float, y: np.ndarray):
 
 
 class _TotalVarianceSurface(Protocol):
-    """Total implied variance w(k, T) and Dupire local variance: SVISurface, FastSVISurface and their views."""
+    """Total implied variance w(k, T) and Dupire local variance: SVISurface and its views."""
 
     def w(self, k, T, /) -> Any: ...
 

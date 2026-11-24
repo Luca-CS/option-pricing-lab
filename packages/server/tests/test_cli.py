@@ -71,8 +71,8 @@ def test_every_script_of_the_inventory_has_its_command():
         ["-m", "optlab.server.cli", "lake", "derive", "--help"],
         ["-m", "optlab.server.cli", "lake", "surface-test", "--help"],
         ["-m", "optlab.server.cli", "lake", "replay", "--help"],
-        ["-m", "optlab.server", "--help"],  # `optlab serve`
-        ["-m", "optlab.server.worker", "--help"],
+        ["-m", "optlab.server.cli", "serve", "--help"],
+        ["-m", "optlab.server.cli", "worker", "--help"],
     ],
 )
 def test_commands_start_in_a_fresh_process(argv):

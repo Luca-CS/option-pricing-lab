@@ -229,7 +229,7 @@ because the calibration amplifies the last bits of libm (section 7 of the baseli
 ```bash
 uv run ruff check . && uv run ruff format --check .
 uv run lint-imports
-uv run python tools/pyright_baseline.py
+uv run pyright
 uvx --from radon==6.0.1 radon cc -a packages/*/src -j
 uvx vulture@2.14 packages/*/src --min-confidence 60
 uvx --from pylint==4.0.2 pylint --disable=all --enable=duplicate-code --min-similarity-lines=8 --ignore-imports=y --ignore-docstrings=y packages tests

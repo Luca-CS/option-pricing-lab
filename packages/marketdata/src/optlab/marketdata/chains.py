@@ -63,7 +63,7 @@ def download_chain(ticker="^SPX", min_days=7, max_days=800, *, out_dir) -> Path:
 def latest_snapshot(out_dir) -> Path:
     files = sorted(Path(out_dir).glob("spx_*.csv"))
     if not files:
-        raise FileNotFoundError(f"no snapshot in {out_dir}: run scripts/download_spx.py first")
+        raise FileNotFoundError(f"no snapshot in {out_dir}: run optlab calib download-spx first")
     return files[-1]
 
 

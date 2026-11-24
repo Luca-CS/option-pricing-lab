@@ -1,18 +1,19 @@
 """The versioned OpenAPI document (`api/openapi.json`, handoff §4.2) is the code's, and it says what the API does:
 problem+json errors, the roles of every operation, unique operation ids. Run
-`uv run python -m optlab.server.openapi export` after changing a route."""
+`uv run optlab api export` after changing a route."""
 
 import json
 
 from optlab.server.app import METHODS
-from optlab.server.openapi import DEFAULT, document, main, render
+from optlab.server.cli import run
+from optlab.server.openapi import DEFAULT, document, render
 
 
 def test_the_versioned_document_is_the_code_s():
-    assert DEFAULT.exists(), "api/openapi.json is missing: python -m optlab.server.openapi export"
+    assert DEFAULT.exists(), "api/openapi.json is missing: optlab api export"
     on_disk = json.loads(DEFAULT.read_text(encoding="utf-8"))
-    assert on_disk == json.loads(render(document())), "api/openapi.json drifted: python -m optlab.server.openapi export"
-    assert main(["check"]) == 0
+    assert on_disk == json.loads(render(document())), "api/openapi.json drifted: optlab api export"
+    assert run(["api", "check"]) == 0
 
 
 def test_the_document_describes_errors_and_roles():
@@ -40,5 +41,5 @@ def test_the_document_describes_errors_and_roles():
 def test_check_fails_on_a_stale_file(tmp_path, capsys):
     stale = tmp_path / "openapi.json"
     stale.write_text("{}", encoding="utf-8")
-    assert main(["check", "--out", str(stale)]) == 1
-    assert main(["export", "--out", str(stale)]) == 0 and main(["check", "--out", str(stale)]) == 0
+    assert run(["api", "check", "--out", str(stale)]) == 1
+    assert run(["api", "export", "--out", str(stale)]) == 0 and run(["api", "check", "--out", str(stale)]) == 0

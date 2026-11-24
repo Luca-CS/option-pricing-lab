@@ -11,7 +11,7 @@ v0 has 19 scripts in `scripts/` plus `cuda/bench/bench_numpy.py` and `python -m 
 ## Decision
 
 - **One CLI, `optlab`, on Typer**, in `optlab.server.cli` (entry point of `optlab-server`):
-  - operation: `serve`, `worker`, `users`, `backup`, `restore`, `deploy`, `migrate`, `check fast|full|gpu|golden`;
+  - operation: `serve`, `worker`, `users`, `backup`, `restore`, `deploy`, `migrate`;
   - domain and data: `lake ...`, `risk ...`, `calib ...`, `structured ...`;
   - tools: `bench ...`, `api export`, `demo ...` (the last one for session 2).
 - Every script maps to a subcommand in `feature-inventory.md` §3, with its options kept or their removal noted, and
@@ -31,9 +31,11 @@ v0 has 19 scripts in `scripts/` plus `cuda/bench/bench_numpy.py` and `python -m 
 ## Implementation (A7)
 
 - `optlab.server.cli`, Typer 0.27.3 (it carries its own copy of Click: no Click in the runtime closure; `shellingham`
-  is the only new package of the lock), console script `optlab` of `optlab-server`. `python -m optlab.server`,
-  `python -m optlab.server.worker`, `.users` and `.openapi` stay, as aliases of `serve`, `worker`, `users` and `api`:
-  one parser per command, never two.
+  is the only new package of the lock), console script `optlab` of `optlab-server`: one parser per command, never two.
+- **A9**: one way in. The aliases A7 kept (`python -m optlab.server`, `.worker`, `.users`, `.openapi`) are gone:
+  `optlab ...`, or `python -m optlab.server.cli ...` where the console script is not on the PATH. So is `optlab check
+  fast|full|gpu|golden`, which wrapped `pytest` and `tests/golden/golden.py` with fixed arguments and had already
+  drifted from the commands of `CLAUDE.md`: the tests run with `pytest`, the golden numbers with `golden.py`.
 - The bodies of the v0 scripts moved (`git mv`, history kept) to `optlab.server.tools`, each a function with keyword
   parameters that the command calls; nothing runs at import, so `optlab --help` needs neither matplotlib nor the lake.
   Their paths come from `Settings` (new fields `reports`, the folder the report commands write, and `market`, the

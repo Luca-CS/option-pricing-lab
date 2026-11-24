@@ -63,7 +63,7 @@ The second session builds a new front on this API and needs a contract it can ge
   `{market, method, result}` envelope come with the job model of A6 (ADR-0006).
 - SSE: event ids are the rank of the state (queued 1, running 2, the end 3), stable across connections, so
   `Last-Event-ID` resumes; progress events come with A6.
-- `uvicorn` serves it (`optlab serve`, or `python -m optlab.server`), on 127.0.0.1 unless the LAN profile is on,
+- `uvicorn` serves it (`optlab serve`), on 127.0.0.1 unless the LAN profile is on,
   `server_header=False`.
 - The TypeScript proof is `api/client-check` (openapi-typescript 7.13.0 with `--default-non-nullable false`,
   openapi-fetch 0.17.0, TypeScript 5.9.3, `npm ci --ignore-scripts`), the CI job `api-contract`.

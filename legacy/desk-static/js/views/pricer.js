@@ -415,7 +415,7 @@ export function basketCard(b) {
         h("td", {}, originBadge(p.origin)), h("td", { class: "num" }, `${num(100 * p.vol, 1)} %`),
         h("td", { class: "num" }, `${num(100 * p.q, 2)} %`), h("td", { class: "num" }, `${num(100 * p.r, 2)} %`))))),
     pairs.length ? h("p", { class: "muted", style: { marginTop: "8px" } }, "Correlations: ",
-      pairs.map(([k, v]) => `${k.replace("|", "–")} ${num(v, 2)}${b.corr_source && b.corr_source[k] !== "lake" ? ` (${b.corr_source[k]})` : ""}`).join(" · "),
+      pairs.map(([k, v]) => `${k.replaceAll("|", "–")} ${num(v, 2)}${b.corr_source && b.corr_source[k] !== "lake" ? ` (${b.corr_source[k]})` : ""}`).join(" · "),
       b.correlation ? ` · measured over ${b.correlation.window} days, premium λ ${num(b.correlation.lambda, 2)}` : "") : null);
 }
 

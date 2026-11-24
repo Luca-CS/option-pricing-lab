@@ -159,7 +159,7 @@ volume in every case: WAL relies on shared memory that 9P does not provide relia
 Each one has a golden test (`tests/golden/`) or a named test:
 
 - Prices depend on `(seed, n_paths)` only: not on the grid, the batch size, the number of workers or the process
-  that runs them. Scripts reproduce `products.py` bit for bit; `FastSVISurface` is bit-identical to `SVISurface`.
+  that runs them. Scripts reproduce `products.py` bit for bit; `SVISurface` has a branch for one time (what a simulation asks at each step), bit-identical to its general one.
 - The library's default engine is NumPy; the desk starts in `auto`. A worker always receives its engine explicitly.
 - A job captures the market context when submitted.
 - Every price carries its standard error and its method; every result names its snapshot and its `origin`.
@@ -173,5 +173,5 @@ Each one has a golden test (`tests/golden/`) or a named test:
 
 Steps A0 to A9, one pull request each, merged by Luca only (`HANDOFF_REFACTOR_1_ARCHITECTURE.md` §6). CI on GitHub
 hosted runners (Linux and Windows) for everything that needs no GPU and no real data; the full suite, the real lake
-and the GPU run on the machine (`optlab check full`, `optlab check gpu`) at the end of each step, with their results in
+and the GPU run on the machine (`pytest` on the whole suite, `tests/golden/golden.py check --local`) at the end of each step, with their results in
 the PR. `v1.0.0` at the end of A9.

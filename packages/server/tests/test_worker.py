@@ -1,5 +1,5 @@
 """The worker as its own process (handoff §4.3, ADR-0006): an api that leaves the queue to
-`python -m optlab.server.worker`, a job done by that process, and a worker killed in the middle of a job (a crash): the
+`optlab worker`, a job done by that process, and a worker killed in the middle of a job (a crash): the
 next worker waits for the dead one's lease to expire, marks the job interrupted, and serves the queue again."""
 
 import os
@@ -22,7 +22,7 @@ def _worker(folder):
         "OPTLAB_WORKER": "external",
     }
     return subprocess.Popen(
-        [sys.executable, "-m", "optlab.server.worker", "--concurrency", "1", "--wait-lease", "60"],
+        [sys.executable, "-m", "optlab.server.cli", "worker", "--concurrency", "1", "--wait-lease", "60"],
         env=env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,

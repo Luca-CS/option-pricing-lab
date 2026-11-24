@@ -1,5 +1,5 @@
 # Lint, types, the offline tests and the CPU engine, on Linux and Windows hosted runners (ADR-0018).
-# Never a self-hosted runner: GPU and real-lake checks run on the machine (`optlab check gpu`, `check full`).
+# Never a self-hosted runner: GPU and real-lake checks run on the machine (the full pytest suite and `tests/golden/golden.py check --local`).
 name: CI
 
 on:
@@ -45,10 +45,10 @@ jobs:
         run: uv run --no-sync ruff format --check .
       - name: import contracts
         run: uv run --no-sync lint-imports
-      - name: pyright against its baseline
+      - name: pyright
         env:
           PYRIGHT_PYTHON_GLOBAL_NODE: "1"
-        run: uv run --no-sync python tools/pyright_baseline.py
+        run: uv run --no-sync pyright
 
   api-contract:
     name: API contract (TypeScript client)

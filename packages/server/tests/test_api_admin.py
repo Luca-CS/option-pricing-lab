@@ -1,5 +1,5 @@
 """API v1, admin router: system, network checks, users (each change ends the user's sessions), the audit log; and the
-accounts command line (`python -m optlab.server.users`), which Luca uses to create his own admin account."""
+accounts command line (`optlab users`), which Luca uses to create his own admin account."""
 
 import io
 import secrets
@@ -7,7 +7,7 @@ import secrets
 import pytest
 from _api import api
 
-from optlab.server import users as users_cli
+from optlab.server.cli import run as cli
 
 PASSWORD = secrets.token_urlsafe(18)  # generated for the run, never written anywhere
 
@@ -69,7 +69,7 @@ def test_the_accounts_command_line(a, monkeypatch, capsys):
     def run(*argv, password=None):
         if password is not None:
             monkeypatch.setattr("sys.stdin", io.StringIO(password + "\n"))
-        return users_cli.main([*argv, "--database", db, *(["--stdin"] if password is not None else [])])
+        return cli(["users", *argv, "--database", db, *(["--stdin"] if password is not None else [])])
 
     assert run("create", "luc", "--roles", "admin,trader", password=PASSWORD) == 0
     assert "created luc (admin, trader)" in capsys.readouterr().out

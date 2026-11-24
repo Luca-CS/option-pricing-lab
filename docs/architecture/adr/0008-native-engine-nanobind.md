@@ -23,7 +23,7 @@ turned into error codes, never `exit`, since the engine runs inside the Python p
   module. pyright reads the stub, so CI type-checks without compiling (spike, ADR-0003).
 - Builds: Windows (MSVC 2022) and Linux (gcc, in the worker image). CI builds the CPU-only wheel on both and runs the
   CPU engine tests; it compiles CUDA without a GPU only if the toolkit installs on a hosted runner without an
-  account. GPU tests run on the machine (`optlab check gpu`).
+  account. GPU tests run on the machine (`pytest -m "gpu or native"`).
 - The fallback to NumPy stays explicit, with its reason, through the engine registry (ADR-0004).
 - On Windows the scikit-build-core `build-dir` stays short: MSBuild fails above 260 characters (spike).
 

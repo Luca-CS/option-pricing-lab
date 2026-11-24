@@ -119,7 +119,6 @@ strict = [
     "packages/server/src/optlab/server/security.py",
     "packages/server/src/optlab/server/settings.py",
     "packages/server/src/optlab/server/tasks.py",
-    "packages/server/src/optlab/server/users.py",
     "packages/server/src/optlab/server/web.py",
     "packages/server/src/optlab/server/worker.py",
 ]

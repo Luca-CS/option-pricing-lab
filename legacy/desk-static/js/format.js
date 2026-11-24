@@ -29,7 +29,7 @@ export function parse(f, text) {
   }
   if (f.kind === "number") {
     if (f.optional && String(text).trim() === "") return null;
-    const v = Number(String(text).replace(",", ".").replace("%", "").trim());
+    const v = Number(String(text).replace(",", ".").replaceAll("%", "").trim());
     if (!Number.isFinite(v)) return text;
     return v / scale(f);
   }

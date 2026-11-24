@@ -1,6 +1,6 @@
 """The worker (ADR-0006): claims the queue's jobs, runs them, writes their progress and results; runs the schedules.
 
-    optlab worker [--concurrency 2] [--engine auto] [--workers N] [--store FILE]   (or python -m optlab.server.worker)
+    optlab worker [--concurrency 2] [--engine auto] [--workers N] [--store FILE]
 
 One worker serves a database (it holds a lease, renewed every few seconds), so one process owns the GPU. By default
 the api runs it in its own process (`Settings.worker = "embedded"`); `OPTLAB_WORKER=external` leaves the queue to this
@@ -18,7 +18,6 @@ import os
 import secrets
 import socket
 import subprocess
-import sys
 import threading
 import time
 import traceback
@@ -36,7 +35,7 @@ from optlab.server.serialize import clean
 if TYPE_CHECKING:
     from optlab.server.api import Desk
 
-LOG = get_logger("optlab.server.worker")  # not __name__: run as -m, it is __main__
+LOG = get_logger(__name__)
 BEAT_SECONDS = 5.0
 SCHEDULE_SECONDS = 20.0
 GPU_SECONDS = 60.0
@@ -270,14 +269,3 @@ class Worker:
             self.leases.stop(self.worker_id)
         except Exception:  # the database may already be closed in a test's teardown
             LOG.debug("lease not released", exc_info=True)
-
-
-def main(argv: list[str] | None = None) -> int:
-    """`python -m optlab.server.worker [options]` is `optlab worker [options]`."""
-    from optlab.server.cli import run
-
-    return run(["worker", *(sys.argv[1:] if argv is None else argv)])
-
-
-if __name__ == "__main__":
-    sys.exit(main())

@@ -1,6 +1,10 @@
 """Request bodies of API v1 (ADR-0005): typed, unknown keys refused, and bounds on everything that costs, so that no
 parameter makes one request take the machine. Levels are fractions; dates are ISO 8601. The routers pass these to
-the desk's services as plain dicts (`body(model)`), the same keys v0's page sent."""
+the desk's services as plain dicts (`body(model)`), the same keys v0's page sent.
+
+`body` passes the keys the client gave, and the desk applies its own default to a missing one: a default written here
+is documentation of what the desk does (`test_api_defaults.py` checks each one whose desk default is not the
+obvious one)."""
 
 from __future__ import annotations
 
@@ -56,7 +60,7 @@ class ScriptIn(Body):
 
 class ScriptPriceIn(ScriptIn):
     model: Model = "lv"
-    n_paths: int = Field(50_000, ge=1_000, le=500_000)
+    n_paths: int = Field(40_000, ge=1_000, le=500_000)
     seed: int = Field(2026, ge=0, le=2**63 - 1)
 
 
@@ -64,7 +68,7 @@ class ScriptPriceIn(ScriptIn):
 class TradeIn(Body):
     sheet: TermSheetIn
     trade_id: str | None = Field(None, pattern=r"^[\w-]{1,64}$")
-    quantity: float = Field(-1.0, ge=-1e9, le=1e9, description="signed: > 0 when the book holds the investor side")
+    quantity: float = Field(1.0, ge=-1e9, le=1e9, description="signed: > 0 when the book holds the investor side")
     coupon_rate: float | None = Field(None, ge=-1.0, le=10.0)
     trade_date: dt.date | None = None
     strike_date: dt.date | None = None
@@ -86,6 +90,14 @@ class ValuationIn(Body):
     options: PricingOptions = Field(default_factory=lambda: PricingOptions.model_validate({}))
 
 
+class BookPricingOptions(PricingOptions):
+    greeks: bool = Field(True, description="delta and vega by name, on by default for the book")
+
+
+class BookValuationIn(Body):
+    options: BookPricingOptions = Field(default_factory=lambda: BookPricingOptions.model_validate({}))
+
+
 class FixingsIn(Body):
     underlying: str = Field(..., pattern=r"^[A-Z0-9._-]{1,16}$")
     text: str | None = Field(None, max_length=500_000, description="pasted or CSV dates and levels")
@@ -95,7 +107,9 @@ class FixingsIn(Body):
 
 
 class FixingsFromLakeIn(Body):
-    underlying: str = Field("SPX", pattern=r"^[A-Z0-9._-]{1,16}$")
+    underlying: str | None = Field(
+        None, pattern=r"^[A-Z0-9._-]{1,16}$", description="default: the underlying of the market in use"
+    )
     start: dt.date | None = None
 
 
@@ -111,8 +125,8 @@ class MarketInUse(Body):
 class MarketFromLakeIn(Body):
     underlying: str = Field("SPX", pattern=r"^[A-Z0-9._-]{1,16}$")
     date: dt.date
-    leverage: bool = False
-    t_max: float | None = Field(None, gt=0, le=10)
+    leverage: bool = Field(True, description="calibrate the SLV leverage (seconds); false: a flat leverage")
+    t_max: float = Field(3.0, gt=0, le=10, description="the longest maturity of the market, in years")
 
 
 class OtherUnderlyingsIn(Body):
@@ -127,13 +141,13 @@ class RiskOptions(Body):
     precision: Precision = "standard"
     n_paths: int | None = Field(None, ge=1_000, le=MAX_PATHS)
     model: Literal["slv"] | None = None
-    smoothing: float = Field(0.005, ge=0.0, le=0.1)
-    kxt: Literal["all", "single", "none"] = "single"
-    curves: bool = True
-    sticky_strike: bool = True
-    realistic: bool = True
-    cross: bool = True
-    theta: bool = True
+    smoothing: float = Field(0.005, ge=0.0, le=0.1, description="Greeks and ladder; the other runs do not smooth")
+    kxt: Literal["all", "single", "none"] = Field("single", description="Greeks: node vegas for which groups")
+    curves: bool = Field(True, description="Greeks: rho, epsilon and repo per tenor")
+    sticky_strike: bool = Field(True, description="Greeks: the sticky-strike variants")
+    realistic: bool = Field(True, description="Greeks: the variants on the lake's spot-vol betas")
+    cross: bool = Field(True, description="Greeks: vanna, volga, cross gamma, correlation")
+    theta: bool = Field(True, description="Greeks: the roll of one day")
 
 
 class Bumps(Body):

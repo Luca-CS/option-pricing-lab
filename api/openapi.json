@@ -2022,7 +2022,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ValuationIn"
+                "$ref": "#/components/schemas/BookValuationIn"
               }
             }
           },
@@ -6411,6 +6411,110 @@
         ],
         "title": "AuditPage"
       },
+      "BookPricingOptions": {
+        "properties": {
+          "precision": {
+            "type": "string",
+            "enum": [
+              "quick",
+              "standard",
+              "precise",
+              "max"
+            ],
+            "title": "Precision",
+            "default": "standard"
+          },
+          "n_paths": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2000000.0,
+                "minimum": 1000.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Paths"
+          },
+          "control": {
+            "type": "boolean",
+            "title": "Control",
+            "default": true
+          },
+          "greeks": {
+            "type": "boolean",
+            "title": "Greeks",
+            "description": "delta and vega by name, on by default for the book",
+            "default": true
+          },
+          "fast": {
+            "type": "boolean",
+            "title": "Fast",
+            "default": false
+          },
+          "slv_vega": {
+            "type": "boolean",
+            "title": "Slv Vega",
+            "default": false
+          },
+          "control_forwards": {
+            "type": "boolean",
+            "title": "Control Forwards",
+            "default": false
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "bs",
+                  "lv",
+                  "heston",
+                  "slv"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "sticky": {
+            "type": "string",
+            "enum": [
+              "moneyness",
+              "strike",
+              "model"
+            ],
+            "title": "Sticky",
+            "default": "moneyness"
+          },
+          "costs": {
+            "type": "boolean",
+            "title": "Costs",
+            "default": true
+          },
+          "mix_band": {
+            "type": "boolean",
+            "title": "Mix Band",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "BookPricingOptions"
+      },
+      "BookValuationIn": {
+        "properties": {
+          "options": {
+            "$ref": "#/components/schemas/BookPricingOptions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "BookValuationIn"
+      },
       "Bumps": {
         "properties": {
           "spot": {
@@ -6601,10 +6705,17 @@
       "FixingsFromLakeIn": {
         "properties": {
           "underlying": {
-            "type": "string",
-            "pattern": "^[A-Z0-9._-]{1,16}$",
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z0-9._-]{1,16}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Underlying",
-            "default": "SPX"
+            "description": "default: the underlying of the market in use"
           },
           "start": {
             "anyOf": [
@@ -7155,20 +7266,16 @@
           "leverage": {
             "type": "boolean",
             "title": "Leverage",
-            "default": false
+            "description": "calibrate the SLV leverage (seconds); false: a flat leverage",
+            "default": true
           },
           "t_max": {
-            "anyOf": [
-              {
-                "type": "number",
-                "maximum": 10.0,
-                "exclusiveMinimum": 0.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "T Max"
+            "type": "number",
+            "maximum": 10.0,
+            "exclusiveMinimum": 0.0,
+            "title": "T Max",
+            "description": "the longest maturity of the market, in years",
+            "default": 3.0
           }
         },
         "additionalProperties": false,
@@ -7834,6 +7941,7 @@
             "maximum": 0.1,
             "minimum": 0.0,
             "title": "Smoothing",
+            "description": "Greeks and ladder; the other runs do not smooth",
             "default": 0.005
           },
           "kxt": {
@@ -7844,31 +7952,37 @@
               "none"
             ],
             "title": "Kxt",
+            "description": "Greeks: node vegas for which groups",
             "default": "single"
           },
           "curves": {
             "type": "boolean",
             "title": "Curves",
+            "description": "Greeks: rho, epsilon and repo per tenor",
             "default": true
           },
           "sticky_strike": {
             "type": "boolean",
             "title": "Sticky Strike",
+            "description": "Greeks: the sticky-strike variants",
             "default": true
           },
           "realistic": {
             "type": "boolean",
             "title": "Realistic",
+            "description": "Greeks: the variants on the lake's spot-vol betas",
             "default": true
           },
           "cross": {
             "type": "boolean",
             "title": "Cross",
+            "description": "Greeks: vanna, volga, cross gamma, correlation",
             "default": true
           },
           "theta": {
             "type": "boolean",
             "title": "Theta",
+            "description": "Greeks: the roll of one day",
             "default": true
           }
         },
@@ -7972,7 +8086,7 @@
             "maximum": 500000.0,
             "minimum": 1000.0,
             "title": "N Paths",
-            "default": 50000
+            "default": 40000
           },
           "seed": {
             "type": "integer",
@@ -8037,7 +8151,7 @@
             "minimum": -1000000000.0,
             "title": "Quantity",
             "description": "signed: > 0 when the book holds the investor side",
-            "default": -1.0
+            "default": 1.0
           },
           "coupon_rate": {
             "anyOf": [

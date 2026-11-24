@@ -6,7 +6,7 @@ shows and takes percent and converts at its edge.
 A computation is a job (ADR-0006): the submitting method validates the request and freezes what the desk holds
 (`tasks.Frozen`: the market in use, the typed settings, the trades and their fixings), and its `run_<kind>` twin,
 called by the worker, rebuilds the same objects from the row and computes. So switching snapshots never changes a run
-in progress, and a job can run in another process (`python -m optlab.server.worker`).
+in progress, and a job can run in another process (`optlab worker`).
 """
 
 from __future__ import annotations
@@ -104,7 +104,7 @@ class Desk:
         process. None keeps the library's default. `store` (the database file), `calibration` and `lake` override
         `settings` (`Settings.load()` when not given), from which every other path comes. `run_jobs`: run the queue's
         jobs in this process (the embedded worker, `max_jobs` at a time) unless another worker already serves this
-        database; False for an api that leaves them to `python -m optlab.server.worker`."""
+        database; False for an api that leaves them to `optlab worker`."""
         from optlab.server.risk_api import RiskApi
 
         if engine is not None:
@@ -129,8 +129,6 @@ class Desk:
         self.workers = workers
         self.max_jobs = max_jobs or self.settings.job_concurrency
         self.started = dt.datetime.now(dt.UTC)
-        self.public_url = None  # set when a tunnel is open
-        self.lan_blockers: list[str] = []  # what stops other machines, found at start (Windows firewall)
         self.risk = RiskApi(self)
         self.worker: Any = None
         if run_jobs:
@@ -172,18 +170,22 @@ class Desk:
         return {"job": job_id, "reused": reused}
 
     def context_of(self, frozen: Frozen) -> PricingContext:
-        """The market a job was submitted on: the one in use, one used before (the same object), or the stored
-        snapshot."""
-        sid = frozen.snapshot_id
-        if sid is None or sid == self.ctx.snapshot_id:
+        """The market a job was submitted on, kept for the jobs that follow on it."""
+        return self._context_of(frozen.snapshot_id, keep=True)
+
+    def _context_of(self, snapshot_id: str | None, keep: bool = False) -> PricingContext:
+        """The market in use (also `in-use`), one used before (the same object), or a stored snapshot read without
+        switching the desk to it; `keep` keeps it among the few markets of running jobs."""
+        if snapshot_id in (None, "", "in-use", self.ctx.snapshot_id):
             return self.ctx
-        ctx = self._contexts.get(sid)
+        ctx = self._contexts.get(str(snapshot_id))
         if ctx is None:
             try:
-                ctx = PricingContext.from_snapshot(self.market_store.get(sid))
+                ctx = PricingContext.from_snapshot(self.market_store.get(str(snapshot_id)))
             except KeyError as exc:
                 raise ApiError(str(exc).strip("'\""), 404) from exc
-            self._keep_context(ctx)
+            if keep:
+                self._keep_context(ctx)
         return ctx
 
     def _keep_context(self, ctx: PricingContext) -> None:
@@ -256,8 +258,6 @@ class Desk:
             "worker": None if self.worker is None else self.worker.worker_id,
             "store": str(self.db.path),
             "started": self.started.isoformat(timespec="seconds"),
-            "public_url": self.public_url,
-            "lan_blockers": self.lan_blockers,
             "engine": native.summary(),
         }
 
@@ -326,15 +326,6 @@ class Desk:
         LOG.info("desk now on market %s (valuation %s)", self.ctx.snapshot_id, self.ctx.valuation)
         return self.context()
 
-    def _context_of(self, snapshot_id: str | None) -> PricingContext:
-        """The market in use, or another stored snapshot read without switching the desk to it."""
-        if snapshot_id in (None, "", "in-use", self.ctx.snapshot_id):
-            return self.ctx
-        try:
-            return PricingContext.from_snapshot(self.market_store.get(str(snapshot_id)))
-        except KeyError as exc:
-            raise ApiError(str(exc).strip("'\""), 404) from exc
-
     def smile(self, T: float, snapshot_id: str | None = None) -> dict:
         ctx, T = self._context_of(snapshot_id), float(T)
         F = float(ctx.market.F(T))
@@ -377,7 +368,7 @@ class Desk:
 
         lake = self.lake
         if not lake.has("instruments") and not lake.has("prices_eod"):
-            return {"available": False, "hint": "run scripts/lake_update.py"}
+            return {"available": False, "hint": "run optlab lake update"}
         cov = lake.coverage()
         cov = cov[~cov["dataset"].isin(("ingestion_runs",))]
         issues = open_issues(lake, order="obs_date DESC")
@@ -459,7 +450,7 @@ class Desk:
         return clean({"day": str(day)[:10], "rows": last[keep].to_dict("records")})
 
     def market_from_lake(self, body: dict) -> dict:
-        """A market at a past date (a job: the leverage takes seconds), stored like any snapshot; /api/market/use prices on it."""
+        """A market at a past date (a job: the leverage takes seconds), stored like any snapshot; PUT /market/in-use prices on it."""
         name, day = str(body.get("underlying", "SPX")), body.get("date")
         try:
             day = dt.date.fromisoformat(str(day))
@@ -1158,7 +1149,7 @@ class Desk:
 
     def delete_trade(self, trade_id: str) -> dict:
         self.repo.delete_trade(trade_id)
-        return {"ok": True, "undo": f"/api/trades/{trade_id}/restore"}
+        return {"ok": True, "undo": f"/api/v1/trading/trades/{trade_id}/restore"}
 
     def restore_trade(self, trade_id: str) -> dict:
         self.repo.restore_trade(trade_id)
@@ -1193,10 +1184,32 @@ class Desk:
                 singles.setdefault((first, pay), []).append(t.to_position(fix))
         return singles, baskets
 
+    def book_groups(self, ctx: PricingContext, trades: list, f: Frozen) -> list[tuple]:
+        """The live trades of a frozen book in independent groups, each on its own shared simulation: one per single
+        name and payment currency, on that name's market, then the worst-ofs of each payment currency under the basket
+        context. The groups use different seeds, so their errors add in quadrature. A group is (label, book, context,
+        what the page shows of its markets, seed, its one name or None for a basket); the book's valuation and the
+        risk engine read the same ones."""
+        singles, baskets = self._positions_by_market(ctx, trades, f.fixings_by_date() or {})
+        if not singles and not baskets:
+            raise ApiError("no live trade in the book", 422)
+        groups: list[tuple] = []
+        key = lambda x: (x[0][0] != ctx.underlying, x[0][0], str(x[0][1]))  # noqa: E731
+        for (name, pay), positions in sorted(singles.items(), key=key):
+            gctx, shown = self._single_ctx(name, ctx, pay)
+            if gctx.underlying != name:
+                held = ", ".join(p.name for p in positions)
+                raise ApiError(f"{held}: no market of {name} on {ctx.valuation}, from the lake or in use", 422)
+            groups.append((name, Book(positions), gctx, shown, DEFAULT_SEED + len(groups), name))
+        for pay, (positions, names) in sorted(baskets.items(), key=lambda x: str(x[0])):
+            bctx, shown = self._basket_ctx(names, f.basket, ctx=ctx, payment=pay)
+            label = "worst-of" if len(baskets) == 1 else f"worst-of ({pay})"
+            groups.append((label, Book(positions), bctx, shown, DEFAULT_SEED + len(groups), None))
+        return groups
+
     def price_book(self, body: dict) -> dict:
-        """Live trades in groups, each on its own shared simulation: one group per single name, on that name's market and
-        under the policy (SLV for path-dependent products), and the worst-ofs under the basket context. The groups use
-        different seeds, so their errors add in quadrature."""
+        """Value the live trades group by group (`book_groups`): the single names under the policy (SLV for
+        path-dependent products), the worst-ofs under the basket context."""
         return self._submit("book", {"options": body.get("options") or {}}, self.freeze_book())
 
     def freeze_book(self) -> Frozen:
@@ -1212,24 +1225,9 @@ class Desk:
         greeks = bool(p["options"].get("greeks", True))
         ctx = self.context_of(f)
         trades = self._trades_of(f)
-        singles, baskets = self._positions_by_market(ctx, trades, f.fixings_by_date() or {})
-        if not singles and not baskets:
-            raise ApiError("no live trade in the book", 422)
         reserves = {t.trade_id: remaining(t, ctx.valuation) for t in trades if t.status == "live"}
         t0 = time.perf_counter()
-        groups = []
-        key = lambda x: (x[0][0] != ctx.underlying, x[0][0], str(x[0][1]))  # noqa: E731
-        for k, ((name, pay), positions) in enumerate(sorted(singles.items(), key=key)):
-            gctx, shown = self._single_ctx(name, ctx, pay)
-            if gctx.underlying != name:
-                raise ValueError(
-                    f"{', '.join(p.name for p in positions)}: no market of {name} on {ctx.valuation}, from the lake or in use"
-                )
-            groups.append((name, Book(positions), gctx, shown, DEFAULT_SEED + k, name))
-        for pay, (positions, names) in sorted(baskets.items(), key=lambda x: str(x[0])):
-            bctx, shown = self._basket_ctx(names, f.basket, ctx=ctx, payment=pay)
-            label = "worst-of" if len(baskets) == 1 else f"worst-of ({pay})"
-            groups.append((label, Book(positions), bctx, shown, DEFAULT_SEED + len(groups), None))
+        groups = self.book_groups(ctx, trades, f)
         parts = []
         steps = len(groups) * (2 if greeks else 1)
         for k, (label, book, gctx, shown, seed, name) in enumerate(groups):

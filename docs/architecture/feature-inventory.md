@@ -186,14 +186,13 @@ Commands with no v0 script (A6, A7):
 
 | Command | Does |
 |---|---|
-| `optlab serve [--open] [--demo-data]` | the API (was `python -m optlab.app`, then `python -m optlab.server`, still an alias) |
+| `optlab serve [--open] [--demo-data]` | the API (was `python -m optlab.app`, then `python -m optlab.server`) |
 | `optlab worker` | the job queue's worker alone (`OPTLAB_WORKER=external`; was `python -m optlab.server.worker`) |
 | `optlab users create\|list\|roles\|password\|disable\|enable` | accounts (was `python -m optlab.server.users`) |
 | `optlab backup [--lake]`, `optlab restore PATH\|latest [--lake]` | a copy of the database (and of the lake) now; a checked restoration that keeps what it replaces |
 | `optlab migrate [--v0 FOLDER]` | the schema to this code's revision; a v0 store imported |
 | `optlab jobs list\|show\|wait\|cancel` | the job queue from the console |
 | `optlab api export\|check` | the OpenAPI document (was `python -m optlab.server.openapi`) |
-| `optlab check fast\|full\|gpu\|golden` | the test suites and the golden numbers, from a checkout |
 | `optlab demo data` | the demo folder of made-up numbers (handoff §7.7) |
 | `optlab version` | the packages' versions and the engines of the machine |
 
