@@ -10,7 +10,6 @@ from optlab.core.heston import HestonParams
 from optlab.core.market import Market
 from optlab.core.models import BlackScholesModel, HestonModel, Leverage, LocalVolModel, SLVModel
 from optlab.core.svi import SVISurface
-from optlab.structured.surfaces import FastSVISurface
 
 LEVERAGE_HORIZONS = (
     1.0,
@@ -89,7 +88,7 @@ class PricingContext:
     def from_snapshot(cls, snap) -> PricingContext:
         heston = HestonParams(**snap.heston)
         slv = SLVModel(heston, Leverage.from_dict(snap.slv["leverage"]), snap.slv["mix"])
-        surface = FastSVISurface.from_dict(snap.surface)  # bit-identical to SVISurface, faster per step
+        surface = SVISurface.from_dict(snap.surface)
         flat = (snap.provenance or {}).get("leverage", {}).get("mode") == "flat"
         return cls(
             Market.from_dict(snap.market),

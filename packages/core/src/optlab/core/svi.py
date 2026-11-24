@@ -81,6 +81,8 @@ class SVISurface:
 
     def derivatives(self, k, T):
         """w, dw/dk, d2w/dk2, dw/dT. T may be a scalar or broadcast with k."""
+        if np.ndim(T) == 0:
+            return self._derivatives_at(np.asarray(k, dtype=float), float(T))
         k, T = np.broadcast_arrays(np.asarray(k, dtype=float), np.asarray(T, dtype=float))
         out = [np.empty(k.shape) for _ in range(4)]
         th = self.theta(T)
@@ -111,6 +113,29 @@ class SVISurface:
             for o, v in zip(out, vals):
                 o[sel] = v
         return tuple(out)
+
+    def _derivatives_at(self, k: np.ndarray, T: float):
+        """`derivatives` at one time, what local volatility asks at every step of a simulation: one interpolation of
+        theta and one pair of slices for every path, the same operations in the same order as the general branch, so
+        the same numbers bit for bit (`test_structured_perf.py` compares the two)."""
+        th, dth = float(self.theta(T)), float(self.dtheta(T))
+        n = len(self.maturities)
+        j = int(np.clip(np.searchsorted(self.maturities, T, side="left"), 0, n))
+        if j == n:  # beyond the last pillar: last slice scaled by theta(T) / theta_n
+            w, wk, wkk = svi_derivs(self.params[-1], k)
+            s, ds = th / self.thetas[-1], dth / self.thetas[-1]
+            return s * w, s * wk, s * wkk, ds * w
+        lo = self.thetas[j - 1] if j > 0 else 0.0
+        hi = self.thetas[j]
+        alpha, dalpha = (th - lo) / (hi - lo), dth / (hi - lo)
+        w0, wk0, wkk0 = self._slice_derivs(j - 1, k)
+        w1, wk1, wkk1 = self._slice_derivs(j, k)
+        return (
+            (1 - alpha) * w0 + alpha * w1,
+            (1 - alpha) * wk0 + alpha * wk1,
+            (1 - alpha) * wkk0 + alpha * wkk1,
+            dalpha * (w1 - w0),
+        )
 
     def w(self, k, T):
         return self.derivatives(k, T)[0]

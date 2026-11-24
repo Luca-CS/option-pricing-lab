@@ -12,8 +12,6 @@ Every Monte Carlo number is recorded with its standard error. Same machine and s
 bit. Another machine (a hosted runner, another OS): `--across`, the tolerance of ADR-0017, never widened silently:
 groups with fixed inputs within `ACROSS_RTOL`; groups that recalibrate, whose fits amplify the last bits, with each
 Monte Carlo number within `SE_RATIO` of its standard error and every other number within `FIT_RTOL`.
-
-This file becomes `optlab check golden [--record]` in step A7; the case definitions stay as they are.
 """
 
 from __future__ import annotations
@@ -314,13 +312,12 @@ def calibration_simulated() -> dict:
 
 def _simulated_context():
     from optlab.structured import PricingContext
-    from optlab.structured.surfaces import FastSVISurface
 
     f = _simulated_fit()
     fit = f["fit"]
     return PricingContext(
         f["market"],
-        FastSVISurface.from_dict(fit["surface"].to_dict()),
+        fit["surface"],
         fit["heston"],
         fit["slv"],
         dt.date(2026, 11, 4),
