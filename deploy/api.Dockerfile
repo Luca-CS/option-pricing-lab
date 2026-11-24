@@ -1,12 +1,21 @@
 # syntax=docker/dockerfile:1
 # The `api` image (ADR-0009): Python 3.14, the six packages from the lock, the compiled engine for the CPU only (no
-# CUDA: the GPU belongs to the worker). Built from the repository's root:
+# CUDA: the GPU belongs to the worker), and the front's build. Built from the repository's root:
 #
 #     docker build -f deploy/api.Dockerfile -t optlab-api .
 #
 # Base images are pinned by digest in the FROM lines (where Dependabot finds them and proposes their updates); the process runs as an unprivileged user on a
 # read-only root file system (compose.yaml), with its data on volumes under /data.
 FROM ghcr.io/astral-sh/uv:0.13.8@sha256:5cc1805e2426484abca4ad46ea783bab281fdb225fd82d8ce6d66a81254bac85 AS uv
+
+# the front's static build (ADR-0024), served by the API on the same origin; Node stays in this stage
+FROM node:26.13.1-trixie-slim@sha256:abe7e5a82b61a8ef67b315b85497c9e65173387ccf2f4a029248184b8e020be5 AS front
+WORKDIR /src/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --ignore-scripts --no-audit --no-fund
+COPY api/openapi.json /src/api/openapi.json
+COPY frontend ./
+RUN npm run build
 
 FROM python:3.14.7-slim-trixie@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d AS build
 RUN apt-get update \
@@ -33,8 +42,9 @@ RUN apt-get update \
  && mkdir -p /data/store /data/logs /data/lake /data/archive /data/config /data/backups \
  && chown -R 10001:10001 /data
 COPY --from=build /opt/venv /opt/venv
+COPY --from=front /src/frontend/dist /opt/frontend
 ENV PATH=/opt/venv/bin:$PATH PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 HOME=/tmp \
-    OPTLAB_DATA=/data OPTLAB_CONTAINER=true OPTLAB_HOST=0.0.0.0
+    OPTLAB_DATA=/data OPTLAB_CONTAINER=true OPTLAB_HOST=0.0.0.0 OPTLAB_FRONTEND=/opt/frontend
 USER 10001:10001
 WORKDIR /tmp
 EXPOSE 8765

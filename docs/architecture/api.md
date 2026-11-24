@@ -198,21 +198,23 @@ crash interrupted ends `error` with `{"type": "Interrupted", ...}` (never resume
 
 ## 10. Types for the front
 
+The front (`frontend/`, ADR-0024) generates its types from this document before every `dev`, `typecheck` and `build`:
+
 ```
-npx openapi-typescript api/openapi.json --default-non-nullable false -o src/api/schema.d.ts
+npx openapi-typescript ../api/openapi.json --default-non-nullable false -o src/api/schema.d.ts
 ```
 
+- The generated file is not versioned: `test_openapi.py` keeps the document equal to the code, and the front must
+  compile on it (CI job `frontend`).
 - `--default-non-nullable false` matters: version 7 otherwise makes every field with a default required, so a request
   body would have to spell out every option.
-- `openapi-fetch` gives a typed client (`createClient<paths>()`); its generic `body` does not run TypeScript's
-  excess-property check, so type a body with its schema (`const body: components["schemas"]["FixingsIn"] = ...`) to
-  get it.
-- `api/client-check/` is the proof CI runs on every push (`npm ci --ignore-scripts`, generate, `tsc --noEmit`): a small
-  client signing in, quoting, polling a job, reading a page of trades and adding fixings.
+- `openapi-fetch` gives a typed client (`createClient<paths>()`, `frontend/src/api/client.ts`). Its generic `body`
+  does not run TypeScript's excess-property check: type a body with its schema
+  (`const body: components["schemas"]["FixingsIn"] = ...`) to get it (`frontend/src/api/contract.ts`).
 - Typed: the models the server shapes itself (`Me`, `Job`, `JobList`, `JobAccepted`, `JobResult` with `MarketRef` and
   `Method`, `CancelOut`, `Pipeline`, `Page`, `UserOut`, `AuditPage`, `Problem`) and `Estimate`. The domain payload
   inside `JobResult.result` (a quote, a book valuation, a risk run) is an object whose fields are described here and
-  by the routers' tests (`packages/server/tests/test_api_*.py` read them field by field); session 2 may add response
+  by the routers' tests (`packages/server/tests/test_api_*.py` read them field by field). Session 2 adds response
   models for the ones its screens read, without changing a field.
 
 ## 11. Adding a route (session 2 may)

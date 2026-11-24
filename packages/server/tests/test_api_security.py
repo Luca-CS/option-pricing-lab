@@ -383,6 +383,29 @@ def test_a_frontend_folder_serves_its_files_only(tmp_path):
             assert "not for you" not in r.text, path
 
 
+def test_a_page_of_the_front_gets_the_app_and_its_assets_are_cached(tmp_path):
+    front = tmp_path / "front"
+    (front / "assets").mkdir(parents=True)
+    (front / "index.html").write_text("<!doctype html><html><body>the app</body></html>", encoding="utf-8")
+    (front / "assets" / "index-abc123.js").write_text("console.log(1)", encoding="utf-8")
+    with api(tmp_path / "data", frontend=front) as f:
+        c = f.client()
+        for page in ("/", "/sign-in", "/trading/trades/DEMO-01", "/quant/market/SPX?date=2021-06-30"):
+            r = c.get(page)
+            assert r.status_code == 200 and "the app" in r.text, page
+            assert r.headers["cache-control"] == "no-cache", page
+            assert r.headers["content-security-policy"].startswith("default-src 'self'"), page
+        r = c.get("/assets/index-abc123.js")
+        assert r.status_code == 200 and r.headers["cache-control"] == "public, max-age=31536000, immutable"
+        # a missing file stays missing, and the API's own 404 stays the API's
+        assert c.get("/assets/index-gone.js").status_code == 404
+        assert c.get("/favicon.ico").status_code == 404
+        r = c.get("/api/v1/no-such-route")
+        assert r.status_code == 404 and r.headers["content-type"].startswith("application/problem+json")
+        assert c.get("/api/whatever").status_code == 404
+        assert c.post("/trading/trades", json={}).status_code in (403, 405)
+
+
 class _Scripts(HTMLParser):
     """The text of every inline script of a page (an HTML parser, not a pattern: tags in any case or spacing)."""
 

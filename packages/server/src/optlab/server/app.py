@@ -11,11 +11,15 @@ import base64
 import hashlib
 from contextlib import asynccontextmanager
 from importlib.metadata import version
+from pathlib import PurePath
 from typing import Any
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException
+from starlette.responses import Response
+from starlette.types import Scope
 
 from optlab.server.api import Desk
 from optlab.server.audit import Audit
@@ -27,6 +31,29 @@ from optlab.server.web import Guard, State, install_problems
 
 PREFIX = "/api/v1"
 METHODS = ("get", "post", "put", "patch", "delete")
+IMMUTABLE = "public, max-age=31536000, immutable"
+
+
+class Frontend(StaticFiles):
+    """The front's build (ADR-0024): its files, and `index.html` for a page of the front's own router.
+
+    A page path (`/trading/trades/DEMO-01`, no file extension, not under `/api/`) that names no file gets the app,
+    which reads the URL. Assets carry their content hash in their name, so they are cached for good; the page itself
+    is revalidated, so a new build is seen at the next load."""
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        parts = PurePath(path).parts  # Starlette gives the path with the system's separator
+        try:
+            response = await super().get_response(path, scope)
+        except HTTPException as e:
+            if e.status_code != 404 or not parts or parts[0] == "api" or "." in parts[-1]:
+                raise
+            response = await super().get_response("index.html", scope)
+        if parts[:1] == ("assets",) and response.status_code == 200:
+            response.headers["cache-control"] = IMMUTABLE
+        elif response.headers.get("content-type", "").startswith("text/html"):
+            response.headers["cache-control"] = "no-cache"
+        return response
 
 
 def operations(app: FastAPI) -> list[dict[str, Any]]:
@@ -212,6 +239,6 @@ def create_app(settings: Settings | None = None, desk: Desk | None = None) -> Fa
     app = api_app(docs=settings.docs)
     app.state.optlab = State(settings, desk, Accounts(desk.db, settings), Audit(desk.db))
     if settings.frontend is not None:
-        app.mount("/", StaticFiles(directory=settings.frontend, html=True), name="frontend")
+        app.mount("/", Frontend(directory=settings.frontend, html=True), name="frontend")
     app.add_middleware(Guard, settings=settings)
     return app

@@ -1,0 +1,61 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  box-sizing: border-box;
+  background: var(--ol-ground);
+}
+
+.panel {
+  width: 100%;
+  max-width: 380px;
+  background: var(--ol-panel);
+  border: 1px solid var(--ol-line);
+  border-radius: 10px;
+  padding: 28px 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-sizing: border-box;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ol-muted);
+}
+
+.mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: var(--ol-brand);
+  color: var(--ol-brand-ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mantine-font-family-monospace);
+  font-weight: 700;
+}
+
+.title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ol-text);
+}
+
+.note {
+  margin: 0;
+  color: var(--ol-faint);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.note code {
+  font-family: var(--mantine-font-family-monospace);
+  color: var(--ol-muted);
+}

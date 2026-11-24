@@ -50,10 +50,15 @@ jobs:
           PYRIGHT_PYTHON_GLOBAL_NODE: "1"
         run: uv run --no-sync pyright
 
-  api-contract:
-    name: API contract (TypeScript client)
+  frontend:
+    name: front (lint, types, unit, build, end to end)
+    # the API contract too: the front's types are generated from api/openapi.json (test_openapi.py keeps that file the
+    # code's), and the front must compile on them (ADR-0024)
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -61,16 +66,47 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
         with:
           node-version: "26"
-      # api/openapi.json is the code's (test_openapi.py in the tests); here it must make a typed client that compiles
-      - name: Install the generator and the compiler (lock file, no install scripts)
-        working-directory: api/client-check
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - name: Install (lock file, no install scripts)
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Generate the types from api/openapi.json
-        working-directory: api/client-check
-        run: npm run generate
-      - name: Compile the client
-        working-directory: api/client-check
-        run: npm run check
+      - name: Lint and format (Biome)
+        run: npx biome ci .
+      - name: Types, generated from api/openapi.json
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: Install the desk
+        working-directory: .
+        env:
+          OPTLAB_WITH_CUDA: "OFF"
+        run: uv sync --locked --all-extras
+      - name: Demo data, with a password made for this run
+        working-directory: .
+        run: |
+          password="$(openssl rand -hex 16)"
+          echo "::add-mask::$password"
+          echo "E2E_PASSWORD=$password" >> "$GITHUB_ENV"
+          printf '%s\n' "$password" | uv run --no-sync optlab demo data --to "$RUNNER_TEMP/demo" --password-stdin
+      - name: Browser
+        run: npx playwright install --with-deps chromium
+      - name: End to end, against the API serving the build
+        env:
+          E2E_DATA: ${{ runner.temp }}/demo
+        run: npx playwright test
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 7
 
   test:
     name: tests (${{ matrix.os }})

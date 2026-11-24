@@ -1,8 +1,15 @@
-# The images get the packages and the lock, nothing else (ADR-0009): no data, no results, no history, no secrets.
+# The images get the packages, the lock and the front's sources, nothing else (ADR-0009): no data, no results, no history, no secrets.
 *
 !pyproject.toml
 !uv.lock
 !packages/
+!api/openapi.json
+!frontend/
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+frontend/src/api/schema.d.ts
 packages/**/tests/
 packages/**/__pycache__/
 packages/**/*.pyc
