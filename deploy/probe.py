@@ -56,7 +56,10 @@ class Target:
                 conn.endheaders(body)
                 r = conn.getresponse()
                 data = r.read()
-            except ConnectionError:  # refused and closed while the body was still being sent
+            except (
+                ConnectionError,
+                TimeoutError,
+            ):  # refused while the body was still being sent (a relay may hold the answer)
                 return 0, {}, b"", []
             return r.status, {k.lower(): v for k, v in r.getheaders()}, data, r.msg.get_all("set-cookie") or []
         finally:
