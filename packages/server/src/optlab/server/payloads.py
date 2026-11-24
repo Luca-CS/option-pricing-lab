@@ -289,7 +289,7 @@ class GpuState(Doc):
 
 class WorkerInfo(Doc):
     engine: EngineInfo | None = None
-    gpu: list[GpuState] | None = Field(None, description="null where the worker's machine has no nvidia-smi")
+    gpu: list[GpuState] | None = Field(default=None, description="null where the worker's machine has no nvidia-smi")
 
 
 class Backup(Doc):
@@ -314,7 +314,7 @@ class WorkerRow(Doc):
     heartbeat_at: str | None = None
     stopped_at: str | None = None
     alive: bool
-    info: WorkerInfo = WorkerInfo()
+    info: WorkerInfo = Field(default_factory=WorkerInfo)
 
 
 class SystemInfo(Doc):

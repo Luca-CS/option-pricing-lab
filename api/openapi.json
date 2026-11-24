@@ -10472,8 +10472,7 @@
             "title": "Alive"
           },
           "info": {
-            "$ref": "#/components/schemas/WorkerInfo",
-            "default": {}
+            "$ref": "#/components/schemas/WorkerInfo"
           }
         },
         "additionalProperties": true,
