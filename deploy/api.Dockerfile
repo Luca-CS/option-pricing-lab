@@ -17,7 +17,7 @@ COPY api/openapi.json /src/api/openapi.json
 COPY frontend ./
 RUN npm run build
 
-FROM python:3.14.7-slim-trixie@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d AS build
+FROM python:3.15.1-slim-trixie@sha256:533b0b2f9b5d46fd097091cf826f27902f1d6c3bca714b6dc74551356aa97a51 AS build
 RUN apt-get update \
  && apt-get install -y --no-install-recommends g++ make cmake \
  && rm -rf /var/lib/apt/lists/*
@@ -30,7 +30,7 @@ COPY packages packages
 # the lock with its hashes, the runtime only (no dev tools), installed as wheels: the image holds no source tree
 RUN uv sync --locked --no-dev --no-editable --extra yahoo --python /usr/local/bin/python3.14
 
-FROM python:3.14.7-slim-trixie@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d
+FROM python:3.15.1-slim-trixie@sha256:533b0b2f9b5d46fd097091cf826f27902f1d6c3bca714b6dc74551356aa97a51
 # the distribution's security updates since the base image was built; no pip (the venv is uv's, and pip carries its
 # own copies of certifi, urllib3 and others, which Trivy rightly counts)
 RUN apt-get update \
