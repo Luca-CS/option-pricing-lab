@@ -117,6 +117,15 @@ def test_a_stored_table_is_validated_and_completed():
         validate_table({"index_us": {"tiers": [{"max_notional": 2e6, "vol": 5.0}]}})
     with pytest.raises(ValueError, match="unknown"):
         validate_table({"index_us": {"tiers": [{"max_notional": 2e6, "gamma": 1.0}]}})
+    # found by the authenticated ZAP scan of A9: a 500 on the first two, a NaN stored past every bound on the others
+    for bad in ({"index_us": "text"}, {"index_us": {"tiers": "abc"}}, {"index_us": {"tiers": [1, 2]}}):
+        with pytest.raises(ValueError, match="object"):
+            validate_table(bad)
+    for value in (float("nan"), float("inf"), "nan", True):
+        with pytest.raises(ValueError, match="number"):
+            validate_table({"index_us": {"tiers": [{"max_notional": 2e6, "vol": value}]}})
+        with pytest.raises(ValueError, match="number"):
+            validate_table({"index_us": {"tiers": [{"max_notional": value}]}})
     old = {"groups": {"index_us": {"label": "US", "currency": "USD", "tiers": [{"max_notional": 1e6, "vol": 0.01}]}}}
     m = merged(old)
     assert (

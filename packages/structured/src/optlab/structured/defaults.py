@@ -10,6 +10,7 @@ in size, the tightest limit, and with two signs both are measured on the product
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 from optlab.core.instruments import instrument
@@ -120,27 +121,43 @@ def merged(table: dict | None) -> dict:
     return out
 
 
+def _number(group: str, what: str, value) -> float:
+    """A finite number: NaN would pass every bound (each comparison with it is false) and reach the quotes."""
+    if isinstance(value, bool):
+        raise ValueError(f"{group}: {what} must be a number, not {value!r}")
+    out = float(value)
+    if not math.isfinite(out):
+        raise ValueError(f"{group}: {what} must be a finite number, not {value!r}")
+    return out
+
+
 def validate_table(groups: dict) -> dict:
     """The table as stored, or ValueError with what is wrong: tiers rising in size, values within the bounds of the form."""
     spec = {f.name: f for f in parameters()}
     clean = {}
+    if not isinstance(groups, dict):
+        raise ValueError("the table is an object: group -> {label, currency, tiers}")
     for name, group in groups.items():
+        if not isinstance(group, dict):
+            raise ValueError(f"{name}: a group is an object with its tiers")
         tiers = group.get("tiers") or []
+        if not isinstance(tiers, list) or not all(isinstance(t, dict) for t in tiers):
+            raise ValueError(f"{name}: the tiers are a list of objects")
         if not tiers:
             raise ValueError(f"{name}: at least one size tier")
-        caps = [float(t.get("max_notional", 0)) for t in tiers]
+        caps = [_number(name, "max_notional", t.get("max_notional", 0)) for t in tiers]
         if any(c <= 0 for c in caps) or any(b <= a for a, b in zip(caps, caps[1:])):
             raise ValueError(f"{name}: tiers must have positive sizes, rising")
         rows = []
         for t in tiers:
-            row = {"max_notional": float(t["max_notional"])}
+            row = {"max_notional": _number(name, "max_notional", t["max_notional"])}
             for key, value in t.items():
                 if key == "max_notional":
                     continue
                 f = spec.get(key)
                 if f is None:
                     raise ValueError(f"{name}: unknown parameter {key!r}")
-                value = float(value)
+                value = _number(name, f.label, value)
                 if f.minimum is not None and value < f.minimum or f.maximum is not None and value > f.maximum:
                     raise ValueError(f"{name}: {f.label} = {value} is outside {f.minimum} to {f.maximum}")
                 row[key] = value
