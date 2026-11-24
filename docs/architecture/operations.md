@@ -144,9 +144,37 @@ Stop, update, logs:
 
 ```bash
 docker compose -f $D down                                      # stops both; the volumes stay
-git pull && docker compose -f $D up -d --build                 # until A9's `optlab deploy` (images from GHCR, rollback)
 docker compose -f $D logs -f worker                            # the console; the JSON log files are in optlab_logs
 ```
+
+### Releases, deploys and rollbacks
+
+A release is a tag `vX.Y.Z` (or `vX.Y.Z-rc.N`) on `main`, whose packages carry the version `X.Y.Z`. Pushing the tag
+runs `.github/workflows/release.yml`: the api and worker images are built from the tag, pushed to
+`ghcr.io/luca-cs/optlab-api` and `optlab-worker` with their SBOM and a provenance attestation, and the GitHub release
+of the tag lists their digests. Rebuilding a release is running that workflow on its tag again: the lock (hashes) and
+the base images (digests) are in the tree.
+
+Deploy, from the repository checked out at the release's tag (its `compose.yaml`), in WSL as root:
+
+```bash
+gh attestation verify oci://ghcr.io/luca-cs/optlab-api@sha256:<digest> --owner Luca-CS      # from Windows, once per release
+sh deploy/wsl/deploy.sh v1.0.0          # pull by digest, copy the database, migrate, restart, check /ready
+sh deploy/wsl/deploy.sh --status        # what runs, what ran before, the copy a rollback restores
+sh deploy/wsl/deploy.sh --rollback      # the version before, with the database as it was before the last deploy
+```
+
+The script pulls the images by the digests of the GitHub release (never by a moving tag) and tags them
+`optlab-api:<tag>` here; copies the database (SQLite's online backup, read-only on the live file) to
+`backups/manual/optlab-<stamp>-before-<tag>.sqlite`; stops api and worker; lets the new worker image migrate the
+database; starts both on the new images; and waits up to 180 s for `/api/v1/ready`. If a step after the copy fails, the
+previous images come back with that copy and the script exits 1. `--rollback` does the same on purpose: whatever the
+desk wrote since the deploy is lost with it (it stays in `backups/pre-restore`). The state (current tag, previous tag,
+the copy) is in `/var/lib/optlab-deploy/optlab` in WSL. `OPTLAB_PROJECT=<name>` runs the same steps on another compose
+project with its own volumes, for a drill; `--local TAG` deploys images already built here (`OPTLAB_TAG=TAG docker
+compose -f $D build`) instead of pulling.
+
+The scripts of `deploy/` keep LF line endings in a Windows checkout (`.gitattributes`): `sh` in WSL stops at a CRLF.
 
 Backups and restore in containers: the worker's schedules write into `optlab_backups` as on Windows. To restore,
 stop both services first, then:
