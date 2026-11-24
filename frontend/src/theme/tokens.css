@@ -1,0 +1,73 @@
+/* The desk's design tokens (HANDOFF_REFACTOR_2_UX.md §5). Dark graphite is the default; light "paper" for the day and
+   the reports. Green and red are for signed values only; the colourblind palette swaps them for blue and orange. */
+:root,
+:root[data-mantine-color-scheme="dark"] {
+  --ol-ground: #121417;
+  --ol-panel: #1a1d21;
+  --ol-raised: #23282e;
+  --ol-line: #2b3036;
+  --ol-line-strong: #3a4047;
+  --ol-text: #e7e9ec;
+  --ol-muted: #a0a8b1;
+  --ol-faint: #7f8893;
+  --ol-brand: #f0a93a;
+  --ol-brand-ink: #1a1305;
+  --ol-accent: #56c2de;
+  --ol-accent-ink: #0d1a1f;
+  --ol-pos: #5dbb8a;
+  --ol-neg: #e57a70;
+  --ol-chrome: #16191c;
+}
+
+:root[data-mantine-color-scheme="light"] {
+  --ol-ground: #f6f5f1;
+  --ol-panel: #ffffff;
+  --ol-raised: #efede7;
+  --ol-line: #dddad2;
+  --ol-line-strong: #c9c5bb;
+  --ol-text: #1d2125;
+  --ol-muted: #565e67;
+  --ol-faint: #6b737c;
+  --ol-brand: #9a5b00;
+  --ol-brand-ink: #ffffff;
+  --ol-accent: #0b7a94;
+  --ol-accent-ink: #ffffff;
+  --ol-pos: #23804f;
+  --ol-neg: #c2473c;
+  --ol-chrome: #efede7;
+}
+
+:root[data-palette="colorblind"][data-mantine-color-scheme="dark"],
+:root[data-palette="colorblind"]:not([data-mantine-color-scheme]) {
+  --ol-pos: #5aa9e6;
+  --ol-neg: #e8964a;
+}
+
+:root[data-palette="colorblind"][data-mantine-color-scheme="light"] {
+  --ol-pos: #1f6fb2;
+  --ol-neg: #b35a00;
+}
+
+html,
+body {
+  background: var(--ol-ground);
+  color: var(--ol-text);
+}
+
+body {
+  margin: 0;
+  font-family: var(--mantine-font-family);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ol-brand);
+  outline-offset: 2px;
+}
+
+.mantine-focus-auto:focus-visible,
+.mantine-focus-always:focus {
+  outline: 2px solid var(--ol-brand);
+  outline-offset: 2px;
+}

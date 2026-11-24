@@ -2,3 +2,7 @@
 # core.autocrlf says: with CRLF, sh reads 'set -eu\r' and stops.
 *.sh text eol=lf
 deploy/Caddyfile text eol=lf
+# The front's sources keep LF in every checkout: Biome checks the line endings, and CI runs on Linux.
+frontend/** text eol=lf
+frontend/public/*.png binary
+frontend/**/*.woff2 binary

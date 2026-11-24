@@ -16,5 +16,9 @@ HANDOFF_*.md
 .coverage.*
 
 # the API contract's client check: its packages and the types it generates
-api/client-check/node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+frontend/src/api/schema.d.ts
 api/client-check/schema.d.ts
