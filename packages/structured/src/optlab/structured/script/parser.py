@@ -11,9 +11,16 @@ Grammar (one statement per line, blocks closed by `end`):
     unary     := - unary | primary
     primary   := NUMBER | NAME | ( expr ) | FUNC ( expr {, expr} ) | lowest|highest ( NAME , WHEN , WHEN [, n = INT] )
     FUNC      := min | max (2 args) | abs | exp | log (1 arg) | worst | best (2 or more, e.g. worst-of baskets)
+
+Depth is bounded: the parser, and every pass over the tree after it (validation, timeline, evaluation, printing), is
+recursive, so a script nested without limit (thousands of parentheses, or one sum of thousands of terms) would end in
+Python's recursion limit instead of a located `ScriptError`. `MAX_NESTING` bounds what the parser recurses on,
+`MAX_DEPTH` the height of the tree; no product comes near either.
 """
 
 from __future__ import annotations
+
+import dataclasses
 
 from optlab.structured.script.lexer import ScriptError, Token, tokenize
 from optlab.structured.script.nodes import (
@@ -26,6 +33,7 @@ from optlab.structured.script.nodes import (
     Event,
     If,
     Name,
+    Node,
     Num,
     Param,
     Pay,
@@ -38,12 +46,25 @@ from optlab.structured.script.nodes import (
 )
 
 COMPARISONS = ("<", "<=", ">", ">=", "==")
+MAX_NESTING = 40  # parentheses, calls, unary signs and ifs inside one another
+MAX_DEPTH = 150  # height of the tree: a chain a + b + c + ... adds one level per operator
 
 
 class Parser:
     def __init__(self, text: str):
         self.tokens = tokenize(text)
         self.i = 0
+        self.nesting = 0
+
+    def nested(self, parse, tok: Token):
+        """`parse()` one level deeper, refused past `MAX_NESTING`."""
+        self.nesting += 1
+        if self.nesting > MAX_NESTING:
+            raise self.error(f"nested more than {MAX_NESTING} levels deep: split it into assignments", tok)
+        try:
+            return parse()
+        finally:
+            self.nesting -= 1
 
     # --- token helpers ---
     @property
@@ -135,11 +156,11 @@ class Parser:
             cond = self.expr()
             self.expect("KEYWORD", "then")
             self.end_of_line()
-            body = self.block(("else", "end"))
+            body = self.nested(lambda: self.block(("else", "end")), tok)
             orelse = ()
             if self.accept("KEYWORD", "else"):
                 self.end_of_line()
-                orelse = self.block(("end",))
+                orelse = self.nested(lambda: self.block(("end",)), tok)
             self.expect("KEYWORD", "end", "'end' closing the if")
             self.end_of_line()
             return If(cond, body, orelse, tok.line, tok.col)
@@ -174,7 +195,7 @@ class Parser:
 
     def not_expr(self):
         if tok := self.accept("KEYWORD", "not"):
-            return Unary("not", self.not_expr(), tok.line, tok.col)
+            return Unary("not", self.nested(self.not_expr, tok), tok.line, tok.col)
         return self.comparison()
 
     def comparison(self):
@@ -205,7 +226,7 @@ class Parser:
 
     def unary(self):
         if tok := self.accept("OP", "-"):
-            return Unary("-", self.unary(), tok.line, tok.col)
+            return Unary("-", self.nested(self.unary, tok), tok.line, tok.col)
         return self.primary()
 
     def primary(self):
@@ -213,7 +234,7 @@ class Parser:
         if self.accept("NUMBER"):
             return Num(float(tok.text), tok.line, tok.col)
         if self.accept("OP", "("):
-            e = self.expr()
+            e = self.nested(self.expr, tok)
             self.expect("OP", ")")
             return e
         if self.accept("NAME"):
@@ -223,9 +244,9 @@ class Parser:
                 return self.window(tok)
             if tok.text not in FUNCTIONS:
                 raise self.error(f"unknown function {tok.text!r}", tok)
-            args = [self.expr()]
+            args = [self.nested(self.expr, tok)]
             while self.accept("OP", ","):
-                args.append(self.expr())
+                args.append(self.nested(self.expr, tok))
             self.expect("OP", ")")
             arity = FUNCTIONS[tok.text]
             if (arity is None and len(args) < 2) or (arity is not None and len(args) != arity):
@@ -252,6 +273,23 @@ class Parser:
         return Window(tok.text, und, start, end, n, tok.line, tok.col)
 
 
+def _check_depth(program: Program) -> None:
+    """Refuse a tree higher than `MAX_DEPTH` (walked with a stack, not by recursion)."""
+    stack: list[tuple[Node, int]] = [(event, 1) for event in program.events]
+    while stack:
+        node, depth = stack.pop()
+        if depth > MAX_DEPTH:
+            line, col = getattr(node, "line", 0), getattr(node, "col", 0)
+            raise ScriptError(f"an expression more than {MAX_DEPTH} levels deep: split it into assignments", line, col)
+        for f in dataclasses.fields(node):
+            value = getattr(node, f.name)
+            for child in value if isinstance(value, tuple) else (value,):
+                if isinstance(child, Node):
+                    stack.append((child, depth + 1))
+
+
 def parse(text: str) -> Program:
     """Parse a script. Raises ScriptError with the line and column of the first error."""
-    return Parser(text).program()
+    program = Parser(text).program()
+    _check_depth(program)
+    return program

@@ -1,6 +1,6 @@
 [project]
 name = "optlab-structured"
-version = "0.1.0"
+version = "1.0.0"
 description = "optlab's structured products: the payoff script language, term sheets, pricing policy, quotes, desk costs, books"
 requires-python = ">=3.14"
 license = "MIT"

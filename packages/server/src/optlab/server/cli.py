@@ -20,6 +20,7 @@ input with `--stdin`, for scripts and tests): never an argument, so it never lan
 from __future__ import annotations
 
 import os
+import signal
 import sys
 import threading
 import time
@@ -213,6 +214,7 @@ def worker(
         say("another worker holds the lease: waiting for it to expire")
         time.sleep(2)
     say(f"worker {w.worker_id} on {desk.db.path}: {w.concurrency} job(s) at a time, Ctrl+C to stop")
+    signal.signal(signal.SIGTERM, _interrupt)  # `docker stop`: the same clean stop as Ctrl+C (the lease released)
     try:
         while True:
             time.sleep(1)
@@ -221,6 +223,10 @@ def worker(
     finally:
         w.stop()
         desk.close()
+
+
+def _interrupt(signum: int, frame: object) -> None:
+    raise KeyboardInterrupt
 
 
 # --- accounts ----------------------------------------------------------------------------------------------------------
@@ -242,7 +248,7 @@ def _password(stdin: bool) -> str:
     import getpass
 
     if stdin:
-        return sys.stdin.readline().rstrip("\n")
+        return sys.stdin.readline().rstrip("\r\n")  # a file written on Windows ends its line with a CR too
     first = getpass.getpass("password (12 characters at least): ")
     if getpass.getpass("again: ") != first:
         raise ValueError("the two passwords differ")
@@ -791,7 +797,7 @@ def demo_data_cmd(
     """Build the demo folder (made-up numbers only): then `optlab --data <folder> serve` or `optlab serve --demo-data`."""
     from optlab.server import demo
 
-    password = sys.stdin.readline().rstrip("\n") if password_stdin else None
+    password = sys.stdin.readline().rstrip("\r\n") if password_stdin else None
     out = demo.build(to, password=password, n_paths=n_paths, rebuild=rebuild, log=say)
     say(f"demo data in {out['folder']}: market {out['market']}, trades {', '.join(out['trades'])}")
     if "password" in out:

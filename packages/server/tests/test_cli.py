@@ -399,3 +399,20 @@ def test_copies_made_in_the_same_millisecond_get_their_own_names(tmp_path, monke
     names = [backups.lake_snapshot(lake, folder, keep=3, log=lambda *a: None)["folder"] for _ in range(3)]
     assert names == ["20261113-120000-000", "20261113-120000-000-1", "20261113-120000-000-2"]
     assert [p.name for p in backups.lake_snapshots(folder)] == names  # oldest first, as made
+
+
+def test_a_password_read_from_a_windows_file_keeps_no_carriage_return(data, monkeypatch):
+    """Found in A9: `users create --stdin` in a container, fed a file written on Windows, kept its CR in the password."""
+    from optlab.server.persistence import Database
+    from optlab.server.security import Accounts
+    from optlab.server.settings import Settings
+
+    password = secrets.token_urlsafe(18)
+    monkeypatch.setattr("sys.stdin", io.StringIO(password + "\r\n"))
+    assert run(["users", "create", "crlf", "--roles", "viewer", "--stdin"]) == 0
+    settings = Settings.load()
+    db = Database(settings.database)
+    try:
+        assert Accounts(db, settings).authenticate("crlf", password, "test").name == "crlf"
+    finally:
+        db.close()

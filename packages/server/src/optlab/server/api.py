@@ -14,6 +14,7 @@ from __future__ import annotations
 import dataclasses
 import datetime as dt
 import json
+import math
 import re
 import time
 from pathlib import Path
@@ -1277,9 +1278,11 @@ class Desk:
         if scale:  # real index levels: divide by real spot / model spot (every market is rescaled to 100)
             ratio = scale / ctx.market.spot
             levels = {d: float(v) / ratio for d, v in levels.items()}
-        for d in levels:
+        for d, v in levels.items():
             if dt.date.fromisoformat(str(d)) > ctx.valuation:
                 raise ApiError(f"fixing on {d} is after the valuation date {ctx.valuation}", 422)
+            if not (math.isfinite(v) and v > 0):
+                raise ApiError(f"fixing on {d}: {v} is not a positive level", 422)
         n = self.repo.put_fixings(und, levels, body.get("source", "manual"))
         return {"ok": True, "stored": n, "skipped": skipped}
 

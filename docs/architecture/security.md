@@ -1,6 +1,6 @@
 # Security: threat model and controls
 
-Status: **draft** (A0, 7 November 2026); reviewed and completed in A9 with the results of every check. Principle:
+Status: written in A0 (7 November 2026), reviewed in A9 (24 November 2026) with the results of every check (§7). Principle:
 safety above all; between a nicer option and a safer one, the safer one, written in the ADR.
 
 ## 1. What is protected
@@ -144,6 +144,40 @@ Checked and sound:
 | 42 | Behind `netsh portproxy`, every LAN client reaches Caddy from the Windows host's address: the login throttle by address and the audit log's addresses collapse into one | Info (off; the per-account lockout still holds) | kept, written in operations.md's LAN section |
 | 43 | Docker's and NVIDIA's signing keys are fetched over HTTPS without a fingerprint check, as their documentation does | Info | kept: the apt repositories then check every package against them |
 
+### Found in A9, from the outside (`deploy/probe.py`)
+
+The probe talks to a running desk over HTTP, raw where it matters (a missing or doubled `Host`, a chunked body
+without a type, a length and a chunked encoding together, bursts of concurrent logins), as a neighbour on the network
+would. It creates its own accounts for the roles through the admin API, with generated passwords, and disables them at
+the end. Run on a throwaway instance (an empty data folder, `127.0.0.1:8766`) on 16 November 2026: **7 failures before
+the fixes, 73 checks out of 73 after them** (`127.0.0.1:8767`, the fixed code).
+
+Held from the first run, without a change:
+- the 71 operations that are not public answer 401 without a session; garbage, oversized and guessed cookies too;
+- every state-changing operation refuses a valid session without its CSRF token, or with another session's;
+- `Origin` of another site, `null`, a look-alike name, or user info in it: 403 with a valid session and token;
+- bodies typed `text/plain`, form, multipart or untyped: 415; a body over the limit: 413, with or without a length;
+- the roles matrix over HTTP: a viewer, a trader and a structurer are refused on each operation their role does not
+  name (33, 19 and 31 of them); someone else's job is a 404 on read, cancel and events;
+- a cookie planted before a login is not adopted; a cookie replayed after its logout, or after its user's roles
+  changed, opens nothing;
+- a wrong password and an unknown name get the same answer in the same time (92 ms against 92 ms);
+- JSON nested 200,000 deep is a 400; a header of 200 KB, two `Host` headers or none: 400; ids of `../`, `%2e%2e`,
+  `%00` or 300 characters reach no file; SQL in a filter is a value; unknown fields and out-of-bound costs: 422;
+- every error is problem+json without a trace or a path; no `Server` header; no CORS answer to another origin.
+
+| # | Finding | Severity | Fate |
+|---|---|---|---|
+| 44 | **A burst of guesses was not counted**: the account's failures were read, then written after the hash, so 15 wrong passwords sent at once were all evaluated and counted as one; the account was not locked afterwards and its real password still opened it. The address throttle had the same gap (checked before the hash, counted after) | Medium (it multiplies the guesses an attacker gets per lockout window by the number of parallel requests) | fixed: an attempt is counted before its hash, in a write transaction for the account and under a lock for the address, and given back when it was right. The same burst now: 5 evaluated, 10 answered 423, the account locked. Test |
+| 45 | **A script nested 9,000 deep** (20,000 characters, within the size bound) ended in Python's recursion limit: a 500. A sum of thousands of terms would do the same in the passes that walk the tree | Low (local DoS of one request; the 500 carried no trace) | fixed: the parser bounds nesting (40) and the tree's height (150), with a `ScriptError` at its line. Test |
+| 46 | A chunked body without a `Content-Type` passed the guard's JSON rule (FastAPI then read it as JSON) | Low (a browser's cross-site request sends a type, and the CSRF header is still required) | fixed: 415. Test |
+| 47 | A request with both a `Content-Length` and a `Transfer-Encoding` was read (uvicorn takes the chunked one) | Low (no proxy in front by default; Caddy refuses it too) | fixed: 400, before any route. Test |
+| 48 | `Host: evil@127.0.0.1` was read as `127.0.0.1` | Info (a browser never sends it; the cookie stays tied to the real name) | fixed: a `Host` must be a plain `name[:port]`. Test |
+| 49 | The guard's own refusals (403, 413, 415) had no `Cache-Control: no-store` | Info | fixed. Test |
+| 50 | Every failed login wrote an audit line, the throttled ones included: an address without an account could grow the log at will; the attempts on a locked account did not count for the address; the per-address memory kept every address forever | Low | fixed: a throttled attempt (429) writes nothing, a locked one (423) counts, addresses without an attempt in 10 minutes are forgotten. Test |
+| 51 | A viewer may submit valuations of a trade or of the book (jobs on the GPU) | Info | kept: a valuation writes nothing, a viewer is a signed-in colleague, and two jobs run at a time whatever is queued |
+| 52 | Many SSE streams held open by one user each poll the job row four times a second | Info | kept: denial of service by volume against the local instance is out of scope (`SECURITY.md`); the stream ends with its session and after an hour |
+
 ## 6. Secrets
 
 None today (checked in A0: no key, token or password in the tree; gitleaks in A1 checks the history). Future secrets
@@ -151,11 +185,41 @@ None today (checked in A0: no key, token or password in the tree; gitleaks in A1
 Test accounts of the session use generated passwords stored in an untracked local file; Luca creates his own admin
 account and the session never types his password.
 
-## 7. Checks of A9 (results to be filled in)
+## 7. Checks of A9 (24 November 2026)
 
-- A security review pass per domain (the `security-review` skill on every PR that touches the server, auth or CI).
-- OWASP ZAP baseline scan of the local instance (free Docker image).
-- Trivy: no critical or high vulnerability left untreated.
-- The authorisation matrix green.
-- Container inspection (`docker inspect`: user, capabilities, ports on `127.0.0.1`).
-- A restore drill from a backup.
+| Check | How | Result |
+|---|---|---|
+| From the outside, natively | `deploy/probe.py` against a throwaway instance (`optlab serve`, an empty data folder) | 7 failures before the fixes (findings 44 to 49), **73 checks out of 73** after |
+| From the outside, in the containers | the same probe against the images of this branch (`compose -p optlab-probe`, `127.0.0.1:8768`) | **73 out of 73** |
+| OWASP ZAP | `zap-api-scan.py` 2.17.0 (image by digest) on the OpenAPI document, with the session and CSRF headers of a user holding the four business roles; the session and admin routes left out (a scanned logout signs ZAP out: the first run got 401 on 15,000 requests and was redone) | 117 rules pass. The first authenticated run found 119 answers 500 on `PUT /trading/cost-defaults` (finding 53, fixed). Warnings kept: COEP missing and `style-src 'unsafe-inline'` on the standalone reports (inline CSS by design, no script), "unexpected content type" on the HTML reports |
+| The containers' isolation | `docker inspect` and inside each container (`/proc/self/status`) | uid 10001, `CapEff` and `CapBnd` 0, `NoNewPrivs` 1, seccomp on, read-only root, the lake, archive, backups and config read-only for the api, no Docker socket, `docker-init` as PID 1, memory and process limits; the one published port on `127.0.0.1` (`ss`: `docker-proxy` on `127.0.0.1:8768` only); refused from every other address of WSL and of Windows (LAN, vEthernet, link-local); a foreign `Host` through it: 403 |
+| The containers' reach | connections from inside | out to the internet: open for both (finding 39, still kept); to the WSL host's port 22 and to `host.docker.internal`: none |
+| The daemon | `daemon.json`, `ss` | `"ip": "127.0.0.1"`, unix socket only (`root:docker`, 660), no TCP port |
+| Trivy, pip-audit, CodeQL, gitleaks, dependency review | CI (`security.yml`, `images.yml`) on the PRs of A9 | green; the two CodeQL alerts of the legacy page (`js/incomplete-sanitization`, high) fixed in A9 |
+| The authorisation matrix | `test_api_matrix.py` in CI, and the probe's roles group over HTTP | green; 33, 19 and 31 refusals for a viewer, a trader and a structurer |
+| A security review of the branch | the `security-review` skill (a subagent) on `security/a9-hardening` | nothing at or above medium; one adjacent point fixed (finding 54) |
+| Restore drill | `deploy/wsl/deploy.sh` on a throwaway compose project: deploy, a deploy that fails, `--rollback` | below, and `operations.md` |
+
+The deploy drill (`OPTLAB_PROJECT=optlab-drill`, images of this branch tagged `drill-a`, `drill-b`, and `drill-bad` whose
+api exits at once):
+- first deploy of `drill-a` (no database yet): ready in 11 s; an admin and a fixing written;
+- `drill-b`: the database copied, migrated, ready in 12 s; a second fixing written;
+- `drill-bad`: not ready after 180 s, so the script restored the copy it had just made with `drill-b`'s images: back
+  in 198 s in all, both fixings there, exit 1;
+- `--rollback`: `drill-a` with the copy of before `drill-b`'s deploy, in 11 s: the second fixing is gone, as it must;
+- `docker stop` of the worker: stopped in 1 s, `/ready` 503 right after (the lease freed, finding 55).
+
+Its first run found a bug of the script itself: `sh` functions share their variables, so a helper set `tag` and the
+deploy of `drill-b` started `drill-a` again while saying `drill-b` was deployed. Every function declares its variables
+`local` now.
+
+| # | Finding | Severity | Fate |
+|---|---|---|---|
+| 53 | `PUT /trading/cost-defaults` with a group or a tier that is not an object: 500 (an `AttributeError`); a `NaN` passed every bound of the table (each comparison with it is false) and was stored | Low (trader only; the 500 carried no trace) | fixed: types checked, numbers finite. Test |
+| 54 | A correct login cleared a lock that guesses sent during its hash had set | Low (needs the real user to sign in at that moment) | fixed: a lock set by others stays. Test |
+| 55 | `docker stop` killed the worker without its clean stop: its lease stayed 15 s, so a restoration right after a stop was refused | Info | fixed: SIGTERM stops it as Ctrl+C does; 30 s of grace in compose. Test (Linux) and the drill |
+| 56 | NaN and infinity were accepted in a request's numbers (Python's JSON reads them): a fixing could be `Infinity` from pasted text or any value from `levels`, negative included | Low (trader only) | fixed: `allow_inf_nan=False` on every request model, levels positive and finite. Test |
+| 57 | `optlab users create --stdin`, fed a file written on Windows, kept its CR in the password (in a container) | Info | fixed. Test |
+| 58 | The shell scripts of `deploy/` are checked out with CRLF on Windows (`core.autocrlf`), and `sh` in WSL stops at `set -eu
+` | Info | fixed: `.gitattributes` keeps them LF |
+| 39 (again) | The api can reach the internet, which it does not need | Low | kept for v1.0.0: blocking it means `DOCKER-USER` rules in WSL's iptables, kept across reboots by a unit; proposed for after the release |

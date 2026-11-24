@@ -4,6 +4,7 @@ header (its Close column is taken, as in a Yahoo download). Dates as 2026-07-27 
 from __future__ import annotations
 
 import datetime as dt
+import math
 import re
 
 SPLIT = re.compile(r"[,;\t]|\s+")
@@ -37,7 +38,7 @@ def parse_fixings(text: str) -> tuple[dict[str, float], list[str]]:
             level = float(cells[col])
         except IndexError, ValueError:
             level = float("nan")
-        if day is not None and level > 0:
+        if day is not None and math.isfinite(level) and level > 0:
             levels[day] = level
         else:
             skipped.append(line)

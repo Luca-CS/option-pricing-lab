@@ -1,0 +1,4 @@
+# Scripts that run in WSL or in a Linux container from this Windows checkout (/mnt/c) need LF line endings, whatever
+# core.autocrlf says: with CRLF, sh reads 'set -eu\r' and stops.
+*.sh text eol=lf
+deploy/Caddyfile text eol=lf

@@ -345,3 +345,31 @@ end
 """
     out = run(script, [[120.0], [200.0]], smoothing=0.01)
     assert np.all(np.isfinite(out.flows[(1.0, "redemption")]))
+
+
+def test_a_script_nested_without_limit_is_a_located_error_not_a_recursion():
+    """Found by the probe in A9: 9,000 parentheses in a 20,000-character script ended in Python's recursion limit
+    (a 500 on the API); so did one sum of thousands of terms, in the passes that walk the tree."""
+    from optlab.structured.script.parser import MAX_DEPTH, MAX_NESTING
+
+    def script(expression: str) -> str:
+        return "\n".join(
+            ["underlying SPX", "event 2030-01-07 pay 2030-01-14", f"  pay {expression} as redemption", "end", ""]
+        )
+
+    for deep in (
+        "(" * 9000 + "1" + ")" * 9000,
+        "-" * 9000 + "1",
+        "not " * 4000 + "1",
+        "abs(" * 3000 + "1" + ")" * 3000,
+    ):
+        with pytest.raises(ScriptError, match=f"nested more than {MAX_NESTING} levels") as err:
+            parse(script(deep))
+        assert err.value.line == 3
+    with pytest.raises(ScriptError, match=f"more than {MAX_DEPTH} levels deep"):
+        parse(script(" + ".join(["1"] * 5000)))
+    ifs = [f"{'  ' * k}if SPX > 1 then" for k in range(60)] + ["x = 1"] + ["end"] * 60
+    with pytest.raises(ScriptError, match="nested more than"):
+        parse("\n".join(["underlying SPX", "event 2030-01-07", *ifs, "end", ""]))
+    program = validate(parse(script(" + ".join(["SPX"] * 100) + " - (((((1)))))")))  # what a product may need
+    assert len(program.events) == 1

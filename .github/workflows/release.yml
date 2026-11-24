@@ -1,0 +1,135 @@
+# A release (ADR-0019): at a tag vX.Y.Z (or vX.Y.Z-rc.N), the api and worker images are built from that tag, pushed to
+# GHCR with their SBOM and a provenance attestation, and a GitHub release lists their digests. The machine never
+# receives anything: Luca deploys a release by hand (deploy/wsl/deploy.sh), which pulls the images by these digests.
+# Rebuilding a release means running this workflow on its tag again: the lock (with hashes) and the base images (by
+# digest) are in the tree, so the same tag builds the same packages.
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+", "v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: the tag is the packages' version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - id: version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="${TAG#v}"
+          base="${version%%-rc.*}"
+          for f in pyproject.toml packages/*/pyproject.toml; do
+            got=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$f" | head -1)
+            if [ "$got" != "$base" ]; then echo "$f says $got, the tag $TAG"; exit 1; fi
+          done
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  images:
+    name: ${{ matrix.image }} image
+    needs: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write  # this job only, on a tag only: push the image
+      id-token: write  # the attestation's proof of origin
+      attestations: write
+    strategy:
+      fail-fast: true
+      matrix:
+        image: [api, worker]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Room for CUDA's devel image
+        if: matrix.image == 'worker'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          docker system prune --all --force
+      - name: The image's name
+        id: name
+        env:
+          OWNER: ${{ github.repository_owner }}
+          IMAGE: ${{ matrix.image }}
+        run: echo "name=ghcr.io/${OWNER,,}/optlab-$IMAGE" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550  # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
+        with:
+          context: .
+          file: deploy/${{ matrix.image }}.Dockerfile
+          push: true
+          tags: ${{ steps.name.outputs.name }}:${{ github.ref_name }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.check.outputs.version }}
+            org.opencontainers.image.licenses=MIT
+          provenance: mode=max
+          sbom: true
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
+        with:
+          subject-name: ${{ steps.name.outputs.name }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  release:
+    name: the release and its digests
+    needs: [check, images]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write  # this job only: create the release of the tag
+      packages: read  # read the digests the images job pushed
+    steps:
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550  # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          owner="${OWNER,,}"
+          digest() { docker buildx imagetools inspect "ghcr.io/$owner/optlab-$1:$TAG" --format '{{.Manifest.Digest}}'; }
+          API=$(digest api)
+          WORKER=$(digest worker)
+          case "$API$WORKER" in *sha256:*sha256:*) ;; *) echo "no digest: api=$API worker=$WORKER"; exit 1 ;; esac
+          {
+            echo "Images (deploy them by digest: \`sh deploy/wsl/deploy.sh $TAG\`, docs/architecture/operations.md):"
+            echo
+            echo "- \`ghcr.io/$owner/optlab-api@$API\`"
+            echo "- \`ghcr.io/$owner/optlab-worker@$WORKER\`"
+            echo
+            echo "Check their provenance: \`gh attestation verify oci://ghcr.io/$owner/optlab-api@$API --owner $OWNER\`."
+            echo
+            printf 'digests: api=%s worker=%s\n' "$API" "$WORKER"
+          } > notes.md
+          prerelease=""
+          case "$TAG" in *-rc.*) prerelease="--prerelease" ;; esac
+          gh release create "$TAG" --repo "$REPO" --title "$TAG" --notes-file notes.md --verify-tag $prerelease
