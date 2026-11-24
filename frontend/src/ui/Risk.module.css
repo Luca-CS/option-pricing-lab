@@ -1,0 +1,149 @@
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.table th,
+.table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--ol-line);
+  text-align: right;
+}
+
+.table th:first-child,
+.table td:first-child {
+  text-align: left;
+  padding-left: 16px;
+}
+
+.table th:last-child,
+.table td:last-child {
+  padding-right: 16px;
+}
+
+.table thead th {
+  color: var(--ol-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.table tbody th {
+  font-weight: 400;
+  color: var(--ol-muted);
+}
+
+.unit {
+  color: var(--ol-faint);
+  font-size: 11px;
+  margin-left: 6px;
+}
+
+.heat {
+  border-collapse: separate;
+  border-spacing: 3px;
+  width: 100%;
+  font-size: 12px;
+}
+
+.heat thead th {
+  color: var(--ol-muted);
+  font-weight: 500;
+  padding: 4px 6px;
+  text-align: right;
+  font-family: var(--mantine-font-family-monospace);
+}
+
+.heat tbody th {
+  color: var(--ol-muted);
+  font-weight: 500;
+  text-align: left;
+  padding: 4px 6px;
+  font-family: var(--mantine-font-family-monospace);
+  white-space: nowrap;
+}
+
+.heat thead th.corner {
+  text-align: left;
+  font-family: var(--mantine-font-family);
+  color: var(--ol-faint);
+}
+
+.heat td {
+  padding: 0;
+}
+
+.cell {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 3px;
+  padding: 7px 8px;
+  text-align: right;
+  font: inherit;
+  font-family: var(--mantine-font-family-monospace);
+  font-variant-numeric: tabular-nums;
+  color: var(--ol-text);
+  cursor: pointer;
+  background: transparent;
+  white-space: nowrap;
+}
+
+.cell.neg {
+  background: color-mix(in srgb, var(--ol-neg) var(--a), transparent);
+}
+
+.cell.pos {
+  background: color-mix(in srgb, var(--ol-pos) var(--a), transparent);
+}
+
+.cell.noise {
+  color: var(--ol-faint);
+  font-style: italic;
+  background: repeating-linear-gradient(135deg, var(--ol-raised) 0 2px, transparent 2px 6px);
+}
+
+.cell.empty {
+  color: var(--ol-faint);
+  cursor: default;
+}
+
+.cell:hover:not(.empty) {
+  outline: 1px solid var(--ol-line-strong);
+}
+
+.cell.selected {
+  outline: 2px solid var(--ol-accent);
+  outline-offset: 1px;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+  color: var(--ol-muted);
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.swatch {
+  width: 14px;
+  height: 10px;
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: -1px;
+  border-radius: 2px;
+}
+
+.swatchNeg {
+  background: color-mix(in srgb, var(--ol-neg) 65%, transparent);
+}
+
+.swatchPos {
+  background: color-mix(in srgb, var(--ol-pos) 65%, transparent);
+}
+
+.swatchNoise {
+  background: repeating-linear-gradient(135deg, var(--ol-line-strong) 0 2px, transparent 2px 5px);
+}

@@ -1,0 +1,93 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--ol-line);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 12px;
+  color: var(--ol-muted);
+  white-space: nowrap;
+  background: transparent;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  box-sizing: border-box;
+}
+
+.observed {
+  background: var(--ol-accent);
+}
+
+.derived {
+  background: var(--ol-muted);
+}
+
+.reconstructed {
+  background: var(--ol-brand);
+}
+
+.synthetic {
+  border: 1.5px dashed var(--ol-muted);
+}
+
+.typed {
+  border-radius: 2px;
+  background: var(--ol-faint);
+}
+
+.market {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--ol-raised);
+  border: 1px solid var(--ol-line);
+  border-radius: 6px;
+  padding: 4px 10px;
+  color: var(--ol-text);
+  font: inherit;
+  white-space: nowrap;
+}
+
+button.market {
+  cursor: pointer;
+}
+
+button.market:hover {
+  border-color: var(--ol-line-strong);
+}
+
+.mono {
+  font-family: var(--mantine-font-family-monospace);
+}
+
+.muted {
+  color: var(--ol-muted);
+}
+
+.stale {
+  color: var(--ol-brand);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.entity {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.entityLink {
+  color: var(--ol-accent);
+  text-decoration: none;
+  font-family: var(--mantine-font-family-monospace);
+}
+
+.entityLink:hover {
+  text-decoration: underline;
+}

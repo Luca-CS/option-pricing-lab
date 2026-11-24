@@ -1,0 +1,53 @@
+.row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.tile {
+  background: var(--ol-panel);
+  border: 1px solid var(--ol-line);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.label {
+  color: var(--ol-muted);
+  font-size: 12px;
+}
+
+.unit {
+  color: var(--ol-faint);
+  margin-left: 6px;
+}
+
+.value {
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.sub {
+  color: var(--ol-faint);
+  font-size: 12px;
+  font-family: var(--mantine-font-family-monospace);
+}
+
+.meter {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--ol-line);
+  overflow: hidden;
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  background: var(--ol-brand);
+  width: var(--fill);
+}

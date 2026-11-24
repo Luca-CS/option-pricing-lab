@@ -1,0 +1,39 @@
+.num {
+  font-family: var(--mantine-font-family-monospace);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pos {
+  color: var(--ol-pos);
+}
+
+.neg {
+  color: var(--ol-neg);
+}
+
+.noise,
+.noise .pos,
+.noise .neg {
+  color: var(--ol-faint);
+  font-style: italic;
+}
+
+.arrow {
+  font-size: 0.75em;
+  margin-right: 0.3em;
+  vertical-align: 0.08em;
+}
+
+.se {
+  color: var(--ol-faint);
+  font-size: 0.88em;
+  margin-left: 0.4em;
+}
+
+.unit {
+  color: var(--ol-faint);
+  font-size: 0.88em;
+  margin-left: 0.3em;
+  font-family: var(--mantine-font-family);
+}
