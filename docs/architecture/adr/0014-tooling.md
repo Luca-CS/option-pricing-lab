@@ -25,9 +25,10 @@ but not run in CI, no type checker, no pre-commit hook.
   by their absolute path (`optlab.core.programs`).
 - **pyright** (A8b): 0 errors, measured on 13 November 2026 against a baseline of 1,491 recorded in A1.
   - **Standard mode everywhere:** `packages/*/src`, the tests, `tests/helpers` and `tests/golden`.
-  - **Strict mode on the server's security and contract core**, the 16 modules listed in `pyproject.toml`: the guard
-    and the problems (`web`), accounts and sessions (`security`), the audit log, schemas and settings, the job queue,
-    its tasks and worker, the application and its OpenAPI document, the presenter, logs, backups and the network check.
+  - **Strict mode on the server's security and contract core**, the modules listed in `pyproject.toml` (16 in A8b, 15
+    since A9 removed `users.py`): the guard and the problems (`web`), accounts and sessions (`security`), the audit
+    log, schemas and settings, the job queue, its tasks and worker, the application and its OpenAPI document, the
+    presenter, logs, backups and the network check.
   - **The rest of `optlab.server` stays in standard mode:** the services (`api`, `risk_api`), the routers, the
     reports, the schedules, the command line and its tools. Strict mode there measured 3,975 errors, almost all of the
     "unknown" kind: the services take and return JSON dicts, so going strict means describing them as TypedDicts.
@@ -46,7 +47,8 @@ but not run in CI, no type checker, no pre-commit hook.
     - pairs that exist exactly when the base's do (`costs`);
     - a mixin's `super()` (`lifecycle`);
     - `bool` as a `Real` through the registration in `numbers`.
-  - **The baseline file** (`pyright-baseline.json`) is now empty: any new error fails CI.
+  - **The baseline** reached zero, so A9 removed it (`tools/pyright_baseline.py`, `pyright-baseline.json`): CI runs
+    `uv run pyright`, and any error fails it.
 
 ## Consequences
 
