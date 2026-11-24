@@ -10368,12 +10368,19 @@
             ]
           },
           "gpu": {
-            "items": {
-              "$ref": "#/components/schemas/GpuState"
-            },
-            "type": "array",
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/GpuState"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Gpu",
-            "default": []
+            "description": "null where the worker's machine has no nvidia-smi"
           }
         },
         "additionalProperties": true,
@@ -10466,9 +10473,7 @@
           },
           "info": {
             "$ref": "#/components/schemas/WorkerInfo",
-            "default": {
-              "gpu": []
-            }
+            "default": {}
           }
         },
         "additionalProperties": true,

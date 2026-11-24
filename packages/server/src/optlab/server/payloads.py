@@ -289,7 +289,7 @@ class GpuState(Doc):
 
 class WorkerInfo(Doc):
     engine: EngineInfo | None = None
-    gpu: list[GpuState] = []
+    gpu: list[GpuState] | None = Field(None, description="null where the worker's machine has no nvidia-smi")
 
 
 class Backup(Doc):
