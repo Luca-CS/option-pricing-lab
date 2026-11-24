@@ -67,8 +67,8 @@ The second session builds a new front on this API and needs a contract it can ge
   `server_header=False`.
 - The TypeScript proof was `api/client-check` (openapi-typescript 7.13.0 with `--default-non-nullable false`,
   openapi-fetch 0.17.0, TypeScript 5.9.3, `npm ci --ignore-scripts`), the CI job `api-contract`. Since session 2 the
-  front itself is the proof: its types are generated from the document and it must compile on them (CI job `frontend`,
-  ADR-0024).
+  front itself is the proof: its types are generated from the document and it must compile on them (the same CI job
+  `api-contract`, ADR-0024).
 - Tests: one file per router (`test_api_system.py`, `_structuring`, `_trading`, `_market`, `_risk`, `_quant`, `_admin`),
   `test_api_security.py`, the matrix `test_api_matrix.py` (76 operations x 7 callers, from the OpenAPI document), and
   `test_api_inventory.py` (every v1 route of `feature-inventory.md` exists; every route is in it or named as new). The

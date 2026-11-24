@@ -63,9 +63,10 @@ Each end-to-end test fails on any console error, and a refused style or script i
 
 ## Consequences
 
-- CI's `frontend` job replaces `api-contract` and `api/client-check`, which is gone. It lints, type-checks, runs the
-  unit tests, builds, then runs Playwright against `optlab serve` on fresh demo data. Its compile-time checks of the
-  contract moved to `frontend/src/api/contract.ts`.
+- CI's `api-contract` job ("API contract (TypeScript client)", a required check of main) now compiles the front on
+  the generated types, in place of `api/client-check`, which is gone; its compile-time checks moved to
+  `frontend/src/api/contract.ts`. The `frontend` job lints, runs the unit tests, builds, then runs Playwright against
+  `optlab serve` on fresh demo data.
 - Dependabot watches `frontend/` (npm), grouped, with the 14-day cooldown.
 - Mantine's whole stylesheet is in the first load: 43 kB gzip of CSS. The first page's JavaScript is 148 kB gzip,
   under the handoff's 300 kB.

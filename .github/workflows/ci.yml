@@ -50,10 +50,29 @@ jobs:
           PYRIGHT_PYTHON_GLOBAL_NODE: "1"
         run: uv run --no-sync pyright
 
+  api-contract:
+    name: API contract (TypeScript client)
+    # api/openapi.json is the code's (test_openapi.py); the front's types are generated from it and the front must
+    # compile on them (ADR-0024): the proof that the contract is usable, a required check of main
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: "26"
+      - name: Install (lock file, no install scripts)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Generate the types from api/openapi.json and compile the front on them
+        run: npm run typecheck
+
   frontend:
-    name: front (lint, types, unit, build, end to end)
-    # the API contract too: the front's types are generated from api/openapi.json (test_openapi.py keeps that file the
-    # code's), and the front must compile on them (ADR-0024)
+    name: front (lint, unit, build, end to end)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
@@ -75,8 +94,6 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Lint and format (Biome)
         run: npx biome ci .
-      - name: Types, generated from api/openapi.json
-        run: npm run typecheck
       - name: Unit tests
         run: npm test
       - name: Build

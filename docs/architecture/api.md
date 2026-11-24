@@ -205,7 +205,7 @@ npx openapi-typescript ../api/openapi.json --default-non-nullable false -o src/a
 ```
 
 - The generated file is not versioned: `test_openapi.py` keeps the document equal to the code, and the front must
-  compile on it (CI job `frontend`).
+  compile on it (CI job `api-contract`, a required check of main).
 - `--default-non-nullable false` matters: version 7 otherwise makes every field with a default required, so a request
   body would have to spell out every option.
 - `openapi-fetch` gives a typed client (`createClient<paths>()`, `frontend/src/api/client.ts`). Its generic `body`
