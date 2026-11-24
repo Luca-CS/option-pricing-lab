@@ -21,7 +21,8 @@ Model = Literal["bs", "lv", "heston", "slv"]
 
 
 class Body(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # JSON has no NaN nor infinity, but Python's parser reads them: a NaN passes every bound (each comparison is false)
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
 def body(model: BaseModel | None) -> dict[str, Any]:
@@ -206,7 +207,7 @@ class EodIn(Body):
     options: RiskOptions = Field(default_factory=lambda: RiskOptions.model_validate({}))
     greeks: bool = True
 
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    model_config = ConfigDict(extra="forbid", populate_by_name=True, allow_inf_nan=False)
 
 
 # --- quant -------------------------------------------------------------------------------------------------------------

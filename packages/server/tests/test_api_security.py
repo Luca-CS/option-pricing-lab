@@ -273,6 +273,29 @@ def test_the_throttle_counts_every_failed_attempt_and_bounds_the_audit_log(tmp_p
         assert _login(c, "fay").status_code == 429
 
 
+def test_no_nan_nor_infinity_reaches_the_desk(a, trader):
+    """Found in A9: Python's JSON reads NaN and Infinity, a NaN passes every bound, and fixings took any level."""
+    before = fixings(a)
+    json_ = {"content-type": "application/json"}
+    for raw in (
+        b'{"underlying": "SPX", "levels": {"2025-01-06": NaN}}',
+        b'{"underlying": "SPX", "levels": {"2025-01-06": Infinity}}',
+        b'{"underlying": "SPX", "text": "2025-01-06 1", "real_spot": NaN}',
+    ):
+        assert trader.post("/api/v1/trading/fixings", content=raw, headers=json_).status_code == 422, raw
+    for levels in ({"2025-01-06": -5.0}, {"2025-01-06": 0.0}):
+        r = trader.post("/api/v1/trading/fixings", json={"underlying": "SPX", "levels": levels})
+        assert r.status_code == 422 and "positive" in r.json()["detail"], levels
+    r = trader.post(
+        "/api/v1/trading/fixings", json={"underlying": "SPX", "text": "2025-01-06 inf" + chr(10) + "2025-01-07 nan"}
+    )
+    assert r.status_code == 422  # both lines skipped: nothing left to store
+    s = a.client("structurer")
+    r = s.post("/api/v1/structuring/script/price", content=b'{"script": "x", "seed": NaN}', headers=json_)
+    assert r.status_code == 422
+    assert fixings(a) == before
+
+
 def test_the_guard_reads_a_request_one_way(a, trader):
     """Found by the probe in A9: a chunked body without a type passed the content-type rule, a request could carry
     both a length and a chunked encoding, and a Host with user info was read as its host part."""
