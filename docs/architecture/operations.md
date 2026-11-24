@@ -6,6 +6,11 @@ queue, and what to do when something goes wrong. Every command is `optlab ...` (
 (`<data>/config/optlab.env`, ADR-0012). Two ways to run it: natively on Windows (the first sections, for development)
 and in containers in WSL (the production path, ADR-0009, section "Containers").
 
+**The real instance runs in the containers since 24 November 2026** (`v1.0.0`, `deploy/wsl/deploy.sh`): its database
+and its lake are the volumes `optlab_store` and `optlab_lake`, filled from `optlab-data` that day (`v1.0.0-rc.1`, then the round trip to `v1.0.0`, `--rollback` and `v1.0.0` again: 138 s, 11 s and 15 s, the 17 trades and the account intact each time) (the database through a
+checked restoration of a copy, the lake by a copy). The Windows folder `optlab-data` is the development data from then
+on: what the containers' desk writes stays in their volumes.
+
 ## Where things are
 
 | What | Where (default) |

@@ -9,7 +9,7 @@ uv sync --locked --all-extras                          # .venv from uv.lock (has
 uv run pytest -q packages/core/tests/test_closed_forms.py   # fast sanity check (seconds)
 uv run pytest packages/core/tests/test_monte_carlo.py::test_heston_mc_matches_fourier   # single test
 uv run pytest -m "not slow and not gpu and not lake and not native" -n auto --dist loadfile   # what CI runs (a few minutes)
-uv run pytest -n 6 --dist loadfile                     # full suite, 946 tests in about 13 min (real lake, GPU, node when present)
+uv run pytest -n 6 --dist loadfile                     # full suite, 954 tests in about 12 min (real lake, GPU, node when present)
 uv run python tests/golden/golden.py check [--local]   # golden numbers, bit for bit (local: lake, showcase, GPU)
 uv run pre-commit install                              # ruff, ruff-format, gitleaks and file checks before each commit
 uv run lint-imports                                    # the package layers of ADR-0004
