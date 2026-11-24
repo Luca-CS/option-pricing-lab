@@ -235,6 +235,32 @@ def test_a_burst_of_guesses_gets_no_more_than_the_same_guesses_in_a_row(tmp_path
         assert t.state.accounts.get("eve")["locked_until"]
 
 
+def test_a_right_password_does_not_lift_a_lock_set_by_others_meanwhile(a, monkeypatch):
+    """Found by the review of A9: a correct login cleared the lock that guesses sent during its hash had set."""
+    accounts = a.state.accounts
+    accounts.create("gil", PASSWORD, ["viewer"])
+    real = accounts.hasher
+
+    class Slow:  # while the right password is checked, guesses lock the account
+        def verify(self, hash_, password):
+            if password == PASSWORD:
+                monkeypatch.setattr(accounts, "hasher", real)
+                for i in range(a.state.settings.login_max_failures):
+                    with pytest.raises(security.LoginError):
+                        accounts._authenticate("gil", f"guess-{i}")
+            return real.verify(hash_, password)
+
+        def __getattr__(self, name):
+            return getattr(real, name)
+
+    monkeypatch.setattr(accounts, "hasher", Slow())
+    assert accounts._authenticate("gil", PASSWORD).name == "gil"  # the right password signs in
+    assert accounts.get("gil")["locked_until"]  # and the lock of the guesses stays
+    with pytest.raises(security.LoginError) as err:
+        accounts._authenticate("gil", PASSWORD)
+    assert err.value.status == 423
+
+
 def test_the_throttle_counts_every_failed_attempt_and_bounds_the_audit_log(tmp_path):
     with api(tmp_path, login_max_failures=3, login_per_address=6) as t:
         t.state.accounts.create("fay", PASSWORD, ["viewer"])

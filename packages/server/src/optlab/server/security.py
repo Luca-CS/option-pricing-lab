@@ -204,6 +204,7 @@ class Accounts:
         return user
 
     def _authenticate(self, name: str, password: str) -> User:
+        counted: dict[str, Any] = {}
         with self.db.write() as c:  # one at a time: the attempt is counted before its hash, whatever arrives beside it
             row = c.execute(select(users).where(users.c.name == name)).first()
             now = _now()
@@ -211,10 +212,9 @@ class Accounts:
                 if row.locked_until and dt.datetime.fromisoformat(row.locked_until) > now:
                     raise LoginError("this account is locked for a few minutes after failed logins", 423)
                 failures = row.failed_logins + 1
-                counted: dict[str, Any] = {"failed_logins": failures}
-                if (
-                    failures >= self.settings.login_max_failures
-                ):  # the last attempt before the lock: locked unless right
+                counted = {"failed_logins": failures}
+                if failures >= self.settings.login_max_failures:
+                    # the last attempt before the lock: it locks the account, unless it is right
                     until = now + dt.timedelta(minutes=self.settings.login_lockout_minutes)
                     counted = {"failed_logins": 0, "locked_until": _iso(until)}
                 c.execute(update(users).where(users.c.user_id == row.user_id).values(**counted))
@@ -230,11 +230,15 @@ class Accounts:
             raise LoginError(WRONG) from None
         if row.disabled:
             raise LoginError(WRONG)
-        values: dict[str, Any] = {"failed_logins": 0, "locked_until": None}
+        values: dict[str, Any] = {"failed_logins": 0}
         if self.hasher.check_needs_rehash(row.password_hash):
             values["password_hash"] = self.hasher.hash(password)
         with self.db.write() as c:
-            c.execute(update(users).where(users.c.user_id == row.user_id).values(**values))
+            locked = c.execute(select(users.c.locked_until).where(users.c.user_id == row.user_id)).scalar()
+            mine = locked == counted.get("locked_until")  # set by this attempt, before it was known to be right
+            if locked is None or mine or dt.datetime.fromisoformat(locked) <= _now():
+                values["locked_until"] = None
+            c.execute(update(users).where(users.c.user_id == row.user_id).values(**values))  # others' lock stays
         return User(row.user_id, row.name, frozenset(json.loads(row.roles)))
 
     # --- sessions -------------------------------------------------------------------------------------------------
