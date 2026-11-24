@@ -120,7 +120,7 @@ Build, fill the volumes, create an account, start:
 ```bash
 docker compose -f $D build                                     # api about 1.5 min, worker about 3.5 min (CUDA for sm_61 to sm_120)
 sh deploy/wsl/seed-volumes.sh /mnt/c/Users/Luca/Code/projets/optlab-data /mnt/c/<repository> [DATABASE]
-docker compose -f $D run --rm --no-deps -it api users create <name> --roles admin
+docker compose -f $D run --rm --no-deps -it api users create <name> --roles admin    # before up; once up: exec -it api optlab users ...
 docker compose -f $D up -d                                     # http://127.0.0.1:8765/api/v1 from Windows
 docker compose -f $D ps                                        # both "healthy"/"running"
 docker compose -f $D exec worker nvidia-smi                    # the GPU, seen by the worker only

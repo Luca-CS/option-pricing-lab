@@ -1,6 +1,6 @@
 # Security: threat model and controls
 
-Status: **draft** (A0, 7 November 2026); reviewed and completed in A9 with the results of every check. Principle:
+Status: written in A0 (7 November 2026), reviewed in A9 (24 November 2026) with the results of every check (§7). Principle:
 safety above all; between a nicer option and a safer one, the safer one, written in the ADR.
 
 ## 1. What is protected
@@ -185,11 +185,41 @@ None today (checked in A0: no key, token or password in the tree; gitleaks in A1
 Test accounts of the session use generated passwords stored in an untracked local file; Luca creates his own admin
 account and the session never types his password.
 
-## 7. Checks of A9 (results to be filled in)
+## 7. Checks of A9 (24 November 2026)
 
-- A security review pass per domain (the `security-review` skill on every PR that touches the server, auth or CI).
-- OWASP ZAP baseline scan of the local instance (free Docker image).
-- Trivy: no critical or high vulnerability left untreated.
-- The authorisation matrix green.
-- Container inspection (`docker inspect`: user, capabilities, ports on `127.0.0.1`).
-- A restore drill from a backup.
+| Check | How | Result |
+|---|---|---|
+| From the outside, natively | `deploy/probe.py` against a throwaway instance (`optlab serve`, an empty data folder) | 7 failures before the fixes (findings 44 to 49), **73 checks out of 73** after |
+| From the outside, in the containers | the same probe against the images of this branch (`compose -p optlab-probe`, `127.0.0.1:8768`) | **73 out of 73** |
+| OWASP ZAP | `zap-api-scan.py` 2.17.0 (image by digest) on the OpenAPI document, with the session and CSRF headers of a user holding the four business roles; the session and admin routes left out (a scanned logout signs ZAP out: the first run got 401 on 15,000 requests and was redone) | 117 rules pass. The first authenticated run found 119 answers 500 on `PUT /trading/cost-defaults` (finding 53, fixed). Warnings kept: COEP missing and `style-src 'unsafe-inline'` on the standalone reports (inline CSS by design, no script), "unexpected content type" on the HTML reports |
+| The containers' isolation | `docker inspect` and inside each container (`/proc/self/status`) | uid 10001, `CapEff` and `CapBnd` 0, `NoNewPrivs` 1, seccomp on, read-only root, the lake, archive, backups and config read-only for the api, no Docker socket, `docker-init` as PID 1, memory and process limits; the one published port on `127.0.0.1` (`ss`: `docker-proxy` on `127.0.0.1:8768` only); refused from every other address of WSL and of Windows (LAN, vEthernet, link-local); a foreign `Host` through it: 403 |
+| The containers' reach | connections from inside | out to the internet: open for both (finding 39, still kept); to the WSL host's port 22 and to `host.docker.internal`: none |
+| The daemon | `daemon.json`, `ss` | `"ip": "127.0.0.1"`, unix socket only (`root:docker`, 660), no TCP port |
+| Trivy, pip-audit, CodeQL, gitleaks, dependency review | CI (`security.yml`, `images.yml`) on the PRs of A9 | green; the two CodeQL alerts of the legacy page (`js/incomplete-sanitization`, high) fixed in A9 |
+| The authorisation matrix | `test_api_matrix.py` in CI, and the probe's roles group over HTTP | green; 33, 19 and 31 refusals for a viewer, a trader and a structurer |
+| A security review of the branch | the `security-review` skill (a subagent) on `security/a9-hardening` | nothing at or above medium; one adjacent point fixed (finding 54) |
+| Restore drill | `deploy/wsl/deploy.sh` on a throwaway compose project: deploy, a deploy that fails, `--rollback` | below, and `operations.md` |
+
+The deploy drill (`OPTLAB_PROJECT=optlab-drill`, images of this branch tagged `drill-a`, `drill-b`, and `drill-bad` whose
+api exits at once):
+- first deploy of `drill-a` (no database yet): ready in 11 s; an admin and a fixing written;
+- `drill-b`: the database copied, migrated, ready in 12 s; a second fixing written;
+- `drill-bad`: not ready after 180 s, so the script restored the copy it had just made with `drill-b`'s images: back
+  in 198 s in all, both fixings there, exit 1;
+- `--rollback`: `drill-a` with the copy of before `drill-b`'s deploy, in 11 s: the second fixing is gone, as it must;
+- `docker stop` of the worker: stopped in 1 s, `/ready` 503 right after (the lease freed, finding 55).
+
+Its first run found a bug of the script itself: `sh` functions share their variables, so a helper set `tag` and the
+deploy of `drill-b` started `drill-a` again while saying `drill-b` was deployed. Every function declares its variables
+`local` now.
+
+| # | Finding | Severity | Fate |
+|---|---|---|---|
+| 53 | `PUT /trading/cost-defaults` with a group or a tier that is not an object: 500 (an `AttributeError`); a `NaN` passed every bound of the table (each comparison with it is false) and was stored | Low (trader only; the 500 carried no trace) | fixed: types checked, numbers finite. Test |
+| 54 | A correct login cleared a lock that guesses sent during its hash had set | Low (needs the real user to sign in at that moment) | fixed: a lock set by others stays. Test |
+| 55 | `docker stop` killed the worker without its clean stop: its lease stayed 15 s, so a restoration right after a stop was refused | Info | fixed: SIGTERM stops it as Ctrl+C does; 30 s of grace in compose. Test (Linux) and the drill |
+| 56 | NaN and infinity were accepted in a request's numbers (Python's JSON reads them): a fixing could be `Infinity` from pasted text or any value from `levels`, negative included | Low (trader only) | fixed: `allow_inf_nan=False` on every request model, levels positive and finite. Test |
+| 57 | `optlab users create --stdin`, fed a file written on Windows, kept its CR in the password (in a container) | Info | fixed. Test |
+| 58 | The shell scripts of `deploy/` are checked out with CRLF on Windows (`core.autocrlf`), and `sh` in WSL stops at `set -eu
+` | Info | fixed: `.gitattributes` keeps them LF |
+| 39 (again) | The api can reach the internet, which it does not need | Low | kept for v1.0.0: blocking it means `DOCKER-USER` rules in WSL's iptables, kept across reboots by a unit; proposed for after the release |
