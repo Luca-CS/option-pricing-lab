@@ -49,14 +49,14 @@ copy_database() {  # SQLite's online backup of the live database, by any image (
   tag=$1 name=$2
   OPTLAB_TAG=$tag compose run --rm --no-deps -T --entrypoint python worker -c "
 import os, sqlite3
+if not os.path.exists('/data/store/optlab.sqlite'):
+    raise SystemExit(3)  # nothing to copy yet: a first deploy
 os.makedirs('/data/backups/manual', exist_ok=True)
 src = sqlite3.connect('file:/data/store/optlab.sqlite?mode=ro', uri=True)
 dst = sqlite3.connect('/data/backups/manual/$name')
 src.backup(dst)
 dst.close(); src.close()
-print('/data/backups/manual/$name')
-" >/dev/null
-  say "database copied to backups/manual/$name"
+"
 }
 
 ready() {  # /ready answers 200 (the database, and a worker that serves the queue) within READY_SECONDS
@@ -97,7 +97,13 @@ deploy() {
   if docker volume inspect "${PROJECT}_store" >/dev/null 2>&1; then
     stamp=$(date -u +%Y%m%d-%H%M%S)-000
     copy="optlab-$stamp-before-$tag.sqlite"
-    copy_database "${current:-$tag}" "$copy"
+    status=0
+    copy_database "${current:-$tag}" "$copy" || status=$?
+    case $status in
+      0) say "database copied to backups/manual/$copy" ;;
+      3) copy=""; say "no database yet: nothing to copy" ;;
+      *) fail "the copy of the database failed: nothing changed" ;;
+    esac
   fi
   say "stop api and worker (${current:-nothing deployed yet})"
   compose stop api worker >/dev/null 2>&1 || true
