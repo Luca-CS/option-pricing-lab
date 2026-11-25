@@ -15,7 +15,11 @@ const SUFFIX: Record<string, string> = {
   "% per 1 %": "% / 1 %",
 };
 
-type FieldLike = Pick<FormField, "name" | "kind"> & { unit?: string | undefined; optional?: boolean | undefined };
+type FieldLike = Pick<FormField, "name"> & {
+  kind?: string | undefined;
+  unit?: string | undefined;
+  optional?: boolean | undefined;
+};
 
 export function isPercent(f: FieldLike): boolean {
   return PERCENT_UNITS.has(f.unit ?? "") || f.name === "participation";

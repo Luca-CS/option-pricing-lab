@@ -7,7 +7,7 @@ import datetime as dt
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
 
-from optlab.server.payloads import PnlHistory, RiskRunPage, documented
+from optlab.server.payloads import PnlHistory, RiskRun, RiskRunPage, documented
 from optlab.server.present import estimates
 from optlab.server.report import risk_report
 from optlab.server.routers._common import ACCEPTED, Id, audited, desk, page, report, submit
@@ -35,7 +35,7 @@ def list_runs(
     return page(_risk(request).runs(kind)["runs"], cursor, limit)
 
 
-@router.get("/runs/{run_id}", **access())
+@router.get("/runs/{run_id}", **access(), responses=documented(RiskRun, "a stored run; its fields follow its kind"))
 def get_run(run_id: Id, request: Request):
     """A stored risk run, measures as {value, se}."""
     return estimates(_risk(request).run_get(run_id), risk=True)

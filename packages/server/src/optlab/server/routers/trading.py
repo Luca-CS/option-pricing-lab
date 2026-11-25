@@ -7,7 +7,16 @@ import datetime as dt
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
 
-from optlab.server.payloads import Trade, TradePage, Upcoming, documented
+from optlab.server.payloads import (
+    CostDefaults,
+    Fixings,
+    Trade,
+    TradeDetail,
+    TradeEvents,
+    TradePage,
+    Upcoming,
+    documented,
+)
 from optlab.server.report import book_report, desk_snapshot
 from optlab.server.routers._common import ACCEPTED, Id, audited, desk, page, report, submit
 from optlab.server.schemas import (
@@ -42,7 +51,7 @@ def list_trades(
     return page(items, cursor, limit)
 
 
-@router.get("/trades/{trade_id}", **access())
+@router.get("/trades/{trade_id}", **access(), responses=documented(TradeDetail))
 def get_trade(trade_id: Id, request: Request):
     """A trade, its versions and the quote it came from."""
     return desk(request).trade(trade_id)
@@ -55,7 +64,7 @@ def create_trade(t: TradeIn, request: Request):
     return audited(request, "create_trade", t.trade_id, lambda: d.create_trade(body(t)))
 
 
-@router.put("/trades/{trade_id}", **access("trader"))
+@router.put("/trades/{trade_id}", **access("trader"), responses=documented(Trade, "the new version"))
 def update_trade(trade_id: Id, t: TradeUpdate, request: Request):
     """Edit a trade: a new version, the old ones stay readable."""
     d = desk(request)
@@ -83,7 +92,7 @@ def value_trade(trade_id: Id, v: ValuationIn, request: Request):
     return submit(request, "value_trade", lambda: desk(request).value_trade(trade_id, body(v)), target=trade_id)
 
 
-@router.get("/trades/{trade_id}/events", **access())
+@router.get("/trades/{trade_id}/events", **access(), responses=documented(TradeEvents))
 def trade_events(trade_id: Id, request: Request):
     """Lifecycle events of a trade from its fixings: observations, coupons, calls, knock-ins."""
     return desk(request).trade_events(trade_id)
@@ -115,7 +124,7 @@ def desk_snapshot_page(request: Request):
 
 
 # --- fixings --------------------------------------------------------------------------------------------------------
-@router.get("/fixings", **access())
+@router.get("/fixings", **access(), responses=documented(Fixings))
 def list_fixings(request: Request, underlying: str | None = Query(None, pattern=r"^[A-Z0-9._-]{1,16}$")):
     """Fixings in the model's scale (every market is rescaled to a spot of 100)."""
     return desk(request).fixings(underlying)
@@ -149,7 +158,7 @@ def fixings_from_lake(f: FixingsFromLakeIn, request: Request):
 
 
 # --- pricing policy -------------------------------------------------------------------------------------------------
-@router.get("/cost-defaults", **access())
+@router.get("/cost-defaults", **access(), responses=documented(CostDefaults))
 def cost_defaults(request: Request):
     """The table of hedging-cost defaults by group of underlyings and size, and its versions."""
     return desk(request).cost_defaults()

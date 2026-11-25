@@ -1,0 +1,98 @@
+.frame {
+  overflow: auto;
+  max-height: 70vh;
+}
+
+.grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.grid th,
+.grid td {
+  padding: 0 8px;
+  height: var(--ol-row);
+  border-bottom: 1px solid var(--ol-line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--ol-panel);
+  color: var(--ol-muted);
+  font-weight: 500;
+}
+
+.grid th:first-child,
+.grid td:first-child {
+  padding-left: 16px;
+}
+
+.grid th:last-child,
+.grid td:last-child {
+  padding-right: 16px;
+}
+
+.grid tbody tr:hover {
+  background: var(--ol-raised);
+}
+
+.grid .num {
+  text-align: right;
+  font-family: var(--mantine-font-family-monospace);
+  font-variant-numeric: tabular-nums;
+}
+
+.sort {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.sort:focus-visible {
+  outline: 2px solid var(--ol-brand);
+  outline-offset: 2px;
+}
+
+.arrow {
+  font-size: 9px;
+  color: var(--ol-accent);
+  min-width: 8px;
+}
+
+.group td {
+  background: var(--ol-chrome);
+}
+
+.toggle {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--ol-text);
+}
+
+.toggle:focus-visible {
+  outline: 2px solid var(--ol-brand);
+  outline-offset: 2px;
+}
+
+.groupName {
+  font-weight: 600;
+}
+
+.count {
+  color: var(--ol-muted);
+}
+
+.grid tfoot td {
+  border-bottom: 0;
+  color: var(--ol-muted);
+}

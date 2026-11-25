@@ -22,22 +22,19 @@ DESCRIBED = {  # the domain routes of session 2's screens, so far; each names it
     "/api/v1/quant/engine": "EngineInfo",
     "/api/v1/admin/system": "SystemInfo",
     "/api/v1/admin/jobs": "JobRowPage",
+    "/api/v1/trading/fixings": "Fixings",
+    "/api/v1/trading/cost-defaults": "CostDefaults",
 }
 
 # JSON answers still open in the document; this set only shrinks (a screen that reads one describes it)
 OPEN = {
     "/api/v1/ready",
     "/api/v1/structuring/schema",  # a JSON Schema itself
-    "/api/v1/trading/trades/{trade_id}",
-    "/api/v1/trading/trades/{trade_id}/events",
-    "/api/v1/trading/fixings",
-    "/api/v1/trading/cost-defaults",
     "/api/v1/market/snapshots/{snapshot_id}/smile",
     "/api/v1/market/snapshots/{snapshot_id}/term",
     "/api/v1/market/other-underlyings",
     "/api/v1/market/lake/vol-indices/{name}",
     "/api/v1/market/lake/basket-quotes",
-    "/api/v1/risk/runs/{run_id}",
     "/api/v1/risk/scenarios",
     "/api/v1/quant/model-risk",
     "/api/v1/quant/vollab/days",
@@ -66,9 +63,16 @@ def admin(a):
     r = c.post("/api/v1/structuring/quotes", json=quote)
     assert r.status_code == 202, r.text
     c.quote = a.wait(c, r.json()["job_id"])  # type: ignore[attr-defined]
+    quick = {"options": {"precision": "quick"}}
+    tid = c.get("/api/v1/trading/trades").json()["items"][0]["trade_id"]
+    c.trade_id = tid  # type: ignore[attr-defined]
+    r = c.post(f"/api/v1/trading/trades/{tid}/valuations", json=quick)
+    c.valuation = a.wait(c, r.json()["job_id"])  # type: ignore[attr-defined]
+    r = c.post("/api/v1/trading/book/valuations", json=quick)
+    c.book = a.wait(c, r.json()["job_id"])  # type: ignore[attr-defined]
     r = c.post("/api/v1/risk/scenarios/runs", json={"options": {"precision": "quick"}, "grid": False})
     assert r.status_code == 202, r.text
-    a.wait(c, r.json()["job_id"], timeout=900)
+    c.scenarios = a.wait(c, r.json()["job_id"], timeout=900)  # type: ignore[attr-defined]
     return c
 
 
@@ -166,3 +170,26 @@ def test_a_booked_trade_is_described(a, admin):
     r = admin.post("/api/v1/trading/trades", json=body)
     assert r.status_code == 201
     payloads.Trade.model_validate(r.json())
+
+
+def test_the_trading_answers_and_results_are_described(a, admin):
+    documented = _documented(a)
+    tid = admin.trade_id
+    for path, name in (
+        ("/api/v1/trading/trades/{trade_id}", "TradeDetail"),
+        ("/api/v1/trading/trades/{trade_id}/events", "TradeEvents"),
+    ):
+        assert documented[path] == name
+        r = admin.get(path.format(trade_id=tid))
+        assert r.status_code == 200, r.text
+        getattr(payloads, name).model_validate(r.json())
+    v = payloads.TradeValuation.model_validate(admin.valuation["result"])
+    assert v.trade_id == tid and v.unit_price.se
+    b = payloads.BookValuation.model_validate(admin.book["result"])
+    assert b.positions and b.groups and b.value.se
+    s = payloads.ScenarioRun.model_validate(admin.scenarios["result"])
+    assert s.scenarios and s.scenarios[0].book.se is not None
+    run = admin.get(f"/api/v1/risk/runs/{s.run_id}")
+    assert run.status_code == 200 and documented["/api/v1/risk/runs/{run_id}"] == "RiskRun"
+    payloads.RiskRun.model_validate(run.json())
+    assert set(a.app.openapi()["x-job-results"]) >= {"quote", "value", "book", "risk", "ladder", "scenarios"}

@@ -3,15 +3,15 @@
 // last quote are in the URL (`?preset=`, `?quote=`, `?job=`), so a link reopens the same view.
 import { Accordion, Button, Group, SegmentedControl, Select, Stack, Switch, Text } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
-import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { ApiError, api, ok, type Schemas } from "../../api/client";
 import { usePresets } from "../../api/queries";
 import { SpacePage } from "../../app/Shell";
 import { can, useMe } from "../../auth/session";
-import { kindLabel, useJobs, useTracked } from "../../jobs/jobs";
-import { useJobResult } from "../../jobs/results";
+import { kindLabel } from "../../jobs/jobs";
+import { useScreenJob } from "../../jobs/useScreenJob";
 import { toRequest, type Values } from "../../lib/sheet";
 import { JobProgress } from "../../ui/Flow";
 import { Panel } from "../../ui/Panel";
@@ -47,8 +47,13 @@ function surfaceOrigin(origin: unknown): string | null {
   return null;
 }
 
-function useStartingSheet(preset: string | null, quote: string | null): Sheet | null {
+function useStartingSheet(preset: string | null, quote: string | null, trade: string | null): Sheet | null {
   const presets = usePresets();
+  const booked = useQuery({
+    queryKey: ["trading", "trade", trade],
+    queryFn: () => ok(api.GET("/api/v1/trading/trades/{trade_id}", { params: { path: { trade_id: trade ?? "" } } })),
+    enabled: Boolean(trade),
+  });
   const saved = useQuery({
     queryKey: ["structuring", "quote", quote],
     queryFn: () =>
@@ -56,21 +61,25 @@ function useStartingSheet(preset: string | null, quote: string | null): Sheet | 
     enabled: Boolean(quote),
   });
   return useMemo(() => {
+    if (trade) {
+      const sheet = booked.data?.trade.product.term_sheet;
+      return sheet ? toRequest(sheet as Record<string, unknown>) : null;
+    }
     if (quote) return saved.data ? toRequest(saved.data.sheet as Record<string, unknown>) : null;
     const list = presets.data?.presets ?? [];
     const p = list.find((x) => x.name === preset) ?? list.find((x) => x.name === "phoenix") ?? list[0];
     return p ? toRequest(p.sheet) : null;
-  }, [quote, saved.data, preset, presets.data]);
+  }, [trade, booked.data, quote, saved.data, preset, presets.data]);
 }
 
 export default function Builder() {
   const [params, setParams] = useSearchParams();
   const preset = params.get("preset");
   const quoteParam = params.get("quote");
-  const jobId = params.get("job");
   const me = useMe().data;
   const presets = usePresets().data?.presets ?? [];
-  const start = useStartingSheet(preset, quoteParam);
+  const tradeParam = params.get("trade");
+  const start = useStartingSheet(preset, quoteParam, tradeParam);
   const [sheet, setSheet] = useState<Sheet | null>(null);
   useEffect(() => {
     if (start) setSheet(start);
@@ -99,21 +108,16 @@ export default function Builder() {
   const invalid = Boolean(problem) || form.isFetching || !form.data;
 
   const [options, setOptions] = useState<Options>({ precision: "standard", greeks: true, mix_band: false });
-  const { track, cancel } = useJobs();
-  const quote = useMutation({
-    mutationFn: () =>
-      ok(api.POST("/api/v1/structuring/quotes", { body: { sheet: sheet as Schemas["TermSheetIn"], options } })),
-    onSuccess: (acc) => {
-      const label = `Quote of ${shownForm?.label ?? "a sheet"}`;
-      const next = new URLSearchParams(params);
-      next.set("job", acc.job_id);
-      track(acc.job_id, { kind: "quote", label, link: `/structuring/builder?${next.toString()}` });
-      setParams(next, { replace: true });
-    },
-  });
-  const tracked = useTracked(jobId);
-  const running = tracked?.state === "queued" || tracked?.state === "running";
-  const { job, envelope } = useJobResult("quote", jobId, !running);
+  const job = useScreenJob("quote", `Quote of ${shownForm?.label ?? "a sheet"}`);
+  const { jobId, tracked, running, envelope } = job;
+  const quote = {
+    mutate: () =>
+      job.start.mutate(() =>
+        ok(api.POST("/api/v1/structuring/quotes", { body: { sheet: sheet as Schemas["TermSheetIn"], options } })),
+      ),
+    isPending: job.start.isPending,
+    error: job.start.error,
+  };
   const result = envelope?.result;
   const [booking, setBooking] = useState(false);
 
@@ -130,7 +134,7 @@ export default function Builder() {
             key={p.name}
             size="xs"
             radius="xl"
-            variant={(preset ?? "phoenix") === p.name && !quoteParam ? "light" : "default"}
+            variant={(preset ?? "phoenix") === p.name && !quoteParam && !tradeParam ? "light" : "default"}
             onClick={() => setParams({ preset: p.name })}
           >
             {p.label}
@@ -139,6 +143,11 @@ export default function Builder() {
         {quoteParam && (
           <Text size="sm" c="dimmed">
             from quote {quoteParam}
+          </Text>
+        )}
+        {tradeParam && (
+          <Text size="sm" c="dimmed">
+            a copy of trade {tradeParam}
           </Text>
         )}
       </Group>
@@ -231,7 +240,7 @@ export default function Builder() {
                   onChange={(e) => setOptions({ ...options, greeks: e.currentTarget.checked })}
                 />
                 {running && tracked ? (
-                  <JobProgress job={tracked} label="Quote" onCancel={() => void cancel(tracked.id)} />
+                  <JobProgress job={tracked} label="Quote" onCancel={() => void job.cancel()} />
                 ) : can(me, "create_quote") ? (
                   <Button onClick={() => quote.mutate()} disabled={invalid} loading={quote.isPending}>
                     Quote
@@ -254,13 +263,8 @@ export default function Builder() {
               used; Ctrl K finds it later.
             </Empty>
           )}
-          {jobId && !result && job.data?.state === "error" && (
-            <Failure
-              error={new Error(`${job.data.error?.type}: ${job.data.error?.message}`)}
-              title="The quote failed"
-            />
-          )}
-          {jobId && !result && job.data?.state !== "error" && (
+          {jobId && !result && job.failed && <Failure error={new Error(job.failed)} title="The quote failed" />}
+          {jobId && !result && !job.failed && (
             <Panel title={kindLabel("quote")} hint="computing">
               <Loading lines={4} label="Quoting" />
             </Panel>

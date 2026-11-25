@@ -109,7 +109,8 @@ export function NodeHeatmap({
                 const noise = isNoise(e);
                 const tone = noise ? classes.noise : f.sign < 0 ? classes.neg : f.sign > 0 ? classes.pos : "";
                 const isSelected = selected?.row === i && selected?.col === j;
-                const share = `${Math.round(14 + (62 * Math.abs(e.value)) / max)}%`;
+                // at most 50 %: the strongest cell stays dark enough for the light text on it (WCAG AA)
+                const share = `${Math.round(12 + (38 * Math.abs(e.value)) / max)}%`;
                 return (
                   <td key={t}>
                     <button

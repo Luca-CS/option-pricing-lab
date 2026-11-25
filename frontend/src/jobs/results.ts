@@ -6,6 +6,11 @@ import { api, ok, type Schemas } from "../api/client";
 
 export type JobResults = {
   quote: Schemas["QuoteResult"];
+  value: Schemas["TradeValuation"];
+  book: Schemas["BookValuation"];
+  risk: Schemas["RiskRun"];
+  ladder: Schemas["LadderRun"];
+  scenarios: Schemas["ScenarioRun"];
 };
 
 export type Envelope<K extends keyof JobResults> = {

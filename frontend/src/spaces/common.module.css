@@ -100,3 +100,33 @@
 .card:hover {
   border-color: var(--ol-accent);
 }
+
+.spacer {
+  flex: 1 1 12px;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 5px 16px;
+  margin: 0;
+}
+
+.facts dt {
+  color: var(--ol-faint);
+}
+
+.facts dd {
+  margin: 0;
+  font-family: var(--mantine-font-family-monospace);
+}
+
+.pad {
+  padding: 8px 16px 12px;
+  margin: 0;
+}
+
+.big {
+  font-size: 26px;
+  font-weight: 500;
+}

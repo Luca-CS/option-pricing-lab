@@ -76,6 +76,32 @@ export function LadderChart({
 
 export type Step = { label: string; value: number };
 
+/** The floating bars of a waterfall, split by the side of zero they lie on (ECharts stacks each side apart): for each
+ * bar, a transparent base then a visible part, above zero (`up`) and below (`down`). The first bar runs from zero to
+ * the start, the last (if any) from zero to the end, the others from the running level to the next. */
+export function waterfallBars(start: number, steps: number[], end?: number) {
+  const spans: [number, number][] = [[0, start]];
+  let level = start;
+  for (const v of steps) {
+    spans.push([level, level + v]);
+    level += v;
+  }
+  if (end !== undefined) spans.push([0, end]);
+  const upBase: number[] = [];
+  const up: number[] = [];
+  const downBase: number[] = [];
+  const down: number[] = [];
+  for (const [a, b] of spans) {
+    const lo = Math.min(a, b);
+    const hi = Math.max(a, b);
+    upBase.push(Math.max(lo, 0));
+    up.push(hi > 0 ? hi - Math.max(lo, 0) : 0);
+    downBase.push(Math.min(hi, 0));
+    down.push(lo < 0 ? lo - Math.min(hi, 0) : 0);
+  }
+  return { upBase, up, downBase, down };
+}
+
 /** start, then each step added to it, then the end: the bars float, positive steps up, negative down. */
 export function WaterfallChart({
   start,
@@ -96,21 +122,13 @@ export function WaterfallChart({
     (c: Colors): Option => {
       const b = base(c);
       const labels = [start.label, ...steps.map((s) => s.label), ...(end ? [end.label] : [])];
-      const invisible: number[] = [Math.min(start.value, 0)];
-      const visible: { value: number; itemStyle: { color: string } }[] = [
-        { value: Math.abs(start.value), itemStyle: { color: c.faint } },
-      ];
-      let level = start.value;
-      for (const s of steps) {
-        const next = level + s.value;
-        invisible.push(Math.min(level, next));
-        visible.push({ value: Math.abs(s.value), itemStyle: { color: s.value >= 0 ? c.pos : c.neg } });
-        level = next;
-      }
-      if (end) {
-        invisible.push(Math.min(end.value, 0));
-        visible.push({ value: Math.abs(end.value), itemStyle: { color: c.brand } });
-      }
+      const bars = waterfallBars(
+        start.value,
+        steps.map((s) => s.value),
+        end?.value,
+      );
+      const colours = [c.faint, ...steps.map((s) => (s.value >= 0 ? c.pos : c.neg)), ...(end ? [c.brand] : [])];
+      const coloured = (values: number[]) => values.map((v, i) => ({ value: v, itemStyle: { color: colours[i] } }));
       const signed = [start.value, ...steps.map((s) => s.value), ...(end ? [end.value] : [])];
       return {
         ...b,
@@ -139,9 +157,13 @@ export function WaterfallChart({
             return `${labels[i]}: ${formatNumber(signed[i], { digits, sign })}`;
           },
         },
+        // ECharts stacks positive and negative values apart: each bar is drawn on the side of zero it lies on, a
+        // transparent part up to where it starts and a visible part to where it ends (both parts when it crosses zero)
         series: [
-          { type: "bar", stack: "w", data: invisible, itemStyle: { color: "transparent" }, silent: true },
-          { type: "bar", stack: "w", data: visible, barMaxWidth: 36 },
+          { type: "bar", stack: "up", data: bars.upBase, itemStyle: { color: "transparent" }, silent: true },
+          { type: "bar", stack: "up", data: coloured(bars.up), barMaxWidth: 36 },
+          { type: "bar", stack: "down", data: bars.downBase, itemStyle: { color: "transparent" }, silent: true },
+          { type: "bar", stack: "down", data: coloured(bars.down), barMaxWidth: 36, barGap: "-100%" },
         ],
       };
     },
@@ -213,6 +235,73 @@ export function CurveChart({
       };
     },
     [curves, xName, yName, xPercent, yPercent],
+  );
+  return <EChart build={build} height={height} label={label} />;
+}
+
+export type Series = { name: string; values: (number | null)[]; kind?: "line" | "bar" };
+
+/** Values along labelled points (dates, tenors): lines or bars, one colour per series, signed bars in pos/neg. */
+export function SeriesChart({
+  x,
+  series,
+  unit,
+  digits = 0,
+  height,
+  label,
+  signedBars = false,
+}: {
+  x: string[];
+  series: Series[];
+  unit: string;
+  digits?: number;
+  height?: number;
+  label: string;
+  /** colour each bar by its sign (a P&L by day) */
+  signedBars?: boolean;
+}) {
+  const build = useCallback(
+    (c: Colors): Option => {
+      const b = base(c);
+      const palette = [c.accent, c.brand, c.muted, c.pos];
+      return {
+        ...b,
+        grid: { ...(b.grid as object), left: 72, top: series.length > 1 ? 32 : 16, bottom: 40 },
+        xAxis: {
+          ...(b.xAxis as object),
+          type: "category",
+          data: x,
+          axisLabel: { color: c.muted, fontSize: 11, hideOverlap: true },
+        },
+        yAxis: {
+          ...(b.yAxis as object),
+          type: "value",
+          name: unit,
+          axisLabel: {
+            color: c.muted,
+            fontFamily: c.mono,
+            fontSize: 11,
+            formatter: (v: number) => formatNumber(v, { digits }),
+          },
+        },
+        legend: series.length > 1 ? b.legend : { show: false },
+        tooltip: { valueFormatter: (v: number) => formatNumber(v, { digits, sign: true }) },
+        series: series.map((sr, i) => ({
+          name: sr.name,
+          type: sr.kind ?? "line",
+          data: sr.values.map((v) =>
+            sr.kind === "bar" && signedBars && v !== null
+              ? { value: v, itemStyle: { color: v >= 0 ? c.pos : c.neg } }
+              : v,
+          ),
+          showSymbol: false,
+          lineStyle: { width: 2, color: palette[i % palette.length] },
+          itemStyle: { color: palette[i % palette.length] },
+          barMaxWidth: 18,
+        })),
+      };
+    },
+    [x, series, unit, digits, signedBars],
   );
   return <EChart build={build} height={height} label={label} />;
 }

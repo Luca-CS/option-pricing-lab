@@ -56,11 +56,19 @@ const HOMES: Record<string, ReactNode> = {
 
 // each space's screens load with the space (HANDOFF_REFACTOR_2_UX.md §7: the first page stays small)
 const structuring = () => import("../spaces/structuring");
+const trading = () => import("../spaces/trading");
 const LAZY: Record<string, ReturnType<typeof lazy>> = {
   "/structuring/builder": lazy(() => structuring().then((m) => ({ default: m.Builder }))),
   "/structuring/quotes": lazy(() => structuring().then((m) => ({ default: m.QuotesPage }))),
   "/structuring/quotes/:id": lazy(() => structuring().then((m) => ({ default: m.QuotePage }))),
   "/structuring/compare": lazy(() => structuring().then((m) => ({ default: m.ComparePage }))),
+  "/trading/book": lazy(() => trading().then((m) => ({ default: m.Book }))),
+  "/trading/risk": lazy(() => trading().then((m) => ({ default: m.BookRisk }))),
+  "/trading/pnl": lazy(() => trading().then((m) => ({ default: m.Pnl }))),
+  "/trading/lifecycle": lazy(() => trading().then((m) => ({ default: m.Lifecycle }))),
+  "/trading/lifecycle/:id": lazy(() => trading().then((m) => ({ default: m.Lifecycle }))),
+  "/trading/costs": lazy(() => trading().then((m) => ({ default: m.Costs }))),
+  "/trading/trades/:id": lazy(() => trading().then((m) => ({ default: m.TradePage }))),
 };
 
 function Lazy({ path }: { path: string }) {
