@@ -82,7 +82,7 @@ test("a fixing is added and deleted on the lifecycle screen", async ({ page }) =
 test("the pricing policy shows its starting values, and a trader saves a version", async ({ page }) => {
   await signInAs(page, "trader");
   await page.goto("/trading/costs");
-  const cell = page.getByRole("textbox", { name: /^Repo, up to/ }).first();
+  const cell = page.getByRole("textbox", { name: /^Overrepo, up to/ }).first();
   await expect(cell).toBeVisible();
   // a value other than the one saved, so there is something to save on every run
   await cell.fill((await cell.inputValue()) === "-6" ? "-7" : "-6");

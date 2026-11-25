@@ -26,10 +26,10 @@ from optlab.structured.script.nodes import Assign, Binary, Call, If, Name, Num, 
 from optlab.structured.script.timeline import Clock, build_timeline
 
 KINDS = {
-    "coupon": "Digital: coupon barrier",
-    "autocall": "Digital: autocall trigger",
-    "barrier": "Digital: final barrier",
-    "upside": "Digital: upside",
+    "coupon": "Digital overhedge: coupon barrier",
+    "autocall": "Digital overhedge: autocall trigger",
+    "barrier": "Digital overhedge: final barrier",
+    "upside": "Digital overhedge: upside",
     "daily": "Barrier observed daily",
 }
 DELTA_FIELD = {

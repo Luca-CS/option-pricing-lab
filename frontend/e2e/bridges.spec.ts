@@ -42,7 +42,7 @@ test("a quote opens its booking, its model risk and the pricing policy", async (
   await accessible(page);
   await dialog.getByRole("button", { name: "Cancel" }).click(); // nothing booked: the book stays as it was
   // bridge 2: the quote → its model risk
-  await page.getByRole("link", { name: "Model risk" }).click();
+  await page.getByRole("link", { name: "Model risk", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/quant/calibration\\?quote=${quote}$`));
   await expect(page.getByRole("heading", { name: `The model risk of quote ${quote}` })).toBeVisible();
   await expect(page.getByText(/Local vol|Black-Scholes|Heston|SLV/).first()).toBeVisible();

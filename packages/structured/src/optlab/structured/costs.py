@@ -39,14 +39,15 @@ from optlab.structured.surfaces import BumpedSurface, surface_arbitrage
 
 # Fractions, like every level of the library: vol 0.005 is half a vol point, corr 0.01 is one correlation point, dividend 0.1 is 10 % of
 # the dividends, repo 0.001 is 10 bp.
+# The desk's names: an "over" is the margin the desk takes on a market input (overvol: vol points added against the client).
 BUMPS = {
-    "vol": "Volatility, parallel",
-    "skew": "Volatility skew (90-110 % at 1 year)",
-    "corr": "Correlation",
-    "dividend": "Dividends",
-    "repo": "Repo",
-    "spot": "Spot, delta bid-ask",
-    "corr_skew": "Correlation skew",
+    "vol": "Overvol",
+    "skew": "Overskew (90-110 % at 1 year)",
+    "corr": "Overcorrel",
+    "dividend": "Overdiv",
+    "repo": "Overrepo",
+    "spot": "Delta bid-ask",
+    "corr_skew": "Overcorrel skew",
 }
 FORWARD_BUMPS = ("dividend", "repo", "spot")
 SIMULATION_BUMPS = ("vol", "skew", "corr")
@@ -555,7 +556,7 @@ def _model_lines(models, x, base_pairs, inputs, lines, line, final_extra):
         slv = name == "slv"
         mix = lines.mix_used(inputs.mix) if slv else None
         note = "" if on else "the gap is in the desk's favour: no provision"
-        label = f"Model: SLV (mix {mix:g})" if slv else "Model: correlation skew (local correlation)"
+        label = f"Model reserve: SLV (mix {mix:g})" if slv else "Model reserve: local correlation (correlation skew)"
         c = line(
             name,
             label,
@@ -648,7 +649,7 @@ def _digital_lines(digital_all, digital_run, x, base_pairs, at_base, inputs, lin
         out.append(
             line(
                 "digital_interaction",
-                "Interaction of the digitals",
+                "Interaction of the digital overhedges",
                 "interaction",
                 None if base_pairs is None else digital_pairs - singles,  # pyright: ignore[reportOperatorIssue] (the pairs exist with the base's)
                 digital_effect - total_kinds,
@@ -770,7 +771,7 @@ def desk_price(
             out.append(
                 line(
                     "interaction",
-                    "Interaction of the bumps",
+                    "Interaction of the overs",
                     "interaction",
                     None if pairs is None else pairs - singles,
                     d,

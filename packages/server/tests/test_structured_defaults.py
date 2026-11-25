@@ -299,7 +299,7 @@ def test_a_quote_shows_its_lines_and_the_report_too(desk):
     saved = desk.saved_quote(q["quote_id"])
     assert saved["result"]["desk"]["final_price"] == d["final_price"]
     html = quote_report(saved)
-    assert "Hedging cost" in html and "Volatility, parallel" in html and "(overridden)" in html
+    assert "Hedging cost" in html and "Overvol" in html and "(overridden)" in html
     assert q["sheet"]["costs"]["vol"] == -0.01  # the override stays with the sheet
 
 
