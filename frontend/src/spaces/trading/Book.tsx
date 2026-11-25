@@ -107,9 +107,13 @@ export default function Book() {
   const [precision, setPrecision] = useState("quick");
   const job = useScreenJob("book", "Book valuation");
   const valuation = job.envelope?.result;
-  const byName = new Map((valuation?.positions ?? []).map((p) => [p.name, p]));
-  const items = (trades.data?.items ?? []).filter((t) => show === "all" || t.status === "live");
-  const rows: Row[] = items.map((t) => ({ ...t, position: byName.get(t.trade_id) }));
+  // the grid's rows keep their identity while nothing they show changes (the grid recomputes on a new array)
+  const rows: Row[] = useMemo(() => {
+    const byName = new Map((valuation?.positions ?? []).map((p) => [p.name, p]));
+    return (trades.data?.items ?? [])
+      .filter((t) => show === "all" || t.status === "live")
+      .map((t) => ({ ...t, position: byName.get(t.trade_id) }));
+  }, [trades.data, show, valuation]);
   const cols = useMemo(() => columns(Boolean(valuation)), [valuation]);
   const set = (key: string, value: string) => {
     const next = new URLSearchParams(params);

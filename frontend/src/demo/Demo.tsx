@@ -189,10 +189,27 @@ function StoryButton() {
   );
 }
 
+/** The card's height, kept as room at the foot of the page: the page's last rows scroll out from under the card,
+ * which sits over them (on a phone, over a good part of the screen). */
+function useRoom(): [(el: HTMLElement | null) => void, number] {
+  const [el, setEl] = useState<HTMLElement | null>(null);
+  const [height, setHeight] = useState(0);
+  useEffect(() => {
+    if (!el) return;
+    const watch = new ResizeObserver(() => setHeight(Math.ceil(el.getBoundingClientRect().height)));
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, [el]);
+  return [setEl, height];
+}
+
 /** The story in progress: its step, what to look at, back and next. */
 export function StoryPanel() {
   const [walk, setWalk] = useWalk();
   const navigate = useNavigate();
+  const [card, room] = useRoom();
+  // below the page, the card's height and its 16 px from the bottom, and as much again to breathe
+  const space = <div className={classes.room} style={{ height: room + 32 }} aria-hidden="true" />;
   const story = walk ? storyOf(walk.profile) : undefined;
   const step = story && walk ? story.steps[walk.step] : undefined;
   if (!story || !walk || !step) return null;
@@ -208,64 +225,74 @@ export function StoryPanel() {
   if (walk.folded) {
     // folded to one line, out of the page's way
     return (
-      <aside className={`${classes.story} ${classes.folded}`} aria-label={`The ${story.label.toLowerCase()}'s story`}>
-        <button type="button" className={classes.unfold} onClick={() => setWalk({ ...walk, folded: false })}>
-          <span className={classes.storyCount}>{count}</span>
-          <span className={classes.foldedTitle}>{step.title}</span>
-        </button>
-        {!last && (
-          <Button size="xs" color="amber" onClick={() => go(walk.step + 1)} aria-label="Next">
-            <IconArrowRight size={14} aria-hidden="true" />
-          </Button>
-        )}
-      </aside>
+      <>
+        <aside
+          ref={card}
+          className={`${classes.story} ${classes.folded}`}
+          aria-label={`The ${story.label.toLowerCase()}'s story`}
+        >
+          <button type="button" className={classes.unfold} onClick={() => setWalk({ ...walk, folded: false })}>
+            <span className={classes.storyCount}>{count}</span>
+            <span className={classes.foldedTitle}>{step.title}</span>
+          </button>
+          {!last && (
+            <Button size="xs" color="amber" onClick={() => go(walk.step + 1)} aria-label="Next">
+              <IconArrowRight size={14} aria-hidden="true" />
+            </Button>
+          )}
+        </aside>
+        {space}
+      </>
     );
   }
   return (
-    <aside className={classes.story} aria-label={`The ${story.label.toLowerCase()}'s story`}>
-      <div className={classes.storyHead}>
-        <span className={classes.storyCount}>{count}</span>
-        <span>
-          <button
-            type="button"
-            className={classes.close}
-            onClick={() => setWalk({ ...walk, folded: true })}
-            aria-label="Fold the story"
-          >
-            <IconChevronDown size={14} aria-hidden="true" />
-          </button>
-          <button type="button" className={classes.close} onClick={() => setWalk(null)} aria-label="Close the story">
-            <IconX size={14} aria-hidden="true" />
-          </button>
-        </span>
-      </div>
-      <h2 className={classes.storyTitle}>{step.title}</h2>
-      <p className={classes.storyBody}>{step.body}</p>
-      <div className={classes.storyNav}>
-        <Button
-          size="xs"
-          variant="default"
-          leftSection={<IconArrowLeft size={14} aria-hidden="true" />}
-          disabled={walk.step === 0}
-          onClick={() => go(walk.step - 1)}
-        >
-          Back
-        </Button>
-        {last ? (
-          <Button size="xs" color="amber" onClick={() => setWalk(null)}>
-            Done: look around
-          </Button>
-        ) : (
+    <>
+      <aside ref={card} className={classes.story} aria-label={`The ${story.label.toLowerCase()}'s story`}>
+        <div className={classes.storyHead}>
+          <span className={classes.storyCount}>{count}</span>
+          <span>
+            <button
+              type="button"
+              className={classes.close}
+              onClick={() => setWalk({ ...walk, folded: true })}
+              aria-label="Fold the story"
+            >
+              <IconChevronDown size={14} aria-hidden="true" />
+            </button>
+            <button type="button" className={classes.close} onClick={() => setWalk(null)} aria-label="Close the story">
+              <IconX size={14} aria-hidden="true" />
+            </button>
+          </span>
+        </div>
+        <h2 className={classes.storyTitle}>{step.title}</h2>
+        <p className={classes.storyBody}>{step.body}</p>
+        <div className={classes.storyNav}>
           <Button
             size="xs"
-            color="amber"
-            rightSection={<IconArrowRight size={14} aria-hidden="true" />}
-            onClick={() => go(walk.step + 1)}
+            variant="default"
+            leftSection={<IconArrowLeft size={14} aria-hidden="true" />}
+            disabled={walk.step === 0}
+            onClick={() => go(walk.step - 1)}
           >
-            Next
+            Back
           </Button>
-        )}
-      </div>
-    </aside>
+          {last ? (
+            <Button size="xs" color="amber" onClick={() => setWalk(null)}>
+              Done: look around
+            </Button>
+          ) : (
+            <Button
+              size="xs"
+              color="amber"
+              rightSection={<IconArrowRight size={14} aria-hidden="true" />}
+              onClick={() => go(walk.step + 1)}
+            >
+              Next
+            </Button>
+          )}
+        </div>
+      </aside>
+      {space}
+    </>
   );
 }

@@ -84,6 +84,7 @@ export function TradingHome() {
             </>
           }
         >
+          {revalue.error && <Failure error={revalue.error} title="The book was not revalued" />}
           {trades.isPending && <Loading />}
           {trades.error && <Failure error={trades.error} />}
           {trades.data && items.length === 0 && (
