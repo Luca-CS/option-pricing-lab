@@ -180,12 +180,15 @@ class Worker:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
-    def start(self) -> bool:
+    def start(self, quiet: bool = False) -> bool:
+        """Take the lease and start the loop; False when another worker serves this database (said once, unless
+        `quiet`: a process that keeps asking for the lease says nothing more while it waits)."""
         engine = engines.default_engine()
         if not self.leases.register(
             self.worker_id, socket.gethostname(), os.getpid(), self.role, engine, self.concurrency
         ):
-            LOG.warning("another worker serves %s: this process leaves the queue to it", self.desk.db.path)
+            if not quiet:
+                LOG.warning("another worker serves %s: this process waits for its lease", self.desk.db.path)
             return False
         swept = self.queue.sweep()
         if swept:

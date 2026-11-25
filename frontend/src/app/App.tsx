@@ -58,6 +58,8 @@ const HOMES: Record<string, ReactNode> = {
 const structuring = () => import("../spaces/structuring");
 const trading = () => import("../spaces/trading");
 const risk = () => import("../spaces/risk");
+const admin = () => import("../spaces/admin");
+const quant = () => import("../spaces/quant");
 const LAZY: Record<string, ReturnType<typeof lazy>> = {
   "/structuring/builder": lazy(() => structuring().then((m) => ({ default: m.Builder }))),
   "/structuring/quotes": lazy(() => structuring().then((m) => ({ default: m.QuotesPage }))),
@@ -75,6 +77,19 @@ const LAZY: Record<string, ReturnType<typeof lazy>> = {
   "/risk/stress": lazy(() => risk().then((m) => ({ default: m.Stress }))),
   "/risk/backtest": lazy(() => risk().then((m) => ({ default: m.Backtest }))),
   "/risk/runs": lazy(() => risk().then((m) => ({ default: m.EodRuns }))),
+  "/quant/market": lazy(() => quant().then((m) => ({ default: m.Market }))),
+  "/quant/market/:name": lazy(() => quant().then((m) => ({ default: m.Market }))),
+  "/quant/calibration": lazy(() => quant().then((m) => ({ default: m.Calibration }))),
+  "/quant/vollab": lazy(() => quant().then((m) => ({ default: m.VolLab }))),
+  "/quant/replay": lazy(() => quant().then((m) => ({ default: m.Replay }))),
+  "/quant/replay/:id": lazy(() => quant().then((m) => ({ default: m.Replay }))),
+  "/quant/script": lazy(() => quant().then((m) => ({ default: m.Script }))),
+  "/quant/engine": lazy(() => quant().then((m) => ({ default: m.Engine }))),
+  "/admin/users": lazy(() => admin().then((m) => ({ default: m.Users }))),
+  "/admin/jobs": lazy(() => admin().then((m) => ({ default: m.Jobs }))),
+  "/admin/schedules": lazy(() => admin().then((m) => ({ default: m.Schedules }))),
+  "/admin/audit": lazy(() => admin().then((m) => ({ default: m.Audit }))),
+  "/admin/system": lazy(() => admin().then((m) => ({ default: m.System }))),
 };
 
 function Lazy({ path }: { path: string }) {

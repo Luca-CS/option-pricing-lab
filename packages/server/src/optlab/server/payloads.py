@@ -878,6 +878,242 @@ class EodResult(Doc):
 
 
 # --- quant, admin ------------------------------------------------------------------------------------------------------
+class Smile(Doc):
+    """A snapshot's implied vols at one maturity, against moneyness K / F(T)."""
+
+    T: float
+    forward: float = Field(..., description="F(T) at the model's spot of 100")
+    moneyness: list[float]
+    iv: list[float]
+
+
+class TermStructure(Doc):
+    """A snapshot's at-the-money vol, forward (over spot) and discount factor along the maturities."""
+
+    T: list[float]
+    atm_vol: list[float]
+    forward: list[float]
+    discount: list[float]
+
+
+class OtherUnderlyings(Doc):
+    """The names a worst-of may hold beside the calibrated one: their typed inputs and correlations."""
+
+    names: dict[str, dict[str, Any]] = {}
+    corr: dict[str, float] = Field(default={}, description='"A|B" -> correlation')
+    calibrated: str | None = None
+    defaults: dict[str, float] = {}
+
+
+class VolIndex(Doc):
+    name: str
+    dates: list[str]
+    close: list[float]
+    origin: str | None = None
+    source: str | None = None
+
+
+class ModelRisk(Doc):
+    """The calibration's exotics under each model (price ± SE), and its fit by maturity; `note` when there is none."""
+
+    exotics: dict[str, dict[str, dict[str, Estimate]]] = Field(
+        default={}, description="product -> model -> {price: {value, se}}"
+    )
+    errors: list[dict[str, Any]] = Field(
+        default=[], description="by maturity: quotes, spread and each model's error, bp"
+    )
+    note: str | None = None
+
+
+class VolLabSet(Doc):
+    underlying: str
+    source: str | None = None
+    days: list[str] = []
+    first: str | None = None
+    last: str | None = None
+    n: int | None = None
+    quality: list[Any] = []
+
+
+class VolLabDays(Doc):
+    """The days with option quotes in the lake, by name and source, and the fit's models and settings."""
+
+    available: bool
+    sets: list[VolLabSet] = []
+    models: list[str] = []
+    defaults: dict[str, Any] = {}
+    shared: bool = False
+
+
+class VolLabSlice(Doc):
+    T: float
+    expiry: str | None = None
+    moneyness: list[float]
+    iv: list[float | None]
+    iv_bid: list[float | None] = []
+    iv_ask: list[float | None] = []
+
+
+class VolLabQuotes(Doc):
+    """A day's cleaned chain: by maturity, the mid implied vol and those of the bid and the ask."""
+
+    underlying: str
+    day: str
+    source: str | None = None
+    slices: list[VolLabSlice] = []
+    origin: str | None = None
+
+
+class VolLabRun(Doc):
+    calibration_id: str
+    underlying: str
+    day: str
+    model: str
+    source: str | None = None
+    rmse_bp: float | None = None
+    within_spread: float | None = None
+    seconds: float | None = None
+    origin: str | None = None
+    code_version: str | None = None
+    ingested: str | None = None
+
+
+class VolLabRuns(Doc):
+    runs: list[VolLabRun] = []
+
+
+class FitRow(Doc):
+    T: float
+    n: int | None = None
+    rmse_bp: float | None = None
+    bias_bp: float | None = None
+    within_spread: float | None = Field(
+        default=None, description="the share of quotes the model puts inside the spread"
+    )
+    median_half_spread_bp: float | None = None
+
+
+class FitCurve(Doc):
+    T: float
+    moneyness: list[float]
+    iv: list[float | None]
+
+
+class ModelFit(Doc):
+    calibration_id: str | None = None
+    params: dict[str, Any] = {}
+    by_maturity: list[FitRow] = []
+    overall: dict[str, Any] = Field(default={}, description="n, rmse_bp, within_spread")
+    seconds: float | None = None
+    curves: list[FitCurve] = []
+    arbitrage: dict[str, Any] | None = None
+
+
+class VolFit(Doc):
+    """A fit of a day's quotes (job `fit`): each model's parameters, its error by maturity against the spread, and
+    its curves; each model stored as a replayable run."""
+
+    underlying: str | None = None
+    day: str | None = None
+    source: str | None = None
+    origin: str | None = None
+    fits: dict[str, ModelFit] = {}
+    maturities: list[float] = []
+    quotes_hash: str | None = None
+
+
+class VolFitReproduction(Doc):
+    """A stored fit run again (job `reproduce`): the same quotes, how far the parameters moved, and both errors."""
+
+    calibration_id: str
+    same_quotes: bool
+    largest_parameter_gap: float | None = None
+    identical: bool
+    stored_rmse_bp: float | None = None
+    new_rmse_bp: float | None = None
+
+
+class ReplayRunItem(Doc):
+    id: str
+    kind: str = Field(..., description="desk (run here) or versioned (results/ of the repository)")
+    trade_id: str | None = None
+    underlyings: list[str] | None = None
+    n_valuations: int | None = None
+    strike: str | None = None
+    events: int | None = None
+    seconds: float | None = None
+
+
+class ReplayRuns(Doc):
+    available: bool = Field(..., description="the lake holds closes to replay on")
+    runs: list[ReplayRunItem] = []
+    presets: list[str] = []
+
+
+class ReplayDay(Doc):
+    date: str
+    value: float | None = None
+    se: float | None = None
+    cash: float | None = None
+    reserve: float | None = None
+    release: float | None = None
+    pnl: float | None = None
+    explain: dict[str, float] | None = Field(default=None, description="the day's P&L by Greek, and the reserve")
+    residual: float | None = None
+    greeks: dict[str, dict[str, float]] = {}
+    perf: dict[str, float] = Field(default={}, description="each name's close over its strike")
+    layer: dict[str, str] = {}
+
+
+class ReplayEvent(Doc):
+    date: str
+    kind: str
+    amount: float | None = None
+    payment: str | None = None
+
+
+class Replay(Doc):
+    """A trade's life on real closes (job `replay`, and its stored copy): its value and cash each valuation day, its
+    events, the P&L explained by the Greeks with what they leave, and the reserve released."""
+
+    trade_id: str
+    underlyings: list[str] = []
+    n_valuations: int | None = None
+    daily: list[ReplayDay] = []
+    events: list[ReplayEvent] = []
+    explain: dict[str, Any] = {}
+    inception: dict[str, Any] = {}
+    reconciliation: dict[str, Any] = {}
+    reserves: dict[str, Any] = {}
+    sheet: dict[str, Any] = {}
+    provenance: dict[str, Any] = {}
+    seconds: dict[str, Any] = {}
+
+
+class ScriptCheck(Doc):
+    """A script read and checked: what it holds, or the first error at its line and column."""
+
+    ok: bool
+    message: str | None = None
+    line: int | None = None
+    col: int | None = None
+    underlyings: list[str] = []
+    params: dict[str, float] = {}
+    events: int | None = None
+
+
+class ScriptPrice(Doc):
+    """A script priced under a model (job `script`)."""
+
+    price: Estimate
+    model: str
+    n_paths: int
+    seconds: float | None = None
+    expected_life: float | None = None
+    notional: float | None = None
+    warnings: list[Any] = []
+
+
 class Device(Doc):
     name: str
     compute_capability: str | None = None
@@ -939,6 +1175,13 @@ class WorkerRow(Doc):
     info: WorkerInfo = Field(default_factory=WorkerInfo)
 
 
+class NetworkInfo(Doc):
+    """Whether the desk listens beyond this machine, and what would stop the LAN from reaching it (read-only)."""
+
+    lan: bool = Field(..., description="the LAN profile is on (OPTLAB_LAN)")
+    blockers: list[str] = Field(default=[], description="what blocks incoming connections (firewall, network profile)")
+
+
 class SystemInfo(Doc):
     ok: bool
     version: str
@@ -992,6 +1235,10 @@ JOB_RESULTS: dict[str, type[BaseModel]] = {
     "scenarios": ScenarioRun,
     "eod": EodResult,
     "var": VarRun,
+    "script": ScriptPrice,
+    "replay": Replay,
+    "fit": VolFit,
+    "reproduce": VolFitReproduction,
 }
 
 

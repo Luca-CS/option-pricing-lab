@@ -13,6 +13,10 @@ export type JobResults = {
   scenarios: Schemas["ScenarioRun"];
   var: Schemas["VarRun"];
   eod: Schemas["EodResult"];
+  script: Schemas["ScriptPrice"];
+  replay: Schemas["Replay"];
+  fit: Schemas["VolFit"];
+  reproduce: Schemas["VolFitReproduction"];
 };
 
 export type Envelope<K extends keyof JobResults> = {

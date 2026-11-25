@@ -8,7 +8,16 @@ from fastapi import APIRouter, Query, Request
 from fastapi import Path as PathParam
 
 from optlab import native
-from optlab.server.payloads import EngineInfo, documented
+from optlab.server.payloads import (
+    EngineInfo,
+    ModelRisk,
+    Replay,
+    ReplayRuns,
+    VolLabDays,
+    VolLabQuotes,
+    VolLabRuns,
+    documented,
+)
 from optlab.server.present import estimates
 from optlab.server.routers._common import ACCEPTED, desk, submit
 from optlab.server.schemas import FitIn, ReplayIn, body
@@ -18,19 +27,19 @@ router = APIRouter(prefix="/quant", tags=["quant"])
 NAME = r"^[A-Z0-9._-]{1,16}$"
 
 
-@router.get("/model-risk", **access())
+@router.get("/model-risk", **access(), responses=documented(ModelRisk))
 def model_risk(request: Request):
     """Prices of the calibration's exotics under Black-Scholes, local vol, Heston and SLV."""
     return estimates(desk(request).model_risk())
 
 
-@router.get("/vollab/days", **access())
+@router.get("/vollab/days", **access(), responses=documented(VolLabDays))
 def vollab_days(request: Request):
     """Days with option quotes in the lake, by name and source."""
     return desk(request).lab_days()
 
 
-@router.get("/vollab/quotes", **access("quant"))
+@router.get("/vollab/quotes", **access("quant"), responses=documented(VolLabQuotes))
 def vollab_quotes(
     request: Request,
     day: dt.date,
@@ -47,7 +56,7 @@ def vollab_fit(f: FitIn, request: Request):
     return submit(request, "vollab_fit", lambda: desk(request).lab_fit(body(f)), target=f.underlying)
 
 
-@router.get("/vollab/runs", **access())
+@router.get("/vollab/runs", **access(), responses=documented(VolLabRuns))
 def vollab_runs(request: Request, underlying: str | None = Query(None, pattern=NAME)):
     return desk(request).lab_runs(underlying)
 
@@ -58,7 +67,7 @@ def vollab_reproduce(request: Request, run_id: str = PathParam(..., pattern=r"^[
     return submit(request, "vollab_reproduce", lambda: desk(request).lab_reproduce(run_id), target=run_id)
 
 
-@router.get("/replay/runs", **access())
+@router.get("/replay/runs", **access(), responses=documented(ReplayRuns))
 def replay_runs(request: Request):
     """Replays of trades on real closes: the desk's and the versioned ones."""
     return desk(request).replay_runs()
@@ -70,7 +79,7 @@ def replay_run(r: ReplayIn, request: Request):
     return submit(request, "replay_run", lambda: desk(request).replay_run(body(r)), target=f"{r.preset}/{r.underlying}")
 
 
-@router.get("/replay/runs/{run_id:path}", **access())
+@router.get("/replay/runs/{run_id:path}", **access(), responses=documented(Replay))
 def replay_get(
     request: Request, run_id: str = PathParam(..., pattern=r"^[A-Za-z0-9_.-]{1,128}(/[A-Za-z0-9_.-]{1,128})?$")
 ):

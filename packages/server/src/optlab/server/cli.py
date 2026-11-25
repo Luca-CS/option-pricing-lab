@@ -148,7 +148,10 @@ def serve(
     if desk.worker is not None:
         say(f"jobs: the worker of this process, {desk.max_jobs} at a time")
     else:
-        say("jobs: left to `optlab worker` (OPTLAB_WORKER=external, or another worker serves this database)")
+        say(
+            "jobs: left to `optlab worker` (OPTLAB_WORKER=external), or to the worker that holds this database's lease"
+            " (this process takes the queue over when it stops)"
+        )
     base = f"http://{settings.host}:{settings.port}"
     say(f"API on {base}/api/v1 (OpenAPI: /api/v1/openapi.json)")
     if open_:

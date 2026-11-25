@@ -77,12 +77,12 @@ export const SPACES: Space[] = [
     key: "q",
     screens: [
       { path: "/quant", label: "Home" },
-      { path: "/quant/market", label: "Market explorer", step: "F7" },
-      { path: "/quant/calibration", label: "Calibration", step: "F7" },
-      { path: "/quant/vollab", label: "Vol lab", step: "F7" },
-      { path: "/quant/replay", label: "Replay lab", step: "F7" },
-      { path: "/quant/script", label: "Script lab", step: "F7" },
-      { path: "/quant/engine", label: "Engine", step: "F7" },
+      { path: "/quant/market", label: "Market explorer" },
+      { path: "/quant/calibration", label: "Calibration" },
+      { path: "/quant/vollab", label: "Vol lab" },
+      { path: "/quant/replay", label: "Replay lab" },
+      { path: "/quant/script", label: "Script lab" },
+      { path: "/quant/engine", label: "Engine" },
     ],
   },
   {
@@ -93,11 +93,11 @@ export const SPACES: Space[] = [
     key: "a",
     screens: [
       { path: "/admin", label: "Home" },
-      { path: "/admin/users", label: "Users", step: "F7" },
-      { path: "/admin/jobs", label: "Jobs", step: "F7" },
-      { path: "/admin/schedules", label: "Schedules", step: "F7" },
-      { path: "/admin/audit", label: "Audit", step: "F7" },
-      { path: "/admin/system", label: "System", step: "F7" },
+      { path: "/admin/users", label: "Users" },
+      { path: "/admin/jobs", label: "Jobs" },
+      { path: "/admin/schedules", label: "Schedules" },
+      { path: "/admin/audit", label: "Audit" },
+      { path: "/admin/system", label: "System" },
     ],
   },
 ];
@@ -108,8 +108,8 @@ export const ENTITY_PAGES: Screen[] = [
   { path: "/trading/trades/:id", label: "A trade" },
   { path: "/trading/lifecycle/:id", label: "A trade's lifecycle" },
   { path: "/risk/var/:id", label: "A VaR run" },
-  { path: "/quant/market/:name", label: "A name's market", step: "F7" },
-  { path: "/quant/replay/:id", label: "A replay", step: "F7" },
+  { path: "/quant/market/:name", label: "A name's market" },
+  { path: "/quant/replay/:id", label: "A replay" },
 ];
 
 export function spaceOf(pathname: string): Space | undefined {

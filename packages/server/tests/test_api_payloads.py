@@ -24,6 +24,12 @@ DESCRIBED = {  # the domain routes of session 2's screens, so far; each names it
     "/api/v1/quant/engine": "EngineInfo",
     "/api/v1/admin/system": "SystemInfo",
     "/api/v1/admin/jobs": "JobRowPage",
+    "/api/v1/admin/network": "NetworkInfo",
+    "/api/v1/market/other-underlyings": "OtherUnderlyings",
+    "/api/v1/quant/model-risk": "ModelRisk",
+    "/api/v1/quant/vollab/days": "VolLabDays",
+    "/api/v1/quant/vollab/runs": "VolLabRuns",
+    "/api/v1/quant/replay/runs": "ReplayRuns",
     "/api/v1/trading/fixings": "Fixings",
     "/api/v1/trading/cost-defaults": "CostDefaults",
 }
@@ -32,18 +38,7 @@ DESCRIBED = {  # the domain routes of session 2's screens, so far; each names it
 OPEN = {
     "/api/v1/ready",
     "/api/v1/structuring/schema",  # a JSON Schema itself
-    "/api/v1/market/snapshots/{snapshot_id}/smile",
-    "/api/v1/market/snapshots/{snapshot_id}/term",
-    "/api/v1/market/other-underlyings",
-    "/api/v1/market/lake/vol-indices/{name}",
     "/api/v1/market/lake/basket-quotes",
-    "/api/v1/quant/model-risk",
-    "/api/v1/quant/vollab/days",
-    "/api/v1/quant/vollab/quotes",
-    "/api/v1/quant/vollab/runs",
-    "/api/v1/quant/replay/runs",
-    "/api/v1/quant/replay/runs/{run_id}",
-    "/api/v1/admin/network",
 }
 NOT_JSON = {"/api/v1/jobs/{job_id}/events"}  # Server-Sent Events
 

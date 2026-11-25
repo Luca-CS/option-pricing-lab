@@ -101,3 +101,24 @@ def test_docker_stop_s_sigterm_is_a_clean_stop(tmp_path):
         assert Workers(desk.db).alive() == []  # released, not left to expire
         j = s.get(f"/api/v1/jobs/{job}").json()
         assert j["state"] == "error" and j["error"] == INTERRUPTED
+
+
+def test_an_api_whose_lease_is_taken_serves_the_queue_once_it_frees(tmp_path, monkeypatch):
+    """An api restarted right after a kill finds the dead process's lease still fresh. It waits for that lease in the
+    background and serves the queue once it frees (it used to leave the queue to nobody until its next restart)."""
+    import optlab.server.api as desk_module
+    from optlab.server.api import Desk
+
+    monkeypatch.setattr(desk_module, "LEASE_RETRY_SECONDS", 0.05)
+    with api(tmp_path) as a:
+        first = a.state.desk
+        assert first.worker is not None
+        second = Desk(settings=first.settings, engine="numpy")
+        try:
+            assert second.worker is None  # the first one serves this database
+            first.worker.stop()  # its lease released
+            _until(lambda: second.worker is not None, 30, "the second api never took the queue over")
+            assert [w["role"] for w in Workers(second.db).alive()] == ["embedded"]
+        finally:
+            second.close()
+        assert Workers(first.db).alive() == []

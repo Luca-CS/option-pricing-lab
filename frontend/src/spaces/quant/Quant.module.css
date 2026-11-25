@@ -1,0 +1,60 @@
+.editor {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  border: 1px solid var(--ol-line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* the gutter and the text share one font and one line height, so line n of the gutter sits beside line n */
+.gutter,
+.code {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 12.5px;
+  line-height: 20px;
+}
+
+.gutter {
+  margin: 0;
+  padding: 8px 8px 8px 12px;
+  text-align: right;
+  color: var(--ol-muted);
+  background: var(--ol-chrome);
+  user-select: none;
+  min-width: 40px;
+}
+
+.gutter span {
+  display: block;
+  height: 20px;
+}
+
+.badLine {
+  color: var(--ol-neg);
+  font-weight: 700;
+}
+
+.codeRoot {
+  flex: 1;
+  min-width: 0;
+}
+
+/* two classes: above the input's own Mantine class */
+.codeRoot .code {
+  border: 0;
+  border-radius: 0;
+  padding: 8px 12px;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+dl dd.plain {
+  font-family: inherit;
+  color: var(--ol-muted);
+}
+
+.mark {
+  font-family: var(--mantine-font-family-monospace);
+  color: var(--ol-accent);
+}

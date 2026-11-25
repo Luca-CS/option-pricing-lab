@@ -21,7 +21,7 @@ type Envelope = {
 };
 
 /** The screen that shows a finished job's result, from its kind and its result's ids. */
-export function resultScreen(kind: string, result: unknown): { label: string; to: string } | null {
+export function resultScreen(kind: string, result: unknown, job = ""): { label: string; to: string } | null {
   const r = (result ?? {}) as Record<string, unknown>;
   const id = (k: string) => (typeof r[k] === "string" ? encodeURIComponent(r[k] as string) : null);
   switch (kind) {
@@ -40,10 +40,13 @@ export function resultScreen(kind: string, result: unknown): { label: string; to
     case "eod":
       return { label: "Open the P&L", to: "/trading/pnl" };
     case "replay":
-      return id("run_id") ? { label: "Open the replay", to: `/quant/replay/${id("run_id")}` } : null;
+      return { label: "Open the replay", to: `/quant/replay?job=${encodeURIComponent(job)}` };
+    case "script":
+      return { label: "Open the script lab", to: `/quant/script?job=${encodeURIComponent(job)}` };
     case "fit":
+      return { label: "Open the fit", to: `/quant/vollab?job=${encodeURIComponent(job)}` };
     case "reproduce":
-      return { label: "Open the vol lab", to: "/quant/vollab" };
+      return { label: "Open the vol lab", to: `/quant/vollab?again=${encodeURIComponent(job)}` };
     default:
       return null;
   }
@@ -67,7 +70,7 @@ export function JobPage() {
   }, [tracked?.state, tracked, job.refetch]);
 
   const env = (j?.result ?? null) as Envelope | null;
-  const screen = j?.state === "done" ? resultScreen(j.kind, env?.result) : null;
+  const screen = j?.state === "done" ? resultScreen(j.kind, env?.result, j.id) : null;
   const origin = env?.market?.origin as { surface?: string } | string | null | undefined;
   return (
     <SpacePage title={j ? `${kindLabel(j.kind)} · job ${j.id}` : "Job"}>

@@ -16,6 +16,7 @@ import datetime as dt
 import json
 import math
 import re
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -66,6 +67,7 @@ FIELD = re.compile(r"^([a-z_]+\.[a-z_]+)\b")
 # (Market screen). The rate defaults to the 1-year zero rate of the market in use.
 BASKET_DEFAULTS = {"vol": 0.20, "q": 0.02, "corr": 0.70}
 LOG = get_logger(__name__)
+LEASE_RETRY_SECONDS = 5.0  # how often an api whose worker found the lease taken asks for it again
 
 
 class ApiError(Exception):
@@ -132,26 +134,48 @@ class Desk:
         self.started = dt.datetime.now(dt.UTC)
         self.risk = RiskApi(self)
         self.worker: Any = None
+        self._lease_wait: threading.Event | None = None  # set: stop waiting for another worker's lease
+        self._worker_lock = threading.Lock()
         if run_jobs:
             self.start_worker()
 
     # --- jobs ---
     def start_worker(self) -> bool:
-        """Run the queue in this process (the embedded worker); False when another worker serves this database."""
+        """Run the queue in this process (the embedded worker). False when another worker serves this database: this
+        process then waits for that worker's lease in the background and takes the queue over once the other one
+        stops or goes stale (a process killed without releasing its lease), so an api restarted right after a kill
+        does not leave its jobs waiting for a worker that no longer exists."""
         from optlab.server.worker import Worker
 
         worker = Worker(self, role="embedded", concurrency=self.max_jobs)
         if worker.start():
             self.worker = worker
             return True
+        self._lease_wait = threading.Event()
+        threading.Thread(
+            target=self._take_over, args=(worker, self._lease_wait), name="optlab-lease", daemon=True
+        ).start()
         return False
 
+    def _take_over(self, worker: Any, stop: threading.Event) -> None:
+        while not stop.wait(LEASE_RETRY_SECONDS):
+            with self._worker_lock:
+                if stop.is_set():
+                    return
+                if worker.start(quiet=True):
+                    self.worker = worker
+                    LOG.warning("the other worker's lease is free: this process serves the queue")
+                    return
+
     def close(self) -> None:
-        """Stop the embedded worker (its running jobs are asked to stop, then marked interrupted) and release the
-        database file."""
-        if self.worker is not None:
-            self.worker.stop()
-            self.worker = None
+        """Stop the embedded worker (its running jobs are asked to stop, then marked interrupted), or stop waiting for
+        another worker's lease, and release the database file."""
+        if self._lease_wait is not None:
+            self._lease_wait.set()
+        with self._worker_lock:
+            if self.worker is not None:
+                self.worker.stop()
+                self.worker = None
         self.db.close()
 
     def _freeze(self, fixings: dict | None = None, trades: list | None = None, costs: bool = False) -> Frozen:
