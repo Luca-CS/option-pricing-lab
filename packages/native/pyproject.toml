@@ -14,7 +14,7 @@ native = "optlab.native"  # the engine protocol of optlab.core.engines
 
 [build-system]
 # ADR-0008: the engine of cuda/ and its nanobind binding, built by CMake; versions pinned, each over two weeks old
-requires = ["scikit-build-core==1.1.1", "nanobind==3.1.0"]
+requires = ["scikit-build-core==1.1.2", "nanobind==3.1.0"]
 build-backend = "scikit_build_core.build"
 
 [tool.scikit-build]
