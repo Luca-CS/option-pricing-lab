@@ -3,9 +3,9 @@
 // model risk, and the fit by maturity against the quotes' spread.
 import { Anchor, Text } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { api, ok } from "../../api/client";
-import { useMarketContext } from "../../api/queries";
+import { useMarketContext, useSavedQuote } from "../../api/queries";
 import { SpacePage } from "../../app/Shell";
 import { type Estimate, formatNumber } from "../../lib/format";
 import { Panel } from "../../ui/Panel";
@@ -20,7 +20,54 @@ export function modelSpread(prices: Estimate[]): number | null {
   return Math.max(...v) - Math.min(...v);
 }
 
+/** The model risk of one sheet, from its saved quote (a quote's "Model risk" bridge): the base model the policy chose
+ * and why, the model provisions the desk priced on the base's random numbers, and the control and its gap. */
+function QuoteModelRisk({ id }: { id: string }) {
+  const saved = useSavedQuote(id);
+  const q = saved.data?.result;
+  const lines = (q?.desk?.lines ?? []).filter((l) => l.kind === "model");
+  return (
+    <Panel title={`The model risk of quote ${id}`} hint="% of nominal, on the base's random numbers">
+      {saved.isPending && <Loading />}
+      {saved.error && <Failure error={saved.error} title="This quote cannot be read" />}
+      {q && (
+        <>
+          <Text size="sm">
+            {q.policy.label}. <span className={c.muted}>{q.policy.reason}</span>
+          </Text>
+          {lines.length > 0 ? (
+            <DataTable
+              caption="The model provisions of this quote"
+              head={["Provision", "Cost ± SE", "Charged"]}
+              num={[1]}
+              rows={lines.map((l) => ({
+                key: l.key,
+                cells: [l.label, <Est key="c" value={l.cost} digits={3} />, l.in_price ? "yes" : "shown only"],
+              }))}
+            />
+          ) : (
+            <Text size="sm" c="dimmed" mt="xs">
+              No model provision on this quote: its class prices on the base model alone.
+            </Text>
+          )}
+          {q.control && (
+            <Text size="sm" mt="xs">
+              Control ({q.policy.control}): <Est value={q.control.price} digits={3} />, a gap of{" "}
+              {formatNumber(q.control_gap_se, { digits: 1 })} SE to the base.
+            </Text>
+          )}
+          <Anchor component={Link} to={`/structuring/quotes/${encodeURIComponent(id)}`} size="sm" underline="always">
+            Back to the quote
+          </Anchor>
+        </>
+      )}
+    </Panel>
+  );
+}
+
 export default function Calibration() {
+  const [params] = useSearchParams();
+  const quoteId = params.get("quote");
   const context = useMarketContext();
   const risk = useQuery({ queryKey: ["quant", "model-risk"], queryFn: () => ok(api.GET("/api/v1/quant/model-risk")) });
   const r = risk.data;
@@ -36,6 +83,7 @@ export default function Calibration() {
           Its surface
         </Anchor>
       </Text>
+      {quoteId && <QuoteModelRisk id={quoteId} />}
       {risk.isPending && <Loading />}
       {risk.error && <Failure error={risk.error} />}
       {r && exotics.length === 0 && (

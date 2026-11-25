@@ -130,8 +130,8 @@ Reports carry inline CSS and SVG and no script: they are served with their own C
 
 ## 2. Screens of the desk (14, `optlab/app/static/js/views/`)
 
-The old front stays in `legacy/desk-static/` (not served) as the reference until session 2 reaches parity. Spaces are
-those of `HANDOFF_REFACTOR_2_UX.md` §3, to be confirmed at its F0.
+The old front was kept in `legacy/desk-static/` (not served) as the reference until session 2 reached it, then removed
+in F8 (it stays in the history). Spaces are those of `HANDOFF_REFACTOR_2_UX.md` §3, confirmed at its F0.
 
 | Screen (`#/...`) | What it holds | v1 routes | Session 2 space | Status |
 |---|---|---|---|---|

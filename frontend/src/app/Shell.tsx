@@ -2,9 +2,10 @@
 // what market, with which engine and for whom the numbers are, the jobs in flight, and the page. Ctrl+K searches,
 // `g` + a letter goes to a space, `?` lists the keys.
 import { Notifications } from "@mantine/notifications";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { useMe } from "../auth/session";
+import { DemoBanner, StoryPanel } from "../demo/Demo";
 import { JobsTray } from "../jobs/JobsTray";
 import { JobsProvider } from "../jobs/jobs";
 import { ContextBar } from "./ContextBar";
@@ -36,6 +37,12 @@ export function Shell() {
   const [market, setMarket] = useState(false);
   const [help, setHelp] = useState(false);
   useShortcuts({ onHelp: () => setHelp(true) });
+  // a new page opens at its top (the router keeps the scroll of the last one); an anchor scrolls on its own
+  const { pathname, hash } = useLocation();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the page changing is what this runs on
+  useEffect(() => {
+    if (!hash) window.scrollTo(0, 0);
+  }, [pathname, hash]);
 
   return (
     <JobsProvider>
@@ -54,6 +61,7 @@ export function Shell() {
           ))}
         </nav>
         <div className={classes.main}>
+          {import.meta.env.MODE === "demo" && <DemoBanner />}
           <ContextBar onMarket={() => setMarket(true)} jobs={<JobsTray />} />
           <Outlet />
         </div>
@@ -61,6 +69,7 @@ export function Shell() {
       <MarketDrawer opened={market} onClose={() => setMarket(false)} />
       <Palette />
       <ShortcutsHelp opened={help} onClose={() => setHelp(false)} />
+      {import.meta.env.MODE === "demo" && <StoryPanel />}
     </JobsProvider>
   );
 }

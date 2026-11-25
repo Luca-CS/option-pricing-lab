@@ -5,6 +5,7 @@ import { useInfiniteQuery, useQueries, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { api, ok, type Schemas } from "../../api/client";
+import { useSavedQuote } from "../../api/queries";
 import { SpacePage } from "../../app/Shell";
 import { can, useMe } from "../../auth/session";
 import { formatDate, formatNumber } from "../../lib/format";
@@ -17,14 +18,6 @@ import { BookDialog } from "./BookDialog";
 import { QuoteActions, QuoteView } from "./QuoteView";
 
 type Saved = Schemas["SavedQuote"];
-
-function useSavedQuote(id: string | undefined) {
-  return useQuery({
-    queryKey: ["structuring", "quote", id],
-    queryFn: () => ok(api.GET("/api/v1/structuring/quotes/{quote_id}", { params: { path: { quote_id: id ?? "" } } })),
-    enabled: Boolean(id),
-  });
-}
 
 export function QuotesPage() {
   const pages = useInfiniteQuery({
@@ -48,15 +41,20 @@ export function QuotesPage() {
         hint={`${items.length} kept, newest first`}
         flush
         actions={
-          <Button
-            size="xs"
-            component={Link}
-            to={`/structuring/compare?quotes=${picked.map(encodeURIComponent).join(",")}`}
-            disabled={picked.length < 2}
-            variant={picked.length >= 2 ? "filled" : "default"}
-          >
-            Compare {picked.length >= 2 ? picked.length : ""}
-          </Button>
+          // a link only once two quotes are picked: a disabled link is still a link to assistive technology
+          picked.length >= 2 ? (
+            <Button
+              size="xs"
+              component={Link}
+              to={`/structuring/compare?quotes=${picked.map(encodeURIComponent).join(",")}`}
+            >
+              Compare {picked.length}
+            </Button>
+          ) : (
+            <Button size="xs" variant="default" disabled>
+              Compare
+            </Button>
+          )
         }
       >
         {pages.isPending && <Loading />}
@@ -113,7 +111,10 @@ export function QuotePage() {
   const { id } = useParams();
   const saved = useSavedQuote(id);
   const me = useMe().data;
-  const [booking, setBooking] = useState(false);
+  const [params] = useSearchParams();
+  const mayBook = can(me, "create_trade");
+  // "Book it" from a quote's link anywhere lands here with ?book=1: the dialog opens once the quote is read
+  const [booking, setBooking] = useState(params.get("book") === "1");
   return (
     <SpacePage title={`Quote ${id ?? ""}`}>
       {saved.isPending && <Loading />}
@@ -127,14 +128,11 @@ export function QuotePage() {
             q={saved.data.result}
             quoteId={saved.data.quote_id}
             actions={
-              <QuoteActions
-                quoteId={saved.data.quote_id}
-                onBook={can(me, "create_trade") ? () => setBooking(true) : undefined}
-              />
+              <QuoteActions quoteId={saved.data.quote_id} onBook={mayBook ? () => setBooking(true) : undefined} />
             }
           />
           <BookDialog
-            opened={booking}
+            opened={booking && mayBook}
             onClose={() => setBooking(false)}
             quote={saved.data.result}
             quoteId={saved.data.quote_id}

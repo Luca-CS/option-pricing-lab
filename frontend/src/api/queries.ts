@@ -57,6 +57,15 @@ export function useQuotes() {
   });
 }
 
+/** A saved quote: its sheet and its result (Structuring's quote page, and the bridges that open on one). */
+export function useSavedQuote(id: string | null | undefined) {
+  return useQuery({
+    queryKey: ["structuring", "quote", id],
+    queryFn: () => ok(api.GET("/api/v1/structuring/quotes/{quote_id}", { params: { path: { quote_id: id ?? "" } } })),
+    enabled: Boolean(id),
+  });
+}
+
 export function usePresets() {
   return useQuery({
     queryKey: ["structuring", "presets"],

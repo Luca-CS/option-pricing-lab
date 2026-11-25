@@ -118,8 +118,9 @@ compiled engine. The others ask for an engine by name. The architecture, its dec
 
 ### The desk
 
-The desk is a local API over the library ([docs/architecture/api.md](docs/architecture/api.md)). Its web front is being
-rebuilt on that API; the v0 page is kept as the reference in `legacy/desk-static/`.
+The desk is a local API over the library ([docs/architecture/api.md](docs/architecture/api.md)). Its web front
+(`frontend/`, [docs/ux.md](docs/ux.md)) is one application on that API, in five spaces: Structuring, Trading, Risk,
+Quant and Admin. The public demo replays a session recorded on it.
 
 - **Pricer**: a term-sheet form generated from the schema, and a quote run as a background job with its progress. The result
   gives:

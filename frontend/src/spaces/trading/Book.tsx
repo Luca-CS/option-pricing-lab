@@ -179,16 +179,18 @@ export default function Book() {
               </Button>
             </>
           ))}
-        <Button
-          component="a"
-          href="/api/v1/trading/book/report"
-          target="_blank"
-          rel="noopener"
-          size="xs"
-          variant="subtle"
-        >
-          Report
-        </Button>
+        {import.meta.env.MODE !== "demo" && (
+          <Button
+            component="a"
+            href="/api/v1/trading/book/report"
+            target="_blank"
+            rel="noopener"
+            size="xs"
+            variant="subtle"
+          >
+            Report
+          </Button>
+        )}
       </Group>
       {job.failed && <Failure error={new Error(job.failed)} title="The valuation failed" />}
       {job.start.error && <Failure error={job.start.error} />}

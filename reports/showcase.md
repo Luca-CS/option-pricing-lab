@@ -11,7 +11,7 @@ uv run optlab serve --store "C:\Users\Luca\Code\projets\optlab-data\showcase\opt
 ```
 
 **Since A5 (12 November 2026) the desk is API v1 only** until session 2 rebuilds the screens: the screens named below are
-those of the v0 page, kept in `legacy/desk-static/` (not served), and each of their functions is a route of
+those of the v0 page (removed in F8 of session 2, in the history), and each of their functions is a route of
 `/api/v1` ([feature-inventory.md](../docs/architecture/feature-inventory.md)); `OPTLAB_DOCS=true` adds a page to call
 them from the browser (`/api/v1/docs`). The numbers of this guide do not change.
 

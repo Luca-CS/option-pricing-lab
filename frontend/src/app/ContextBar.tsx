@@ -119,7 +119,8 @@ export function ContextBar({ onMarket, jobs }: { onMarket: () => void; jobs: Rea
             underlying: context.underlying,
             origin: context.origin.surface,
           }}
-          stale={isStale(context.valuation)}
+          // the demo's market is dated on purpose, and its banner says so
+          stale={import.meta.env.MODE !== "demo" && isStale(context.valuation)}
           onOpen={onMarket}
         />
       )}

@@ -134,7 +134,7 @@ def build(
 
     from optlab.marketdata.synthetic import synthetic_lake
 
-    synthetic_lake(folder / "lake", START, END)
+    synthetic_lake(folder / "lake", START, END, origin="synthetic", options=True)  # made up, and said so
     log(f"synthetic lake {START} to {END}: {time.perf_counter() - t0:.0f} s")
 
     from optlab.server.tools import calibration

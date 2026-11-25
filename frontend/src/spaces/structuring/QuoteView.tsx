@@ -140,7 +140,17 @@ export function QuoteView({
           >
             <Waterfall q={q} />
           </Panel>
-          <Panel title="The desk's lines" hint="each on the base's random numbers; % of nominal" flush>
+          <Panel
+            title="The desk's lines"
+            hint="each on the base's random numbers; % of nominal"
+            flush
+            actions={
+              // bridge 9: the cost table these lines were drawn from (Trading; read-only to whoever may not edit it)
+              <Anchor component={Link} to="/trading/costs" size="xs" underline="always">
+                The pricing policy
+              </Anchor>
+            }
+          >
             <DataTable
               caption="The desk price, line by line"
               head={["Line", "Kind", "Cost ± SE", coupon ? "Coupon, bp" : "", ""]}
@@ -266,16 +276,19 @@ export function QuoteActions({ quoteId, onBook }: { quoteId: string; onBook?: ((
       <Button component={Link} to={`/quant/replay?quote=${e}`} size="xs" variant="subtle">
         Backtest
       </Button>
-      <Button
-        component="a"
-        href={`/api/v1/structuring/quotes/${e}/report`}
-        target="_blank"
-        rel="noopener"
-        size="xs"
-        variant="subtle"
-      >
-        Report
-      </Button>
+      {/* a report is a page the desk writes: the demo has no desk behind it */}
+      {import.meta.env.MODE !== "demo" && (
+        <Button
+          component="a"
+          href={`/api/v1/structuring/quotes/${e}/report`}
+          target="_blank"
+          rel="noopener"
+          size="xs"
+          variant="subtle"
+        >
+          Report
+        </Button>
+      )}
     </>
   );
 }

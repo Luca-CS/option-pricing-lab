@@ -1,0 +1,256 @@
+/* the demo's first page: a short pitch, then the three profiles side by side (stacked on a phone) */
+.landing {
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 48px 24px 32px;
+  background: var(--ol-ground);
+  color: var(--ol-text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+}
+
+.hero {
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ol-muted);
+  font-size: 14px;
+}
+
+.mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: var(--ol-brand);
+  color: var(--ol-brand-ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mantine-font-family-monospace);
+  font-weight: 700;
+}
+
+.headline {
+  margin: 0;
+  font-size: clamp(24px, 4vw, 34px);
+  line-height: 1.2;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.lede {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--ol-text);
+}
+
+.note {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ol-muted);
+}
+
+.profiles {
+  width: 100%;
+  max-width: 1120px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.profile {
+  background: var(--ol-panel);
+  border: 1px solid var(--ol-line);
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.profileTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.pitch {
+  margin: 0;
+  color: var(--ol-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.steps {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13.5px;
+  line-height: 1.7;
+  flex: 1;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.failed {
+  color: var(--ol-neg);
+  margin: 0;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 24px;
+}
+
+/* the band above every screen */
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 5px 16px;
+  font-size: 12.5px;
+  background: var(--ol-chrome);
+  border-bottom: 1px solid var(--ol-line);
+  color: var(--ol-muted);
+}
+
+.banner strong {
+  color: var(--ol-brand);
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 11.5px;
+}
+
+.who {
+  color: var(--ol-text);
+}
+
+.grow {
+  flex: 1;
+}
+
+.bannerLink {
+  color: var(--ol-text);
+}
+
+/* the story in progress: a card in a corner, above the page, never over the rail */
+.story {
+  position: fixed;
+  left: calc(68px + 16px); /* past the rail */
+  bottom: 16px;
+  z-index: 200;
+  width: min(360px, calc(100vw - 32px));
+  box-sizing: border-box;
+  background: var(--ol-panel);
+  border: 1px solid var(--ol-brand);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .story {
+    left: 16px;
+  }
+}
+
+.folded {
+  flex-direction: row;
+  align-items: center;
+  padding: 8px 10px 8px 14px;
+  width: auto;
+  max-width: calc(100vw - 32px);
+}
+
+.unfold {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--ol-text);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+
+.foldedTitle {
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 260px;
+}
+
+.storyHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.storyCount {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ol-brand);
+}
+
+.close {
+  background: none;
+  border: 0;
+  color: var(--ol-muted);
+  cursor: pointer;
+  padding: 4px;
+  display: inline-flex;
+}
+
+.storyTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.storyBody {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ol-text);
+}
+
+.storyNav {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.loading {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ol-ground);
+}

@@ -28,13 +28,43 @@ export function originKind(origin: string | null | undefined): OriginKind {
   return "synthetic";
 }
 
-export function OriginBadge({ origin, label }: { origin: string | null | undefined; label?: string }) {
+/** Where an origin leads (bridge 10): the lake's coverage, in Quant's market explorer. An admin's screens send it to the
+ * pipelines that fill the lake instead (Admin › Schedules). */
+export const COVERAGE = "/quant/market#lake";
+export const PIPELINES = "/admin/schedules";
+
+export function OriginBadge({
+  origin,
+  label,
+  to,
+}: {
+  origin: string | null | undefined;
+  label?: string;
+  /** the page it opens (COVERAGE, PIPELINES); none inside the coverage table itself */
+  to?: string;
+}) {
   const kind = originKind(origin);
-  return (
-    <span className={classes.badge} title={origin ?? undefined}>
+  const content = (
+    <>
       <span className={`${classes.dot} ${classes[kind]}`} aria-hidden="true" />
       {label ? `${label}: ` : ""}
       {ORIGIN_LABEL[kind]}
+    </>
+  );
+  if (to) {
+    return (
+      <Link
+        className={`${classes.badge} ${classes.badgeLink}`}
+        to={to}
+        title={`${origin ?? ""}: ${to === PIPELINES ? "the pipelines that fill the lake" : "what the lake holds"}`}
+      >
+        {content}
+      </Link>
+    );
+  }
+  return (
+    <span className={classes.badge} title={origin ?? undefined}>
+      {content}
     </span>
   );
 }

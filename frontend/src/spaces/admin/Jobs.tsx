@@ -3,7 +3,7 @@
 import { Anchor, Badge, Button, Group, Select } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { api, ok, type Schemas } from "../../api/client";
 import { SpacePage } from "../../app/Shell";
 import { JOB_KINDS, kindLabel } from "../../jobs/jobs";
@@ -30,7 +30,9 @@ function took(j: Row): string {
 
 export default function Jobs() {
   const queries = useQueryClient();
-  const [kind, setKind] = useState<string | null>(null);
+  // a job's page links here with ?kind= (a failed job among the others of its kind)
+  const [params] = useSearchParams();
+  const [kind, setKind] = useState<string | null>(params.get("kind"));
   const [cursors, setCursors] = useState<string[]>([]);
   const cursor = cursors.at(-1);
   const jobs = useQuery({

@@ -1,6 +1,8 @@
 # The public demo on GitHub Pages (ADR-0002: the only public face), published by this workflow and not by a branch
-# build: the site holds the demo page and what it loads, nothing else of docs/ (the architecture notes stay in the
-# repository). The page computes in the browser from recorded parameters: it calls no server.
+# build. The site holds two things, and nothing else of the repository:
+# - at its root, the desk's front built in demo mode (docs/ux.md §5): it replays the sessions recorded in
+#   frontend/demo/recorded (synthetic numbers only) and calls no server, which its CSP enforces (connect-src 'self');
+# - under lab/, the pricing lab (docs/index.html and lab.js), which computes in the browser from recorded parameters.
 name: Pages
 
 on:
@@ -12,6 +14,8 @@ on:
       - docs/lab.js
       - docs/pricer-data.js
       - docs/figures/**
+      - frontend/**
+      - api/openapi.json
       - .github/workflows/pages.yml
   workflow_dispatch:
 
@@ -26,29 +30,57 @@ jobs:
   build:
     name: the demo's files
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: "26"
+      - name: The front in demo mode (lock file, no install scripts)
+        working-directory: frontend
+        env:
+          OPTLAB_DEMO_BASE: /option-pricing-lab/
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build:demo
       - name: Assemble the site
         run: |
-          mkdir -p _site/figures
-          cp docs/index.html docs/style.css docs/lab.js docs/pricer-data.js _site/
-          cp docs/figures/*.png _site/figures/
+          mkdir -p _site/lab/figures
+          cp -r frontend/dist-demo/. _site/
+          cp docs/index.html docs/style.css docs/lab.js docs/pricer-data.js _site/lab/
+          cp docs/figures/*.png _site/lab/figures/
           touch _site/.nojekyll
-      - name: The page loads only its own files and calls no machine
+      - name: Each page loads only its own files and calls no machine
         run: |
           python3 - <<'EOF'
           import pathlib, re, sys
           site = pathlib.Path("_site")
-          page = (site / "index.html").read_text(encoding="utf-8")
-          missing = [r for r in re.findall(r'(?:src|href)="([^"#:]+)"', page) if not (site / r).is_file()]
-          text = "".join(p.read_text(encoding="utf-8") for p in site.iterdir() if p.suffix in (".html", ".js", ".css"))
+          errors = []
+          # the pricing lab: its files are there, and its code calls nothing
+          lab = site / "lab"
+          page = (lab / "index.html").read_text(encoding="utf-8")
+          errors += [f"lab: missing {r}" for r in re.findall(r'(?:src|href)="([^"#:]+)"', page) if not (lab / r).is_file()]
+          text = "".join(p.read_text(encoding="utf-8") for p in lab.iterdir() if p.suffix in (".html", ".js", ".css"))
           calls = re.findall(r"localhost|127\.0\.0\.1|192\.168\.|\bfetch\(|XMLHttpRequest|WebSocket|EventSource", text)
-          if missing or calls:
-              sys.exit(f"missing files: {missing}; network calls: {sorted(set(calls))}")
-          print("files:", sorted(p.name for p in site.rglob("*") if p.is_file()))
+          errors += [f"lab: network call {c}" for c in sorted(set(calls))]
+          # the demo: its files are there, its CSP keeps every request on the site, its sessions are there
+          page = (site / "index.html").read_text(encoding="utf-8")
+          base = "/option-pricing-lab/"
+          for ref in re.findall(r'(?:src|href)="([^"#]+)"', page):
+              if ref.startswith(base) and not (site / ref[len(base):]).is_file():
+                  errors.append(f"demo: missing {ref}")
+          if "connect-src 'self'" not in page:
+              errors.append("demo: no CSP keeping its requests on the site")
+          sessions = sorted(p.name for p in (site / "demo").glob("*.json"))
+          if sessions != ["quant.json", "structurer.json", "trader.json"]:
+              errors.append(f"demo: recorded sessions {sessions}")
+          if not (site / "404.html").is_file():
+              errors.append("demo: no 404.html for the deep links")
+          if errors:
+              sys.exit("\n".join(errors))
+          print("files:", sum(1 for p in site.rglob("*") if p.is_file()))
           EOF
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0
         with:

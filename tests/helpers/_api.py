@@ -12,7 +12,7 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
-# the script lab's example of the v0 page (legacy/desk-static/js/views/script.js): it must stay valid
+# the script lab's example of the v0 page (legacy/desk-static/js/views/script.js, in the history): it must stay valid
 SCRIPT_EXAMPLE = """underlying SPX
 param N = 100
 param K = 1.0
