@@ -150,7 +150,7 @@ export function ContextBar({ onMarket, jobs }: { onMarket: () => void; jobs: Rea
       <span className={classes.spacer} />
       <button type="button" className={classes.search} onClick={() => spotlight.open()}>
         <IconSearch size={14} aria-hidden="true" />
-        <span className={classes.srNarrow}>Search trades, quotes, screens</span>
+        <span className={classes.srMedium}>Search trades, quotes, screens</span>
         <span className={`${classes.kbd} ${classes.hideNarrow}`}>Ctrl K</span>
       </button>
       {jobs}

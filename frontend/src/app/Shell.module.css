@@ -187,6 +187,22 @@
   font-weight: 600;
 }
 
+/* below 1440 px the search keeps its icon and its key, its words stay read: the bar holds on one line at 1280 */
+@media (max-width: 1439px) {
+  .search {
+    min-width: 0;
+  }
+
+  .srMedium {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+}
+
 @media (max-width: 720px) {
   .shell {
     grid-template-columns: minmax(0, 1fr);
