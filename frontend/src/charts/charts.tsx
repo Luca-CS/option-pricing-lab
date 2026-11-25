@@ -181,6 +181,7 @@ export function CurveChart({
   yName,
   xPercent = true,
   yPercent = true,
+  digits = 2,
   height,
   label,
 }: {
@@ -189,6 +190,8 @@ export function CurveChart({
   yName: string;
   xPercent?: boolean;
   yPercent?: boolean;
+  /** decimals of an axis that is not in percent */
+  digits?: number;
   height?: number;
   label: string;
 }) {
@@ -196,8 +199,8 @@ export function CurveChart({
     (c: Colors): Option => {
       const b = base(c);
       const palette = [c.brand, c.accent, c.muted, c.pos, c.neg];
-      const fmtX = (v: number) => (xPercent ? formatPercent(v, { digits: 0 }) : formatNumber(v, { digits: 2 }));
-      const fmtY = (v: number) => (yPercent ? formatPercent(v, { digits: 1 }) : formatNumber(v, { digits: 2 }));
+      const fmtX = (v: number) => (xPercent ? formatPercent(v, { digits: 0 }) : formatNumber(v, { digits }));
+      const fmtY = (v: number) => (yPercent ? formatPercent(v, { digits: 1 }) : formatNumber(v, { digits }));
       return {
         ...b,
         grid: { ...(b.grid as object), left: 56, top: 32, bottom: 40 },
@@ -234,7 +237,7 @@ export function CurveChart({
         })),
       };
     },
-    [curves, xName, yName, xPercent, yPercent],
+    [curves, xName, yName, xPercent, yPercent, digits],
   );
   return <EChart build={build} height={height} label={label} />;
 }
@@ -302,6 +305,103 @@ export function SeriesChart({
       };
     },
     [x, series, unit, digits, signedBars],
+  );
+  return <EChart build={build} height={height} label={label} />;
+}
+
+/** Equal-width bins over [min, max] of the values: `bins` + 1 edges and a count per bin (the last edge included). */
+export function histogram(values: number[], bins: number): { edges: number[]; counts: number[] } {
+  const finite = values.filter(Number.isFinite);
+  if (finite.length === 0) return { edges: [], counts: [] };
+  const lo = Math.min(...finite);
+  const hi = Math.max(...finite);
+  const n = hi > lo ? Math.max(1, Math.round(bins)) : 1;
+  const width = hi > lo ? (hi - lo) / n : 1;
+  const edges = Array.from({ length: n + 1 }, (_, i) => (i === n && hi > lo ? hi : lo + i * width));
+  const counts = new Array<number>(n).fill(0);
+  for (const v of finite) {
+    const i = Math.min(n - 1, Math.floor((v - lo) / width));
+    counts[i] = (counts[i] ?? 0) + 1;
+  }
+  return { edges, counts };
+}
+
+export type Mark = { label: string; value: number };
+
+/** The distribution of values (the book's P&L over historical moves) as a histogram: the bins beyond `tail` (the
+ * loss at the VaR) in the loss colour, and a dashed line at each mark. */
+export function DistributionChart({
+  values,
+  marks = [],
+  tail,
+  bins = 40,
+  unit,
+  height,
+  label,
+}: {
+  values: number[];
+  marks?: Mark[];
+  tail?: number;
+  bins?: number;
+  unit: string;
+  height?: number;
+  label: string;
+}) {
+  const build = useCallback(
+    (c: Colors): Option => {
+      const b = base(c);
+      const { edges, counts } = histogram(values, bins);
+      const centres = counts.map((_, i) => ((edges[i] ?? 0) + (edges[i + 1] ?? 0)) / 2);
+      const at = (v: number) => {
+        const i = edges.findIndex((e, k) => k > 0 && v <= e);
+        return i < 0 ? counts.length - 1 : Math.max(0, i - 1);
+      };
+      return {
+        ...b,
+        grid: { ...(b.grid as object), left: 48, top: 28, bottom: 48 },
+        xAxis: {
+          ...(b.xAxis as object),
+          type: "category",
+          data: centres.map((v) => formatNumber(v)),
+          name: unit,
+          nameLocation: "middle",
+          nameGap: 30,
+          axisLabel: { color: c.muted, fontFamily: c.mono, fontSize: 11, hideOverlap: true },
+        },
+        yAxis: { ...(b.yAxis as object), type: "value", name: "days", minInterval: 1 },
+        tooltip: {
+          trigger: "axis",
+          formatter: (items: { dataIndex: number }[]) => {
+            const i = items[0]?.dataIndex ?? 0;
+            const n = counts[i] ?? 0;
+            return `${formatNumber(edges[i], { sign: true })} to ${formatNumber(edges[i + 1], { sign: true })}: ${n} day${n === 1 ? "" : "s"}`;
+          },
+        },
+        series: [
+          {
+            type: "bar",
+            data: counts.map((n, i) => ({
+              value: n,
+              itemStyle: { color: tail !== undefined && (centres[i] ?? 0) <= tail ? c.neg : c.faint },
+            })),
+            barCategoryGap: "8%",
+            markLine: {
+              silent: true,
+              symbol: "none",
+              lineStyle: { color: c.accent, type: "dashed" },
+              label: { color: c.text, fontFamily: c.mono, fontSize: 11, formatter: "{b}" },
+              // along each line, on alternate sides, so two marks close together stay readable
+              data: marks.map((m, i) => ({
+                name: `${m.label} ${formatNumber(m.value)}`,
+                xAxis: at(m.value),
+                label: { position: i % 2 === 0 ? "insideEndTop" : "insideEndBottom" },
+              })),
+            },
+          },
+        ],
+      };
+    },
+    [values, marks, tail, bins, unit],
   );
   return <EChart build={build} height={height} label={label} />;
 }

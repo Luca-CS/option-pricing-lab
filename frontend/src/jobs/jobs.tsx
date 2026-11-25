@@ -53,6 +53,21 @@ export function kindLabel(kind: string): string {
 
 const ENDS = ["done", "error", "cancelled"] as const;
 
+// what a finished job of a kind adds to: those lists are read again (a stored run, a saved quote)
+const RISK_LISTS = [
+  ["risk", "runs"],
+  ["risk", "pnl"],
+  ["risk", "backtest"],
+];
+const REFRESHES: Record<string, string[][]> = {
+  quote: [["structuring", "quotes"]],
+  risk: RISK_LISTS,
+  ladder: RISK_LISTS,
+  scenarios: RISK_LISTS,
+  var: RISK_LISTS,
+  eod: RISK_LISTS,
+};
+
 type Jobs = {
   jobs: Tracked[];
   track: (id: string, info: { kind: string; label?: string; link?: string }) => void;
@@ -80,6 +95,9 @@ export function JobsProvider({ children }: { children: ReactNode }) {
   const ended = useCallback(
     (id: string, job: Job) => {
       queries.setQueryData(["job", id], job);
+      if (job.state === "done") {
+        for (const queryKey of REFRESHES[job.kind] ?? []) void queries.invalidateQueries({ queryKey });
+      }
       const current = latest.current[id];
       if (!current) return;
       const error = job.error ? `${job.error.type}: ${job.error.message}` : null;

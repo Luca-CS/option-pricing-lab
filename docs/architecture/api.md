@@ -214,11 +214,13 @@ npx openapi-typescript ../api/openapi.json --default-non-nullable false -o src/a
 - Typed: the models the server shapes itself (`Me`, `Job`, `JobList`, `JobAccepted`, `JobResult` with `MarketRef` and
   `Method`, `CancelOut`, `Pipeline`, `UserOut`, `AuditPage`, `Problem`) and `Estimate`.
 - Described: the domain answers a screen reads (`optlab.server.payloads`: the market context, snapshots, the lake's
-  coverage, universe and quality, presets, quotes, trades, upcoming events, risk runs, the P&L history, the engine,
-  the system, the admin's jobs). A route names its model in `responses`, which changes the document only, never what
-  the route sends; each model allows fields it does not name, and `test_api_payloads.py` checks the real answers
-  against them. Answers not yet described are open objects in the document; session 2 describes them as its screens
-  read them, without changing a field.
+  coverage, universe and quality, presets, quotes, trades, upcoming events, risk runs, the P&L history, the scenario
+  library, the VaR backtest, the engine, the system, the admin's jobs). A route names its model in `responses`, which
+  changes the document only, never what the route sends; each model allows fields it does not name, and
+  `test_api_payloads.py` checks the real answers against them. Answers not yet described are open objects in the
+  document; session 2 describes them as its screens read them, without changing a field. A stored run
+  (`GET /risk/runs/{run_id}`) is one of the run kinds (`anyOf`: Greeks, ladder, scenarios, VaR, EOD, a day of P&L),
+  each its job result's fields plus `kind` and `created_at`; `x-job-results` gives each job kind's result.
 
 ## 11. Adding a route (session 2 may)
 

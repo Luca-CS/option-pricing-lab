@@ -89,6 +89,10 @@
   white-space: nowrap;
 }
 
+span.cell {
+  cursor: default;
+}
+
 .cell.neg {
   background: color-mix(in srgb, var(--ol-neg) var(--a), transparent);
 }

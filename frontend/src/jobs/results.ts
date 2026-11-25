@@ -11,6 +11,8 @@ export type JobResults = {
   risk: Schemas["RiskRun"];
   ladder: Schemas["LadderRun"];
   scenarios: Schemas["ScenarioRun"];
+  var: Schemas["VarRun"];
+  eod: Schemas["EodResult"];
 };
 
 export type Envelope<K extends keyof JobResults> = {

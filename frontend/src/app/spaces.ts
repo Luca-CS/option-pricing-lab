@@ -63,10 +63,10 @@ export const SPACES: Space[] = [
     key: "r",
     screens: [
       { path: "/risk", label: "Home" },
-      { path: "/risk/var", label: "VaR", step: "F6" },
-      { path: "/risk/stress", label: "Stress", step: "F6" },
-      { path: "/risk/backtest", label: "Backtest", step: "F6" },
-      { path: "/risk/runs", label: "EOD runs", step: "F6" },
+      { path: "/risk/var", label: "VaR" },
+      { path: "/risk/stress", label: "Stress" },
+      { path: "/risk/backtest", label: "Backtest" },
+      { path: "/risk/runs", label: "EOD runs" },
     ],
   },
   {
@@ -107,7 +107,7 @@ export const ENTITY_PAGES: Screen[] = [
   { path: "/structuring/quotes/:id", label: "A quote" },
   { path: "/trading/trades/:id", label: "A trade" },
   { path: "/trading/lifecycle/:id", label: "A trade's lifecycle" },
-  { path: "/risk/var/:id", label: "A VaR run", step: "F6" },
+  { path: "/risk/var/:id", label: "A VaR run" },
   { path: "/quant/market/:name", label: "A name's market", step: "F7" },
   { path: "/quant/replay/:id", label: "A replay", step: "F7" },
 ];

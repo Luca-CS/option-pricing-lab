@@ -7,7 +7,7 @@ import datetime as dt
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
 
-from optlab.server.payloads import PnlHistory, RiskRun, RiskRunPage, documented
+from optlab.server.payloads import PnlHistory, RiskRunPage, ScenarioLibrary, StoredRun, VarBacktest, documented
 from optlab.server.present import estimates
 from optlab.server.report import risk_report
 from optlab.server.routers._common import ACCEPTED, Id, audited, desk, page, report, submit
@@ -35,7 +35,7 @@ def list_runs(
     return page(_risk(request).runs(kind)["runs"], cursor, limit)
 
 
-@router.get("/runs/{run_id}", **access(), responses=documented(RiskRun, "a stored run; its fields follow its kind"))
+@router.get("/runs/{run_id}", **access(), responses=documented(StoredRun, "a stored run; its fields follow its kind"))
 def get_run(run_id: Id, request: Request):
     """A stored risk run, measures as {value, se}."""
     return estimates(_risk(request).run_get(run_id), risk=True)
@@ -47,7 +47,7 @@ def ladder(lad: LadderIn, request: Request):
     return submit(request, "ladder", lambda: _risk(request).ladder(body(lad)))
 
 
-@router.get("/scenarios", **access())
+@router.get("/scenarios", **access(), responses=documented(ScenarioLibrary))
 def scenarios(request: Request):
     """The scenario library: its versions and who signed them."""
     return _risk(request).scenarios()
@@ -81,6 +81,17 @@ def pnl(
     return estimates(
         _risk(request).pnl(start.isoformat() if start else None, end.isoformat() if end else None), risk=True
     )
+
+
+@router.get("/backtest", **access(), responses=documented(VarBacktest))
+def backtest(
+    request: Request,
+    var_run: str | None = Query(None, pattern=r"^[A-Za-z0-9_.:-]{1,128}$", description="default: the last VaR run"),
+    start: dt.date | None = Query(None, alias="from"),
+    end: dt.date | None = Query(None, alias="to"),
+):
+    """A VaR run's 1-day VaR against each stored day's explained P&L: the exceptions and Kupiec's test."""
+    return _risk(request).backtest(var_run, start.isoformat() if start else None, end.isoformat() if end else None)
 
 
 @router.post("/eod-runs", **access("risk"), status_code=202, responses=ACCEPTED)

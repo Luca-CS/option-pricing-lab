@@ -9,6 +9,17 @@ import { Panel } from "../../ui/Panel";
 import { Empty, Failure, Loading } from "../../ui/States";
 import { commonClasses as c, DataTable } from "../common";
 
+/** Where a stored run opens. */
+function linkOf(r: { run_id: string; kind: string; day: string }): string {
+  const id = encodeURIComponent(r.run_id);
+  if (r.kind === "var") return `/risk/var/${id}`;
+  if (r.kind === "eod") return `/risk/runs?a=${id}`;
+  if (r.kind === "pnl") return `/trading/pnl?day=${r.day}`;
+  const view = r.kind === "risk" ? "greeks" : r.kind;
+  const param = r.kind === "risk" ? "run" : r.kind;
+  return `/trading/risk?view=${view}&${param}=${id}`;
+}
+
 const KIND: Record<string, string> = {
   risk: "Greeks",
   ladder: "Ladder",
@@ -64,9 +75,9 @@ export function RiskHome() {
             rows={items.map((r) => ({
               key: r.run_id,
               cells: [
-                <span key="id" className={c.mono}>
+                <Anchor key="id" component={Link} to={linkOf(r)} className={c.mono}>
                   {r.run_id}
-                </span>,
+                </Anchor>,
                 KIND[r.kind] ?? r.kind,
                 formatDate(r.day),
                 r.version,

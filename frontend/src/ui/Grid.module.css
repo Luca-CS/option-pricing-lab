@@ -37,8 +37,10 @@
   padding-right: 16px;
 }
 
+/* on the hovered row's background, its faint text takes the muted tone, to keep its contrast (WCAG AA) */
 .grid tbody tr:hover {
   background: var(--ol-raised);
+  --ol-faint: var(--ol-muted);
 }
 
 .grid .num {

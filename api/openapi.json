@@ -4003,7 +4003,27 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RiskRun"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/RiskRun"
+                    },
+                    {
+                      "$ref": "#/components/schemas/LadderRun"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ScenarioRun"
+                    },
+                    {
+                      "$ref": "#/components/schemas/VarRun"
+                    },
+                    {
+                      "$ref": "#/components/schemas/EodRun"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PnlRun"
+                    }
+                  ],
+                  "title": "Response 200 Get Run"
                 }
               }
             }
@@ -4163,10 +4183,12 @@
         "operationId": "scenarios",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioLibrary"
+                }
               }
             }
           },
@@ -4526,6 +4548,131 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PnlHistory"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "invalid input: the fields at fault in `errors`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "a role or the CSRF header is missing",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "any other error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-roles": [
+          "viewer"
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/risk/backtest": {
+      "get": {
+        "tags": [
+          "risk"
+        ],
+        "summary": "Backtest",
+        "description": "A VaR run's 1-day VaR against each stored day's explained P&L: the exceptions and Kupiec's test.",
+        "operationId": "backtest",
+        "parameters": [
+          {
+            "name": "var_run",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "default: the last VaR run",
+              "title": "Var Run"
+            },
+            "description": "default: the last VaR run"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the answer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VarBacktest"
                 }
               }
             }
@@ -6447,6 +6594,31 @@
         ],
         "title": "AuditPage"
       },
+      "BacktestDay": {
+        "properties": {
+          "day": {
+            "type": "string",
+            "title": "Day"
+          },
+          "pnl": {
+            "type": "number",
+            "title": "Pnl"
+          },
+          "exception": {
+            "type": "boolean",
+            "title": "Exception",
+            "description": "the loss went beyond the VaR"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "day",
+          "pnl",
+          "exception"
+        ],
+        "title": "BacktestDay"
+      },
       "Backup": {
         "properties": {
           "file": {
@@ -7218,6 +7390,82 @@
         ],
         "title": "EngineInfo"
       },
+      "EodGroup": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "n_paths": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Paths"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "value": {
+            "$ref": "#/components/schemas/Estimate"
+          },
+          "positions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Positions",
+            "default": []
+          },
+          "warnings": {
+            "items": {},
+            "type": "array",
+            "title": "Warnings",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "label",
+          "value"
+        ],
+        "title": "EodGroup"
+      },
       "EodIn": {
         "properties": {
           "from": {
@@ -7246,6 +7494,200 @@
           "to"
         ],
         "title": "EodIn"
+      },
+      "EodPosition": {
+        "properties": {
+          "trade_id": {
+            "type": "string",
+            "title": "Trade Id"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "value": {
+            "$ref": "#/components/schemas/Estimate"
+          },
+          "notional": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notional"
+          },
+          "reserve": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reserve",
+            "description": "the reserve still held at the close"
+          },
+          "greeks": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/Estimate"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Greeks"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "trade_id",
+          "value"
+        ],
+        "title": "EodPosition"
+      },
+      "EodRun": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "kind": {
+            "type": "string",
+            "const": "eod",
+            "title": "Kind"
+          },
+          "day": {
+            "type": "string",
+            "title": "Day"
+          },
+          "value": {
+            "$ref": "#/components/schemas/Estimate"
+          },
+          "positions": {
+            "items": {
+              "$ref": "#/components/schemas/EodPosition"
+            },
+            "type": "array",
+            "title": "Positions",
+            "default": []
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/EodGroup"
+            },
+            "type": "array",
+            "title": "Groups",
+            "default": []
+          },
+          "greeks": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/Estimate"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Greeks",
+            "description": "\"greek|name|bucket\" -> {value, se}"
+          },
+          "provenance": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Provenance",
+            "description": "what each name's market was made of (origins only)",
+            "default": {}
+          },
+          "trades": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Trades",
+            "description": "the trades alive that day: id, version, status",
+            "default": []
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params",
+            "default": {}
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "run_id",
+          "kind",
+          "day",
+          "value"
+        ],
+        "title": "EodRun",
+        "description": "A stored EOD run: the book's value and Greeks at a day's close, on that day's market from the lake."
       },
       "Estimate": {
         "type": "object",
@@ -8216,6 +8658,132 @@
         "additionalProperties": false,
         "type": "object",
         "title": "LadderIn"
+      },
+      "LadderPosition": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "values": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Estimate"
+            },
+            "type": "object",
+            "title": "Values",
+            "description": "'measure@rule@shift' -> {value, se}",
+            "default": {}
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "LadderPosition"
+      },
+      "LadderRun": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "points": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Points"
+          },
+          "rules": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Rules"
+          },
+          "tenors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tenors",
+            "default": []
+          },
+          "book": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Estimate"
+            },
+            "type": "object",
+            "title": "Book"
+          },
+          "positions": {
+            "items": {
+              "$ref": "#/components/schemas/LadderPosition"
+            },
+            "type": "array",
+            "title": "Positions",
+            "default": []
+          },
+          "groups": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Groups",
+            "default": []
+          },
+          "options": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Options",
+            "default": {}
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "run_id",
+          "points",
+          "rules",
+          "book"
+        ],
+        "title": "LadderRun",
+        "description": "A spot ladder under the vol rules (job `ladder`): keys 'measure@rule@shift', shifts as fractions."
       },
       "LadderSpec": {
         "properties": {
@@ -9274,6 +9842,104 @@
         "type": "object",
         "title": "PnlHistory",
         "description": "The explained P&L cumulated from the EOD runs over a period (`note` says why it is empty)."
+      },
+      "PnlRun": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "kind": {
+            "type": "string",
+            "const": "pnl",
+            "title": "Kind"
+          },
+          "from": {
+            "type": "string",
+            "title": "From"
+          },
+          "to": {
+            "type": "string",
+            "title": "To"
+          },
+          "total": {
+            "type": "number",
+            "title": "Total"
+          },
+          "steps": {
+            "additionalProperties": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Steps",
+            "default": {}
+          },
+          "predicted": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Predicted",
+            "default": {}
+          },
+          "unexplained": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Unexplained",
+            "default": {}
+          },
+          "order": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Order",
+            "default": []
+          },
+          "eod": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Eod",
+            "description": "the EOD runs of the two days",
+            "default": []
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "run_id",
+          "kind",
+          "from",
+          "to",
+          "total"
+        ],
+        "title": "PnlRun",
+        "description": "A stored day of the explained P&L (kind `pnl`): the cascade from the day before's EOD run to this one's."
       },
       "PnlTrade": {
         "properties": {
@@ -10751,6 +11417,317 @@
         ],
         "title": "SavedQuote"
       },
+      "ScenarioDef": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "shock": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Shock",
+            "description": "the shock's fields as `optlab.risk.shocks.Shock` reads them (moves as fractions, curves in bp)",
+            "default": {}
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ScenarioDef"
+      },
+      "ScenarioLibrary": {
+        "properties": {
+          "scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioDef"
+            },
+            "type": "array",
+            "title": "Scenarios"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "signed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signed By"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "starting": {
+            "type": "boolean",
+            "title": "Starting",
+            "default": false
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioVersion"
+            },
+            "type": "array",
+            "title": "History",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "scenarios"
+        ],
+        "title": "ScenarioLibrary",
+        "description": "The signed scenario set in use (the starting values when nothing is saved) and its versions."
+      },
+      "ScenarioPosition": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "pnl": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Estimate"
+                },
+                {
+                  "additionalProperties": {
+                    "items": {
+                      "type": "number"
+                    },
+                    "type": "array"
+                  },
+                  "type": "object"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Pnl",
+            "description": "scenario name -> the position's P&L; under `grid` (when asked), 'spot:vol' -> [value, se]",
+            "default": {}
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ScenarioPosition"
+      },
+      "ScenarioResult": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "shock": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Shock",
+            "default": {}
+          },
+          "book": {
+            "$ref": "#/components/schemas/Estimate",
+            "description": "the book's P&L under the scenario, currency"
+          },
+          "flags": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Flags",
+            "default": {}
+          },
+          "arbitrage": {
+            "items": {},
+            "type": "array",
+            "title": "Arbitrage",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name",
+          "book"
+        ],
+        "title": "ScenarioResult"
+      },
+      "ScenarioRun": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioResult"
+            },
+            "type": "array",
+            "title": "Scenarios"
+          },
+          "positions": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioPosition"
+            },
+            "type": "array",
+            "title": "Positions",
+            "default": []
+          },
+          "grid": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid",
+            "description": "spot x vol P&L grid: pnl[i][j] = [value, se]"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "signed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signed By"
+          },
+          "starting": {
+            "type": "boolean",
+            "title": "Starting",
+            "default": false
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "run_id",
+          "scenarios"
+        ],
+        "title": "ScenarioRun",
+        "description": "The scenario library run on the book (job `scenarios`)."
+      },
       "ScenarioRunIn": {
         "properties": {
           "options": {
@@ -10780,6 +11757,38 @@
         "additionalProperties": false,
         "type": "object",
         "title": "ScenarioRunIn"
+      },
+      "ScenarioVersion": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "meta": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Meta",
+            "description": "signed_by, note",
+            "default": {}
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "title": "ScenarioVersion"
       },
       "ScenariosIn": {
         "properties": {
@@ -12152,6 +13161,250 @@
         "type": "object",
         "title": "ValuationIn"
       },
+      "VarBacktest": {
+        "properties": {
+          "var_run": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Var Run"
+          },
+          "var_day": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Var Day"
+          },
+          "var": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Var",
+            "description": "the 1-day VaR, a positive loss, currency"
+          },
+          "level": {
+            "type": "number",
+            "title": "Level"
+          },
+          "from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestDay"
+            },
+            "type": "array",
+            "title": "Days",
+            "default": []
+          },
+          "kupiec": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kupiec",
+            "description": "Kupiec's test: exceptions, n, expected, rate, lr, p_value"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "level"
+        ],
+        "title": "VarBacktest",
+        "description": "A VaR run's 1-day VaR against each stored day's explained P&L (one VaR, not a VaR per day)."
+      },
+      "VarHorizon": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "horizon": {
+            "type": "integer",
+            "title": "Horizon"
+          },
+          "start": {
+            "type": "string",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "title": "End"
+          },
+          "dates": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dates"
+          },
+          "pnl": {
+            "items": {
+              "$ref": "#/components/schemas/Estimate"
+            },
+            "type": "array",
+            "title": "Pnl",
+            "description": "the book's P&L of each historical move, currency"
+          },
+          "var": {
+            "$ref": "#/components/schemas/Estimate",
+            "description": "the loss at the level, positive"
+          },
+          "es": {
+            "type": "number",
+            "title": "Es",
+            "description": "the mean loss beyond the ES level, positive"
+          },
+          "var_date": {
+            "type": "string",
+            "title": "Var Date",
+            "description": "the historical day whose move is the VaR"
+          },
+          "contributions": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "number"
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Contributions",
+            "description": "'var' and 'es' -> position -> its P&L (on the VaR day; mean over the tail)",
+            "default": {}
+          },
+          "factors": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Estimate"
+            },
+            "type": "object",
+            "title": "Factors",
+            "description": "the VaR day's move one factor at a time, and the interaction",
+            "default": {}
+          },
+          "taylor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VarTaylor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "n": {
+            "type": "integer",
+            "title": "N",
+            "default": 0
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds"
+          },
+          "origins": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Origins",
+            "default": {}
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "window": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window",
+            "description": "the stressed window and how it was found"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "label",
+          "horizon",
+          "start",
+          "end",
+          "dates",
+          "pnl",
+          "var",
+          "es",
+          "var_date"
+        ],
+        "title": "VarHorizon",
+        "description": "One VaR: a horizon (1 day, 10 days) or the stressed window, its distribution, the VaR day and what made it."
+      },
       "VarIn": {
         "properties": {
           "options": {
@@ -12191,6 +13444,164 @@
         "additionalProperties": false,
         "type": "object",
         "title": "VarIn"
+      },
+      "VarRun": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "day": {
+            "type": "string",
+            "title": "Day"
+          },
+          "names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Names",
+            "default": []
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "level": {
+            "type": "number",
+            "title": "Level"
+          },
+          "es_level": {
+            "type": "number",
+            "title": "Es Level"
+          },
+          "factors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Factors",
+            "default": []
+          },
+          "one_day": {
+            "$ref": "#/components/schemas/VarHorizon"
+          },
+          "ten_day": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VarHorizon"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stressed": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VarHorizon"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origins": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Origins",
+            "default": {}
+          },
+          "scenarios": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scenarios"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "run_id",
+          "day",
+          "level",
+          "es_level",
+          "one_day"
+        ],
+        "title": "VarRun",
+        "description": "A historical VaR by full revaluation (job `var`): 1 day, 10 days and the stressed window."
+      },
+      "VarTaylor": {
+        "properties": {
+          "var": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Var"
+          },
+          "es": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Es"
+          },
+          "mean_abs_gap": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Abs Gap"
+          },
+          "pnl": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Pnl",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "VarTaylor",
+        "description": "The same VaR from the Greeks (delta, gamma, vega), against the full revaluation."
       },
       "WorkerInfo": {
         "properties": {
@@ -12715,135 +14126,6 @@
         "title": "EodResult",
         "type": "object"
       },
-      "LadderPosition": {
-        "additionalProperties": true,
-        "properties": {
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "group": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Group"
-          },
-          "quantity": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Quantity"
-          },
-          "values": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/Estimate"
-            },
-            "default": {},
-            "description": "'measure@rule@shift' -> {value, se}",
-            "title": "Values",
-            "type": "object"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "LadderPosition",
-        "type": "object"
-      },
-      "LadderRun": {
-        "additionalProperties": true,
-        "description": "A spot ladder under the vol rules (job `ladder`): keys 'measure@rule@shift', shifts as fractions.",
-        "properties": {
-          "run_id": {
-            "title": "Run Id",
-            "type": "string"
-          },
-          "points": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Points",
-            "type": "array"
-          },
-          "rules": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Rules",
-            "type": "array"
-          },
-          "tenors": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Tenors",
-            "type": "array"
-          },
-          "book": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/Estimate"
-            },
-            "title": "Book",
-            "type": "object"
-          },
-          "positions": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/LadderPosition"
-            },
-            "title": "Positions",
-            "type": "array"
-          },
-          "groups": {
-            "default": [],
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Groups",
-            "type": "array"
-          },
-          "options": {
-            "additionalProperties": true,
-            "default": {},
-            "title": "Options",
-            "type": "object"
-          },
-          "seconds": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Seconds"
-          }
-        },
-        "required": [
-          "run_id",
-          "points",
-          "rules",
-          "book"
-        ],
-        "title": "LadderRun",
-        "type": "object"
-      },
       "NameGreeks": {
         "additionalProperties": true,
         "properties": {
@@ -12877,213 +14159,6 @@
           }
         },
         "title": "NameGreeks",
-        "type": "object"
-      },
-      "ScenarioPosition": {
-        "additionalProperties": true,
-        "properties": {
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "group": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Group"
-          },
-          "value": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Value"
-          },
-          "pnl": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Estimate"
-                },
-                {
-                  "additionalProperties": {
-                    "items": {
-                      "type": "number"
-                    },
-                    "type": "array"
-                  },
-                  "type": "object"
-                }
-              ]
-            },
-            "default": {},
-            "description": "scenario name -> the position's P&L; under `grid` (when asked), 'spot:vol' -> [value, se]",
-            "title": "Pnl",
-            "type": "object"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "ScenarioPosition",
-        "type": "object"
-      },
-      "ScenarioResult": {
-        "additionalProperties": true,
-        "properties": {
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Description"
-          },
-          "label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Label"
-          },
-          "shock": {
-            "additionalProperties": true,
-            "default": {},
-            "title": "Shock",
-            "type": "object"
-          },
-          "book": {
-            "$ref": "#/components/schemas/Estimate",
-            "description": "the book's P&L under the scenario, currency"
-          },
-          "flags": {
-            "additionalProperties": true,
-            "default": {},
-            "title": "Flags",
-            "type": "object"
-          },
-          "arbitrage": {
-            "default": [],
-            "items": {},
-            "title": "Arbitrage",
-            "type": "array"
-          }
-        },
-        "required": [
-          "name",
-          "book"
-        ],
-        "title": "ScenarioResult",
-        "type": "object"
-      },
-      "ScenarioRun": {
-        "additionalProperties": true,
-        "description": "The scenario library run on the book (job `scenarios`).",
-        "properties": {
-          "run_id": {
-            "title": "Run Id",
-            "type": "string"
-          },
-          "scenarios": {
-            "items": {
-              "$ref": "#/components/schemas/ScenarioResult"
-            },
-            "title": "Scenarios",
-            "type": "array"
-          },
-          "positions": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/ScenarioPosition"
-            },
-            "title": "Positions",
-            "type": "array"
-          },
-          "grid": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "spot x vol P&L grid: pnl[i][j] = [value, se]",
-            "title": "Grid"
-          },
-          "version": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Version"
-          },
-          "signed_by": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Signed By"
-          },
-          "starting": {
-            "default": false,
-            "title": "Starting",
-            "type": "boolean"
-          },
-          "seconds": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Seconds"
-          }
-        },
-        "required": [
-          "run_id",
-          "scenarios"
-        ],
-        "title": "ScenarioRun",
         "type": "object"
       },
       "TradeValuation": {
@@ -13244,6 +14319,9 @@
     },
     "eod": {
       "$ref": "#/components/schemas/EodResult"
+    },
+    "var": {
+      "$ref": "#/components/schemas/VarRun"
     }
   }
 }

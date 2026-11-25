@@ -1,98 +1,25 @@
 // The book's risk (Trading › Book risk): the last Greeks run or a new one, read four ways. Greeks with their errors;
 // vega by strike and tenor, where a node leads to the trades that carry it and to the surface behind it; the spot
 // ladder under three vol rules; the signed scenarios. Every figure is a full revaluation of the book (optlab.risk).
-import { Anchor, Button, Group, SegmentedControl, Select, Tabs, Text } from "@mantine/core";
-import { useQuery } from "@tanstack/react-query";
+import { Anchor, Group, Select, Tabs, Text } from "@mantine/core";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { api, ok, type Schemas } from "../../api/client";
-import { useRiskRuns } from "../../api/queries";
 import { SpacePage } from "../../app/Shell";
-import { can, useMe } from "../../auth/session";
 import { LadderChart } from "../../charts";
-import type { JobResults } from "../../jobs/results";
 import { useScreenJob } from "../../jobs/useScreenJob";
-import { type Estimate, formatDate, formatNumber, formatSeconds, isNoise } from "../../lib/format";
+import { useStoredRun } from "../../jobs/useStoredRun";
+import { type Estimate, formatNumber, isNoise } from "../../lib/format";
 import { greekLabel, HEADLINE, ladderSeries, nodeGrid, parseKey, rows } from "../../lib/greeks";
-import { JobProgress } from "../../ui/Flow";
 import { Panel } from "../../ui/Panel";
 import { type Cell, GreeksTable, NodeHeatmap, shortUnit } from "../../ui/Risk";
 import { Empty, Failure, Loading } from "../../ui/States";
 import { Est } from "../../ui/Value";
 import { commonClasses as c, DataTable, TradeLink } from "../common";
+import { RunBar } from "../runs";
+import { ScenariosView } from "../scenarios";
 
 type Run = Schemas["RiskRun"];
-
-function useStoredRun<K extends "risk" | "ladder" | "scenarios">(
-  kind: K,
-  fresh: JobResults[K] | undefined,
-  param: string | null,
-) {
-  const runs = useRiskRuns(kind);
-  const id = param ?? runs.data?.items[0]?.run_id ?? null;
-  const stored = useQuery({
-    queryKey: ["risk", "run", id],
-    queryFn: () => ok(api.GET("/api/v1/risk/runs/{run_id}", { params: { path: { run_id: id ?? "" } } })),
-    enabled: Boolean(id) && !fresh,
-  });
-  // a stored run has the job result's fields (the store keeps the library's shapes, api.md §5)
-  const run = fresh ?? (stored.data as unknown as JobResults[K] | undefined) ?? null;
-  return { run, pending: stored.isPending && Boolean(id) && !fresh, none: runs.data && !id };
-}
-
-const PRECISION = [
-  { value: "quick", label: "Quick" },
-  { value: "standard", label: "Standard" },
-  { value: "precise", label: "Precise" },
-];
-
-function RunBar({
-  kind,
-  label,
-  run,
-  job,
-  submit,
-}: {
-  kind: string;
-  label: string;
-  run: { run_id: string; seconds?: number | null; meta?: Record<string, unknown> } | null;
-  job: ReturnType<typeof useScreenJob>;
-  submit: (precision: string) => Promise<Schemas["JobAccepted"]>;
-}) {
-  const me = useMe().data;
-  const [precision, setPrecision] = useState("quick");
-  const allowed = can(me, kind === "risk" ? "greeks" : kind === "ladder" ? "ladder" : "run_scenarios");
-  const meta = (run?.meta ?? {}) as { valuation?: string; snapshot_id?: string };
-  return (
-    <Group gap="sm" wrap="wrap">
-      <Text size="sm" c="dimmed">
-        {run
-          ? `${run.run_id} · ${meta.valuation ? formatDate(meta.valuation) : ""} · ${formatSeconds(run.seconds)}`
-          : "No run yet"}
-      </Text>
-      <span className={c.spacer} />
-      {allowed &&
-        (job.running && job.tracked ? (
-          <JobProgress job={job.tracked} label={label} onCancel={() => void job.cancel()} />
-        ) : (
-          <>
-            <SegmentedControl
-              size="xs"
-              value={precision}
-              onChange={setPrecision}
-              data={PRECISION}
-              aria-label="Precision"
-            />
-            <Button size="xs" loading={job.start.isPending} onClick={() => job.start.mutate(() => submit(precision))}>
-              {label}
-            </Button>
-          </>
-        ))}
-    </Group>
-  );
-}
-
-type Precision = "quick" | "standard" | "precise";
 
 function GreeksView({ run, trade }: { run: Run; trade: string | null }) {
   const book = run.book as Record<string, Estimate>;
@@ -285,53 +212,6 @@ function LadderView({ run }: { run: Schemas["LadderRun"] }) {
   );
 }
 
-function ScenariosView({ run }: { run: Schemas["ScenarioRun"] }) {
-  return (
-    <div className={c.grid}>
-      <Panel
-        title="The book under each scenario"
-        hint={
-          run.signed_by ? `library v${run.version}, signed by ${run.signed_by}` : "the starting library, not signed yet"
-        }
-        flush
-      >
-        <DataTable
-          caption="The book's P&L under each scenario"
-          head={["Scenario", "What it does", "Book P&L ± SE"]}
-          num={[2]}
-          rows={run.scenarios.map((s) => ({
-            key: s.name,
-            cells: [
-              s.name,
-              <span key="d" className={c.faint}>
-                {s.description ?? ""}
-              </span>,
-              <Est key="b" value={s.book} signed />,
-            ],
-          }))}
-        />
-      </Panel>
-      <Panel title="By trade" hint="currency" flush>
-        <DataTable
-          caption="Each trade's P&L under each scenario"
-          head={["Trade", ...run.scenarios.map((s) => s.name)]}
-          num={run.scenarios.map((_, i) => i + 1)}
-          rows={(run.positions ?? []).map((p) => ({
-            key: p.name,
-            cells: [
-              <TradeLink key="t" id={p.name} />,
-              ...run.scenarios.map((s) => {
-                const e = p.pnl?.[s.name];
-                return e && "value" in e ? <Est key={s.name} value={e as Estimate} signed /> : "—";
-              }),
-            ],
-          }))}
-        />
-      </Panel>
-    </div>
-  );
-}
-
 export default function BookRisk() {
   const [params, setParams] = useSearchParams();
   const view = params.get("view") ?? "greeks";
@@ -368,11 +248,11 @@ export default function BookRisk() {
         </Tabs.List>
         <Tabs.Panel value="greeks" pt="md">
           <RunBar
-            kind="risk"
+            operation="greeks"
             label="Run the Greeks"
             run={greeks.run}
             job={greeksJob}
-            submit={(p) => ok(api.POST("/api/v1/risk/greeks", { body: { options: { precision: p as Precision } } }))}
+            submit={(p) => ok(api.POST("/api/v1/risk/greeks", { body: { options: { precision: p } } }))}
           />
           {greeks.pending && <Loading />}
           {greeks.none && !greeks.run && (
@@ -382,22 +262,22 @@ export default function BookRisk() {
         </Tabs.Panel>
         <Tabs.Panel value="vega" pt="md">
           <RunBar
-            kind="risk"
+            operation="greeks"
             label="Run the Greeks"
             run={greeks.run}
             job={greeksJob}
-            submit={(p) => ok(api.POST("/api/v1/risk/greeks", { body: { options: { precision: p as Precision } } }))}
+            submit={(p) => ok(api.POST("/api/v1/risk/greeks", { body: { options: { precision: p } } }))}
           />
           {greeks.pending && <Loading />}
           {greeks.run && <VegaView run={greeks.run} />}
         </Tabs.Panel>
         <Tabs.Panel value="ladder" pt="md">
           <RunBar
-            kind="ladder"
+            operation="ladder"
             label="Run the ladder"
             run={ladder.run}
             job={ladderJob}
-            submit={(p) => ok(api.POST("/api/v1/risk/ladder", { body: { options: { precision: p as Precision } } }))}
+            submit={(p) => ok(api.POST("/api/v1/risk/ladder", { body: { options: { precision: p } } }))}
           />
           {ladder.pending && <Loading />}
           {ladder.none && !ladder.run && (
@@ -407,13 +287,11 @@ export default function BookRisk() {
         </Tabs.Panel>
         <Tabs.Panel value="scenarios" pt="md">
           <RunBar
-            kind="scenarios"
+            operation="run_scenarios"
             label="Run the scenarios"
             run={scenarios.run}
             job={scenarioJob}
-            submit={(p) =>
-              ok(api.POST("/api/v1/risk/scenarios/runs", { body: { options: { precision: p as Precision } } }))
-            }
+            submit={(p) => ok(api.POST("/api/v1/risk/scenarios/runs", { body: { options: { precision: p } } }))}
           />
           {scenarios.pending && <Loading />}
           {scenarios.none && !scenarios.run && (

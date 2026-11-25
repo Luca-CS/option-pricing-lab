@@ -270,6 +270,37 @@ class RiskApi:
         method = {"name": "historical_full_revaluation", "days": days, "workers": workers}
         return self._done(payload, ctx, settings, method)
 
+    # --- VaR backtest ---
+    def backtest(self, run_id: str | None, start: str | None, end: str | None) -> dict:
+        """A VaR run's 1-day VaR against the explained P&L of each stored EOD day: the days it was exceeded and Kupiec's
+        test. One VaR (the run's), not a VaR per day: what the desk can check with what it has stored."""
+        from optlab.risk.pnl import cumulative
+        from optlab.risk.var import LEVEL, kupiec
+
+        var_runs = self.store.runs("var", latest=False)
+        if run_id is not None:
+            var_runs = [r for r in var_runs if r["run_id"] == run_id]
+            if not var_runs:
+                raise ApiError(f"no VaR run {run_id}", 404)
+        empty = {"days": [], "kupiec": None, "level": LEVEL}
+        if not var_runs:
+            return {**empty, "note": "no VaR run yet: run one first (Risk > VaR)"}
+        run = var_runs[-1]
+        payload = self.store.run(run["run_id"])["payload"]
+        one_day = payload.get("one_day") or {}
+        stored = one_day.get("var")
+        var = stored.get("value") if isinstance(stored, dict) else stored  # the store may keep {value, se} or a number
+        base = {**empty, "var_run": run["run_id"], "var_day": payload.get("day"), "var": var}
+        pnl_runs = self.store.runs("pnl")
+        if not pnl_runs or var is None:
+            return {**base, "note": "no explained P&L to test it on: run the EOD backfill first (Risk > EOD runs)"}
+        start = start or pnl_runs[0]["params"].get("from") or pnl_runs[0]["day"]
+        end = end or pnl_runs[-1]["day"]
+        daily = cumulative(self.store, start, end)["daily"]
+        days = [{"day": d["to"], "pnl": d["total"], "exception": -d["total"] > var} for d in daily]
+        test = kupiec(sum(1 for d in days if d["exception"]), len(days), 1 - LEVEL)
+        return clean({**base, "from": start, "to": end, "days": days, "kupiec": test, "note": None})
+
     # --- explained P&L ---
     def pnl(self, start: str | None, end: str | None) -> dict:
         from optlab.risk.pnl import cumulative
