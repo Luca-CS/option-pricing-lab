@@ -170,7 +170,7 @@ jobs:
   golden-reported:
     name: golden numbers, reported (${{ matrix.os }})
     # not blocking (ADR-0017): one SLV price each moves past 0.1 SE on Linux (0.32 and 0.13 SE) and the rule stays at
-    # 0.1 SE (Luca, 8 November); these groups are guarded bit for bit on the machine. Their own job, so they cost no time.
+    # 0.1 SE (ADR-0017); these groups are guarded bit for bit on the machine. Their own job, so they cost no time.
     strategy:
       fail-fast: false
       matrix:

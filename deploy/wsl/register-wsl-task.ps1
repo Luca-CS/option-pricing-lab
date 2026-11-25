@@ -1,11 +1,10 @@
-# A Windows scheduled task that starts WSL at Luca's logon and keeps it running, so the containers of
+# A Windows scheduled task that starts WSL at the user's logon and keeps it running, so the containers of
 # deploy/compose.yaml run 24/7 (ADR-0009: WSL stops its VM a few minutes after the last wsl.exe session, and nothing
-# starts it after a reboot). A Windows scheduled task: run it only with Luca's agreement (handoff §0; given on
-# 13 November 2026).
+# starts it after a reboot). A scheduled task changes the machine: register it only on its owner's decision.
 #
 #     powershell -ExecutionPolicy Bypass -File deploy\wsl\register-wsl-task.ps1     # no administrator needed; re-run to update
 #
-# What it runs, as Luca, at his logon, without a window (conhost --headless): a loop that holds a `wsl.exe -d Ubuntu
+# What it runs, as the current user, at their logon, without a window (conhost --headless): a loop that holds a `wsl.exe -d Ubuntu
 # --exec /bin/sleep infinity` session and starts it again 30 s after it ends (a `wsl --shutdown`, a WSL update). The
 # containers start with the distribution (systemd, Docker, restart: unless-stopped); `docker compose down` stops
 # them for good, the task only keeps WSL up.

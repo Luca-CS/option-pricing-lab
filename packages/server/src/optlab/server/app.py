@@ -2,7 +2,7 @@
 
 Routes are under `/api/v1`, one router per domain (`optlab.server.routers`). The OpenAPI document is
 `/api/v1/openapi.json` and its versioned copy `api/openapi.json` (`python -m optlab.server.openapi export`).
-The front's static build (`OPTLAB_FRONTEND`, session 2) is served on the same origin; there is no CORS.
+The front's static build (`OPTLAB_FRONTEND`) is served on the same origin; there is no CORS.
 """
 
 from __future__ import annotations
@@ -116,7 +116,7 @@ def api_app(docs: bool = False) -> FastAPI:
 
 # Swagger UI from a CDN, pinned and checked by its integrity (the files are those of the npm tarball, whose sha512 the
 # registry signs); off unless `Settings.docs` (OPTLAB_DOCS=true), because the page runs a third-party script on the
-# desk's origin (ADR-0021).
+# desk's origin (docs/architecture/security.md §4).
 SWAGGER = "5.34.0"
 SWAGGER_JS = (
     f"https://cdn.jsdelivr.net/npm/swagger-ui-dist@{SWAGGER}/swagger-ui-bundle.js",

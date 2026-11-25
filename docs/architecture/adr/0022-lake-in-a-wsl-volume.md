@@ -1,18 +1,16 @@
 # ADR-0022: The containers' lake lives in a WSL volume
 
-- Status: Proposed (A7, 13 November 2026), as ADR-0009 planned: decided by its measurement; for Luca to accept in
-  the A7 pull request
-- Follows: ADR-0009 ("the lake: A7 times one reference DuckDB query from `/mnt/c` and from WSL's ext4 disk")
+- Status: Accepted, 13 November 2026
 
 ## Context
 
-The lake (340 MB of Parquet, append-only, read by DuckDB) is on Windows, in `optlab-data/lake`. A container in WSL
+The lake (340 MB of Parquet, append-only, read by DuckDB) lives on Windows, in `optlab-data/lake`. A container in WSL
 reads a Windows folder through `/mnt/c`, a 9P file share; a Docker volume is a folder of WSL's own ext4 disk.
-ADR-0009 set the rule: above a 2x gap, the production copy lives in a WSL volume.
+The rule: above a 2x gap, the production copy lives in a WSL volume ([ADR-0009](0009-containers-wsl2.md)).
 
 ## Measurement
 
-The same three reads in the `worker` image (`optlab-worker:dev`), best of five after a warm-up, twice. The same script
+The same three reads in the `worker` image, best of five after a warm-up, twice. The same script
 ran natively on Windows (NTFS) with the same code. The script is `deploy/wsl/lake_timing.py`: run it with
 `python lake_timing.py <lake folder> <label>`.
 
@@ -40,7 +38,7 @@ The second run gave the same figures within 12 %. A copy of the whole lake from 
 - A container reads the lake 2 to 3 times faster than Windows does natively, and 19 to 49 times faster than through
   `/mnt/c`.
 - Two lakes can drift apart. Each says what it holds, with the `origin` and the ingestion time of every row and the
-  Data screen's coverage. The weekly copy (`lake_backup`) runs where the production lake is, in the containers.
+  lake's coverage in the market explorer. The weekly copy (`lake_backup`) runs where the production lake is, in the containers.
 - To refresh the development lake from the production one, or the reverse, copy a lake copy
   (`<data>/backups/lake/<stamp>`, checked by its manifest) with `optlab restore --lake` on the receiving side.
 

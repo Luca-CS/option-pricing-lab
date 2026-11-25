@@ -1,4 +1,4 @@
-// Benchmark protocol of the handoff (section 6). Run from the repository root, after `uv run optlab bench numpy`:
+// The benchmark protocol (README, "Running"). Run from the repository root, after `uv run optlab bench numpy`:
 //
 //   build\Release\bench.exe            writes packages/native/cuda/bench/results.csv and prints the Markdown table
 //

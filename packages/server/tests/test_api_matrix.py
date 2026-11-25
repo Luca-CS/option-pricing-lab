@@ -1,4 +1,4 @@
-"""The authorisation matrix (ADR-0020, handoff §4.2): every operation of the OpenAPI document x every role, and
+"""The authorisation matrix (ADR-0020): every operation of the OpenAPI document x every role, and
 anonymous, against the roles the route declares. Generated from the route table, so no route escapes it: a new route
 is in the matrix the day it is added. Jobs are not run (their submission is replaced by a stub): the matrix checks who
 gets through, not what the computation gives (the routers' own tests do)."""

@@ -1,7 +1,7 @@
 {
   "name": "optlab-frontend",
   "private": true,
-  "description": "The desk's front (session 2): one application on API v1, served by the API on the same origin.",
+  "description": "The desk's front: one application on API v1, served by the API on the same origin.",
   "license": "UNLICENSED",
   "type": "module",
   "engines": {

@@ -1,5 +1,5 @@
 // What the screens of every space share: the placeholder of a screen still to come, small tables, and the link of a
-// trade or a quote with the places it opens in (the bridges of HANDOFF_REFACTOR_2_UX.md §3).
+// trade or a quote with the places it opens in (the bridges of docs/ux.md §3).
 import { Anchor } from "@mantine/core";
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router";

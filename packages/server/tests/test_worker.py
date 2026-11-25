@@ -1,4 +1,4 @@
-"""The worker as its own process (handoff §4.3, ADR-0006): an api that leaves the queue to
+"""The worker as its own process (ADR-0006): an api that leaves the queue to
 `optlab worker`, a job done by that process, and a worker killed in the middle of a job (a crash): the
 next worker waits for the dead one's lease to expire, marks the job interrupted, and serves the queue again."""
 

@@ -1,26 +1,23 @@
 # ADR-0013: Python 3.14 and C++/CUDA; no Rust
 
-- Status: Accepted (A0 checkpoint, 7 November 2026)
-- Handoff §1: Langages
+- Status: Accepted, 7 November 2026
 
 ## Context
 
-The hot loops are already in CUDA/C++ (path engine, leverage) and in vectorised NumPy. The library runs on Python
-3.14.7 in the dev environment.
+The hot loops are in CUDA/C++ (the path engine, the SLV leverage) and in vectorised NumPy.
 
 ## Decision
 
 - Python 3.14 (`requires-python = ">=3.14"`), C++17 and CUDA 12.x for the engine.
 - **No Rust**: no decisive gain (the loops that matter are on the GPU or in NumPy), and a Rust engine would double the
   native code to keep bit-identical.
-- The front of session 2: TypeScript (strict) and React, built by Vite.
+- The front: TypeScript (strict) and React, built by Vite ([ADR-0024](0024-front-end-stack.md)).
 
 ## Consequences
 
-- CI runs Python 3.14 only. Dependencies must ship wheels for 3.14 on Windows and Linux; A1 checks every one of them
-  (FastAPI, Pydantic, SQLAlchemy, Alembic, argon2-cffi, Typer, uvicorn, duckdb, pyarrow).
+- CI runs Python 3.14 only. Every dependency must ship wheels for 3.14 on Windows and Linux.
 
 ## Alternatives considered
 
 - Rust (PyO3) for the engine: rejected above.
-- Supporting 3.12 and 3.13 too: a matrix for no user.
+- Supporting older Pythons too: a matrix for no user.

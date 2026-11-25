@@ -1,6 +1,6 @@
 // Where a number comes from, and where an entity leads. Every market object says whether it was observed, derived,
 // reconstructed or made up (the lake's `origin`); every entity (trade, quote, run, snapshot) links to its page and
-// offers the other places it can be opened (the bridges of HANDOFF_REFACTOR_2_UX.md §3).
+// offers the other places it can be opened (the bridges of docs/ux.md §3).
 import { ActionIcon, Menu } from "@mantine/core";
 import { IconDots } from "@tabler/icons-react";
 import { Link } from "react-router";

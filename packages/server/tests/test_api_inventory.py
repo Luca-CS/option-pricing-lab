@@ -1,6 +1,6 @@
-"""Parity with v0 (handoff §7.2): every v1 route of docs/architecture/feature-inventory.md, section 1, exists in the
+"""Parity with v0: every v1 route of docs/architecture/feature-inventory.md, section 1, exists in the
 OpenAPI document, and every route of the API is either in the inventory or named here as new. Replaces v0's
-`test_routes_and_screens_are_wired`; the screens are session 2's, checked against the same inventory."""
+`test_routes_and_screens_are_wired`; the screens are checked against the same inventory (its §2)."""
 
 import re
 from pathlib import Path
@@ -13,7 +13,7 @@ from optlab.server.app import operations
 INVENTORY = Path(__file__).resolve().parents[3] / "docs" / "architecture" / "feature-inventory.md"
 METHOD = r"(GET|POST|PUT|PATCH|DELETE)"
 LATER: dict[tuple[str, str], str] = {}  # routes of the inventory that a later step brings, with that step
-NEW = {  # routes v0 had no equivalent for: accounts replace the shared token (A5), the worker's queue and schedules (A6)
+NEW = {  # routes v0 had no equivalent for: accounts replace the shared token, the worker's queue and schedules
     ("POST", "/auth/login"),
     ("POST", "/auth/logout"),
     ("GET", "/auth/me"),

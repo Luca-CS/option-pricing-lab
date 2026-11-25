@@ -1,4 +1,4 @@
-"""What the domain routes answer, described for the OpenAPI document (session 2; api.md §10).
+"""What the domain routes answer, described for the OpenAPI document (api.md §10).
 
 The services answer JSON-ready dicts in the library's shapes. These models *describe* those answers so the front's
 types are generated, never written by hand: a route names its model in `responses` (`documented(Model)`), which only

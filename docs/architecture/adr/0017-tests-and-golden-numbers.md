@@ -1,80 +1,46 @@
 # ADR-0017: Golden numbers, a fast CI, the full suite on the machine
 
-- Status: Accepted (A0 checkpoint, 7 November 2026); tolerance across machines agreed on 7 and 8 November 2026
-- Handoff §1: Tests; §5
+- Status: Accepted, 7 November 2026
 
 ## Context
 
-v0 has 831 tests (52 files), 32 to 33 minutes in full (`reports/refactor-baseline.md` §5), many of which read the
-real lake or need the GPU and skip otherwise. Every stochastic pricer is validated against an independent reference
-within 4 standard errors. The refactor moves every file: something must prove that no number changed.
+The suite has about 950 tests, many of which read the real lake or need the GPU. Every stochastic pricer is validated
+against an independent reference within four standard errors. A change that moves code must prove that no number
+changed.
 
 ## Decision
 
-- **Golden numbers, recorded in A0 before any change** (`tests/golden/golden.py record`). Groups:
-  - versioned in `tests/golden/` (synthetic inputs only, runnable in CI): closed forms, CRR, Heston Fourier; the
-    Monte Carlo pricers of `products.py` under BS, Heston, LV and SLV on fixed seeds; the calibration pipeline on the
-    simulated market; the presets quoted on that market (NumPy), forced models, the desk's cost lines, Greeks and a
-    small book;
-  - local, in `optlab-data/golden/`, never in git (they derive from personal-use data): presets on the SPX
-    calibration (NumPy and GPU), objects derived from the lake at fixed dates, the explained P&L cascades of
-    13/03/2020 and 04/11/2026, the showcase book's value and Greeks (GPU, Standard), its 1-day VaR (A0 and A9 only).
-  - Large arrays are kept as a digest (sha256 of the float64 bytes, sum, 32 samples) so a golden file stays small.
-- **Tolerances**: same platform and engine, equality to the last bit. Windows against Linux: measured in A0 and A7,
-  then a relative tolerance is fixed (expected near 1e-12 for deterministic numbers, well under 0.01 SE for Monte
-  Carlo), written in this ADR's follow-up, never widened silently. A golden difference blocks a PR unless it is a
-  documented bug fix (number before and after).
-- **Measured in A0 across platforms** (`reports/refactor-baseline.md` §7): closed forms and the Monte Carlo pricers
-  with fixed inputs differ by at most 2.6e-14 relative (5.7e-14 SE) between Windows and Linux; the calibration pipeline
-  amplifies those last bits (SLV leverage samples up to 1.7 %), and prices computed on a recalibrated market differ by up
-  to 0.07 SE. Proposed tolerance across platforms: `rtol = 1e-12` for every group that takes fixed inputs
-  (`closed_forms`, `mc_products`, `labjs`, and later the native engine's CPU groups); for the groups that recalibrate
-  (`calibration_simulated`, `presets_simulated`, `structured_extra`), Monte Carlo values within 0.1 SE and fitted
-  parameters within `rtol = 2e-2`, checked by a dedicated comparison, not bit for bit. Within one platform the rule
-  stays equality to the last bit. To be confirmed at the A0 checkpoint.
-- **Measured in A2 across machines of one platform**: the hosted Windows runner gave the versioned goldens bit for bit
-  on PR #3 (Azure northcentralus) and not on PR #4 (westus2), with the same image (`windows-2025-vs2026` 20261103.298.1),
-  the same lock and code that is bit for bit on this machine. The gaps have the size of the Windows-Linux ones:
-  `mc_products` 2.2e-14 relative, the calibration's parameters up to 6.5e-3, the presets' control variate 3.7e-4
-  relative on an SE, the forced SLV's termination probabilities up to 0.6 %. NumPy picks its SIMD kernels at start-up
-  and the last bit of `exp` and `log` follows the kernel; the step now prints each runner's CPU and SIMD level. On the
-  next run, a Windows runner on an AMD Zen 3 at X86_V3 (this machine, a Zen 2, runs X86_V3 too) gave all six groups bit
-  for bit, recalibrations included, while the Linux runner (EPYC 7763, also X86_V3) differed as in A0 (another build of
-  NumPy and of the C library). The failing Windows run did not record its CPU, so the CPU is the likely cause there, not
-  a proven one. Either way "same platform" means **same machine**: bit for bit is the rule on this machine (each step's
-  local check), and every hosted runner is treated as another platform. Until the tolerance above is confirmed, the CI
-  blocks on the fixed-input groups at `rtol = 1e-12` on both systems and runs the recalibrating groups without
-  blocking, the machine's CPU and SIMD level printed beside them.
-- **Agreed with Luca (7 November 2026)**: the tolerance proposed above, implemented as `golden.py check --across`
-  (`ACROSS_RTOL`, `SE_RATIO`, `FIT_RTOL`; a number's standard error is the one recorded beside it). Checked on the
-  code of A2 under Linux: every number of `closed_forms`, `mc_products`, `labjs` and `presets_simulated` holds (the
-  presets within 0.007 SE), and so do all the others but two, both SLV prices on a leverage the run recalibrated: the
-  American put of the exotics table at 0.32 SE and the Phoenix's SLV provision at 0.13 SE. A0's "up to 0.07 SE" had
-  looked at the presets only. **Luca's decision (8 November 2026): the rule stays at 0.1 SE**, not widened for them;
-  the CI blocks on the four groups that hold and runs `calibration_simulated` and `structured_extra` with the same
-  rule without blocking, their gaps printed. The guard of these two groups is the bit-for-bit check on this machine at
-  every step.
-- **The native engine's goldens (A3)**, recorded on the `ctypes` bridge before the binding changed: `native_cpu` and
-  `native_gpu`, versioned (synthetic inputs, the simulated market), run with `--local` or by name since they need the
-  engine. They hold paths of the four models and of a basket with a local correlation, the fixed products of the CUDA
-  study, the SLV leverage and a Phoenix quoted on the engine. The CPU engine is bit for bit from run to run. The GPU is
-  not, in two places, both reductions by `atomicAdd` whose order of blocks changes: the fixed products' partial sums
-  (prices identical over six runs, SE within 8.6e-16 relative) and the leverage's histograms (within 1.3e-9). So
-  `native_gpu` is bit for bit except `fixed` within 1e-12 and `leverage` within 1e-8 (`WITHIN` in `golden.py`); its
-  paths and the quote priced on them stay bit for bit, and so does `presets_spx_gpu`.
-- **CI under 5 minutes**, measured: `pytest -m "not slow and not gpu and not lake"` with xdist on a synthetic
-  mini-lake generated deterministically by the tests (no binary fixture), plus the CI golden groups.
-- **The full suite and the GPU on the machine**: `pytest -n 6 --dist loadfile` (the real lake, the GPU; about 13
-  minutes) and `tests/golden/golden.py check --local`, at the end of every step, their results in the PR.
-- The 817 tests stay green or are replaced by a named equivalent in the PR; no independent reference is lost; the
-  stochastic ones stay at 4 SE.
+- **Golden numbers** (`tests/golden/golden.py record|check`), in groups:
+  - versioned in `tests/golden/` (synthetic inputs only, run in CI): closed forms, CRR, Heston by Fourier; the Monte
+    Carlo pricers under BS, Heston, LV and SLV on fixed seeds; the calibration chain on the simulated market; the
+    presets quoted on that market, forced models, the desk's lines, Greeks and a small book; the native engine's CPU
+    and GPU groups;
+  - local, in `<data>/golden/`, never in git (they derive from personal-use data): presets on the SPX calibration
+    (NumPy and GPU), objects derived from the lake at fixed dates, explained P&L cascades, the showcase book's value,
+    Greeks and VaR.
+  - Large arrays are kept as a digest (sha256 of the float64 bytes, a sum, 32 samples), so a golden file stays small.
+- **Tolerances**:
+  - on one machine and one engine: equality to the last bit;
+  - across machines (each hosted runner counts as another machine: NumPy picks its SIMD kernels at start-up, and the
+    last bit of `exp` and `log` follows them), `golden.py check --across`: groups with fixed inputs within
+    `rtol = 1e-12`; groups that recalibrate, whose fits amplify the last bits, with each Monte Carlo number within
+    0.1 of its standard error and the fitted parameters within `rtol = 2e-2`;
+  - GPU reductions by `atomicAdd` (the fixed products' partial sums, the leverage's histograms) vary in their last bits
+    from run to run: `WITHIN` in `golden.py` names them; the GPU paths stay bit for bit.
+- A golden difference blocks a pull request unless it is a documented fix, with the number before and after.
+- **CI** runs `pytest -m "not slow and not gpu and not lake and not native"` with xdist on a synthetic mini-lake
+  generated by the tests, plus the versioned golden groups across machines. Two recalibrating groups
+  (`calibration_simulated`, `structured_extra`) run there without blocking, with their gaps printed: their guard is the
+  bit-for-bit check on the machine.
+- **The full suite and the GPU on the machine**: `pytest -n 6 --dist loadfile` (the real lake, the GPU, node) and
+  `tests/golden/golden.py check --local`.
 
 ## Consequences
 
-- Golden files are part of the review: a changed file in a PR is a changed number.
+- Golden files are part of the review: a changed file in a pull request is a changed number.
 - Personal-use data never reaches CI: the mini-lake is synthetic, and the local goldens stay local.
 
 ## Alternatives considered
 
-- Snapshot testing of whole API responses: brittle on timings and ids; the golden recorder drops clocks and ids.
-- Run the lake tests in CI on a sanitized lake extract: still derived from Yahoo data. Rejected (safety).
+- Snapshot tests of whole API responses: brittle on timings and ids; the recorder drops clocks and ids.
+- The lake's tests in CI on a sanitized extract: still derived from Yahoo data. Rejected.

@@ -1,4 +1,4 @@
-// The frame of every screen (HANDOFF_REFACTOR_2_UX.md §5): a rail of the spaces, a context bar that always says on
+// The frame of every screen (docs/ux.md §2): a rail of the spaces, a context bar that always says on
 // what market, with which engine and for whom the numbers are, the jobs in flight, and the page. Ctrl+K searches,
 // `g` + a letter goes to a space, `?` lists the keys.
 import { Notifications } from "@mantine/notifications";

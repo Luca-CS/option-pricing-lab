@@ -1,5 +1,5 @@
 """optlab.core stands alone (ADR-0004): importing every module of it loads no other optlab package, none of the data or
-web libraries, and starts no thread, so that the Pyodide trial of the demo (session 2) can load it. The compiled engine
+web libraries, and starts no thread, so that it can run alone (in Pyodide, for instance). The compiled engine
 is reached by name through `optlab.core.engines`, and its absence falls back to NumPy with the reason."""
 
 import json

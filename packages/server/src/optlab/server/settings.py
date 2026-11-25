@@ -87,7 +87,7 @@ class Settings(BaseSettings):
     # --- network ---------------------------------------------------------------------------------------------------
     host: str = Field("127.0.0.1", description="where the server listens; beyond this machine only with lan")
     port: int = Field(8765, ge=1, le=65535)
-    lan: bool = Field(False, description="the LAN profile (ADR-0002): off unless Luca turns it on")
+    lan: bool = Field(False, description="the LAN profile (ADR-0002): off by default")
     lan_names: str = Field(
         "",
         description="with lan: the names the desk answers to, separated by a comma and a space as Caddy wants them "
@@ -99,7 +99,7 @@ class Settings(BaseSettings):
         "publishes on 127.0.0.1 of the host only (ADR-0009)",
     )
 
-    frontend: Path | None = Field(None, description="the front's static build, served on the same origin (session 2)")
+    frontend: Path | None = Field(None, description="the front's static build, served on the same origin")
     docs: bool = Field(False, description="the Swagger UI page, whose script comes from a CDN: off unless asked")
 
     # --- security (ADR-0020) ---------------------------------------------------------------------------------------
@@ -151,7 +151,7 @@ class Settings(BaseSettings):
         in_container_interface = self.container and self.host == "0.0.0.0"  # the container's own interface (ADR-0009)  # noqa: S104 (a container's own interface only, ADR-0009)
         if not self.lan and not _is_loopback(self.host) and not in_container_interface:
             raise ValueError(
-                f"host {self.host!r} listens beyond this machine: set OPTLAB_LAN=true only with Luca's agreement "
+                f"host {self.host!r} listens beyond this machine: set OPTLAB_LAN=true only on the owner's decision "
                 "(ADR-0002), or keep 127.0.0.1"
             )
         if self.lan and not self.lan_hosts:

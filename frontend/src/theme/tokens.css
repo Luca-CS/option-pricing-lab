@@ -1,4 +1,4 @@
-/* The desk's design tokens (HANDOFF_REFACTOR_2_UX.md §5). Dark graphite is the default; light "paper" for the day and
+/* The desk's design tokens (docs/ux.md §4). Dark graphite is the default; light "paper" for the day and
    the reports. Green and red are for signed values only; the colourblind palette swaps them for blue and orange. */
 :root,
 :root[data-mantine-color-scheme="dark"] {

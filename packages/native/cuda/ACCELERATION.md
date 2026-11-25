@@ -1,9 +1,9 @@
-# Acceleration: where the time goes and the plan to use the whole machine
+# Acceleration: where the time goes, and how the engines use the whole machine
 
-The library prices everything by NumPy Monte Carlo, and the structured products spend 99 % of a quote in the
-simulation (measured below). The plan moves the simulation, then the rest of the hot loops, to compiled code that
-runs on whatever the machine has: an NVIDIA GPU, every CPU core, or NumPy as before. NumPy stays the reference: every
-compiled result is checked against it, or against a closed form, within 4 standard errors.
+Under NumPy, a structured product spends 99 % of its quote in the simulation. The engines move the simulation and the
+SLV leverage to compiled code that runs on whatever the machine has: an NVIDIA GPU, every CPU core, or NumPy as
+before. NumPy stays the reference: every compiled result is checked against it, or against a closed form, within 4
+standard errors.
 
 Measured on the development machine: Ryzen 5 3600 (6 cores, 12 threads, AVX2), 24 GB, RTX 2070 Super (8 GB,
 sm_75, display GPU), Windows 11, CUDA 12.9. GPU times after a warm-up (`optlab bench accel`), on an idle machine.
@@ -23,7 +23,7 @@ quarter of the free memory, so 4 GB laptop GPUs work with smaller chunks. The en
 (`engine=` on a pricer, `optlab.native.set_default`, or `$OPTLAB_ENGINE`) and on by default in the desk
 (`optlab serve --engine auto`).
 
-## Results so far
+## Results
 
 One million paths, Phoenix and BRC on the SPX calibration, worst-of on three local vol names (seconds, wall clock):
 
@@ -48,23 +48,30 @@ float rounding decides whether a variance near zero is truncated; prices agree w
 error of their paired difference. The leverage calibrated on the engine misses the vanilla surface by the same
 amounts as NumPy's (within 1.1 standard errors of each other per strike, at 400,000 paths).
 
-## Plan
+## How it is built
 
-| Step | Content | Status |
-|---|---|---|
-| 1 | Measure: simulation 99 % of a quote under NumPy | done |
-| 2 | One path engine for every model (BS, Dupire local vol on uniform tables, Heston and SLV with full truncation), 1 to 8 correlated names, local correlation, Philox counter-based normals; CPU (double, threads) and GPU (float) from the same header; a CPU-only build | done |
-| 3 | `optlab.native` and the batch engine: `engine=` numpy, cpu, gpu, auto; fallback to NumPy with the reason; batches sized by memory, prices that depend on (seed, paths) only | done |
-| 4 | SLV leverage by the particle method on the engine (bins on the device, regression on the host) | done |
-| 5 | Evaluation on several threads while the GPU simulates the next batch | done: ×4.7 on the Phoenix |
-| 6 | Daily windows reduced to lowest and highest spot in the kernel (two columns instead of 252) | done: BRC ×8 on the GPU |
-| 7 | Normals read as one stream per pair (no draw wasted) | done: CPU engine ×1.7 to ×2.1 |
-| 8 | Desk on the engine: `--engine auto`, status bar, a 2 million paths precision; the vanilla checks of the mix band (`validation.mc_smile`) on the engine | done: desk quote 107.5 s to 4.4 s |
-| 9 | Fused payoff on the GPU: the script's AST compiled to CUDA C and loaded with NVRTC, so only pair sums cross PCIe; the evaluation (now 60 to 90 % of a GPU quote) disappears | next; gate: equal numbers to the NumPy evaluator on the same paths |
-| 10 | All the bumps of a quote in one launch: vol, skew and correlation scenarios as extra tables on the same draws (exact common random numbers, one transfer) | planned |
-| 11 | CPU engine vectorised over tiles of pairs (AVX2, structure of arrays) | planned: the CPU tier is still 15 times slower than the GPU |
-| 12 | Other loops: local correlation calibration, the replay's daily valuations as one batch of markets, Longstaff-Schwartz regressions, the Monte Carlo checks of the calibration | planned |
-| 13 | Hardware profile: device and core count in the desk's settings, batch and thread counts tuned per machine, a portable build for distribution | partly: `optlab.native.summary()` |
+- **One path engine for every model**: Black-Scholes, Dupire local vol on uniform tables, Heston and SLV with full
+  truncation, 1 to 8 correlated names, local correlation, Philox counter-based normals; the CPU (double, threads) and
+  the GPU (float) run the same header, and a CPU-only build needs no CUDA.
+- **`optlab.native` and the batch engine**: `engine=` numpy, cpu, gpu or auto; a fallback to NumPy with its reason;
+  batches sized by memory; prices that depend on (seed, paths) only.
+- **The SLV leverage by the particle method on the engine**: bins on the device, the regression on the host.
+- **Evaluation on several threads while the GPU simulates the next batch** (×4.7 on the Phoenix).
+- **Daily windows reduced in the kernel** to the lowest and highest spot: two columns instead of 252 (the BRC ×8 on
+  the GPU).
+- **Normals read as one stream per pair**, with no draw wasted (the CPU engine ×1.7 to ×2.1).
+- **The desk on the engine**: `--engine auto`, the engine shown in the context bar, a 2 million paths precision, the
+  mix band's vanilla checks on the engine (a desk quote from 107.5 s to 4.4 s).
+
+## Possible extensions
+
+- A fused payoff on the GPU: the script's AST compiled to CUDA C and loaded with NVRTC, so only pair sums cross PCIe
+  (the evaluation is now 60 to 90 % of a GPU quote), gated on equal numbers to the NumPy evaluator on the same paths.
+- All the overs of a quote in one launch: vol, skew and correlation scenarios as extra tables on the same draws.
+- The CPU engine vectorised over tiles of pairs (AVX2, structure of arrays): it is still about 15 times slower than
+  the GPU.
+- Other loops: the local correlation calibration, the replay's daily valuations as one batch of markets,
+  Longstaff-Schwartz regressions, the Monte Carlo checks of the calibration.
 
 Precision policy: GPU paths in float (consumer cards run double at 1/32 or 1/64 of float), sums in double on the host.
 A change that alters prices beyond rounding is validated against NumPy and the closed forms before it becomes a default.

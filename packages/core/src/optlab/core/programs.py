@@ -1,7 +1,7 @@
 """Where an external program is (curl, git): an absolute path, from the absolute folders of the PATH only.
 
 `subprocess.run(["curl", ...])` with a bare name lets Windows look in the interpreter's folder and the current folder
-before the PATH, so a `curl.exe` planted in the working directory would run (security.md, findings 19 and 44). The
+before the PATH, so a `curl.exe` planted in the working directory would run (security.md §3). The
 packages that start a program resolve it here first and pass the absolute path. Nothing runs at import.
 """
 

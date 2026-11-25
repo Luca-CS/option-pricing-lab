@@ -1,4 +1,4 @@
-// How the desk writes a number (HANDOFF_REFACTOR_2_UX.md §5): tabular, thousands separated, an explicit sign where
+// How the desk writes a number (docs/ux.md §4): tabular, thousands separated, an explicit sign where
 // it means something, the minus as a real minus, the standard error after a muted ±, and a value inside its noise
 // (|v| < 2 SE) said to be noise. Levels are fractions in the API and percentages on screen: the conversion happens
 // here, at the edge, and nowhere else.

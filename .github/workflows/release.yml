@@ -1,6 +1,6 @@
 # A release (ADR-0019): at a tag vX.Y.Z (or vX.Y.Z-rc.N), the api and worker images are built from that tag, pushed to
 # GHCR with their SBOM and a provenance attestation, and a GitHub release lists their digests. The machine never
-# receives anything: Luca deploys a release by hand (deploy/wsl/deploy.sh), which pulls the images by these digests.
+# receives anything: the admin deploys a release by hand (deploy/wsl/deploy.sh), which pulls the images by these digests.
 # Rebuilding a release means running this workflow on its tag again: the lock (with hashes) and the base images (by
 # digest) are in the tree, so the same tag builds the same packages.
 name: Release

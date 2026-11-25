@@ -6,7 +6,7 @@ once, so two processes that both read a version and insert the next one wait for
 handling is off, and the engine issues BEGIN itself.
 
 Migrations run when a `Database` opens with `upgrade=True` (the desk does, until the worker of A6 takes it over;
-`optlab deploy` will in A9). A file another process upgraded is simply at head.
+the deploy does too). A file another process upgraded is simply at head.
 """
 
 from __future__ import annotations

@@ -5,11 +5,11 @@ Run on 5 November 2026 with `optlab structured pricing-report`, on the market of
 **The defaults are starting values, not a trader's.** They are in `packages/structured/src/optlab/structured/defaults.py`, labelled on every screen, and every cost below scales with them.
 
 ```
-Base            local vol, or replication for a European product
-+ Provisions    max(0, gap against the desk) per model of the family
-+ Bumps         one cost per market parameter, signed by the trader
-+ Digitals      the cost of reading each digital as a call spread
-= Client price  the coupon is solved on it and the 2 % margin
+Base                  local vol, or replication for a European product
++ Model reserves      max(0, gap against the desk) per model of the family
++ Overs               one cost per market input (overvol, overskew, overcorrel, overdiv, overrepo, delta bid-ask)
++ Digital overhedges  the cost of reading each digital as a call spread
+= Client price        the coupon is solved on it and the 2 % margin
 ```
 
 ## Results
@@ -17,10 +17,10 @@ Base            local vol, or replication for a European product
 | | Phoenix SPX | Athena SPX | BRC SPX | RC SPX | Phoenix AAPL | Worst of SPX, NDX, RUT | Worst of SPX, SX5E |
 |---|---|---|---|---|---|---|---|
 | Base | 96.99 ± 0.04 | 96.90 ± 0.04 | 97.73 ± 0.04 | 97.58 | 96.60 ± 0.05 | 95.08 ± 0.07 | 95.47 ± 0.06 |
-| SLV provision | +0.58 ± 0.03 | +0.49 ± 0.03 | 0 (gap -0.18) | none | +0.65 ± 0.03 | +0.84 ± 0.04 | +0.94 ± 0.04 |
-| Correlation skew provision | | | | | | +1.08 ± 0.06 | +0.62 ± 0.04 |
-| Bumps, with interaction | +0.14 | +0.13 | +0.21 | +0.18 | +0.34 | +0.38 | +0.37 |
-| Digitals, with interaction | +0.29 | +0.48 | +0.05 | +0.23 | +0.41 | +0.62 | +0.60 |
+| Model reserve: SLV | +0.58 ± 0.03 | +0.49 ± 0.03 | 0 (gap -0.18) | none | +0.65 ± 0.03 | +0.84 ± 0.04 | +0.94 ± 0.04 |
+| Model reserve: local correlation | | | | | | +1.08 ± 0.06 | +0.62 ± 0.04 |
+| Overs, with interaction | +0.14 | +0.13 | +0.21 | +0.18 | +0.34 | +0.38 | +0.37 |
+| Digital overhedges, with interaction | +0.29 | +0.48 | +0.05 | +0.23 | +0.41 | +0.62 | +0.60 |
 | Client price | 98.00 ± 0.04 | 98.00 ± 0.04 | 98.00 ± 0.04 | 98.00 | 98.00 ± 0.05 | 98.00 ± 0.08 | 98.00 ± 0.06 |
 | Coupon on the base alone, % p.a. | 5.87 | 7.91 | 6.52 | 6.63 | 9.99 | 13.79 | 10.90 |
 | Coupon with the costs, % p.a. | 3.80 ± 0.07 | 4.86 ± 0.10 | 6.25 ± 0.04 | 6.20 | 7.27 ± 0.10 | 8.81 ± 0.13 | 6.80 ± 0.09 |
@@ -28,30 +28,30 @@ Base            local vol, or replication for a European product
 
 The terms are 2 years for the autocalls and 1 year for the others: BRC with a daily barrier at 70 %, reverse convertible with a European barrier at 80 %, autocalls with a coupon barrier at 70 % and a final barrier at 60 %. The time of a basket includes the leverages and the fit of its correlation, kept for later quotes of that basket and date; those of SPX include its leverage only on the first line.
 
-Provisions are the largest lines, then the final barrier's digital. On the worst-ofs, the coupon falls by 4 to 5 points, and the desk holds about 2.5 to 3 % in reserves against a 2 % margin. These starting values are what to correct first.
+Model reserves are the largest lines, then the final barrier's digital overhedge. On the worst-ofs, the coupon falls by 4 to 5 points, and the desk holds about 2.5 to 3 % in reserves against a 2 % margin. These starting values are what to correct first.
 
-On the SPX phoenix the costs take 208 bp off the coupon. The old policy, SLV for all path-dependent products, put it at 4.64 %. The BRC's gap goes the other way: SLV is 0.18 of price below local vol, so there is no provision.
+On the SPX phoenix the costs take 208 bp off the coupon. The old policy, SLV for all path-dependent products, put it at 4.64 %. The BRC's gap goes the other way: SLV is 0.18 of price below local vol, so there is no model reserve.
 
-## Bumps
+## Overs
 
-All on the base's random numbers. On the phoenix, the SE of a line is about a tenth of the SE of the price. A bump of the forward (dividends, repo, spot) costs no simulation.
+All on the base's random numbers. On the phoenix, the SE of a line is about a tenth of the SE of the price. An over on the forward (overdiv, overrepo, delta bid-ask) costs no simulation.
 
 | Phoenix SPX | Used | Cost | Coupon, bp |
 |---|---|---|---|
-| Volatility | -0.25 pt | +0.071 ± 0.004 | -14.7 |
-| Skew, 90-110 % at 1 year | -0.25 pt | +0.048 ± 0.006 | -9.9 |
-| Dividends | -5 % | +0.010 ± 0.002 | -2.1 |
-| Repo | -5 bp | +0.009 ± 0.002 | -1.8 |
-| Spot, delta bid-ask | +2 bp | +0.006 ± 0.002 | -1.2 |
+| Overvol | -0.25 pt | +0.071 ± 0.004 | -14.7 |
+| Overskew, 90-110 % at 1 year | -0.25 pt | +0.048 ± 0.006 | -9.9 |
+| Overdiv | -5 % | +0.010 ± 0.002 | -2.1 |
+| Overrepo | -5 bp | +0.009 ± 0.002 | -1.8 |
+| Delta bid-ask | +2 bp | +0.006 ± 0.002 | -1.2 |
 | Interaction | | -0.006 ± 0.008 | +1.3 |
 
-Each bump was checked against Black-Scholes on a 90 % put, by Monte Carlo and by replication, within 4 SE (`packages/structured/tests/test_structured_costs.py`). The skew rotation has exact derivatives for Dupire, and the check for butterfly and calendar arbitrage warns on the quote.
+Each over was checked against Black-Scholes on a 90 % put, by Monte Carlo and by replication, within 4 SE (`packages/structured/tests/test_structured_costs.py`). The skew rotation has exact derivatives for Dupire, and the check for butterfly and calendar arbitrage warns on the quote.
 
-## Provisions of model
+## Model reserves
 
 **Common random numbers needed a change.** Local vol draws one normal per step and SLV two, so on one seed they shared nothing: correlation of the pairs 0.035, SE of the gap 0.052. Now SLV takes its spot normals from the same stream as local vol and the rest of its variance's driver from a stream of its own (`SLVModel.spot_driven`), with the same law. Correlation 0.7, SE 0.030. Local vol's numbers do not change.
 
-**A floor has a bias.** At a gap of zero, `max(0, gap)` averages about 0.4 of its SE, here about 1 bp at 100,000 paths. No threshold removes it, as agreed.
+**A floor has a bias.** At a gap of zero, `max(0, gap)` averages about 0.4 of its SE, here about 1 bp at 100,000 paths. No threshold removes it.
 
 **The mix is not calibrated and it moves the provision a lot**, and on a basket so does the correlation of the variances, which is an assumption too. Gap to SLV of a phoenix with a 12 % coupon:
 
@@ -108,9 +108,9 @@ The phoenix of `reports/replay.md`, sold on 14/01/2022 at 3.24 % ± 0.18 p.a. in
 
 ## What this does not show
 
-- **Default bumps are signed for a desk that sells,** and apply as given. On a buyer's quote they come out in its favour (SHOW-12: vol -0.117, skew -0.118), so a buyer must override them.
+- **Default overs are signed for a desk that sells,** and apply as given. On a buyer's quote they come out in its favour (SHOW-12: vol -0.117, skew -0.118), so a buyer must override them.
 - **Trades booked before this change have no reserve:** the screens say "none booked".
 - **A position's size picks a tier in the currency of its group,** with no FX. A worst-of of USD and EUR names compares one notional against both grids.
-- **The reserve is not repriced** after issue, as agreed, so the Book's reserve can drift from what the same line would cost today.
+- **The reserve is not repriced** after issue, by design, so the Book's reserve can drift from what the same line would cost today.
 - **The mix band is on single names only** on the screen. On a basket, the table above is from the script.
-- **No hedging simulation** backs the digital limits, or says what a bump should be.
+- **No hedging simulation** backs the digital limits, or says what an over should be.

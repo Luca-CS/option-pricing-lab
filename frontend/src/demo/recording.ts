@@ -1,4 +1,4 @@
-// The recorded session the demo replays (HANDOFF_REFACTOR_2_UX.md §6 (a)): for one profile, every answer of the API its
+// The recorded session the demo replays (docs/ux.md §5): for one profile, every answer of the API its
 // screens asked for while the recorder (e2e/record) walked them on a desk with the demo's synthetic data, keyed by the
 // request, and every job it ran as GET /jobs/{id} gave it once done. Shared by the recorder and the demo's transport, so
 // both key a request the same way.

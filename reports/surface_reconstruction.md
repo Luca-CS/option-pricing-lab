@@ -98,9 +98,9 @@ too low.** These are SPY options of at most about 2 months, so nothing here test
 - **SPX only.** Other names are the same machinery scaled by their 30-day index, with an assumed single-name skew. No
   equivalent test exists for them, as the sample has no chain for them beyond SPY, TSLA and KO.
 
-## Decision on the archive (199 to 799 $)
+## Would a paid chain archive help? (199 to 799 $)
 
-Luca's call. The figure says the purchase is **not needed to run the replay**: near the money at the maturities of these
+The figure says the purchase is **not needed to run the replay**: near the money at the maturities of these
 products, the error is about what a bid-ask costs at long maturities.
 
 It would be needed for two things this test cannot deliver:

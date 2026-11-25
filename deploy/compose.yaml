@@ -1,9 +1,9 @@
 # The desk in containers, in WSL's Docker Engine (ADR-0009, docs/architecture/operations.md):
 #
 #     docker compose -f deploy/compose.yaml up -d --build          # api on http://127.0.0.1:8765, its worker on the GPU
-#     docker compose -f deploy/compose.yaml --profile lan up -d    # + Caddy with TLS for the LAN: Luca's agreement first
+#     docker compose -f deploy/compose.yaml --profile lan up -d    # + Caddy with TLS for the LAN: the owner's decision (ADR-0002)
 #
-# Safety (security.md §3): every port is published on 127.0.0.1 explicitly (Docker writes its own firewall rules, so a
+# Safety (security.md §1, §6): every port is published on 127.0.0.1 explicitly (Docker writes its own firewall rules, so a
 # bare "8765:8765" would listen on every interface); no container sees the Docker socket; read-only root file
 # systems, a tmpfs for /tmp, no capability, no new privileges, an unprivileged user, bounded memory and processes.
 # The data lives in named volumes (ext4 in WSL): SQLite's WAL needs a real file system, never /mnt/c (9P).

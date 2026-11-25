@@ -1,4 +1,4 @@
-// A job's page (the bridge "job → its result", HANDOFF_REFACTOR_2_UX.md §3): what it is, where it stands, on what
+// A job's page (the bridge "job → its result", docs/ux.md §3): what it is, where it stands, on what
 // market and by what method it computed, the error if it failed, and the screen that shows its result.
 import { Anchor, Badge, Button, Code, Group } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";

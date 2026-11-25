@@ -1,4 +1,4 @@
-// The design system on one page (HANDOFF_REFACTOR_2_UX.md §5): every shared component, fed with numbers the API
+// The design system on one page (docs/ux.md §4): every shared component, fed with numbers the API
 // gave on the demo data. Served in development only (`npm run dev`, /dev/gallery); the production build leaves it out.
 import { Button, Group, SegmentedControl, Stack, TextInput, useMantineColorScheme } from "@mantine/core";
 import { useState } from "react";

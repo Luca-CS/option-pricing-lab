@@ -1,4 +1,4 @@
-"""Log files of the server's processes (handoff §4.12): JSON lines in `<data>/logs/<role>.log`, a new file every
+"""Log files of the server's processes (operations.md): JSON lines in `<data>/logs/<role>.log`, a new file every
 midnight, `Settings.log_keep_days` of them kept (the rotation is the handler's; the `housekeeping` schedule removes
 what a stopped process left behind). The console keeps the plain format of `optlab.core.log.configure`."""
 

@@ -1,4 +1,4 @@
-"""NumPy timings of the optlab library for the GPU benchmark table (handoff, section 6): `optlab bench numpy`.
+"""NumPy timings of the optlab library for the GPU benchmark table (packages/native/cuda/README.md): `optlab bench numpy`.
 
 Not the same algorithm as the CUDA engine: optlab simulates Heston by full-truncation Euler on a graded grid
 (more than 252 steps), and stores every path, so N is capped by memory as well as by time. When the capped N is

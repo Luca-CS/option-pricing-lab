@@ -1,9 +1,10 @@
 # API v1: conventions
 
-The contract session 2 builds the front on (handoff §7, ADR-0005, ADR-0020). The routes and their bodies are in
-[`api/openapi.json`](../../api/openapi.json); this page says what the document cannot: how to sign in, what an error,
-a job and a page look like, the units, the bounds, and how the front is served. Every function of v0 and its route
-are in [`feature-inventory.md`](feature-inventory.md); roles in [`security.md`](security.md).
+The contract the front is built on ([ADR-0005](adr/0005-api-v1-fastapi.md), [ADR-0020](adr/0020-accounts-roles-audit.md)).
+The routes and their bodies are in [`api/openapi.json`](../../api/openapi.json); this page says what the document
+cannot: how to sign in, what an error, a job and a page look like, the units, the bounds, and how the front is served.
+Every function and its route are in [`feature-inventory.md`](feature-inventory.md); roles in
+[`security.md`](security.md).
 
 ## 1. The document
 
@@ -19,7 +20,7 @@ are in [`feature-inventory.md`](feature-inventory.md); roles in [`security.md`](
   is not a `GET`. Every operation that answers 202 (it submits a job) takes the `Idempotency-Key` header (§7).
 - The interactive page `GET /api/v1/docs` is off by default (`OPTLAB_DOCS=true` turns it on): Swagger UI runs a
   third-party script on the desk's origin, pinned (5.34.0) and checked by its integrity, under a CSP that allows only
-  that script and the page's own init (ADR-0021). Sign in with `POST /auth/login` (Try it out), then paste its
+  that script and the page's own init ([security.md](security.md) §4). Sign in with `POST /auth/login` (Try it out), then paste its
   `csrf_token` in Authorize.
 
 ## 2. Signing in
@@ -83,7 +84,7 @@ Every error is `application/problem+json` (RFC 9457), never a stack trace:
 - The model works at a spot of 100: fixings, smiles and the market context are in that scale; a real level is
   converted with the real spot of the market (`real_spot` on `POST /trading/fixings`).
 - Ids are stable strings: `trade_id`, `quote_id`, `run_id`, `snapshot_id`, `job_id`.
-- Every job result is one envelope (A6):
+- Every job result is one envelope:
 
   ```json
   {
@@ -198,14 +199,14 @@ crash interrupted ends `error` with `{"type": "Interrupted", ...}` (never resume
 
 ## 10. Types for the front
 
-The front (`frontend/`, ADR-0024) generates its types from this document before every `dev`, `typecheck` and `build`:
+The front (`frontend/`, [ADR-0024](adr/0024-front-end-stack.md)) generates its types from this document before every `dev`, `typecheck` and `build`:
 
 ```
 npx openapi-typescript ../api/openapi.json --default-non-nullable false -o src/api/schema.d.ts
 ```
 
 - The generated file is not versioned: `test_openapi.py` keeps the document equal to the code, and the front must
-  compile on it (CI job `api-contract`, a required check of main).
+  compile on it (CI job `api-contract`).
 - `--default-non-nullable false` matters: version 7 otherwise makes every field with a default required, so a request
   body would have to spell out every option.
 - `openapi-fetch` gives a typed client (`createClient<paths>()`, `frontend/src/api/client.ts`). Its generic `body`
@@ -217,14 +218,14 @@ npx openapi-typescript ../api/openapi.json --default-non-nullable false -o src/a
   coverage, universe and quality, presets, quotes, trades, upcoming events, risk runs, the P&L history, the scenario
   library, the VaR backtest, a snapshot's smile and term structure, the other names, the volatility indices, the
   model-risk table, the vol lab's days, quotes and runs, the replays, a script's check, the engine, the system, the network
-  check, the admin's jobs). A route names its model in `responses`, which
+  check, the admin's jobs, the basket pseudo-quotes). A route names its model in `responses`, which
   changes the document only, never what the route sends; each model allows fields it does not name, and
-  `test_api_payloads.py` checks the real answers against them. Answers not yet described are open objects in the
-  document; session 2 describes them as its screens read them, without changing a field. A stored run
+  `test_api_payloads.py` checks the real answers against them. Only `/ready` and the term sheet's JSON Schema stay
+  open objects. A stored run
   (`GET /risk/runs/{run_id}`) is one of the run kinds (`anyOf`: Greeks, ladder, scenarios, VaR, EOD, a day of P&L),
   each its job result's fields plus `kind` and `created_at`; `x-job-results` gives each job kind's result.
 
-## 11. Adding a route (session 2 may)
+## 11. Adding a route
 
 Follow the conventions above, declare who may call it with `**access(...)`, bound what it costs, audit what it writes
 (`audited`), and add its test beside the router's (`packages/server/tests/test_api_<router>.py`). The authorisation

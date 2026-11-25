@@ -10,7 +10,7 @@ logs/
 build/
 build-*/
 
-# Handoffs between sessions stay local (journals of work in progress)
+# Local working notes, never versioned
 HANDOFF_*.md
 .coverage
 .coverage.*

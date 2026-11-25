@@ -1,4 +1,4 @@
-"""Import a v0 desk folder into an optlab database (ADR-0007, handoff §4.4).
+"""Import a v0 desk folder into an optlab database (ADR-0007).
 
 A v0 folder holds `desk.sqlite` (trades, fixings, quotes, settings, cost_defaults), `risk.sqlite` (records, runs),
 `market/` (`index.sqlite` and one JSON file per snapshot) and `replay/` (one JSON file per replay); each part may be

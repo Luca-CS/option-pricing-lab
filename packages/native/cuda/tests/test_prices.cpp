@@ -1,4 +1,4 @@
-// Validation against the reference table of the handoff (section 5).
+// Validation against the reference table of the study (README, "Results").
 // Criterion: |price - ref| <= 4 sqrt(se^2 + se_ref^2) + allowed bias. Rows marked "info" are reported, not tested.
 //
 //   test_prices              closed forms + CPU reference + GPU float + GPU double (float vs double, same normals)

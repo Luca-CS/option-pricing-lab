@@ -195,7 +195,7 @@ def load_calendars(lake: Lake) -> list[dict]:
 def load_yahoo_chains(
     lake: Lake, names=("SPX", "NDX", "RUT", "AAPL"), tickers=None, download=yahoo.download_chain
 ) -> list[dict]:
-    """One snapshot of the day's chains, on request only: Luca chose not to collect them every day."""
+    """One snapshot of the day's chains, on request only: they are not collected every day."""
     tickers = tickers or {"SPX": "^SPX", "NDX": "^NDX", "RUT": "^RUT"}
     out = []
     for name in names:

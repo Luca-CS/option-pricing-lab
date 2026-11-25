@@ -348,7 +348,7 @@ end
 
 
 def test_a_script_nested_without_limit_is_a_located_error_not_a_recursion():
-    """Found by the probe in A9: 9,000 parentheses in a 20,000-character script ended in Python's recursion limit
+    """Found by probing a running desk: 9,000 parentheses in a 20,000-character script ended in Python's recursion limit
     (a 500 on the API); so did one sum of thousands of terms, in the passes that walk the tree."""
     from optlab.structured.script.parser import MAX_DEPTH, MAX_NESTING
 

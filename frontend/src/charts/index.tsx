@@ -1,4 +1,4 @@
-// The charts, loaded on demand: ECharts stays out of the first page's JavaScript (HANDOFF_REFACTOR_2_UX.md §7).
+// The charts, loaded on demand: ECharts stays out of the first page's JavaScript (docs/ux.md §4).
 import { Skeleton } from "@mantine/core";
 import { type ComponentProps, lazy, Suspense } from "react";
 import type {

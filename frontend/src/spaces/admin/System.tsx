@@ -1,5 +1,5 @@
 // The system (Admin › System): the desk's version, database and market in use, the workers and the engine each sees,
-// the backups, the settings it runs with, and whether other machines could reach it (read-only: the LAN is Luca's
+// the backups, the settings it runs with, and whether other machines could reach it (read-only: the LAN is the owner's
 // decision, ADR-0002).
 import { Badge, Text } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
@@ -76,7 +76,7 @@ export default function System() {
                   })}
               />
             </Panel>
-            <Panel title="Sharing" hint="read-only; opening the desk to the LAN is Luca's decision">
+            <Panel title="Sharing" hint="read-only; opening the desk to the LAN is the owner's decision">
               {network.isPending && <Loading lines={1} />}
               {network.error && <Failure error={network.error} />}
               {n && (

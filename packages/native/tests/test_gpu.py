@@ -96,7 +96,7 @@ def test_engine_bs_barrier_matches_bgk(backend, cp):
 def test_gpu_heston_barrier_close_to_euler_library():
     model = HestonModel(SPX)
     res = gpu.barrier(model, MARKET, 100, 80, 1.0, n_paths=4_000_000, seed=5, backend="gpu")
-    assert within(res, 8.0927, floor=4 * 0.0092)  # QE reference of the handoff (JavaScript of the demo page)
+    assert within(res, 8.0927, floor=4 * 0.0092)  # QE reference (the JavaScript of the pricing lab)
     euler = barrier_mc(model, MARKET, 100, 80, 1.0, n_paths=100_000, rng=5)
     assert abs(res.price - euler.price) < 0.1  # scheme effect (QE against full-truncation Euler) ~ 0.02
 

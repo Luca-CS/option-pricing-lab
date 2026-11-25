@@ -14,8 +14,8 @@ engine of the Python library** (`paths.hpp`, `leverage.hpp`): it simulates every
 Dupire local vol, Heston and SLV, alone or in baskets of up to 8 correlated names with a local correlation) with the
 library's own discretisation, calibrates the SLV leverage by the particle method, and hands the paths to the
 structured products pricer. It runs in double on every CPU thread, or in float on the GPU, from the same header, and
-builds without CUDA for machines without an NVIDIA card. Its results, its validation and the plan that drives it are
-in [ROADMAP.md](ROADMAP.md): a Phoenix at one million paths goes from 31.9 s on NumPy to 0.19 s on this GPU, and a
+builds without CUDA for machines without an NVIDIA card. Its results, its validation and its possible extensions are
+in [ACCELERATION.md](ACCELERATION.md): a Phoenix at one million paths goes from 31.9 s on NumPy to 0.19 s on this GPU, and a
 worst-of on three names from 104.5 s to 0.29 s.
 
 ## Results

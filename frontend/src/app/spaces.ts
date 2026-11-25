@@ -1,4 +1,4 @@
-// The desk's five spaces (HANDOFF_REFACTOR_2_UX.md §3), their screens and who they belong to. A space is shown to
+// The desk's five spaces (docs/ux.md §2), their screens and who they belong to. A space is shown to
 // the roles it serves first; every signed-in user may read every space but Admin, and the server refuses what a role
 // may not do anyway.
 import {

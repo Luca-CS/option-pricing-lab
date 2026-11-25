@@ -65,7 +65,7 @@ def test_listening_beyond_this_machine_needs_the_lan_flag(data, monkeypatch):
         Settings.load(host="192.168.1.20", container=True)  # a container may not name another address
     monkeypatch.setenv("OPTLAB_LAN", "true")
     with pytest.raises(ValidationError, match="OPTLAB_LAN_NAMES"):
-        Settings.load(host="0.0.0.0")  # the LAN profile names the hosts it answers to (finding 17)
+        Settings.load(host="0.0.0.0")  # the LAN profile names the hosts it answers to
     monkeypatch.setenv("OPTLAB_LAN_NAMES", "optlab.home.arpa, 192.168.1.20")
     s = Settings.load(host="0.0.0.0")
     assert s.lan and s.lan_hosts == {"optlab.home.arpa", "192.168.1.20"}

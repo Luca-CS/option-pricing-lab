@@ -4,7 +4,7 @@ A job is its kind, its parameters (the validated request, JSON) and `Frozen`: wh
 submitted. The market in use is frozen by its snapshot id (snapshots are immutable), the typed basket settings and the
 version of the cost table by value, the trades by (id, version) (every version stays readable), the fixings by value.
 The worker rebuilds the same objects from them, so a job computes what it would have computed at once, whatever
-changed in between (the invariant of handoff §2: switching the market never changes a run in progress).
+changed in between (an invariant, docs/architecture/README.md §5: switching the market never changes a run in progress).
 
 `TASKS` maps a kind to a function (desk, params, frozen) -> envelope {market, method, result}. The desk, the risk
 adapter and the schedules register theirs when imported (`optlab.server.api`, `risk_api`, `schedules`).

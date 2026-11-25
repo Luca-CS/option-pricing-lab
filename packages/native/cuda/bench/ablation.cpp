@@ -1,4 +1,4 @@
-// Optimisation study (handoff, M6): one change at a time against the production kernel, same protocol as bench.cpp
+// Optimisation study (README, "Method"): one change at a time against the production kernel, same protocol as bench.cpp
 // (sustained warm-up, then per row at least 300 ms of warm-up and 5 repetitions, median [min, max]), and every row
 // validated against its reference. Rows whose normals are those of the baseline also report the price gap to the
 // baseline in standard errors: that gap is pure arithmetic.

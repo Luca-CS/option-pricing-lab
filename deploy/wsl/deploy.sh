@@ -1,6 +1,6 @@
 #!/bin/sh
 # Deploy a release of the desk in WSL's Docker, or go back to the one before (ADR-0019, operations.md "Deploy").
-# Run by Luca, as root in WSL, from the repository checked out at the release's tag (its compose.yaml):
+# Run by the admin, as root in WSL, from the repository checked out at the release's tag (its compose.yaml):
 #
 #     sh deploy/wsl/deploy.sh v1.0.0            # pull by digest, copy the database, migrate, restart, check /ready
 #     sh deploy/wsl/deploy.sh --rollback        # the version before, and the database as it was before the last deploy
