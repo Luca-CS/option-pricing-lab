@@ -10,6 +10,7 @@ import type { Schemas } from "../../api/client";
 import { savedQuote } from "../../api/queries";
 import { WaterfallChart } from "../../charts";
 import { formatDate, formatNumber, formatPercent, formatSeconds } from "../../lib/format";
+import { CLASS, LINE_KIND, METHOD, modelName, STICKY, shortLine } from "../../lib/models";
 import { describeSheet } from "../../lib/sheet";
 import { Kpi, KpiRow } from "../../ui/Kpi";
 import { MarketBadge } from "../../ui/Markers";
@@ -35,7 +36,7 @@ function Waterfall({ q }: { q: QuoteResult }) {
     return (
       <WaterfallChart
         start={{ label: "base", value: desk.coupon_base * 1e4 }}
-        steps={inPrice.map((l) => ({ label: l.label.replace(/^Digital: /, "digital: "), value: l.coupon_bp ?? 0 }))}
+        steps={inPrice.map((l) => ({ label: shortLine(l.label), value: l.coupon_bp ?? 0 }))}
         end={{ label: "client", value: (desk.coupon_final ?? 0) * 1e4 }}
         digits={1}
         height={300}
@@ -46,12 +47,100 @@ function Waterfall({ q }: { q: QuoteResult }) {
   return (
     <WaterfallChart
       start={{ label: "base", value: desk.base_price.value }}
-      steps={inPrice.map((l) => ({ label: l.label, value: l.cost.value }))}
+      steps={inPrice.map((l) => ({ label: shortLine(l.label), value: l.cost.value }))}
       end={{ label: "client", value: desk.final_price.value }}
       digits={2}
       height={300}
       label="The price from the base model to the client, in percent of nominal"
     />
+  );
+}
+
+/** How the quote was priced: the product's class, the base model and why the policy chose it, its control, the
+ * model reserves, and the numerics. Everything comes from the quote itself. */
+function PricingModel({ q, quoteId }: { q: QuoteResult; quoteId?: string | null | undefined }) {
+  const p = q.policy;
+  const o = (q.options ?? {}) as Record<string, unknown>;
+  const timings = (q.result.timings ?? {}) as Record<string, unknown>;
+  const reserves = (q.desk?.lines ?? []).filter((l) => l.kind === "model");
+  const mc = p.method === "monte_carlo";
+  const gap = q.control_gap_se;
+  const options = [
+    `delta ${STICKY[String(o.sticky ?? "moneyness")] ?? o.sticky}`,
+    o.fast ? "fast models (grid interpolation)" : null,
+    o.control_forwards ? "forward control variates" : null,
+    o.slv_vega ? "SLV vega" : null,
+  ].filter(Boolean);
+  return (
+    <Panel
+      id="pricing-model"
+      title="The pricing model"
+      hint={p.forced ? "the model picked for this quote, not the policy's" : "chosen by the desk's pricing policy"}
+      actions={
+        quoteId ? (
+          <Anchor component={Link} to={`/quant/calibration?quote=${encodeURIComponent(quoteId)}`} size="xs">
+            Its model risk
+          </Anchor>
+        ) : undefined
+      }
+    >
+      <dl className={`${classes.facts} ${classes.model}`}>
+        <dt>Product</dt>
+        <dd>
+          <strong>{CLASS[p.class] ?? p.class}</strong>
+          {p.description ? `: ${p.description}` : ""}
+        </dd>
+        <dt>Base model</dt>
+        <dd>
+          <strong>{modelName(mc ? p.model : "surface")}</strong>
+          {mc ? `, by ${METHOD[p.method] ?? p.method} on ${formatNumber(q.result.n_paths)} paths` : ""}
+        </dd>
+        <dt>Why</dt>
+        <dd>{p.reason.charAt(0).toUpperCase() + p.reason.slice(1)}</dd>
+        {p.control && (
+          <>
+            <dt>Control</dt>
+            <dd>
+              {modelName(p.control)}
+              {q.control && (
+                <>
+                  {": "}
+                  <Est value={q.control.price} /> % against the base's <Est value={q.result.price} />
+                  {gap !== null && gap !== undefined
+                    ? ` (a gap of ${formatNumber(gap, { digits: 1, sign: true })} SE)`
+                    : ""}
+                </>
+              )}
+            </dd>
+          </>
+        )}
+        <dt>Model reserves</dt>
+        <dd>
+          {reserves.length === 0
+            ? (p.provisions ?? []).length > 0
+              ? `${(p.provisions ?? []).map(modelName).join(", ")}: none charged (the gap is in the desk's favour, or no desk lines)`
+              : "none for this class"
+            : reserves.map((l) => (
+                <span key={l.key} className={classes.reserve}>
+                  {l.label.replace(/^Model reserve: /, "")} <Est value={l.cost} digits={3} /> % of nominal
+                  {l.in_price ? "" : " (not charged)"}
+                </span>
+              ))}
+        </dd>
+        <dt>Numerics</dt>
+        <dd className={c.faint}>
+          {[
+            mc && o.batch ? `batches of ${formatNumber(Number(o.batch))}` : null,
+            typeof timings.workers === "number" ? `${timings.workers} workers` : null,
+            typeof timings.engine_note === "string" ? timings.engine_note : null,
+            `${formatSeconds(q.seconds ?? q.result.seconds)} in all`,
+            ...options,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </dd>
+      </dl>
+    </Panel>
   );
 }
 
@@ -86,9 +175,10 @@ export function QuoteView({
         </div>
         <div className={classes.how}>
           <span>
-            {q.policy.label}{" "}
+            {modelName(q.policy.method === "monte_carlo" ? q.policy.model : "surface")}
+            {q.policy.control ? `, control ${modelName(q.policy.control)}` : ""}{" "}
             <Tooltip label={q.policy.reason} multiline w={340} withArrow>
-              <Anchor component="button" type="button" size="sm">
+              <Anchor href="#pricing-model" size="sm">
                 why
               </Anchor>
             </Tooltip>
@@ -136,6 +226,8 @@ export function QuoteView({
         )}
       </KpiRow>
 
+      <PricingModel q={q} quoteId={quoteId} />
+
       {desk && (
         <div className={c.grid}>
           <Panel
@@ -164,7 +256,7 @@ export function QuoteView({
                 cells: [
                   l.label,
                   <span key="k" className={c.faint}>
-                    {l.kind}
+                    {LINE_KIND[l.kind] ?? l.kind}
                   </span>,
                   <Est key="c" value={l.cost} digits={3} />,
                   coupon && l.coupon_bp !== null && l.coupon_bp !== undefined
@@ -228,14 +320,6 @@ export function QuoteView({
             <dd>{formatDate(q.product.strike_date)}</dd>
             <dt>Maturity</dt>
             <dd>{formatDate(q.product.maturity)}</dd>
-            {q.control && (
-              <>
-                <dt>Control ({q.policy.control})</dt>
-                <dd>
-                  <Est value={q.control.price} /> · gap {formatNumber(q.control_gap_se, { digits: 1 })} SE
-                </dd>
-              </>
-            )}
           </dl>
           {(q.warnings?.length ?? 0) > 0 && (
             <ul className={classes.warnings}>
@@ -258,7 +342,6 @@ export function QuoteView({
   );
 }
 
-/** The links a quote opens: book it, its model risk, its backtest, its report, the builder, a comparison. */
 /** The quote's term sheet as JSON: to the clipboard where the page may write it (a secure context: this machine, or
  * HTTPS), else shown selected, for Ctrl C (the desk over plain HTTP on the LAN). */
 function CopySheet({ quoteId }: { quoteId: string }) {
@@ -306,6 +389,7 @@ function CopySheet({ quoteId }: { quoteId: string }) {
   );
 }
 
+/** The links a quote opens: book it, its model risk, its backtest, its report, the builder, a comparison. */
 export function QuoteActions({ quoteId, onBook }: { quoteId: string; onBook?: (() => void) | undefined }) {
   const e = encodeURIComponent(quoteId);
   return (

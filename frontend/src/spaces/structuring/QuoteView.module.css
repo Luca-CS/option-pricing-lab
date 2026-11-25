@@ -116,6 +116,16 @@
   font-family: var(--mantine-font-family-monospace);
 }
 
+/* the pricing model reads as sentences: figures keep their monospace through Est */
+.model dd {
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.reserve {
+  display: block;
+}
+
 .warnings {
   margin: 0 0 12px;
   padding-left: 18px;

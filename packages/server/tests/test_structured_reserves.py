@@ -21,7 +21,7 @@ DESK_PRICE = {
     "base_price": 97.0,
     "final_price": 98.0,
     "lines": [
-        {"key": "slv", "label": "Model: SLV", "kind": "model", "cost": 0.6, "se": 0.03},
+        {"key": "slv", "label": "Model reserve: SLV", "kind": "model", "cost": 0.6, "se": 0.03},
         {"key": "vol", "label": "Volatility", "kind": "bump", "cost": 0.5, "se": 0.01},
         {"key": "interaction", "label": "Interaction", "kind": "interaction", "cost": -0.1, "se": 0.01},
     ],

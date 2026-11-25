@@ -280,7 +280,7 @@ def test_an_extreme_bump_warns_and_the_table_prints():
     q = lv_quote(sheet(), CostInputs({"skew": 0.5}), n_paths=4000)
     assert any("arbitrage" in w for w in q.warnings)
     q = lv_quote(sheet(), CostInputs({"vol": 0.005}), n_paths=4000)
-    assert "Volatility, parallel" in q.table() and "client price (sell)" in q.table()
+    assert "Overvol" in q.table() and "client price (sell)" in q.table()
 
 
 # --- provisions of model ---
@@ -369,4 +369,4 @@ def test_a_mix_and_bumps_add_up_in_the_summary():
     d = desk_of(policy_quote(sheet(), CostInputs({"vol": -0.005, "repo": -0.001}), n_paths=20_000))
     assert [x.key for x in d.lines] == ["slv", "vol", "repo", "interaction"]
     assert sum(x.cost for x in d.lines) == pytest.approx(d.final_price - d.base_price, abs=1e-10)
-    assert "Model: SLV" in d.table()
+    assert "Model reserve: SLV" in d.table()
