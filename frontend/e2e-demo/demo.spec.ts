@@ -56,6 +56,40 @@ for (const story of STORIES) {
   });
 }
 
+test("the trader's book filters and groups its trades, and stays responsive", async ({ page }) => {
+  await landing(page);
+  await page.getByRole("button", { name: "Look around freely" }).nth(1).click();
+  await page.getByRole("link", { name: "Book", exact: true }).click();
+  await expect(page.getByRole("button", { name: /^SPX\s*\d+ rows/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: "DEMO-01", exact: true })).toHaveCount(0); // called: not live
+  await page.getByText("All", { exact: true }).click();
+  await expect(page.getByRole("link", { name: "DEMO-01", exact: true })).toBeVisible();
+  await page.getByRole("combobox", { name: "Group by" }).click();
+  await page.getByRole("option", { name: "By status" }).click();
+  await expect(page.getByRole("button", { name: /^called\s*\d+ rows?/ })).toBeVisible();
+  await page.getByText("Standard", { exact: true }).click();
+  await expect(page.getByRole("radio", { name: "Standard" })).toBeChecked();
+  await accessible(page);
+});
+
+test("on a phone, the story's card leaves the page's last rows within reach", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await landing(page);
+  await page.getByRole("button", { name: "Follow the trader's story" }).click();
+  await expect(page.getByRole("complementary", { name: "The trader's story" })).toBeVisible();
+  await page.goto("trading/book");
+  const last = page.getByRole("link", { name: "DEMO-04", exact: true });
+  await expect(last).toBeAttached();
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  // at the foot of the page, the last trade is above the card, not under it
+  const onTop = await last.evaluate((el) => {
+    const b = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+    return hit !== null && (el === hit || el.contains(hit));
+  });
+  expect(onTop).toBe(true);
+});
+
 test("a request the recording does not hold says the demo is read-only", async ({ page }) => {
   await landing(page);
   await page.getByRole("button", { name: "Look around freely" }).first().click();

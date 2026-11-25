@@ -14,7 +14,7 @@ import {
   type SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import classes from "./Grid.module.css";
 
 export type GridColumn<T> = ColumnDef<T, unknown> & { meta?: { numeric?: boolean } };
@@ -39,7 +39,11 @@ export function Grid<T>({
 }) {
   const [sorting, setSorting] = useState<SortingState>(initialSort);
   const [expanded, setExpanded] = useState<ExpandedState>(true);
-  const grouping: GroupingState = groupBy ? [groupBy] : [];
+  // The table's state must keep its identity between renders: TanStack recomputes its row models when a piece of state
+  // is a new object, and each recomputation queues a reset of the page index, a new state object, hence a render. A
+  // grouping built afresh on each render made that a loop that never ended: the page kept rendering, its CPU busy and
+  // the router's transitions (a filter in the URL) never committed.
+  const grouping: GroupingState = useMemo(() => (groupBy ? [groupBy] : []), [groupBy]);
   const table = useReactTable({
     data,
     columns,
@@ -52,6 +56,7 @@ export function Grid<T>({
     getGroupedRowModel: getGroupedRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
     autoResetExpanded: false,
+    autoResetPageIndex: false, // the grid has no pages: nothing to reset when its rows change
   });
   const width = table.getVisibleLeafColumns().length;
   return (

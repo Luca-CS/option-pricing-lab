@@ -1,7 +1,7 @@
 import { Center, Loader, localStorageColorSchemeManager, MantineProvider } from "@mantine/core";
 import { ModalsProvider } from "@mantine/modals";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { lazy, type ReactNode, Suspense } from "react";
+import { lazy, type ReactNode, Suspense, useState } from "react";
 import { createBrowserRouter, Navigate, Outlet, RouterProvider, useLocation } from "react-router";
 import { useMe } from "../auth/session";
 import { DemoLanding } from "../demo/Demo";
@@ -178,7 +178,10 @@ export function Providers({ children, client }: { children: ReactNode; client: Q
 }
 
 export function App() {
-  const client = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false, retry: 1 } } });
+  // one cache for the page's life, whatever renders App again
+  const [client] = useState(
+    () => new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false, retry: 1 } } }),
+  );
   return (
     <Providers client={client}>
       <RouterProvider router={router} />
