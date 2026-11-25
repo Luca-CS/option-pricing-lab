@@ -1,7 +1,7 @@
 # Security policy
 
 optlab is a personal, non-commercial project. Its real instance runs on its owner's machine and is never exposed to
-the internet; the public face is a static demo on GitHub Pages. The threat model and the controls are in
+the internet; the public face is a static demo on GitHub Pages. How the desk is protected is in
 [docs/architecture/security.md](docs/architecture/security.md).
 
 ## Reporting a vulnerability

@@ -1,8 +1,8 @@
 # The desk's front: principles, spaces, bridges, design system
 
-The front (`frontend/`, ADR-0024) is one application on API v1, served by the API on the same origin. This note is
-the plan it follows. It replaces the design of the v0 page, whose rules carry over: the form is the schema, validation
-is where the eye is, jobs never freeze the page, and numbers are honest.
+The front (`frontend/`, [ADR-0024](architecture/adr/0024-front-end-stack.md)) is one application on API v1, served
+by the API on the same origin. Its rules: the form is the schema, validation is where the eye is, jobs never freeze
+the page, and numbers are honest.
 
 ## 1. Principles
 
@@ -110,7 +110,7 @@ No request leaves the browser.
     lab and the engine.
 - **The pricing lab** (`docs/lab.js`, at `lab/` on the site) computes in the browser: closed forms, CRR, the American
   PDE, Heston by Fourier, Monte Carlo and LSM.
-  - Running `optlab.core` itself under Pyodide was tried in F8 and measured. Prices are well within the budget: under
+  - Running `optlab.core` itself under Pyodide was tried and measured. Prices are well within the budget: under
     5 ms for the closed forms, 0.3 s for a Heston Monte Carlo of 20,000 paths. But the first load is not: 30.5 MB to
     download and 5.6 s to start even when cached, so about 10 s at 50 Mbps against a budget of 10 s.
   - It would also need NumPy 2.4 (the core asks for 2.5) and a CSP opened to `'wasm-unsafe-eval'`. So the lab stays

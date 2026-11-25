@@ -1,4 +1,4 @@
-// Booking a quote (the bridge quote → trade, HANDOFF_REFACTOR_2_UX.md §3): the trade takes the quote's sheet and its
+// Booking a quote (the bridge quote → trade, docs/ux.md §3): the trade takes the quote's sheet and its
 // solved coupon, and the tag `quote:<id>` that freezes the quote's desk lines as the trade's reserve.
 import { Button, Group, Modal, NumberInput, Stack, Text, TextInput } from "@mantine/core";
 import { notifications } from "@mantine/notifications";

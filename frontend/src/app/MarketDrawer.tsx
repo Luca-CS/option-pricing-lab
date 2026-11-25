@@ -1,4 +1,4 @@
-// The market drawer, open from anywhere (HANDOFF_REFACTOR_2_UX.md §3): the market in use, where each part of it
+// The market drawer, open from anywhere (docs/ux.md §2): the market in use, where each part of it
 // comes from, its key levels, and the stored snapshots a trader may switch the desk to.
 import { Anchor, Button, Drawer, Group, Stack, Table, Text } from "@mantine/core";
 import { modals } from "@mantine/modals";

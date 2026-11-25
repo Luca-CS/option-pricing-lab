@@ -1,4 +1,4 @@
-"""Probe a running desk from the outside, the way a hostile neighbour on the network would (security.md §7).
+"""Probe a running desk from the outside, the way a hostile neighbour on the network would (security.md).
 
     OPTLAB_PROBE_PASSWORD=... python deploy/probe.py --url http://127.0.0.1:8765 --admin <name> [--only host,csrf]
 

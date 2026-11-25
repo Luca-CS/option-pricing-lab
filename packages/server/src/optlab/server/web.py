@@ -256,7 +256,7 @@ class Guard:
         if not self.settings.lan and name not in LOOPBACK:
             return 403, "this server answers on 127.0.0.1 or localhost only"
         if self.settings.lan and name not in LOOPBACK and name not in self.settings.lan_hosts:
-            return 403, "this server answers on its LAN names only"  # a rebound name (security.md, finding 17)
+            return 403, "this server answers on its LAN names only"  # a rebound name (security.md §3)
         chunked = "transfer-encoding" in headers
         if chunked and "content-length" in headers:
             return 400, "a request has a Content-Length or a Transfer-Encoding, not both"

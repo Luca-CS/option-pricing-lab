@@ -7,7 +7,7 @@ from _api import api, preset_sheet
 
 from optlab.server import payloads
 
-DESCRIBED = {  # the domain routes of session 2's screens, so far; each names its model in the document
+DESCRIBED = {  # the domain routes the screens read; each names its model in the document
     "/api/v1/market/context": "MarketContext",
     "/api/v1/market/snapshots": "SnapshotPage",
     "/api/v1/market/lake/coverage": "LakeCoverage",

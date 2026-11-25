@@ -307,7 +307,7 @@ def test_demo_data_never_takes_the_data_folder_of_the_environment(tmp_path, monk
     from optlab.server import cli, demo
 
     real = tmp_path / "real-data"
-    monkeypatch.setenv("OPTLAB_DATA", str(real))  # Luca's data, named by the environment
+    monkeypatch.setenv("OPTLAB_DATA", str(real))  # the real data, named by the environment
     monkeypatch.setattr(demo, "default_folder", lambda: tmp_path / "demo")
     monkeypatch.setattr(demo, "info", lambda folder: {"folder": str(folder)})  # built already
     monkeypatch.setitem(cli.GIVEN, "data", None)
@@ -402,7 +402,7 @@ def test_copies_made_in_the_same_millisecond_get_their_own_names(tmp_path, monke
 
 
 def test_a_password_read_from_a_windows_file_keeps_no_carriage_return(data, monkeypatch):
-    """Found in A9: `users create --stdin` in a container, fed a file written on Windows, kept its CR in the password."""
+    """`users create --stdin` in a container, fed a file written on Windows, kept its CR in the password."""
     from optlab.server.persistence import Database
     from optlab.server.security import Accounts
     from optlab.server.settings import Settings

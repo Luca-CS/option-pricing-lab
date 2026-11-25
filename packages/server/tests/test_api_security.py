@@ -73,7 +73,7 @@ def test_the_lan_profile_answers_on_its_names_only_and_keeps_the_origin_rule(tmp
         h = {"host": "192.168.1.20:8765"}
         assert c.get("/api/v1/trading/trades", headers=h).status_code == 200
         assert c.get("/api/v1/trading/trades", headers={"host": "OPTLAB.home.arpa"}).status_code == 200
-        for host in ("evil.example", "optlab.home.arpa.evil.example", "192.168.1.21:8765"):  # finding 17
+        for host in ("evil.example", "optlab.home.arpa.evil.example", "192.168.1.21:8765"):  # a rebound name
             r = c.get("/api/v1/trading/trades", headers={"host": host})
             assert r.status_code == 403 and "LAN names" in r.json()["detail"], host
         assert c.get("/api/v1/trading/trades", headers={"host": "127.0.0.1:8765"}).status_code == 200
@@ -213,7 +213,7 @@ def test_one_address_is_throttled(tmp_path):
 
 
 def test_a_burst_of_guesses_gets_no_more_than_the_same_guesses_in_a_row(tmp_path):
-    """Found by the probe in A9: the count of failures was read, then written after the hash, so guesses sent together
+    """Found by probing a running desk: the count of failures was read, then written after the hash, so guesses sent together
     were all evaluated and counted as one; the account was not even locked afterwards."""
     import threading
 
@@ -274,7 +274,7 @@ def test_the_throttle_counts_every_failed_attempt_and_bounds_the_audit_log(tmp_p
 
 
 def test_no_nan_nor_infinity_reaches_the_desk(a, trader):
-    """Found in A9: Python's JSON reads NaN and Infinity, a NaN passes every bound, and fixings took any level."""
+    """Python's JSON reads NaN and Infinity, a NaN passes every bound, and fixings took any level."""
     before = fixings(a)
     json_ = {"content-type": "application/json"}
     for raw in (
@@ -297,7 +297,7 @@ def test_no_nan_nor_infinity_reaches_the_desk(a, trader):
 
 
 def test_the_guard_reads_a_request_one_way(a, trader):
-    """Found by the probe in A9: a chunked body without a type passed the content-type rule, a request could carry
+    """Found by probing a running desk: a chunked body without a type passed the content-type rule, a request could carry
     both a length and a chunked encoding, and a Host with user info was read as its host part."""
     before = fixings(a)
     r = trader.post("/api/v1/trading/fixings", content=iter([b'{"underlying": "SPX", "text": "2025-01-08 1"}']))

@@ -825,7 +825,7 @@ def demo_seed_showcase(
 
 @demo_app.command("widget-data")
 def demo_widget_data() -> None:
-    """docs/pricer-data.js from the SPX calibration (until session 2 replaces docs/lab.js)."""
+    """docs/pricer-data.js from the SPX calibration (the pricing lab's data)."""
     from optlab.server.tools import widget_data
 
     widget_data.main()

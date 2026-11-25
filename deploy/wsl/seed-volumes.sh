@@ -6,7 +6,7 @@
 # Nothing is written outside the volumes; the Windows folders are mounted read-only. Run as root in WSL, after
 # `docker compose -f deploy/compose.yaml build`:
 #
-#     sh deploy/wsl/seed-volumes.sh /mnt/c/Users/Luca/Code/projets/optlab-data /mnt/c/<the repository> [DATABASE]
+#     sh deploy/wsl/seed-volumes.sh /mnt/c/<data folder> /mnt/c/<the repository> [DATABASE]
 set -eu
 DATA=${1:?the Windows data folder, as /mnt/c/...}
 REPO=${2:?the repository, as /mnt/c/...}

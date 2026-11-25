@@ -55,7 +55,7 @@ const HOMES: Record<string, ReactNode> = {
   admin: <AdminHome />,
 };
 
-// each space's screens load with the space (HANDOFF_REFACTOR_2_UX.md §7: the first page stays small)
+// each space's screens load with the space (docs/ux.md §4, Performance: the first page stays small)
 const structuring = () => import("../spaces/structuring");
 const trading = () => import("../spaces/trading");
 const risk = () => import("../spaces/risk");

@@ -1,4 +1,4 @@
-"""The versioned OpenAPI document of API v1 (handoff §4.2, ADR-0005): `api/openapi.json` at the root of the repo.
+"""The versioned OpenAPI document of API v1 (ADR-0005): `api/openapi.json` at the root of the repo.
 
     optlab api export [--out api/openapi.json]   # write it
     optlab api check  [--out api/openapi.json]   # exit 1 when the file is not the code's

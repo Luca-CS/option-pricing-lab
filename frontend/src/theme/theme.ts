@@ -1,4 +1,4 @@
-// The desk's Mantine theme: graphite and amber (HANDOFF_REFACTOR_2_UX.md §5, the F0 mockups). Our own tokens, used by
+// The desk's Mantine theme: graphite and amber (docs/ux.md §4). Our own tokens, used by
 // the app's CSS, are in tokens.css; Mantine's variables point at the same colours. No React here: the build reads this
 // file to write Mantine's CSS variables statically (tooling/mantine-vars.ts).
 import {

@@ -6,7 +6,7 @@
 namespace optlab {
 
 enum class CpuNormals {
-    Std,        // std::normal_distribution<double> (the reference of the handoff)
+    Std,        // std::normal_distribution<double> (the study's reference)
     BoxMuller,  // Box-Muller on the same std::mt19937_64 stream, two normals per pair of uniforms
 };
 

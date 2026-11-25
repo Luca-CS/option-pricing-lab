@@ -34,16 +34,16 @@ def test_defaults_are_starting_values_saved_edited_and_signed(tmp_path):
     assert all(s.label == sc.STARTING for s in first["scenarios"])
     with pytest.raises(ValueError, match="signed"):
         sc.save(store, first["scenarios"], "")
-    assert sc.save(store, first["scenarios"], "Luca", "starting set") == 1
+    assert sc.save(store, first["scenarios"], "risk-a", "starting set") == 1
     edited = [s.to_dict() for s in first["scenarios"]]
     edited[1]["shock"]["spot"] = {"*": -0.12}
     edited[1]["label"] = "desk"
-    assert sc.save(store, edited, "Luca", "grind down to -12 %") == 2
+    assert sc.save(store, edited, "risk-a", "grind down to -12 %") == 2
     now = sc.load(store)
-    assert now["version"] == 2 and now["signed_by"] == "Luca" and now["scenarios"][1].shock.spot == {"*": -0.12}
+    assert now["version"] == 2 and now["signed_by"] == "risk-a" and now["scenarios"][1].shock.spot == {"*": -0.12}
     assert [h["version"] for h in sc.history(store)] == [1, 2]
     with pytest.raises(ValueError, match="unique"):
-        sc.save(store, edited + [edited[0]], "Luca")
+        sc.save(store, edited + [edited[0]], "risk-a")
 
 
 def test_scenarios_replayed_on_a_vanilla_match_the_closed_forms():

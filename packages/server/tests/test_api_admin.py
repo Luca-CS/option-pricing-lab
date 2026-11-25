@@ -1,5 +1,5 @@
 """API v1, admin router: system, network checks, users (each change ends the user's sessions), the audit log; and the
-accounts command line (`optlab users`), which Luca uses to create his own admin account."""
+accounts command line (`optlab users`), which creates the first admin account."""
 
 import io
 import secrets

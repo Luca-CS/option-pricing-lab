@@ -7,7 +7,7 @@
 
 namespace optlab {
 
-// Kernel variants of the optimisation study (handoff, M6). Default: the production kernel. Each switch changes
+// Kernel variants of the optimisation study (README, "Method"). Default: the production kernel. Each switch changes
 // one thing; the non-default variants are compiled for the Black-Scholes European and the two barriers only.
 struct GpuVariant {
     bool fast_intrinsics = false;  // __expf / __logf instead of expf / logf

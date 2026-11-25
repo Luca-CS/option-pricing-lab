@@ -27,7 +27,7 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
 - Desk (API v1; the front is `frontend/`, its principles, spaces and bridges in `docs/ux.md`):
   `uv run optlab users create <name> --roles admin` (password asked twice), then
   `uv run optlab serve [--port 8765] [--workers 6] [--engine auto] [--store FILE] [--market ID] [--open]` serves
-  `http://127.0.0.1:8765/api/v1` (127.0.0.1 only; another host needs `OPTLAB_LAN=true`, with Luca's agreement);
+  `http://127.0.0.1:8765/api/v1` (127.0.0.1 only; another host needs `OPTLAB_LAN=true`, only on the machine owner's explicit decision, ADR-0002);
   `OPTLAB_DOCS=true` adds the Swagger page `/api/v1/docs`. Conventions in `docs/architecture/api.md`; after changing a
   route, `uv run optlab api export` (writes `api/openapi.json`; `test_openapi.py` fails on drift).
   Jobs run in the api's process unless `OPTLAB_WORKER=external`, then `uv run optlab worker
@@ -83,10 +83,12 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
   (C901, at most 15) (`pyproject.toml`, ADR-0014). No build step for `docs/` (static, dependency-free JS).
 - Types: pyright in standard mode everywhere (tests included) and strict on the server's security and contract core (the
   15 modules listed in `pyproject.toml`); `pandas-stubs` in the dev group, `py.typed` in every package. The rest of
-  `optlab.server` stays in standard mode (Luca's decision of 15 November 2026: strict there means TypedDicts for every
-  JSON payload).
+  `optlab.server` stays in standard mode (strict there would mean TypedDicts for every JSON payload; ADR-0014).
 
 ## Architecture
+
+The documentation, from the overview down, starts at `docs/README.md`; the architecture at `docs/architecture/README.md`, each
+package's internals in `docs/architecture/library.md`, the decisions in `docs/architecture/adr/`.
 
 - **A uv workspace of six distributions** sharing the PEP 420 namespace `optlab` (no `optlab/__init__.py`), each in
   `packages/<name>/src/optlab/<name>` with its own `pyproject.toml` (hatchling) and tests: `optlab.core`, `optlab.native`,
@@ -147,10 +149,10 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
   `dates.py` (Mon-Fri calendar). Builder: `schema.py` (sections, fields with `visible_if`, masks `autocall` and
   `bullet`, `TermSheet`, `describe()` for a front end), `compiler.py` (term sheet → script), `presets.py`.
   Analysis: `profile.py` classifies the AST (european, path_dependent, callable), `policy.py` maps the class to a base
-  (european → `replication.py` on the SVI smile; otherwise local vol Monte Carlo) and to its models of provision (SLV, and local correlation on a basket),
-  `solve.py` (coupon affine on common random numbers), `quote.py`, `greeks.py`, `report.py`. `costs.py` is the desk price (results in `reports/pricing.md`): base + provisions
-  floored at zero + bumps signed by the trader + digitals as call spreads (`digitals.py`), every line on the base's random numbers, the coupon solved on the client price. `defaults.py`
-  holds the table by group of underlyings and size (versioned in the store, edited at `#/costs`), `reserves.py` what a trade freezes at issue, `localcorr.py` the correlation skew. Independent
+  (european → `replication.py` on the SVI smile; otherwise local vol Monte Carlo) and to its model reserves (SLV, and local correlation on a basket),
+  `solve.py` (coupon affine on common random numbers), `quote.py`, `greeks.py`, `report.py`. `costs.py` is the desk price (results in `reports/pricing.md`): base + model reserves
+  floored at zero + overs signed by the trader (overvol, overskew, overcorrel, overdiv, overrepo, delta bid-ask) + digital overhedges as call spreads (`digitals.py`), every line on the base's random numbers, the coupon solved on the client price. `defaults.py`
+  holds the table by group of underlyings and size (versioned in the store, edited in Trading › Pricing policy), `reserves.py` what a trade freezes at issue, `localcorr.py` the correlation skew. Independent
   references for the tests are in `tests/_structured_refs.py` (closed forms, autocall backward quadrature).
   On top: `portfolio.py` (`Book` of `Position`s on one shared simulation, book Greeks), `cashflows.FundedSwap`
   (floating funding leg until redemption), `multiasset.py` (`Basket` of correlated names, `BasketContext`, SLV with a leverage per name), and past `fixings` for running products.

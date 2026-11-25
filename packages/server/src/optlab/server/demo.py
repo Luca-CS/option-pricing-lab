@@ -1,4 +1,4 @@
-"""The demo data (handoff §7.7): a whole data folder made of made-up numbers, to develop the front and run end-to-end
+"""The demo data (operations.md, "Demo data"): a whole data folder made of made-up numbers, to develop the front and run end-to-end
 tests without any real data. `optlab demo data [--to DIR]` builds it, `optlab serve --demo-data` builds it when
 missing and serves it.
 

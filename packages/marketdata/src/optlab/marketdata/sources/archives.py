@@ -1,7 +1,7 @@
 """Importers of option archives dropped in the local inbox: the historicaldata.net sample and OptionsDX files.
 
 The historicaldata.net sample may be evaluated without a licence, without redistribution: nothing from it goes into the
-repository, into docs/ or into a report except statistics. OptionsDX and Kaggle files need Luca's accounts. The OptionsDX
+repository, into docs/ or into a report except statistics. OptionsDX and Kaggle files need the owner's accounts. The OptionsDX
 parser follows its published column names and has not been run on a real file yet.
 """
 

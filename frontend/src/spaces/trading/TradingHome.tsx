@@ -1,4 +1,4 @@
-// The trader's home (HANDOFF_REFACTOR_2_UX.md §3): the book at a glance, what is due, the last risk run and what
+// The trader's home (docs/ux.md §2): the book at a glance, what is due, the last risk run and what
 // deserves a look. Figures that need a computation (the book's value, its Greeks) come from the stored runs or from a
 // job the trader starts; the home never computes on its own.
 import { Anchor, Badge, Button } from "@mantine/core";

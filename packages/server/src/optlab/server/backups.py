@@ -1,4 +1,4 @@
-"""Copies of the database and of the lake, and their restoration (handoff §4.12): `optlab backup`, `optlab restore`,
+"""Copies of the database and of the lake, and their restoration (operations.md, "Backups"): `optlab backup`, `optlab restore`,
 and the worker's `backup` (nightly) and `lake_backup` (weekly) schedules.
 
 - **The database**: `VACUUM INTO` gives a consistent copy while the desk runs (`Database.backup`). A restoration

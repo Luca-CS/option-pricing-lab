@@ -1,6 +1,6 @@
 // The sheet's form, drawn from what the server says (POST /structuring/termsheet/form): its sections, the fields it
 // shows for these values (`visible_if` is the server's), their units, read-only fields, and each field's error under
-// it in the unit shown (HANDOFF_REFACTOR_2_UX.md §5). The form holds no rule of its own.
+// it in the unit shown (docs/ux.md §1). The form holds no rule of its own.
 import { Select, Switch, TextInput } from "@mantine/core";
 import { useEffect, useState } from "react";
 import type { Schemas } from "../../api/client";

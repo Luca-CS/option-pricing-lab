@@ -1,4 +1,4 @@
-// The demo's three guided stories, one per profile (HANDOFF_REFACTOR_2_UX.md §6, Luca's choice of 24 November 2026:
+// The demo's three guided stories, one per profile (docs/ux.md §5:
 // trader, quant, structurer; Risk and Admin stay spaces of the real app). Each step opens a screen and says what to
 // look at; `{name}` in a path is a reference the recorder wrote (an id it made: a quote, a run, a trade).
 import type { Profile } from "./transport";

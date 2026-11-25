@@ -247,7 +247,7 @@ def mc_products() -> dict:
 
 
 def _simulated_market(noise_bp=15, seed=1):
-    """Frozen copy of scripts/run_calibration.py:simulated_market (A0): Heston quotes plus noise on a flat market."""
+    """Frozen copy of scripts/run_calibration.py:simulated_market : Heston quotes plus noise on a flat market."""
     from optlab.core import HestonParams, Market, heston_iv
 
     true = HestonParams(v0=0.025, kappa=1.8, theta=0.04, xi=0.75, rho=-0.75)
@@ -470,7 +470,7 @@ def _node() -> str:
 
 
 def labjs() -> dict:
-    """The JavaScript pricers of the Pages demo (docs/lab.js), frozen until session 2 replaces them."""
+    """The JavaScript pricers of the Pages demo (docs/lab.js, the pricing lab)."""
     js = (ROOT / "docs" / "lab.js").read_text(encoding="utf-8")
     cases = [
         (100, 100, 1.0, 0.04, 0.01, 0.20, "true"),
@@ -699,7 +699,7 @@ def showcase_var() -> dict:
     return numbers_only(plain(res))
 
 
-# ADR-0017, agreed with Luca on 7 November 2026: the comparison across machines
+# ADR-0017: the comparison across machines
 ACROSS_RTOL = 1e-12  # groups with fixed inputs
 SE_RATIO = 0.1  # recalibrating groups: a Monte Carlo number moves by at most this many of its standard errors
 FIT_RTOL = 2e-2  # recalibrating groups: fitted parameters and the other numbers, relative

@@ -1,6 +1,6 @@
 """Write docs/pricer-data.js from <results>/spx_calibration.json: the SPX results the demo page shows
 (model-risk table, mixing-fraction sweep, fit errors). No market quote is included (`optlab demo widget-data`; the
-page and this file stay until session 2 replaces docs/lab.js)."""
+page is the pricing lab, ADR-0011)."""
 
 from __future__ import annotations
 

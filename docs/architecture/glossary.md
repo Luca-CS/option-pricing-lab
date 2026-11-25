@@ -1,7 +1,6 @@
 # Glossary
 
-The words of the desk, as the code, the API and the UI use them. Draft of A0 (7 November 2026), completed in A9.
-Session 2 keeps to this vocabulary in the UI.
+The words of the desk, as the code, the API and the screens use them.
 
 ## Products and quotes
 
@@ -16,13 +15,13 @@ Session 2 keeps to this vocabulary in the UI.
 | **Profile** | The class of a script read from its AST: `european`, `path_dependent`, `callable`. |
 | **Policy** | The rule that maps a profile to a pricing base and its controls (`structured/policy.py`). |
 | **Base** | The price the policy chooses: replication on the SVI smile for a European product, local vol Monte Carlo otherwise. |
-| **Provision** | A model reserve added to the base when the gap to a richer model (SLV; local correlation for a worst-of) goes against the desk; floored at zero. |
-| **Bump** | A signed move of an input (vol, skew, correlation, dividends, repo, spot) chosen by the trader, priced on the base's random numbers. |
-| **Digital** | A discontinuous payoff priced as a call spread on the side against the desk; the width comes from the cost table. |
-| **Desk price** | Base + provisions + bumps + digitals (`structured/costs.py`). |
+| **Model reserve** (provision) | Added to the base when the gap to a richer model (SLV; local correlation for a worst-of) goes against the desk; floored at zero. |
+| **Over** (bump) | A margin the desk takes on a market input, signed against the client and priced on the base's random numbers: overvol, overskew, overcorrel, overdiv, overrepo, and the delta bid-ask. |
+| **Digital overhedge** | A discontinuous payoff priced as a call spread on the side against the desk; the width comes from the cost table. |
+| **Desk price** | Base + model reserves + overs + digital overhedges (`structured/costs.py`). |
 | **Client price** | The price shown to the client: the desk price plus the margin; in coupon mode the coupon is solved on it. |
 | **Solve** | `wrapper.solve`: `coupon` (find the coupon that gives the target price) or `upfront` (price at a given coupon). |
-| **Cost defaults** | The table of bumps, SLV mix and digital limits by group of underlyings and notional tier, versioned. |
+| **Cost defaults** | The table of overs, SLV mix and digital limits by group of underlyings and notional tier, versioned (Trading › Pricing policy). |
 | **Group (of underlyings)** | The row of the cost table a name takes (`index_us`, `index_eu`, `equity_us`...); a worst-of takes its most prudent group. |
 | **Reserve** | The lines of a quote frozen when it is booked (`structured/reserves.py`); released over the trade's life. |
 | **Quote** | One pricing of a term sheet on a market: its numbers, method, policy reason, snapshot and SE; `quote_id`. |
@@ -96,7 +95,7 @@ Session 2 keeps to this vocabulary in the UI.
 | **Schedule** | A planned job (EOD, lake update, backup) editable by the admin role and audited. |
 | **Role, permission** | `admin`, `trader`, `structurer`, `risk`, `quant`, `viewer`; each route declares the permission it needs. |
 | **Audit log** | The append-only record of every write: who, when, what. |
-| **Golden number** | An output frozen in A0 and compared bit for bit after every step (`tests/golden/`). |
+| **Golden number** | An output recorded once and compared bit for bit after every change (`tests/golden/`, [ADR-0017](adr/0017-tests-and-golden-numbers.md)). |
 | **Mini-lake** | The synthetic lake the tests generate deterministically, for CI and the demo data. |
 | **Showcase** | The demo store: a dozen trades dealt on past dates on real history (`optlab demo seed-showcase`), local only. |
 | **Vol lab** | Fits of the models against real option quotes of a day, stored and replayable. |

@@ -1,27 +1,34 @@
 # ADR-0019: Images on GHCR, a manual deploy with rollback
 
-- Status: Accepted (A0 checkpoint, 7 November 2026)
-- Handoff §1: CD; §4.9
+- Status: Accepted, 7 November 2026
 
 ## Context
 
-The machine must never accept an inbound connection (ADR-0002), so no webhook and no push-based deploy.
+The machine never accepts an inbound connection ([ADR-0002](0002-never-exposed.md)), so there is no webhook and no
+push-based deploy.
 
 ## Decision
 
-- Semantic versions: `v1.0.0` at the end of session 1 (A9), `v2.0.0` at the end of session 2.
-- `release.yml` pushes the `api` and `worker` images to GHCR at each `v*` tag, with SBOM and provenance.
-- **`optlab deploy vX.Y.Z`, run by Luca on the machine**, in order: back up the databases; pull the images by digest;
-  `alembic upgrade`; restart; check `GET /api/v1/ready`; on failure, restore the previous version (images and the
-  pre-deploy backup). Tested on a round trip `v1.0.0-rc` -> `v1.0.0` -> rollback in A9.
-- The deploy verifies the provenance attestation of the pulled images (`gh attestation verify`) before starting them.
+- Semantic versions; `release.yml` pushes the `api` and `worker` images to GHCR at each `vX.Y.Z` tag, with an SBOM and
+  a provenance attestation, and creates a GitHub release that lists their digests. The tag must equal the packages'
+  version.
+- **`deploy/wsl/deploy.sh vX.Y.Z`, run by the admin on the machine**, from the repository checked out at that tag, in
+  order: pull the images by the digests of the release; copy the database; stop api and worker; migrate with the new
+  worker image; start both; check `GET /api/v1/ready`. If any step after the copy fails, the previous images come back
+  with the copy, and the script exits with an error.
+- `deploy.sh --rollback` goes back to the version before, with the database as it was before the last deploy;
+  `--status` says what runs, what ran before, and the copy a rollback would restore.
+- The provenance of an image can be checked with `gh attestation verify oci://ghcr.io/...@<digest>`, as the release
+  notes say.
 
 ## Consequences
 
-- Every deploy is a deliberate act with a backup before it; a failed migration is undone by the rollback.
-- Public images: they contain code and dependencies only, never data (checked by Trivy and an image content test).
+- Every deploy is a deliberate act with a copy of the database before it; a failed migration is undone by the
+  rollback.
+- The images are public: they hold code and dependencies only, never data (the `.dockerignore` is an allow-list,
+  Trivy scans them).
 
 ## Alternatives considered
 
 - Watchtower or a pull loop: automatic updates of a machine that holds personal data. Rejected.
-- Building images on the machine: no provenance, no reproducibility across machines.
+- Building the images on the machine: no provenance, no reproducibility across machines.

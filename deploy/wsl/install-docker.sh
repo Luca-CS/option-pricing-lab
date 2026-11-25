@@ -1,5 +1,5 @@
 #!/bin/sh
-# Docker Engine and the NVIDIA Container Toolkit in WSL Ubuntu (handoff §4.7, ADR-0009), from their vendors' signed
+# Docker Engine and the NVIDIA Container Toolkit in WSL Ubuntu (ADR-0009), from their vendors' signed
 # apt repositories; no Docker Desktop, no account. Run as root in the distribution:
 #
 #     wsl -d Ubuntu -u root -- sh deploy/wsl/install-docker.sh      (from the repository, through /mnt/c)

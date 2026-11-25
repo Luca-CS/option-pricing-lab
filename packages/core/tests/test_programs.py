@@ -1,5 +1,5 @@
 """An external program is found in the absolute folders of the PATH only, never in the current folder (security.md,
-finding 44): a `curl` planted where the process runs is not the one that runs."""
+§3): a `curl` planted where the process runs is not the one that runs."""
 
 import os
 import sys

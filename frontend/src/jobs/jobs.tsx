@@ -1,4 +1,4 @@
-// Jobs as the person sees them (HANDOFF_REFACTOR_2_UX.md §5): a submission returns at once with its job id, the job
+// Jobs as the person sees them (docs/ux.md §1): a submission returns at once with its job id, the job
 // is followed over Server-Sent Events (`GET /jobs/{id}/events`, api.md §7), it shows in the tray while it runs, and a
 // notification says when it ends, with a link to its result. Never a frozen page. The jobs a person had running
 // before a reload are picked up again from `GET /jobs`.

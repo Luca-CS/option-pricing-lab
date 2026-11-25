@@ -1,4 +1,4 @@
-"""The versioned OpenAPI document (`api/openapi.json`, handoff §4.2) is the code's, and it says what the API does:
+"""The versioned OpenAPI document (`api/openapi.json`, ADR-0005) is the code's, and it says what the API does:
 problem+json errors, the roles of every operation, unique operation ids. Run
 `uv run optlab api export` after changing a route."""
 

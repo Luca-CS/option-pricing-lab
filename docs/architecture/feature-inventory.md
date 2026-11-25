@@ -1,11 +1,11 @@
-# Feature inventory: every function of v0, its home in v1
+# Feature inventory: every function and where it lives
 
-The parity list of the refactor. Session 1 (architecture) keeps every function behind API v1 or the `optlab` CLI;
-session 2 (front) checks every screen line against its new screen. Measured on `main` + the risk engine (PR #1) on
-7 November 2026.
+The map from the first desk ("v0": a standard-library HTTP server, a static page and a folder of scripts) to the
+current one: every route, screen, script, option and output, and where it lives now. Two tests keep it true:
+`test_api_inventory.py` checks §1 against the API, and `test_cli.py` checks §3 against the command tree.
 
-Status: **kept** (same function, new place), **merged** (folded into another line, named), **dropped** (only with
-Luca's agreement, given at the A0 checkpoint on 7 November 2026).
+Status: **kept** (same function, new place), **merged** (folded into another line, named), **dropped** (on purpose,
+with the reason in the row).
 
 Routes are written without the `/api/v1` prefix. `202` marks a route that answers with a job (`POST` returns
 `{job_id}`, progress on `GET /jobs/{id}` and `GET /jobs/{id}/events`). Roles are the minimum to call the route
@@ -81,7 +81,7 @@ Routes are written without the `/api/v1` prefix. `202` marks a route that answer
 | `PUT /api/risk/scenarios` | edit and sign scenarios | `PUT /risk/scenarios` (`signed_by` = the authenticated user, audited) | risk | risk | kept |
 | `POST /api/risk/scenarios/run` | run the scenarios on the book | `POST /risk/scenarios/runs` 202 | risk | trader, risk | kept |
 | `POST /api/risk/var` | historical VaR (1 day, 10 days, stressed), contributions | `POST /risk/var` 202 | risk | risk | kept |
-| — | backtest of a VaR run's 1-day VaR on the stored explained P&L, Kupiec's test (CLI and report only in v0) | `GET /risk/backtest?var_run=&from=&to=` | risk | viewer | new route for an existing function (session 2, Risk > Backtest) |
+| — | backtest of a VaR run's 1-day VaR on the stored explained P&L, Kupiec's test (CLI and report only in v0) | `GET /risk/backtest?var_run=&from=&to=` | risk | viewer | new route for an existing function (Risk › Backtest) |
 | `GET /api/pnl?from=&to=` | cumulated explained P&L from EOD runs | `GET /risk/pnl?from=&to=` | risk | viewer | kept |
 | `POST /api/pnl/eod` | EOD runs for a period (idempotent backfill) | `POST /risk/eod-runs` 202 (idempotency key = the run key) | risk | risk | kept |
 
@@ -97,7 +97,7 @@ Routes are written without the `/api/v1` prefix. `202` marks a route that answer
 | `GET /api/replay/runs` | replay runs (desk and versioned) | `GET /quant/replay/runs` | marketdata | viewer | kept |
 | `POST /api/replay/run` | replay a preset over its life on real closes | `POST /quant/replay/runs` 202 | marketdata | quant | kept |
 | `GET /api/replay/runs/{id}` | a replay run | `GET /quant/replay/runs/{run_id}` (id checked against the registry, never a path) | marketdata | viewer | kept |
-| — | engine benchmarks and precisions (CLI only in v0) | `GET /quant/engine` (engines available, last benchmark) | native | viewer | new route for an existing function (session 2, Quant > Engine) |
+| — | engine benchmarks and precisions (CLI only in v0) | `GET /quant/engine` (engines available, last benchmark) | native | viewer | new route for an existing function (Quant › Engine) |
 
 ### Jobs
 
@@ -123,17 +123,16 @@ Reports carry inline CSS and SVG and no script: they are served with their own C
 
 | v0 | Does | v1 | Status |
 |---|---|---|---|
-| shared token (`--token`, `?token=`, cookie `optlab_token`) | access beyond localhost | local accounts, sessions, roles (`POST /auth/login`, `POST /auth/logout`, `GET /auth/me`) | **dropped** (decided 07/11, §1 of the handoff) |
-| `--tunnel` (localhost.run over SSH, `tunnel.py`) | a public link to the desk | none: the real instance is never exposed; the public showcase is the static demo on GitHub Pages | **dropped** (decided 07/11) |
+| shared token (`--token`, `?token=`, cookie `optlab_token`) | access beyond localhost | local accounts, sessions, roles (`POST /auth/login`, `POST /auth/logout`, `GET /auth/me`) | **dropped** ([ADR-0020](adr/0020-accounts-roles-audit.md)) |
+| `--tunnel` (localhost.run over SSH, `tunnel.py`) | a public link to the desk | none: the real instance is never exposed; the public showcase is the static demo on GitHub Pages | **dropped** ([ADR-0002](adr/0002-never-exposed.md)) |
 | `desk.shared` (403 on raw quotes and levels beyond this machine) | personal-use data never leaves the PC | kept as a rule of the market routes when the LAN profile is on | kept |
 | `netcheck.py` (Windows firewall, network profile; read-only) | says why the LAN cannot connect | `GET /admin/network` (fixed arguments only) | kept |
 
 ## 2. Screens of the desk (14, `optlab/app/static/js/views/`)
 
-The old front was kept in `legacy/desk-static/` (not served) as the reference until session 2 reached it, then removed
-in F8 (it stays in the history). Spaces are those of `HANDOFF_REFACTOR_2_UX.md` §3, confirmed at its F0.
+Each screen of the first desk, and where its functions live in the current front (its spaces: [ux.md](../ux.md) §2).
 
-| Screen (`#/...`) | What it holds | v1 routes | Session 2 space | Status |
+| Screen (`#/...`) | What it holds | v1 routes | Space | Status |
 |---|---|---|---|---|
 | Overview (`overview`) | market card (snapshot, valuation, spot model scale, ATM vols, 1y zero rate, calibrated up to), book card (value, delta, vega, trades by status), next 60 days, recent quotes, desk snapshot link | `market/context`, `trading/trades`, `trading/events/upcoming`, `structuring/quotes` | home pages by role | kept |
 | Pricer (`pricer`, `pricer/quote/{id}`) | preset and mask cards, form from the schema by section (`visible_if`, computed fields, percent input), advanced options (control model, fast models, forward control variates, delta convention), quote job with progress and cancel, results: coupon or price ± SE, method and policy reason, control gap, desk price lines (base, provisions, bumps, digitals date by date), SLV mix band, flows by date, termination probabilities, expected life, Greeks, markets used, generated script, copy sheet, book it, export report | `structuring/*`, `jobs/*`, `trading/trades` | Structuring > Builder | kept |
@@ -154,8 +153,7 @@ Shell functions of the old front, for parity: status bar (connection, snapshot, 
 (`g` + letter, `?`, `t` for the theme), light and dark themes, sortable `table.data`, form state and last results kept in
 `localStorage`, delete with undo, confirmation dialogs.
 
-**Checked by session 2 (F9, 25 November 2026).** Every line above was read against its new screen. Six were short and
-were completed:
+Every line above was read against the current front. Six were completed at that check:
 
 - the pricer's advanced options: the delta convention, the fast models, the forward control variates and the SLV vega
   (Structuring > Builder, Pricing options);
@@ -172,20 +170,19 @@ link shows the same run to anyone.
 
 ## 3. Scripts (19 in `scripts/`, 1 in `cuda/bench/`) -> `optlab` CLI
 
-Every option is kept unless the row says otherwise. **Done in A7**: every script below is a command of `optlab`
-(`optlab.server.cli`, its body in `optlab.server.tools`), `scripts/` is gone, and `test_cli.py` checks this table
-against the command tree. One change for all: a list option (`--only`) is comma-separated or repeated
-(`--only curves,fx`), where v0 took space-separated values.
+Every option is kept unless the row says otherwise. Every script below is a command of `optlab` (`optlab.server.cli`,
+its body in `optlab.server.tools`), and `test_cli.py` checks this table against the command tree. One change for all:
+a list option (`--only`) is comma-separated or repeated (`--only curves,fx`), where v0 took space-separated values.
 
 | Script | Does | Subcommand | Options | Status |
 |---|---|---|---|---|
 | `run_calibration.py` | SSVI -> SVI -> Heston -> SLV on the simulated market or the latest SPX snapshot, writes `results/<source>_calibration.json` and figures | `optlab calib run` | `--source simulated\|spx`, `--mix`, `--particles`, `--paths`, `--skip-sweep`, `--replot`; the output goes to the settings' `results` (`results/` of a checkout, `optlab-data/archive/` for an installed wheel; the versioned JSON stays, in compact JSON: ADR-0023) and the charts to `<reports>/figures` | kept |
 | `make_report.py` | `reports/calibration.md` from the calibrations | `optlab calib report` | none | kept |
 | `plots.py` | report charts (matplotlib, site palette) | library module of `calib report` (extra `[reports]`) | — | merged |
-| `build_widget_data.py` | `docs/pricer-data.js` from the SPX calibration | `optlab demo widget-data` | none | kept until session 2 replaces `docs/lab.js` |
+| `build_widget_data.py` | `docs/pricer-data.js` from the SPX calibration | `optlab demo widget-data` | none | kept (the pricing lab's data) |
 | `download_spx.py` | SPX chain snapshot to `data/raw/` | `optlab calib download-spx` | none | kept |
-| `fix_asian_exotic.py` | one-off recomputation of the Asian cell in `results/*.json` | — | `--source` | **dropped** (agreed at A0): a migration already applied to the versioned results |
-| `rewrite_leverage.py` | one-off rewrite of the stored SLV leverage at every time step | — | `--source`, `--dry-run` | **dropped** (agreed at A0): already applied |
+| `fix_asian_exotic.py` | one-off recomputation of the Asian cell in `results/*.json` | — | `--source` | **dropped**: a migration already applied to the versioned results |
+| `rewrite_leverage.py` | one-off rewrite of the stored SLV leverage at every time step | — | `--source`, `--dry-run` | **dropped**: already applied |
 | `lake_update.py` | update the lake from public sources, quality report | `optlab lake update` | `--only`, `--lake`, `--yahoo-chains`, `--import-sample`, `--dolt`; new `--as-job` (the public sources, left to the worker) | kept (and the `lake` schedule of the worker, off by default) |
 | `lake_derive.py` | derived tables: curves, carry, bank, FX, surfaces, correlation, pairs, observed fits | `optlab lake derive` | `--only`, `--lake` | kept |
 | `lake_fx_check.py` | FX against H.10 and CME, quanto size: `reports/fx_check.md` | `optlab lake fx-check` | `--lake`, `--n-paths` | kept |
@@ -199,7 +196,7 @@ against the command tree. One change for all: a list option (`--only`) is comma-
 | `bench_accel.py` | NumPy against the CPU and GPU engines | `optlab bench accel` | `--paths`, `--batch`, `--workers`, `--cases`, `--engines`, `--no-leverage`, `--desk`, `--out` | kept |
 | `cuda/bench/bench_numpy.py` | NumPy timings for the CUDA benchmark table | `optlab bench numpy` | new `--out` (default: beside `bench.exe`'s sources) | kept |
 
-Commands with no v0 script (A6, A7):
+Commands with no script in v0:
 
 | Command | Does |
 |---|---|
@@ -210,22 +207,22 @@ Commands with no v0 script (A6, A7):
 | `optlab migrate [--v0 FOLDER]` | the schema to this code's revision; a v0 store imported |
 | `optlab jobs list\|show\|wait\|cancel` | the job queue from the console |
 | `optlab api export\|check` | the OpenAPI document (was `python -m optlab.server.openapi`) |
-| `optlab demo data` | the demo folder of made-up numbers (handoff §7.7) |
+| `optlab demo data` | the demo folder of made-up numbers |
 | `optlab version` | the packages' versions and the engines of the machine |
 
 ## 4. Desk command line (`python -m optlab.app`)
 
 | Option | v1 | Status |
 |---|---|---|
-| `--host` (default `127.0.0.1`) | `OPTLAB_HOST`, `optlab serve --host`; beyond `127.0.0.1` only through the `lan` profile (Caddy, TLS) with Luca's agreement | kept |
+| `--host` (default `127.0.0.1`) | `OPTLAB_HOST`, `optlab serve --host`; beyond `127.0.0.1` only through the `lan` profile (Caddy, TLS; [ADR-0002](adr/0002-never-exposed.md)) | kept |
 | `--port` (8765) | `OPTLAB_PORT`, `optlab serve --port` | kept |
-| `--token` | replaced by accounts | **dropped** (decided) |
+| `--token` | replaced by accounts | **dropped** ([ADR-0020](adr/0020-accounts-roles-audit.md)) |
 | `--workers` | `OPTLAB_WORKERS`, `optlab serve --workers`, `optlab worker --workers` | kept |
 | `--engine auto\|gpu\|cpu\|numpy` | `OPTLAB_ENGINE`, `optlab serve --engine`, `optlab worker --engine` | kept |
 | `--store` | `OPTLAB_DATABASE` (the SQLite database), `optlab serve --store` | kept |
 | `--calibration` | `OPTLAB_CALIBRATION` (default: the SPX calibration in `optlab-data/archive/`) | kept |
 | `--market` | `OPTLAB_MARKET`, `optlab serve --market` (initial market in use) | kept |
-| `--tunnel` | none | **dropped** (decided) |
+| `--tunnel` | none | **dropped** ([ADR-0002](adr/0002-never-exposed.md)) |
 | `--open` | `optlab serve --open` | kept |
 | `--log` | `optlab serve --log`, `optlab worker --log` | kept |
 
@@ -239,15 +236,15 @@ Commands with no v0 script (A6, A7):
 | `reports/risk.md` | measured runs of `optlab risk ...` (written by hand from them) | kept |
 | `reports/fx_check.md` | `optlab lake fx-check` | kept |
 | `reports/surface_reconstruction.md` | `optlab lake surface-test`, `regime-test` | kept |
-| `reports/showcase.md` | guide of the showcase (its commands are `optlab` ones since A7) | kept |
-| `results/spx_calibration.json`, `results/simulated_calibration.json` | `optlab calib run` | kept in the repo, in compact JSON (ADR-0023, superseding the move out of ADR-0016) |
+| `reports/showcase.md` | guide of the showcase | kept |
+| `results/spx_calibration.json`, `results/simulated_calibration.json` | `optlab calib run` | kept in the repo, in compact JSON ([ADR-0023](adr/0023-calibrations-compact-in-repo.md)) |
 | `results/pricing_examples.json`, `replay_*.json`, `surface_*.json` (small) | their subcommands | kept in the repo |
-| `docs/` (GitHub Pages: `index.html`, `lab.js`, `pricer-data.js`) | by hand, `demo widget-data` | frozen; replaced by the demo build in session 2 |
-| `space/app.py` (Gradio, not deployed) | — | **dropped** (decided) |
+| `docs/` (GitHub Pages: `index.html`, `lab.js`, `pricer-data.js`) | by hand, `demo widget-data` | kept as the pricing lab, under `lab/` beside the demo ([ADR-0011](adr/0011-duplicates.md)) |
+| `space/app.py` (Gradio, not deployed) | — | **dropped** ([ADR-0011](adr/0011-duplicates.md)) |
 
 ## 6. Library functions without a route today
 
 Kept in the packages, reachable from the CLI or Python only: `optlab.core` closed forms, CRR, Heston Fourier, the
 Monte Carlo pricers of `products.py`, calibration steps; `structured.qmc` (opt-in RQMC), `fastmodels`; the risk engine's
 lower-level functions. The JS re-implementation in `docs/lab.js` (American PDE with PSOR, Levy moment matching, Heston QE)
-stays as is until session 2.
+is the pricing lab ([ADR-0011](adr/0011-duplicates.md)).

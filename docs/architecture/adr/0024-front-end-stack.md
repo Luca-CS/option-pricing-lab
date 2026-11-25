@@ -1,14 +1,13 @@
 # ADR-0024: The front's stack, and how it keeps the strict CSP
 
-- Status: Accepted (F1, 24 November 2026; the choices of `HANDOFF_REFACTOR_2_UX.md` §4, agreed with Luca on 7 November)
-- Handoff §4: Stack
+- Status: Accepted, 24 November 2026
 
 ## Context
 
-Session 2 replaces the v0 front (`legacy/desk-static/`) with one application on API v1, served by the API on the same
-origin under the page CSP of `security.md` §4: `script-src 'self'`, `style-src 'self'`, no inline script or style,
-nothing from another origin. The handoff asks for the simplest stack that does the job, React (Luca knows it), free
-licences, few npm dependencies, a lock file and `npm ci --ignore-scripts`.
+The desk's front is one application on API v1, served by the API on the same origin under the page CSP of
+[security.md](../security.md) §4: `script-src 'self'`, `style-src 'self'`, no inline script or style, nothing from
+another origin. The rule: the simplest stack that does the job, free licences, few npm dependencies, a lock file and
+`npm ci --ignore-scripts`.
 
 ## Decision
 
@@ -17,13 +16,12 @@ licences, few npm dependencies, a lock file and `npm ci --ignore-scripts`.
   - TypeScript 7, the native compiler, has no JavaScript API for it yet.
 - **Components:** Mantine 9 (MIT), which has forms, notifications and the `Ctrl+K` palette (Spotlight).
 - **Tables:** TanStack Table 8 with Mantine's styles, not Mantine React Table. MRT's latest release supports Mantine 6
-  and its 2.0 beta supports Mantine 7, neither supports Mantine 9. The handoff planned this fallback.
-- **Charts:** Apache ECharts (Apache 2.0), loaded on demand from F2.
+  and its 2.0 beta supports Mantine 7, neither supports Mantine 9.
+- **Charts:** Apache ECharts (Apache 2.0), loaded on demand with the first chart.
 - **Server data:** TanStack Query, with an `openapi-fetch` client. Its types are generated from `api/openapi.json`
   (`npm run generate`, run before `dev`, `typecheck` and `build`). They are not versioned, so they cannot drift:
   `test_openapi.py` keeps the document equal to the code, and the front must compile on it. No API type is written by
-  hand. Domain payloads that the document leaves open get response models on the server as screens need them, and no
-  field changes (`api.md` §10).
+  hand. Every domain payload a screen reads has a response model on the server ([api.md](../api.md) §10).
 - **Routing:** React Router 7 in library mode. The state lives in the URL.
 - **Quality:**
   - Biome for lint and format;
@@ -65,13 +63,14 @@ Each end-to-end test fails on any console error, and a refused style or script i
 
 ## Consequences
 
-- CI's `api-contract` job ("API contract (TypeScript client)", a required check of main) now compiles the front on
-  the generated types, in place of `api/client-check`, which is gone; its compile-time checks moved to
+- CI's `api-contract` job compiles the front on the generated types; its compile-time checks are in
   `frontend/src/api/contract.ts`. The `frontend` job lints, runs the unit tests, builds, then runs Playwright against
-  `optlab serve` on fresh demo data.
+  `optlab serve` on fresh demo data, and against the demo build.
 - Dependabot watches `frontend/` (npm), grouped, with the 14-day cooldown.
-- Mantine's whole stylesheet is in the first load: 43 kB gzip of CSS. The first page's JavaScript is 148 kB gzip,
-  under the handoff's 300 kB.
+- Mantine's whole stylesheet is in the first load (44 kB gzipped of CSS). The first page's JavaScript is 211 kB
+  gzipped, under a budget of 300 kB; ECharts (185 kB) loads with the first chart.
+- Mantine's color-scheme hook writes a `<style>` to drop transitions on each theme change unless told not to: the app
+  calls it with `keepTransitions: true`.
 
 ## Alternatives considered
 

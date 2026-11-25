@@ -1,6 +1,6 @@
 """The defaults the OpenAPI document states are the ones the desk applies. `body(model)` passes only the keys a client
 gave and the desk fills the others itself, so a default written in a schema can drift from the desk's: these are the
-fields where the desk's default is its own (found in A9: four of them said something else than what happened)."""
+fields where the desk's default is its own (four of them once said something else than what happened)."""
 
 import pytest
 from _api import SCRIPT_EXAMPLE, api, preset_sheet
