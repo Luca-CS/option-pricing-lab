@@ -1,0 +1,430 @@
+// The book's risk (Trading › Book risk): the last Greeks run or a new one, read four ways. Greeks with their errors;
+// vega by strike and tenor, where a node leads to the trades that carry it and to the surface behind it; the spot
+// ladder under three vol rules; the signed scenarios. Every figure is a full revaluation of the book (optlab.risk).
+import { Anchor, Button, Group, SegmentedControl, Select, Tabs, Text } from "@mantine/core";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { Link, useSearchParams } from "react-router";
+import { api, ok, type Schemas } from "../../api/client";
+import { useRiskRuns } from "../../api/queries";
+import { SpacePage } from "../../app/Shell";
+import { can, useMe } from "../../auth/session";
+import { LadderChart } from "../../charts";
+import type { JobResults } from "../../jobs/results";
+import { useScreenJob } from "../../jobs/useScreenJob";
+import { type Estimate, formatDate, formatNumber, formatSeconds, isNoise } from "../../lib/format";
+import { greekLabel, HEADLINE, ladderSeries, nodeGrid, parseKey, rows } from "../../lib/greeks";
+import { JobProgress } from "../../ui/Flow";
+import { Panel } from "../../ui/Panel";
+import { type Cell, GreeksTable, NodeHeatmap, shortUnit } from "../../ui/Risk";
+import { Empty, Failure, Loading } from "../../ui/States";
+import { Est } from "../../ui/Value";
+import { commonClasses as c, DataTable, TradeLink } from "../common";
+
+type Run = Schemas["RiskRun"];
+
+function useStoredRun<K extends "risk" | "ladder" | "scenarios">(
+  kind: K,
+  fresh: JobResults[K] | undefined,
+  param: string | null,
+) {
+  const runs = useRiskRuns(kind);
+  const id = param ?? runs.data?.items[0]?.run_id ?? null;
+  const stored = useQuery({
+    queryKey: ["risk", "run", id],
+    queryFn: () => ok(api.GET("/api/v1/risk/runs/{run_id}", { params: { path: { run_id: id ?? "" } } })),
+    enabled: Boolean(id) && !fresh,
+  });
+  // a stored run has the job result's fields (the store keeps the library's shapes, api.md §5)
+  const run = fresh ?? (stored.data as unknown as JobResults[K] | undefined) ?? null;
+  return { run, pending: stored.isPending && Boolean(id) && !fresh, none: runs.data && !id };
+}
+
+const PRECISION = [
+  { value: "quick", label: "Quick" },
+  { value: "standard", label: "Standard" },
+  { value: "precise", label: "Precise" },
+];
+
+function RunBar({
+  kind,
+  label,
+  run,
+  job,
+  submit,
+}: {
+  kind: string;
+  label: string;
+  run: { run_id: string; seconds?: number | null; meta?: Record<string, unknown> } | null;
+  job: ReturnType<typeof useScreenJob>;
+  submit: (precision: string) => Promise<Schemas["JobAccepted"]>;
+}) {
+  const me = useMe().data;
+  const [precision, setPrecision] = useState("quick");
+  const allowed = can(me, kind === "risk" ? "greeks" : kind === "ladder" ? "ladder" : "run_scenarios");
+  const meta = (run?.meta ?? {}) as { valuation?: string; snapshot_id?: string };
+  return (
+    <Group gap="sm" wrap="wrap">
+      <Text size="sm" c="dimmed">
+        {run
+          ? `${run.run_id} · ${meta.valuation ? formatDate(meta.valuation) : ""} · ${formatSeconds(run.seconds)}`
+          : "No run yet"}
+      </Text>
+      <span className={c.spacer} />
+      {allowed &&
+        (job.running && job.tracked ? (
+          <JobProgress job={job.tracked} label={label} onCancel={() => void job.cancel()} />
+        ) : (
+          <>
+            <SegmentedControl
+              size="xs"
+              value={precision}
+              onChange={setPrecision}
+              data={PRECISION}
+              aria-label="Precision"
+            />
+            <Button size="xs" loading={job.start.isPending} onClick={() => job.start.mutate(() => submit(precision))}>
+              {label}
+            </Button>
+          </>
+        ))}
+    </Group>
+  );
+}
+
+type Precision = "quick" | "standard" | "precise";
+
+function GreeksView({ run, trade }: { run: Run; trade: string | null }) {
+  const book = run.book as Record<string, Estimate>;
+  const positions = run.positions ?? [];
+  const keys = [...HEADLINE].filter((g) =>
+    Object.keys(book).some((k) => parseKey(k).greek === g && parseKey(k).bucket === ""),
+  );
+  return (
+    <div className={c.grid}>
+      <Panel title="The book's Greeks" hint="each a full revaluation; ± one SE" flush>
+        <GreeksTable rows={rows(book)} units={run.units} caption="Greeks of the book" />
+      </Panel>
+      <Panel title="By trade" hint="delta per +1 % spot, vega per vol point, theta per business day" flush>
+        <DataTable
+          caption="Greeks by trade"
+          head={["Trade", ...keys.filter((k) => ["delta", "vega", "theta"].includes(k)).map(greekLabel)]}
+          num={[1, 2, 3]}
+          rows={positions
+            .filter((p) => !trade || p.name === trade)
+            .map((p) => ({
+              key: p.name,
+              cells: [
+                <TradeLink key="t" id={p.name} />,
+                ...["delta", "vega", "theta"]
+                  .filter((g) => keys.includes(g as (typeof HEADLINE)[number]))
+                  .map((g) => {
+                    const k = Object.keys(p.greeks ?? {}).find(
+                      (x) => parseKey(x).greek === g && parseKey(x).bucket === "",
+                    );
+                    const e = k ? p.greeks?.[k] : undefined;
+                    return e ? <Est key={g} value={e} signed /> : "—";
+                  }),
+              ],
+            }))}
+        />
+      </Panel>
+    </div>
+  );
+}
+
+function VegaView({ run }: { run: Run }) {
+  const [params, setParams] = useSearchParams();
+  const book = run.book as Record<string, Estimate>;
+  const names = [
+    ...new Set(
+      Object.keys(book)
+        .filter((k) => k.startsWith("vega_node|"))
+        .map((k) => parseKey(k).name),
+    ),
+  ];
+  const name = params.get("name") ?? names[0] ?? "";
+  if (!run.grid || names.length === 0) {
+    return (
+      <Empty title="No node vegas in this run">
+        Run the Greeks with the strike × tenor grid (the default) to see them.
+      </Empty>
+    );
+  }
+  const grid = nodeGrid(book, name, run.grid);
+  // the tenors where the book has no exposure at all are left out
+  const cols = grid.tenors.map((_, j) => j).filter((j) => grid.cells.some((r) => (r[j]?.value ?? 0) !== 0));
+  const shown = {
+    strikes: grid.strikes,
+    tenors: cols.map((j) => grid.tenors[j] ?? ""),
+    cells: grid.cells.map((r) => cols.map((j) => r[j] ?? null)),
+  };
+  const node = params.get("node");
+  const [k, t] = node ? node.split("@") : [undefined, undefined];
+  const selected: Cell | null = k && t ? { row: shown.strikes.indexOf(k), col: shown.tenors.indexOf(t) } : null;
+  const key = k && t ? `vega_node|${name}|${k}@${t}` : null;
+  const value = key ? book[key] : undefined;
+  const exposed = key
+    ? (run.positions ?? [])
+        .flatMap((p) => {
+          const e = p.greeks?.[key];
+          return e && e.value !== 0 ? [{ name: p.name, e: e as Estimate }] : [];
+        })
+        .sort((a, b) => Math.abs(b.e.value) - Math.abs(a.e.value))
+    : [];
+  const select = (cell: Cell) => {
+    const next = new URLSearchParams(params);
+    next.set("node", `${shown.strikes[cell.row]}@${shown.tenors[cell.col]}`);
+    setParams(next, { replace: true });
+  };
+  return (
+    <div className={c.wide}>
+      <Panel
+        title="Vega by node"
+        hint={`${shortUnit(String(run.units?.vega ?? "per vol point"))} at one node · ${run.grid.moneyness ?? "K / F(T)"}`}
+        actions={
+          names.length > 1 && (
+            <Select
+              size="xs"
+              data={names}
+              value={name}
+              onChange={(v) => setParams({ view: "vega", name: v ?? names[0] ?? "" }, { replace: true })}
+              aria-label="Name"
+              allowDeselect={false}
+            />
+          )
+        }
+      >
+        <NodeHeatmap
+          strikes={shown.strikes}
+          tenors={shown.tenors}
+          cells={shown.cells}
+          selected={selected && selected.row >= 0 && selected.col >= 0 ? selected : null}
+          onSelect={select}
+          caption={`Vega of the book on ${name}, by strike and tenor`}
+        />
+      </Panel>
+      <Panel title={key ? `${name} · ${k} · ${t}` : "Pick a node"} hint={key ? "one vol point at this node only" : ""}>
+        {!key && (
+          <Text c="dimmed" size="sm">
+            A node is one strike and one tenor of the surface. Click one to see which trades carry it.
+          </Text>
+        )}
+        {key && value && (
+          <>
+            <div className={c.big}>
+              <Est value={value} signed />
+            </div>
+            {isNoise(value) && (
+              <Text size="sm" c="dimmed">
+                Within two standard errors of zero: noise, not exposure.
+              </Text>
+            )}
+            <Text fw={600} size="sm" mt="md" mb={6}>
+              Trades exposed
+            </Text>
+            {exposed.length === 0 ? (
+              <Text size="sm" c="dimmed">
+                None of the trades moves with this node.
+              </Text>
+            ) : (
+              <DataTable
+                caption="Trades exposed to this node"
+                head={["Trade", "Vega at the node"]}
+                num={[1]}
+                rows={exposed.map((x) => ({
+                  key: x.name,
+                  cells: [<TradeLink key="t" id={x.name} />, <Est key="e" value={x.e} signed />],
+                }))}
+              />
+            )}
+            <Group gap="xs" mt="md">
+              <Anchor
+                component={Link}
+                to={`/quant/market/${encodeURIComponent(name)}?strike=${encodeURIComponent(k ?? "")}&tenor=${encodeURIComponent(t ?? "")}`}
+                size="sm"
+              >
+                Open the surface at this node ↗
+              </Anchor>
+            </Group>
+          </>
+        )}
+      </Panel>
+    </div>
+  );
+}
+
+function LadderView({ run }: { run: Schemas["LadderRun"] }) {
+  const book = run.book as Record<string, Estimate>;
+  const measures = [...new Set(Object.keys(book).map((k) => k.split("@")[0] ?? ""))].filter(Boolean);
+  const [measure, setMeasure] = useState(measures.includes("delta") ? "delta" : (measures[0] ?? "delta"));
+  const series = ladderSeries(book, measure, run.rules, run.points);
+  return (
+    <Panel
+      title={`${greekLabel(measure)} against a spot shift`}
+      hint="sticky moneyness, sticky strike, and the realistic rule (spot-vol betas from the lake)"
+      actions={
+        <Select
+          size="xs"
+          data={measures}
+          value={measure}
+          onChange={(v) => setMeasure(v ?? "delta")}
+          aria-label="Measure"
+          allowDeselect={false}
+        />
+      }
+    >
+      <LadderChart
+        shifts={run.points}
+        series={series}
+        unit={measure}
+        height={320}
+        label={`${measure} of the book against a spot shift`}
+      />
+    </Panel>
+  );
+}
+
+function ScenariosView({ run }: { run: Schemas["ScenarioRun"] }) {
+  return (
+    <div className={c.grid}>
+      <Panel
+        title="The book under each scenario"
+        hint={
+          run.signed_by ? `library v${run.version}, signed by ${run.signed_by}` : "the starting library, not signed yet"
+        }
+        flush
+      >
+        <DataTable
+          caption="The book's P&L under each scenario"
+          head={["Scenario", "What it does", "Book P&L ± SE"]}
+          num={[2]}
+          rows={run.scenarios.map((s) => ({
+            key: s.name,
+            cells: [
+              s.name,
+              <span key="d" className={c.faint}>
+                {s.description ?? ""}
+              </span>,
+              <Est key="b" value={s.book} signed />,
+            ],
+          }))}
+        />
+      </Panel>
+      <Panel title="By trade" hint="currency" flush>
+        <DataTable
+          caption="Each trade's P&L under each scenario"
+          head={["Trade", ...run.scenarios.map((s) => s.name)]}
+          num={run.scenarios.map((_, i) => i + 1)}
+          rows={(run.positions ?? []).map((p) => ({
+            key: p.name,
+            cells: [
+              <TradeLink key="t" id={p.name} />,
+              ...run.scenarios.map((s) => {
+                const e = p.pnl?.[s.name];
+                return e && "value" in e ? <Est key={s.name} value={e as Estimate} signed /> : "—";
+              }),
+            ],
+          }))}
+        />
+      </Panel>
+    </div>
+  );
+}
+
+export default function BookRisk() {
+  const [params, setParams] = useSearchParams();
+  const view = params.get("view") ?? "greeks";
+  const trade = params.get("trade");
+  const greeksJob = useScreenJob("risk", "Greeks of the book", "job");
+  const ladderJob = useScreenJob("ladder", "Ladder of the book", "ladderJob");
+  const scenarioJob = useScreenJob("scenarios", "Scenarios on the book", "scenarioJob");
+  const greeks = useStoredRun("risk", greeksJob.envelope?.result, params.get("run"));
+  const ladder = useStoredRun("ladder", ladderJob.envelope?.result, params.get("ladder"));
+  const scenarios = useStoredRun("scenarios", scenarioJob.envelope?.result, params.get("scenarios"));
+  const failed = greeksJob.failed ?? ladderJob.failed ?? scenarioJob.failed;
+  const setView = (v: string | null) => {
+    const next = new URLSearchParams(params);
+    next.set("view", v ?? "greeks");
+    setParams(next, { replace: true });
+  };
+  return (
+    <SpacePage>
+      {trade && (
+        <Text size="sm" c="dimmed">
+          Showing {trade}'s contributions.{" "}
+          <Anchor component={Link} to="/trading/risk">
+            Show the whole book
+          </Anchor>
+        </Text>
+      )}
+      {failed && <Failure error={new Error(failed)} title="The run failed" />}
+      <Tabs value={view} onChange={setView} keepMounted={false}>
+        <Tabs.List>
+          <Tabs.Tab value="greeks">Greeks</Tabs.Tab>
+          <Tabs.Tab value="vega">Vega K × T</Tabs.Tab>
+          <Tabs.Tab value="ladder">Ladder</Tabs.Tab>
+          <Tabs.Tab value="scenarios">Scenarios</Tabs.Tab>
+        </Tabs.List>
+        <Tabs.Panel value="greeks" pt="md">
+          <RunBar
+            kind="risk"
+            label="Run the Greeks"
+            run={greeks.run}
+            job={greeksJob}
+            submit={(p) => ok(api.POST("/api/v1/risk/greeks", { body: { options: { precision: p as Precision } } }))}
+          />
+          {greeks.pending && <Loading />}
+          {greeks.none && !greeks.run && (
+            <Empty title="No Greeks run on this book yet">Run them: a minute or so at the quick precision.</Empty>
+          )}
+          {greeks.run && <GreeksView run={greeks.run} trade={trade} />}
+        </Tabs.Panel>
+        <Tabs.Panel value="vega" pt="md">
+          <RunBar
+            kind="risk"
+            label="Run the Greeks"
+            run={greeks.run}
+            job={greeksJob}
+            submit={(p) => ok(api.POST("/api/v1/risk/greeks", { body: { options: { precision: p as Precision } } }))}
+          />
+          {greeks.pending && <Loading />}
+          {greeks.run && <VegaView run={greeks.run} />}
+        </Tabs.Panel>
+        <Tabs.Panel value="ladder" pt="md">
+          <RunBar
+            kind="ladder"
+            label="Run the ladder"
+            run={ladder.run}
+            job={ladderJob}
+            submit={(p) => ok(api.POST("/api/v1/risk/ladder", { body: { options: { precision: p as Precision } } }))}
+          />
+          {ladder.pending && <Loading />}
+          {ladder.none && !ladder.run && (
+            <Empty title="No ladder yet">The ladder revalues the book along a spot shift under three vol rules.</Empty>
+          )}
+          {ladder.run && <LadderView run={ladder.run} />}
+        </Tabs.Panel>
+        <Tabs.Panel value="scenarios" pt="md">
+          <RunBar
+            kind="scenarios"
+            label="Run the scenarios"
+            run={scenarios.run}
+            job={scenarioJob}
+            submit={(p) =>
+              ok(api.POST("/api/v1/risk/scenarios/runs", { body: { options: { precision: p as Precision } } }))
+            }
+          />
+          {scenarios.pending && <Loading />}
+          {scenarios.none && !scenarios.run && (
+            <Empty title="No scenario run yet">
+              The library is signed by Risk; anyone with the trader role can run it on the book.
+            </Empty>
+          )}
+          {scenarios.run && <ScenariosView run={scenarios.run} />}
+        </Tabs.Panel>
+      </Tabs>
+      <p className={c.faint}>{formatNumber(greeks.run?.positions?.length ?? 0)} positions in the last Greeks run.</p>
+    </SpacePage>
+  );
+}

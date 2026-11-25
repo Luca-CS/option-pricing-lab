@@ -300,7 +300,7 @@ class QuoteResult(Doc):
     snapshot_id: str | None = None
     headline: Headline
     coupon_rate: Estimate | None = None
-    upfront: Estimate | None = None
+    upfront: Estimate | float | None = None
     target: float | None = None
     margin: float | None = None
     result: Pricing
@@ -389,6 +389,168 @@ class Upcoming(Doc):
     until: str
 
 
+class TradeVersion(Doc):
+    version: int
+    recorded_at: str
+    deleted: bool = False
+    quantity: float
+    status: str
+    book: str
+    counterparty: str = ""
+
+
+class ReserveNowLine(Doc):
+    """A line of a trade's reserve today: what it froze at issue (`initial`) and what is left (`amount`), currency."""
+
+    key: str
+    kind: str
+    label: str
+    cost: Estimate | float = Field(..., description="% of nominal at issue ({value, se} in a valuation)")
+    se: float | None = None
+    amount: float
+    initial: float
+
+
+class ReserveNow(Doc):
+    amount: float = Field(..., description="what is left today, currency")
+    initial: float = Field(..., description="what the trade froze at issue, currency")
+    fraction: float = Field(..., description="the share of the life gone, which released the reserve so far")
+    method: str
+    lines: list[ReserveNowLine] = []
+
+
+class TradeDetail(Doc):
+    trade: Trade
+    versions: list[TradeVersion]
+    quote_id: str | None = None
+    reserve: ReserveNow | None = None
+    form: SheetForm | None = None
+    script: str | None = None
+
+
+class PastEvent(Doc):
+    date: str
+    kind: str = Field(..., description="coupon_paid, coupon_missed, called, knocked_in, matured, ...")
+    amount: float | None = None
+    payment: str | None = None
+
+
+class TradeEvents(Doc):
+    trade_id: str
+    past: list[PastEvent] = []
+    upcoming: list[dict[str, Any]] = []
+    missing: str | None = Field(default=None, description="why the past stops early: the fixing the trade lacks")
+    maturity: str | None = None
+    strike_date: str | None = None
+    underlyings: list[str] = []
+
+
+class Fixings(Doc):
+    fixings: dict[str, dict[str, float]] = Field(..., description="name -> date -> level at the model's scale (100)")
+
+
+class CostField(Doc):
+    name: str
+    label: str
+    unit: str = ""
+    kind: str = "number"
+    min: float | None = None
+    max: float | None = None
+
+
+class CostTier(Doc):
+    """One size band of a group: up to `max_notional`, each field's value (fractions, as the sheet's costs)."""
+
+    max_notional: float | None = None
+
+
+class CostGroup(Doc):
+    label: str
+    currency: str | None = None
+    tiers: list[CostTier]
+
+
+class CostDefaults(Doc):
+    """The desk's cost table by group of underlyings and size band, its versions and the starting values."""
+
+    groups: dict[str, CostGroup]
+    starting: dict[str, CostGroup] = {}
+    version: int | None = None
+    recorded_at: str | None = None
+    versions: list[dict[str, Any]] = []
+    fields: list[CostField] = []
+
+
+class TradeValuation(Doc):
+    """A trade valued at the market in use (job `value`)."""
+
+    trade_id: str
+    valuation: str
+    snapshot_id: str | None = None
+    notional: float
+    quantity: float
+    unit_price: Estimate = Field(..., description="% of nominal")
+    value: Estimate = Field(..., description="currency, desk side")
+    result: Pricing
+    reserve: ReserveNow | None = None
+    quote: dict[str, Any] = {}
+
+
+class BookPosition(Doc):
+    name: str
+    group: str
+    quantity: float
+    unit_price: Estimate
+    value: Estimate
+    reserve: ReserveNow | None = None
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+    class_: str | None = Field(default=None, alias="class")
+
+
+class BookGroup(Doc):
+    label: str
+    method: str
+    model: str | None = None
+    n_paths: int | None = None
+    value: Estimate
+    positions: int
+    reason: str | None = None
+    seconds: float | None = None
+    note: str | None = None
+
+
+class NameGreeks(Doc):
+    delta: Estimate | None = None
+    vega: Estimate | None = None
+    vega_missing: list[Any] = []
+
+
+class BookGreeks(Doc):
+    by_name: dict[str, NameGreeks] = {}
+    units: dict[str, Any] = {}
+    note: str | None = None
+
+
+class BookValuation(Doc):
+    """The book valued in groups at the market in use (job `book`)."""
+
+    value: Estimate
+    value_net: float | None = Field(default=None, description="the value less the reserve left")
+    reserve: float | None = None
+    reserve_initial: float | None = None
+    method: str
+    model: str | None = None
+    n_paths: int | None = None
+    positions: list[BookPosition]
+    groups: list[BookGroup]
+    greeks: BookGreeks | None = None
+    no_reserve: list[str] = []
+    skipped: list[Any] = []
+    warnings: list[str] = []
+    snapshot_id: str | None = None
+    seconds: float | None = None
+
+
 # --- risk --------------------------------------------------------------------------------------------------------------
 class RiskRunItem(Doc):
     run_id: str
@@ -406,15 +568,151 @@ class RiskRunPage(Next):
     items: list[RiskRunItem]
 
 
-class PnlHistory(Doc):
-    """The explained P&L cumulated from the EOD runs (`note` says why it is empty)."""
+class RiskGrid(Doc):
+    strike_labels: list[str]
+    tenor_labels: list[str]
+    strikes: list[float] = []
+    tenors: list[float] = []
+    moneyness: str | None = None
 
-    daily: list[dict[str, Any]] = []
-    days: list[Any] = []
-    curve: list[dict[str, Any]] = []
+
+class RiskPosition(Doc):
+    name: str
+    group: str | None = None
+    quantity: float | None = None
+    notional: float | None = None
+    value: Estimate | float | None = None
+    greeks: dict[str, Estimate] = Field({}, description="measure key 'greek|name|bucket' -> {value, se}")
+
+
+class RiskRun(Doc):
+    """A Greeks run (job `risk`, and its stored copy on GET /risk/runs/{run_id}): every measure of the book under keys
+    "greek|name|bucket", their units, the strikes x tenors grid of the node vegas, and each position's own."""
+
+    run_id: str
+    kind: str | None = None
+    book: dict[str, Estimate] = {}
+    units: dict[str, Any] = {}
+    grid: RiskGrid | None = None
+    positions: list[RiskPosition] = []
+    groups: list[dict[str, Any]] = []
+    options: dict[str, Any] = {}
+    bumps: dict[str, Any] = {}
+    meta: dict[str, Any] = {}
+    seconds: float | None = None
+    created_at: str | None = None
+
+
+class LadderPosition(Doc):
+    name: str
+    group: str | None = None
+    quantity: float | None = None
+    values: dict[str, Estimate] = Field({}, description="'measure@rule@shift' -> {value, se}")
+
+
+class LadderRun(Doc):
+    """A spot ladder under the vol rules (job `ladder`): keys 'measure@rule@shift', shifts as fractions."""
+
+    run_id: str
+    points: list[float]
+    rules: list[str]
+    tenors: list[str] = []
+    book: dict[str, Estimate]
+    positions: list[LadderPosition] = []
+    groups: list[dict[str, Any]] = []
+    options: dict[str, Any] = {}
+    seconds: float | None = None
+
+
+class ScenarioResult(Doc):
+    name: str
+    description: str | None = None
+    label: str | None = None
+    shock: dict[str, Any] = {}
+    book: Estimate = Field(..., description="the book's P&L under the scenario, currency")
+    flags: dict[str, Any] = {}
+    arbitrage: list[Any] = []
+
+
+class ScenarioPosition(Doc):
+    name: str
+    group: str | None = None
+    value: float | None = None
+    pnl: dict[str, Estimate | dict[str, list[float]]] = Field(
+        default={},
+        description="scenario name -> the position's P&L; under `grid` (when asked), 'spot:vol' -> [value, se]",
+    )
+
+
+class ScenarioRun(Doc):
+    """The scenario library run on the book (job `scenarios`)."""
+
+    run_id: str
+    scenarios: list[ScenarioResult]
+    positions: list[ScenarioPosition] = []
+    grid: dict[str, Any] | None = Field(default=None, description="spot x vol P&L grid: pnl[i][j] = [value, se]")
+    version: int | None = None
+    signed_by: str | None = None
+    starting: bool = False
+    seconds: float | None = None
+
+
+class PnlDay(Doc):
+    """One day of the explained P&L: the cascade of full revaluations, each step's [value, se], the Greeks' prediction
+    of each step and what they leave unexplained."""
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+    from_: str = Field(..., alias="from")
+    to: str
+    total: float
+    steps: dict[str, list[float]] = Field({}, description="step -> [value, se], in the cascade's order")
+    predicted: dict[str, float] = {}
+    unexplained: dict[str, float] = {}
+    release: float | None = Field(default=None, description="the reserve released that day")
+    new_trades: list[Any] = []
+    events: dict[str, Any] = {}
+
+
+class PnlTrade(Doc):
+    total: float
+    steps: dict[str, float] = {}
+    group: str | None = None
+
+
+class PnlHistory(Doc):
+    """The explained P&L cumulated from the EOD runs over a period (`note` says why it is empty)."""
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+    from_: str | None = Field(default=None, alias="from")
+    to: str | None = None
+    days: list[str] = []
+    curve: list[float] = Field([], description="the cumulated P&L at the end of each day")
+    daily: list[PnlDay] = []
+    order: list[str] = Field([], description="the cascade's steps, in order")
+    steps: dict[str, float] = {}
+    predicted: dict[str, float] = {}
+    unexplained: dict[str, float] = {}
+    trades: dict[str, PnlTrade] = {}
+    total: float | None = None
     runs: list[dict[str, Any]] = []
-    eod: list[dict[str, Any]] = []
+    eod: list[RiskRunItem] = []
     note: str | None = None
+
+
+class EodDay(Doc):
+    day: str
+    run_id: str
+    reused: bool = False
+    value: float | None = None
+
+
+class EodResult(Doc):
+    """EOD runs over a period (job `eod`): one run per business day, reused when already stored."""
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+    from_: str = Field(..., alias="from")
+    to: str
+    runs: list[EodDay]
 
 
 # --- quant, admin ------------------------------------------------------------------------------------------------------
@@ -525,6 +823,12 @@ class JobRowPage(Next):
 # under `x-job-results`) so the front types a finished job by its kind.
 JOB_RESULTS: dict[str, type[BaseModel]] = {
     "quote": QuoteResult,
+    "value": TradeValuation,
+    "book": BookValuation,
+    "risk": RiskRun,
+    "ladder": LadderRun,
+    "scenarios": ScenarioRun,
+    "eod": EodResult,
 }
 
 

@@ -64,3 +64,6 @@ def test_a_greeks_run_through_the_api(a, risk):
     assert res["run_id"].startswith("risk-") and res["book"]["delta|SPX|"]["se"] > 0
     assert env["method"]["name"] == "full_revaluation" and raw_errors(env) == []
     assert risk.get(f"/api/v1/risk/runs/{res['run_id']}").json()["book"] == res["book"]
+    from optlab.server import payloads
+
+    payloads.RiskRun.model_validate(res)  # the document's description of a Greeks run (test_api_payloads.py)

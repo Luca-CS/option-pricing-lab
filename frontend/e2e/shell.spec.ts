@@ -28,7 +28,7 @@ test("the palette finds a trade and opens its page", async ({ page }) => {
   await page.getByPlaceholder(/A trade, a quote/).fill("DEMO-03");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/trading\/trades\/DEMO-03$/);
-  await expect(page.getByText(/A trade comes with step F5/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Trade DEMO-03" })).toBeVisible();
 });
 
 test("g then a letter goes to a space, ? lists the keys", async ({ page }) => {

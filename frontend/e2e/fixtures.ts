@@ -49,6 +49,19 @@ export async function ensureUsers(baseURL: string, roles: string[]): Promise<voi
   await ctx.dispose();
 }
 
+/** A job started through the API as the test account of a role (a run the test only reads); its id. */
+export async function submitAs(baseURL: string, role: string, path: string, body: unknown): Promise<string> {
+  const ctx = await request.newContext({ baseURL });
+  const login = await ctx.post("/api/v1/auth/login", { data: { name: accountOf(role), password: passwordOf(role) } });
+  expect(login.status()).toBe(200);
+  const { csrf_token } = (await login.json()) as { csrf_token: string };
+  const r = await ctx.post(path, { data: body, headers: { "X-CSRF-Token": csrf_token } });
+  expect(r.status()).toBe(202);
+  const { job_id } = (await r.json()) as { job_id: string };
+  await ctx.dispose();
+  return job_id;
+}
+
 /** The test account of a role, or of roles joined by "+" ("structurer+trader"). */
 export function accountOf(role: string): string {
   return `e2e-${role.replaceAll("+", "-")}`;

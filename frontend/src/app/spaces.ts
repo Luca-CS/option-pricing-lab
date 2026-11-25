@@ -48,11 +48,11 @@ export const SPACES: Space[] = [
     key: "t",
     screens: [
       { path: "/trading", label: "Home" },
-      { path: "/trading/book", label: "Book", step: "F5" },
-      { path: "/trading/risk", label: "Book risk", step: "F5" },
-      { path: "/trading/pnl", label: "P&L explained", step: "F5" },
-      { path: "/trading/lifecycle", label: "Lifecycle", step: "F5" },
-      { path: "/trading/costs", label: "Pricing policy", step: "F5" },
+      { path: "/trading/book", label: "Book" },
+      { path: "/trading/risk", label: "Book risk" },
+      { path: "/trading/pnl", label: "P&L explained" },
+      { path: "/trading/lifecycle", label: "Lifecycle" },
+      { path: "/trading/costs", label: "Pricing policy" },
     ],
   },
   {
@@ -105,8 +105,8 @@ export const SPACES: Space[] = [
 /** Pages of one entity, reached by links and the palette; each lands with the step that builds its space. */
 export const ENTITY_PAGES: Screen[] = [
   { path: "/structuring/quotes/:id", label: "A quote" },
-  { path: "/trading/trades/:id", label: "A trade", step: "F5" },
-  { path: "/trading/lifecycle/:id", label: "A trade's lifecycle", step: "F5" },
+  { path: "/trading/trades/:id", label: "A trade" },
+  { path: "/trading/lifecycle/:id", label: "A trade's lifecycle" },
   { path: "/risk/var/:id", label: "A VaR run", step: "F6" },
   { path: "/quant/market/:name", label: "A name's market", step: "F7" },
   { path: "/quant/replay/:id", label: "A replay", step: "F7" },

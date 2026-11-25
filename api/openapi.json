@@ -1519,10 +1519,12 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TradeDetail"
+                }
               }
             }
           },
@@ -1609,10 +1611,12 @@
         },
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the new version",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/Trade"
+                }
               }
             }
           },
@@ -1960,10 +1964,12 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TradeEvents"
+                }
               }
             }
           },
@@ -2344,10 +2350,12 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/Fixings"
+                }
               }
             }
           },
@@ -2657,10 +2665,12 @@
         "operationId": "cost_defaults",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CostDefaults"
+                }
               }
             }
           },
@@ -3989,10 +3999,12 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "a stored run; its fields follow its kind",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/RiskRun"
+                }
               }
             }
           },
@@ -6684,6 +6696,71 @@
         ],
         "title": "CancelOut"
       },
+      "CostDefaults": {
+        "properties": {
+          "groups": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CostGroup"
+            },
+            "type": "object",
+            "title": "Groups"
+          },
+          "starting": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CostGroup"
+            },
+            "type": "object",
+            "title": "Starting",
+            "default": {}
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "recorded_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded At"
+          },
+          "versions": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Versions",
+            "default": []
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/CostField"
+            },
+            "type": "array",
+            "title": "Fields",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "groups"
+        ],
+        "title": "CostDefaults",
+        "description": "The desk's cost table by group of underlyings and size band, its versions and the starting values."
+      },
       "CostDefaultsIn": {
         "properties": {
           "groups": {
@@ -6699,6 +6776,109 @@
           "groups"
         ],
         "title": "CostDefaultsIn"
+      },
+      "CostField": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit",
+            "default": ""
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "number"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name",
+          "label"
+        ],
+        "title": "CostField"
+      },
+      "CostGroup": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "tiers": {
+            "items": {
+              "$ref": "#/components/schemas/CostTier"
+            },
+            "type": "array",
+            "title": "Tiers"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "label",
+          "tiers"
+        ],
+        "title": "CostGroup"
+      },
+      "CostTier": {
+        "properties": {
+          "max_notional": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Notional"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "CostTier",
+        "description": "One size band of a group: up to `max_notional`, each field's value (fractions, as the sheet's costs)."
       },
       "CoverageRow": {
         "properties": {
@@ -7138,6 +7318,27 @@
           "day"
         ],
         "title": "FitIn"
+      },
+      "Fixings": {
+        "properties": {
+          "fixings": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "number"
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Fixings",
+            "description": "name -> date -> level at the model's scale (100)"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "fixings"
+        ],
+        "title": "Fixings"
       },
       "FixingsFromLakeIn": {
         "properties": {
@@ -8604,6 +8805,48 @@
         "type": "object",
         "title": "OtherUnderlyingsIn"
       },
+      "PastEvent": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "coupon_paid, coupon_missed, called, knocked_in, matured, ..."
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "payment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "date",
+          "kind"
+        ],
+        "title": "PastEvent"
+      },
       "Pipeline": {
         "properties": {
           "name": {
@@ -8820,31 +9063,183 @@
         "type": "object",
         "title": "PipelineUpdate"
       },
-      "PnlHistory": {
+      "PnlDay": {
         "properties": {
-          "daily": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
+          "from": {
+            "type": "string",
+            "title": "From"
+          },
+          "to": {
+            "type": "string",
+            "title": "To"
+          },
+          "total": {
+            "type": "number",
+            "title": "Total"
+          },
+          "steps": {
+            "additionalProperties": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
             },
+            "type": "object",
+            "title": "Steps",
+            "description": "step -> [value, se], in the cascade's order",
+            "default": {}
+          },
+          "predicted": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Predicted",
+            "default": {}
+          },
+          "unexplained": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Unexplained",
+            "default": {}
+          },
+          "release": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release",
+            "description": "the reserve released that day"
+          },
+          "new_trades": {
+            "items": {},
             "type": "array",
-            "title": "Daily",
+            "title": "New Trades",
             "default": []
           },
+          "events": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Events",
+            "default": {}
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "from",
+          "to",
+          "total"
+        ],
+        "title": "PnlDay",
+        "description": "One day of the explained P&L: the cascade of full revaluations, each step's [value, se], the Greeks' prediction\nof each step and what they leave unexplained."
+      },
+      "PnlHistory": {
+        "properties": {
+          "from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To"
+          },
           "days": {
-            "items": {},
+            "items": {
+              "type": "string"
+            },
             "type": "array",
             "title": "Days",
             "default": []
           },
           "curve": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "type": "number"
             },
             "type": "array",
             "title": "Curve",
+            "description": "the cumulated P&L at the end of each day",
             "default": []
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/PnlDay"
+            },
+            "type": "array",
+            "title": "Daily",
+            "default": []
+          },
+          "order": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Order",
+            "description": "the cascade's steps, in order",
+            "default": []
+          },
+          "steps": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Steps",
+            "default": {}
+          },
+          "predicted": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Predicted",
+            "default": {}
+          },
+          "unexplained": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Unexplained",
+            "default": {}
+          },
+          "trades": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PnlTrade"
+            },
+            "type": "object",
+            "title": "Trades",
+            "default": {}
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
           },
           "runs": {
             "items": {
@@ -8857,8 +9252,7 @@
           },
           "eod": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/RiskRunItem"
             },
             "type": "array",
             "title": "Eod",
@@ -8879,7 +9273,40 @@
         "additionalProperties": true,
         "type": "object",
         "title": "PnlHistory",
-        "description": "The explained P&L cumulated from the EOD runs (`note` says why it is empty)."
+        "description": "The explained P&L cumulated from the EOD runs over a period (`note` says why it is empty)."
+      },
+      "PnlTrade": {
+        "properties": {
+          "total": {
+            "type": "number",
+            "title": "Total"
+          },
+          "steps": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Steps",
+            "default": {}
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "total"
+        ],
+        "title": "PnlTrade"
       },
       "Policy": {
         "properties": {
@@ -9452,9 +9879,13 @@
                 "$ref": "#/components/schemas/Estimate"
               },
               {
+                "type": "number"
+              },
+              {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Upfront"
           },
           "target": {
             "anyOf": [
@@ -9712,6 +10143,105 @@
         ],
         "title": "ReserveLine"
       },
+      "ReserveNow": {
+        "properties": {
+          "amount": {
+            "type": "number",
+            "title": "Amount",
+            "description": "what is left today, currency"
+          },
+          "initial": {
+            "type": "number",
+            "title": "Initial",
+            "description": "what the trade froze at issue, currency"
+          },
+          "fraction": {
+            "type": "number",
+            "title": "Fraction",
+            "description": "the share of the life gone, which released the reserve so far"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/ReserveNowLine"
+            },
+            "type": "array",
+            "title": "Lines",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "amount",
+          "initial",
+          "fraction",
+          "method"
+        ],
+        "title": "ReserveNow"
+      },
+      "ReserveNowLine": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "cost": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Estimate"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Cost",
+            "description": "% of nominal at issue ({value, se} in a valuation)"
+          },
+          "se": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Se"
+          },
+          "amount": {
+            "type": "number",
+            "title": "Amount"
+          },
+          "initial": {
+            "type": "number",
+            "title": "Initial"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "key",
+          "kind",
+          "label",
+          "cost",
+          "amount",
+          "initial"
+        ],
+        "title": "ReserveNowLine",
+        "description": "A line of a trade's reserve today: what it froze at issue (`initial`) and what is left (`amount`), currency."
+      },
       "Reserves": {
         "properties": {
           "base_price": {
@@ -9775,6 +10305,58 @@
         ],
         "title": "Reserves",
         "description": "What the trade froze at issue: the desk price over the base, line by line (% of nominal)."
+      },
+      "RiskGrid": {
+        "properties": {
+          "strike_labels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Strike Labels"
+          },
+          "tenor_labels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tenor Labels"
+          },
+          "strikes": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Strikes",
+            "default": []
+          },
+          "tenors": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Tenors",
+            "default": []
+          },
+          "moneyness": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moneyness"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "strike_labels",
+          "tenor_labels"
+        ],
+        "title": "RiskGrid"
       },
       "RiskOptions": {
         "properties": {
@@ -9867,6 +10449,183 @@
         "additionalProperties": false,
         "type": "object",
         "title": "RiskOptions"
+      },
+      "RiskPosition": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "notional": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notional"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Estimate"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "greeks": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Estimate"
+            },
+            "type": "object",
+            "title": "Greeks",
+            "description": "measure key 'greek|name|bucket' -> {value, se}",
+            "default": {}
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "RiskPosition"
+      },
+      "RiskRun": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "book": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Estimate"
+            },
+            "type": "object",
+            "title": "Book",
+            "default": {}
+          },
+          "units": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Units",
+            "default": {}
+          },
+          "grid": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RiskGrid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "positions": {
+            "items": {
+              "$ref": "#/components/schemas/RiskPosition"
+            },
+            "type": "array",
+            "title": "Positions",
+            "default": []
+          },
+          "groups": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Groups",
+            "default": []
+          },
+          "options": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Options",
+            "default": {}
+          },
+          "bumps": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Bumps",
+            "default": {}
+          },
+          "meta": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Meta",
+            "default": {}
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "run_id"
+        ],
+        "title": "RiskRun",
+        "description": "A Greeks run (job `risk`, and its stored copy on GET /risk/runs/{run_id}): every measure of the book under keys\n\"greek|name|bucket\", their units, the strikes x tenors grid of the node vegas, and each position's own."
       },
       "RiskRunItem": {
         "properties": {
@@ -10686,6 +11445,142 @@
         ],
         "title": "Trade"
       },
+      "TradeDetail": {
+        "properties": {
+          "trade": {
+            "$ref": "#/components/schemas/Trade"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/TradeVersion"
+            },
+            "type": "array",
+            "title": "Versions"
+          },
+          "quote_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote Id"
+          },
+          "reserve": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReserveNow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "form": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SheetForm"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "script": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Script"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "trade",
+          "versions"
+        ],
+        "title": "TradeDetail"
+      },
+      "TradeEvents": {
+        "properties": {
+          "trade_id": {
+            "type": "string",
+            "title": "Trade Id"
+          },
+          "past": {
+            "items": {
+              "$ref": "#/components/schemas/PastEvent"
+            },
+            "type": "array",
+            "title": "Past",
+            "default": []
+          },
+          "upcoming": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Upcoming",
+            "default": []
+          },
+          "missing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Missing",
+            "description": "why the past stops early: the fixing the trade lacks"
+          },
+          "maturity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maturity"
+          },
+          "strike_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strike Date"
+          },
+          "underlyings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Underlyings",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "trade_id"
+        ],
+        "title": "TradeEvents"
+      },
       "TradeIn": {
         "properties": {
           "sheet": {
@@ -10956,6 +11851,50 @@
         "type": "object",
         "title": "TradeUpdate",
         "description": "What an edit may change; every edit is a new version of the trade."
+      },
+      "TradeVersion": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "recorded_at": {
+            "type": "string",
+            "title": "Recorded At"
+          },
+          "deleted": {
+            "type": "boolean",
+            "title": "Deleted",
+            "default": false
+          },
+          "quantity": {
+            "type": "number",
+            "title": "Quantity"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "book": {
+            "type": "string",
+            "title": "Book"
+          },
+          "counterparty": {
+            "type": "string",
+            "title": "Counterparty",
+            "default": ""
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "version",
+          "recorded_at",
+          "quantity",
+          "status",
+          "book"
+        ],
+        "title": "TradeVersion"
       },
       "Universe": {
         "properties": {
@@ -11383,6 +12322,843 @@
         ],
         "title": "WorkerRow"
       },
+      "BookGreeks": {
+        "additionalProperties": true,
+        "properties": {
+          "by_name": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NameGreeks"
+            },
+            "default": {},
+            "title": "By Name",
+            "type": "object"
+          },
+          "units": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Units",
+            "type": "object"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Note"
+          }
+        },
+        "title": "BookGreeks",
+        "type": "object"
+      },
+      "BookGroup": {
+        "additionalProperties": true,
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          },
+          "n_paths": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "N Paths"
+          },
+          "value": {
+            "$ref": "#/components/schemas/Estimate"
+          },
+          "positions": {
+            "title": "Positions",
+            "type": "integer"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reason"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Seconds"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Note"
+          }
+        },
+        "required": [
+          "label",
+          "method",
+          "value",
+          "positions"
+        ],
+        "title": "BookGroup",
+        "type": "object"
+      },
+      "BookPosition": {
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "group": {
+            "title": "Group",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number"
+          },
+          "unit_price": {
+            "$ref": "#/components/schemas/Estimate"
+          },
+          "value": {
+            "$ref": "#/components/schemas/Estimate"
+          },
+          "reserve": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReserveNow"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Class"
+          }
+        },
+        "required": [
+          "name",
+          "group",
+          "quantity",
+          "unit_price",
+          "value"
+        ],
+        "title": "BookPosition",
+        "type": "object"
+      },
+      "BookValuation": {
+        "additionalProperties": true,
+        "description": "The book valued in groups at the market in use (job `book`).",
+        "properties": {
+          "value": {
+            "$ref": "#/components/schemas/Estimate"
+          },
+          "value_net": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "the value less the reserve left",
+            "title": "Value Net"
+          },
+          "reserve": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reserve"
+          },
+          "reserve_initial": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reserve Initial"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          },
+          "n_paths": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "N Paths"
+          },
+          "positions": {
+            "items": {
+              "$ref": "#/components/schemas/BookPosition"
+            },
+            "title": "Positions",
+            "type": "array"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/BookGroup"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "greeks": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BookGreeks"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "no_reserve": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "No Reserve",
+            "type": "array"
+          },
+          "skipped": {
+            "default": [],
+            "items": {},
+            "title": "Skipped",
+            "type": "array"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Snapshot Id"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Seconds"
+          }
+        },
+        "required": [
+          "value",
+          "method",
+          "positions",
+          "groups"
+        ],
+        "title": "BookValuation",
+        "type": "object"
+      },
+      "EodDay": {
+        "additionalProperties": true,
+        "properties": {
+          "day": {
+            "title": "Day",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "reused": {
+            "default": false,
+            "title": "Reused",
+            "type": "boolean"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Value"
+          }
+        },
+        "required": [
+          "day",
+          "run_id"
+        ],
+        "title": "EodDay",
+        "type": "object"
+      },
+      "EodResult": {
+        "additionalProperties": true,
+        "description": "EOD runs over a period (job `eod`): one run per business day, reused when already stored.",
+        "properties": {
+          "from": {
+            "title": "From",
+            "type": "string"
+          },
+          "to": {
+            "title": "To",
+            "type": "string"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/EodDay"
+            },
+            "title": "Runs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "runs"
+        ],
+        "title": "EodResult",
+        "type": "object"
+      },
+      "LadderPosition": {
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Group"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Quantity"
+          },
+          "values": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Estimate"
+            },
+            "default": {},
+            "description": "'measure@rule@shift' -> {value, se}",
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "LadderPosition",
+        "type": "object"
+      },
+      "LadderRun": {
+        "additionalProperties": true,
+        "description": "A spot ladder under the vol rules (job `ladder`): keys 'measure@rule@shift', shifts as fractions.",
+        "properties": {
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "points": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "rules": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Rules",
+            "type": "array"
+          },
+          "tenors": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Tenors",
+            "type": "array"
+          },
+          "book": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Estimate"
+            },
+            "title": "Book",
+            "type": "object"
+          },
+          "positions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/LadderPosition"
+            },
+            "title": "Positions",
+            "type": "array"
+          },
+          "groups": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "options": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Options",
+            "type": "object"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Seconds"
+          }
+        },
+        "required": [
+          "run_id",
+          "points",
+          "rules",
+          "book"
+        ],
+        "title": "LadderRun",
+        "type": "object"
+      },
+      "NameGreeks": {
+        "additionalProperties": true,
+        "properties": {
+          "delta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Estimate"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "vega": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Estimate"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "vega_missing": {
+            "default": [],
+            "items": {},
+            "title": "Vega Missing",
+            "type": "array"
+          }
+        },
+        "title": "NameGreeks",
+        "type": "object"
+      },
+      "ScenarioPosition": {
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Group"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Value"
+          },
+          "pnl": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Estimate"
+                },
+                {
+                  "additionalProperties": {
+                    "items": {
+                      "type": "number"
+                    },
+                    "type": "array"
+                  },
+                  "type": "object"
+                }
+              ]
+            },
+            "default": {},
+            "description": "scenario name -> the position's P&L; under `grid` (when asked), 'spot:vol' -> [value, se]",
+            "title": "Pnl",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ScenarioPosition",
+        "type": "object"
+      },
+      "ScenarioResult": {
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Label"
+          },
+          "shock": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Shock",
+            "type": "object"
+          },
+          "book": {
+            "$ref": "#/components/schemas/Estimate",
+            "description": "the book's P&L under the scenario, currency"
+          },
+          "flags": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Flags",
+            "type": "object"
+          },
+          "arbitrage": {
+            "default": [],
+            "items": {},
+            "title": "Arbitrage",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "book"
+        ],
+        "title": "ScenarioResult",
+        "type": "object"
+      },
+      "ScenarioRun": {
+        "additionalProperties": true,
+        "description": "The scenario library run on the book (job `scenarios`).",
+        "properties": {
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioResult"
+            },
+            "title": "Scenarios",
+            "type": "array"
+          },
+          "positions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ScenarioPosition"
+            },
+            "title": "Positions",
+            "type": "array"
+          },
+          "grid": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "spot x vol P&L grid: pnl[i][j] = [value, se]",
+            "title": "Grid"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Version"
+          },
+          "signed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Signed By"
+          },
+          "starting": {
+            "default": false,
+            "title": "Starting",
+            "type": "boolean"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Seconds"
+          }
+        },
+        "required": [
+          "run_id",
+          "scenarios"
+        ],
+        "title": "ScenarioRun",
+        "type": "object"
+      },
+      "TradeValuation": {
+        "additionalProperties": true,
+        "description": "A trade valued at the market in use (job `value`).",
+        "properties": {
+          "trade_id": {
+            "title": "Trade Id",
+            "type": "string"
+          },
+          "valuation": {
+            "title": "Valuation",
+            "type": "string"
+          },
+          "snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Snapshot Id"
+          },
+          "notional": {
+            "title": "Notional",
+            "type": "number"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number"
+          },
+          "unit_price": {
+            "$ref": "#/components/schemas/Estimate",
+            "description": "% of nominal"
+          },
+          "value": {
+            "$ref": "#/components/schemas/Estimate",
+            "description": "currency, desk side"
+          },
+          "result": {
+            "$ref": "#/components/schemas/Pricing"
+          },
+          "reserve": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReserveNow"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "quote": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Quote",
+            "type": "object"
+          }
+        },
+        "required": [
+          "trade_id",
+          "valuation",
+          "notional",
+          "quantity",
+          "unit_price",
+          "value",
+          "result"
+        ],
+        "title": "TradeValuation",
+        "type": "object"
+      },
       "FieldError": {
         "type": "object",
         "required": [
@@ -11450,6 +13226,24 @@
   "x-job-results": {
     "quote": {
       "$ref": "#/components/schemas/QuoteResult"
+    },
+    "value": {
+      "$ref": "#/components/schemas/TradeValuation"
+    },
+    "book": {
+      "$ref": "#/components/schemas/BookValuation"
+    },
+    "risk": {
+      "$ref": "#/components/schemas/RiskRun"
+    },
+    "ladder": {
+      "$ref": "#/components/schemas/LadderRun"
+    },
+    "scenarios": {
+      "$ref": "#/components/schemas/ScenarioRun"
+    },
+    "eod": {
+      "$ref": "#/components/schemas/EodResult"
     }
   }
 }
