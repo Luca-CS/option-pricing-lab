@@ -20,7 +20,14 @@ export function useScreenJob<K extends keyof JobResults>(kind: K, label: string,
   const { track, cancel } = useJobs();
   const tracked = useTracked(jobId);
   const running = tracked?.state === "queued" || tracked?.state === "running";
-  const { job, envelope } = useJobResult(kind, jobId, !running);
+  const { job, envelope } = useJobResult(kind, jobId, Boolean(tracked));
+  // a link to a job still running (from another tab, a notification, a test): followed here as if started here
+  const state = job.data?.state;
+  useEffect(() => {
+    if (jobId && !tracked && (state === "queued" || state === "running")) {
+      track(jobId, { kind, label, link: `${window.location.pathname}${window.location.search}` });
+    }
+  }, [jobId, tracked, state, track, kind, label]);
   const start = useMutation({
     mutationFn: (submit: () => Promise<Schemas["JobAccepted"]>) => submit(),
     onSuccess: (accepted) => {

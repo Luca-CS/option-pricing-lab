@@ -1,4 +1,4 @@
-import { accessible, ensureUsers, expect, signInAs, test } from "./fixtures";
+import { accessible, ensureUsers, expect, signInAs, submitAs, test } from "./fixtures";
 
 test.beforeAll(async ({ baseURL }) => {
   await ensureUsers(baseURL ?? "", ["trader"]);
@@ -28,12 +28,24 @@ test("a trade's page holds its sheet, its events and its value today", async ({ 
   await accessible(page);
 });
 
-test("from the book's Greeks down to a vol node and the trades behind it", async ({ page }) => {
+test("from the book's Greeks down to a vol node and the trades behind it", async ({ page, baseURL }) => {
   test.setTimeout(600_000);
+  // a light run started through the API (few paths, the node vegas and no other variant), so a runner's CPU takes
+  // minutes, not tens; the screen follows a running job from its link as if it had started it
+  const job = await submitAs(baseURL ?? "", "trader", "/api/v1/risk/greeks", {
+    options: {
+      precision: "quick",
+      n_paths: 2_000,
+      kxt: "single",
+      curves: false,
+      sticky_strike: false,
+      realistic: false,
+      cross: false,
+      theta: false,
+    },
+  });
   await signInAs(page, "trader");
-  await page.goto("/trading/risk");
-  const run = page.getByRole("button", { name: "Run the Greeks" });
-  if (await run.isVisible()) await run.click();
+  await page.goto(`/trading/risk?job=${job}`);
   await expect(page.getByRole("heading", { name: "The book's Greeks" })).toBeVisible({ timeout: 540_000 });
   await page.getByRole("tab", { name: "Vega K × T" }).click();
   const nodes = page.getByRole("button", { name: /at 1y: .* plus or minus/ });
