@@ -172,7 +172,8 @@ export function WaterfallChart({
   return <EChart build={build} height={height} label={label} />;
 }
 
-export type Curve = { name: string; points: [number, number][]; kind?: "line" | "points" };
+/** A line, quotes as points, or one marked point (a node a risk figure points at). */
+export type Curve = { name: string; points: [number, number][]; kind?: "line" | "points" | "mark" };
 
 /** Curves on numeric axes, levels as fractions shown in percent (a smile: moneyness and implied vol). */
 export function CurveChart({
@@ -203,7 +204,8 @@ export function CurveChart({
       const fmtY = (v: number) => (yPercent ? formatPercent(v, { digits: 1 }) : formatNumber(v, { digits }));
       return {
         ...b,
-        grid: { ...(b.grid as object), left: 56, top: 32, bottom: 40 },
+        // the legend above the plot, the axis names beside their axes: neither overlaps the other
+        grid: { ...(b.grid as object), left: 56, top: 44, bottom: 40 },
         xAxis: {
           ...(b.xAxis as object),
           type: "value",
@@ -225,16 +227,22 @@ export function CurveChart({
           formatter: (p: { seriesName: string; value: [number, number] }) =>
             `${p.seriesName}: ${fmtX(p.value[0])}, ${fmtY(p.value[1])}`,
         },
-        series: curves.map((cv, i) => ({
-          name: cv.name,
-          type: cv.kind === "points" ? "scatter" : "line",
-          data: cv.kind === "points" ? cv.points : [...cv.points].sort((a, b) => a[0] - b[0]),
-          showSymbol: cv.kind === "points",
-          symbolSize: cv.kind === "points" ? 5 : 0,
-          smooth: cv.kind !== "points",
-          lineStyle: { width: 2, color: palette[i % palette.length] },
-          itemStyle: { color: palette[i % palette.length] },
-        })),
+        series: curves.map((cv, i) => {
+          const scatter = cv.kind === "points" || cv.kind === "mark";
+          const colour = cv.kind === "mark" ? c.text : palette[i % palette.length];
+          return {
+            name: cv.name,
+            type: scatter ? "scatter" : "line",
+            data: scatter ? cv.points : [...cv.points].sort((a, b) => a[0] - b[0]),
+            showSymbol: scatter,
+            symbol: cv.kind === "mark" ? "diamond" : "circle",
+            symbolSize: cv.kind === "mark" ? 14 : scatter ? 5 : 0,
+            z: cv.kind === "mark" ? 5 : 2,
+            smooth: !scatter,
+            lineStyle: { width: 2, color: colour },
+            itemStyle: { color: colour, borderColor: c.panel, borderWidth: cv.kind === "mark" ? 2 : 0 },
+          };
+        }),
       };
     },
     [curves, xName, yName, xPercent, yPercent, digits],

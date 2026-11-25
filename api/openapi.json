@@ -1132,10 +1132,12 @@
         },
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ScriptCheck"
+                }
               }
             }
           },
@@ -3065,10 +3067,12 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/Smile"
+                }
               }
             }
           },
@@ -3145,10 +3149,12 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TermStructure"
+                }
               }
             }
           },
@@ -3306,10 +3312,12 @@
         "operationId": "other_underlyings",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/OtherUnderlyings"
+                }
               }
             }
           },
@@ -3649,10 +3657,12 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/VolIndex"
+                }
               }
             }
           },
@@ -4891,10 +4901,12 @@
         "operationId": "model_risk",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ModelRisk"
+                }
               }
             }
           },
@@ -4949,10 +4961,12 @@
         "operationId": "vollab_days",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/VolLabDays"
+                }
               }
             }
           },
@@ -5047,10 +5061,12 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/VolLabQuotes"
+                }
               }
             }
           },
@@ -5226,10 +5242,12 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/VolLabRuns"
+                }
               }
             }
           },
@@ -5387,10 +5405,12 @@
         "operationId": "replay_runs",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayRuns"
+                }
               }
             }
           },
@@ -5548,10 +5568,12 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/Replay"
+                }
               }
             }
           },
@@ -6104,10 +6126,12 @@
         "operationId": "network",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkInfo"
+                }
               }
             }
           },
@@ -9231,6 +9255,75 @@
         "title": "Method",
         "description": "How a result was computed: `name` (monte_carlo, replication, full_revaluation, ...) and its parameters."
       },
+      "ModelRisk": {
+        "properties": {
+          "exotics": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/Estimate"
+                },
+                "type": "object"
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Exotics",
+            "description": "product -> model -> {price: {value, se}}",
+            "default": {}
+          },
+          "errors": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Errors",
+            "description": "by maturity: quotes, spread and each model's error, bp",
+            "default": []
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "ModelRisk",
+        "description": "The calibration's exotics under each model (price ± SE), and its fit by maturity; `note` when there is none."
+      },
+      "NetworkInfo": {
+        "properties": {
+          "lan": {
+            "type": "boolean",
+            "title": "Lan",
+            "description": "the LAN profile is on (OPTLAB_LAN)"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Blockers",
+            "description": "what blocks incoming connections (firewall, network profile)",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "lan"
+        ],
+        "title": "NetworkInfo",
+        "description": "Whether the desk listens beyond this machine, and what would stop the LAN from reaching it (read-only)."
+      },
       "Ok": {
         "properties": {
           "ok": {
@@ -9337,6 +9430,51 @@
         "type": "object",
         "title": "Origin",
         "description": "How much of a market was observed: each part's origin (observed, derived, reconstructed, synthetic, ...)."
+      },
+      "OtherUnderlyings": {
+        "properties": {
+          "names": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Names",
+            "default": {}
+          },
+          "corr": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Corr",
+            "description": "\"A|B\" -> correlation",
+            "default": {}
+          },
+          "calibrated": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calibrated"
+          },
+          "defaults": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Defaults",
+            "default": {}
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "OtherUnderlyings",
+        "description": "The names a worst-of may hold beside the calibrated one: their typed inputs and correlations."
       },
       "OtherUnderlyingsIn": {
         "properties": {
@@ -10676,6 +10814,273 @@
         "title": "QuoteResult",
         "description": "A quote, as the job returns it (`result` of its envelope) and as it is stored."
       },
+      "Replay": {
+        "properties": {
+          "trade_id": {
+            "type": "string",
+            "title": "Trade Id"
+          },
+          "underlyings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Underlyings",
+            "default": []
+          },
+          "n_valuations": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Valuations"
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/ReplayDay"
+            },
+            "type": "array",
+            "title": "Daily",
+            "default": []
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/ReplayEvent"
+            },
+            "type": "array",
+            "title": "Events",
+            "default": []
+          },
+          "explain": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Explain",
+            "default": {}
+          },
+          "inception": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Inception",
+            "default": {}
+          },
+          "reconciliation": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Reconciliation",
+            "default": {}
+          },
+          "reserves": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Reserves",
+            "default": {}
+          },
+          "sheet": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Sheet",
+            "default": {}
+          },
+          "provenance": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Provenance",
+            "default": {}
+          },
+          "seconds": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Seconds",
+            "default": {}
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "trade_id"
+        ],
+        "title": "Replay",
+        "description": "A trade's life on real closes (job `replay`, and its stored copy): its value and cash each valuation day, its\nevents, the P&L explained by the Greeks with what they leave, and the reserve released."
+      },
+      "ReplayDay": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "se": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Se"
+          },
+          "cash": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash"
+          },
+          "reserve": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reserve"
+          },
+          "release": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release"
+          },
+          "pnl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pnl"
+          },
+          "explain": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explain",
+            "description": "the day's P&L by Greek, and the reserve"
+          },
+          "residual": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Residual"
+          },
+          "greeks": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "number"
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Greeks",
+            "default": {}
+          },
+          "perf": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Perf",
+            "description": "each name's close over its strike",
+            "default": {}
+          },
+          "layer": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Layer",
+            "default": {}
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "date"
+        ],
+        "title": "ReplayDay"
+      },
+      "ReplayEvent": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "payment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "date",
+          "kind"
+        ],
+        "title": "ReplayEvent"
+      },
       "ReplayIn": {
         "properties": {
           "preset": {
@@ -10767,6 +11172,126 @@
           "strike"
         ],
         "title": "ReplayIn"
+      },
+      "ReplayRunItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "desk (run here) or versioned (results/ of the repository)"
+          },
+          "trade_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trade Id"
+          },
+          "underlyings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Underlyings"
+          },
+          "n_valuations": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Valuations"
+          },
+          "strike": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strike"
+          },
+          "events": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Events"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "kind"
+        ],
+        "title": "ReplayRunItem"
+      },
+      "ReplayRuns": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available",
+            "description": "the lake holds closes to replay on"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/ReplayRunItem"
+            },
+            "type": "array",
+            "title": "Runs",
+            "default": []
+          },
+          "presets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Presets",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "available"
+        ],
+        "title": "ReplayRuns"
       },
       "ReserveLine": {
         "properties": {
@@ -11872,6 +12397,81 @@
         ],
         "title": "ScheduleRow"
       },
+      "ScriptCheck": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "line": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line"
+          },
+          "col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Col"
+          },
+          "underlyings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Underlyings",
+            "default": []
+          },
+          "params": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Params",
+            "default": {}
+          },
+          "events": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Events"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "ScriptCheck",
+        "description": "A script read and checked: what it holds, or the first error at its line and column."
+      },
       "ScriptIn": {
         "properties": {
           "script": {
@@ -12062,6 +12662,43 @@
         "additionalProperties": true,
         "type": "object",
         "title": "SheetGeneral"
+      },
+      "Smile": {
+        "properties": {
+          "T": {
+            "type": "number",
+            "title": "T"
+          },
+          "forward": {
+            "type": "number",
+            "title": "Forward",
+            "description": "F(T) at the model's spot of 100"
+          },
+          "moneyness": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Moneyness"
+          },
+          "iv": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Iv"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "T",
+          "forward",
+          "moneyness",
+          "iv"
+        ],
+        "title": "Smile",
+        "description": "A snapshot's implied vols at one maturity, against moneyness K / F(T)."
       },
       "Snapshot": {
         "properties": {
@@ -12363,6 +13000,48 @@
         "additionalProperties": false,
         "type": "object",
         "title": "TermSheetIn"
+      },
+      "TermStructure": {
+        "properties": {
+          "T": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "T"
+          },
+          "atm_vol": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Atm Vol"
+          },
+          "forward": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Forward"
+          },
+          "discount": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Discount"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "T",
+          "atm_vol",
+          "forward",
+          "discount"
+        ],
+        "title": "TermStructure",
+        "description": "A snapshot's at-the-money vol, forward (over spot) and discount factor along the maturities."
       },
       "Trade": {
         "properties": {
@@ -13603,6 +14282,421 @@
         "title": "VarTaylor",
         "description": "The same VaR from the Greeks (delta, gamma, vega), against the full revaluation."
       },
+      "VolIndex": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "dates": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dates"
+          },
+          "close": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Close"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name",
+          "dates",
+          "close"
+        ],
+        "title": "VolIndex"
+      },
+      "VolLabDays": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "sets": {
+            "items": {
+              "$ref": "#/components/schemas/VolLabSet"
+            },
+            "type": "array",
+            "title": "Sets",
+            "default": []
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Models",
+            "default": []
+          },
+          "defaults": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Defaults",
+            "default": {}
+          },
+          "shared": {
+            "type": "boolean",
+            "title": "Shared",
+            "default": false
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "available"
+        ],
+        "title": "VolLabDays",
+        "description": "The days with option quotes in the lake, by name and source, and the fit's models and settings."
+      },
+      "VolLabQuotes": {
+        "properties": {
+          "underlying": {
+            "type": "string",
+            "title": "Underlying"
+          },
+          "day": {
+            "type": "string",
+            "title": "Day"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "slices": {
+            "items": {
+              "$ref": "#/components/schemas/VolLabSlice"
+            },
+            "type": "array",
+            "title": "Slices",
+            "default": []
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "underlying",
+          "day"
+        ],
+        "title": "VolLabQuotes",
+        "description": "A day's cleaned chain: by maturity, the mid implied vol and those of the bid and the ask."
+      },
+      "VolLabRun": {
+        "properties": {
+          "calibration_id": {
+            "type": "string",
+            "title": "Calibration Id"
+          },
+          "underlying": {
+            "type": "string",
+            "title": "Underlying"
+          },
+          "day": {
+            "type": "string",
+            "title": "Day"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "rmse_bp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rmse Bp"
+          },
+          "within_spread": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Within Spread"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          },
+          "code_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Version"
+          },
+          "ingested": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingested"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "calibration_id",
+          "underlying",
+          "day",
+          "model"
+        ],
+        "title": "VolLabRun"
+      },
+      "VolLabRuns": {
+        "properties": {
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/VolLabRun"
+            },
+            "type": "array",
+            "title": "Runs",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "VolLabRuns"
+      },
+      "VolLabSet": {
+        "properties": {
+          "underlying": {
+            "type": "string",
+            "title": "Underlying"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "days": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Days",
+            "default": []
+          },
+          "first": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First"
+          },
+          "last": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N"
+          },
+          "quality": {
+            "items": {},
+            "type": "array",
+            "title": "Quality",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "underlying"
+        ],
+        "title": "VolLabSet"
+      },
+      "VolLabSlice": {
+        "properties": {
+          "T": {
+            "type": "number",
+            "title": "T"
+          },
+          "expiry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiry"
+          },
+          "moneyness": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Moneyness"
+          },
+          "iv": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Iv"
+          },
+          "iv_bid": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Iv Bid",
+            "default": []
+          },
+          "iv_ask": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Iv Ask",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "T",
+          "moneyness",
+          "iv"
+        ],
+        "title": "VolLabSlice"
+      },
       "WorkerInfo": {
         "properties": {
           "engine": {
@@ -14126,6 +15220,191 @@
         "title": "EodResult",
         "type": "object"
       },
+      "FitCurve": {
+        "additionalProperties": true,
+        "properties": {
+          "T": {
+            "title": "T",
+            "type": "number"
+          },
+          "moneyness": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Moneyness",
+            "type": "array"
+          },
+          "iv": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Iv",
+            "type": "array"
+          }
+        },
+        "required": [
+          "T",
+          "moneyness",
+          "iv"
+        ],
+        "title": "FitCurve",
+        "type": "object"
+      },
+      "FitRow": {
+        "additionalProperties": true,
+        "properties": {
+          "T": {
+            "title": "T",
+            "type": "number"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "N"
+          },
+          "rmse_bp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Rmse Bp"
+          },
+          "bias_bp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Bias Bp"
+          },
+          "within_spread": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "the share of quotes the model puts inside the spread",
+            "title": "Within Spread"
+          },
+          "median_half_spread_bp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Median Half Spread Bp"
+          }
+        },
+        "required": [
+          "T"
+        ],
+        "title": "FitRow",
+        "type": "object"
+      },
+      "ModelFit": {
+        "additionalProperties": true,
+        "properties": {
+          "calibration_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Calibration Id"
+          },
+          "params": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Params",
+            "type": "object"
+          },
+          "by_maturity": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FitRow"
+            },
+            "title": "By Maturity",
+            "type": "array"
+          },
+          "overall": {
+            "additionalProperties": true,
+            "default": {},
+            "description": "n, rmse_bp, within_spread",
+            "title": "Overall",
+            "type": "object"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Seconds"
+          },
+          "curves": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FitCurve"
+            },
+            "title": "Curves",
+            "type": "array"
+          },
+          "arbitrage": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Arbitrage"
+          }
+        },
+        "title": "ModelFit",
+        "type": "object"
+      },
       "NameGreeks": {
         "additionalProperties": true,
         "properties": {
@@ -14159,6 +15438,72 @@
           }
         },
         "title": "NameGreeks",
+        "type": "object"
+      },
+      "ScriptPrice": {
+        "additionalProperties": true,
+        "description": "A script priced under a model (job `script`).",
+        "properties": {
+          "price": {
+            "$ref": "#/components/schemas/Estimate"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "n_paths": {
+            "title": "N Paths",
+            "type": "integer"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Seconds"
+          },
+          "expected_life": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expected Life"
+          },
+          "notional": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Notional"
+          },
+          "warnings": {
+            "default": [],
+            "items": {},
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "price",
+          "model",
+          "n_paths"
+        ],
+        "title": "ScriptPrice",
         "type": "object"
       },
       "TradeValuation": {
@@ -14232,6 +15577,151 @@
           "result"
         ],
         "title": "TradeValuation",
+        "type": "object"
+      },
+      "VolFit": {
+        "additionalProperties": true,
+        "description": "A fit of a day's quotes (job `fit`): each model's parameters, its error by maturity against the spread, and\nits curves; each model stored as a replayable run.",
+        "properties": {
+          "underlying": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Underlying"
+          },
+          "day": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Day"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Source"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Origin"
+          },
+          "fits": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ModelFit"
+            },
+            "default": {},
+            "title": "Fits",
+            "type": "object"
+          },
+          "maturities": {
+            "default": [],
+            "items": {
+              "type": "number"
+            },
+            "title": "Maturities",
+            "type": "array"
+          },
+          "quotes_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Quotes Hash"
+          }
+        },
+        "title": "VolFit",
+        "type": "object"
+      },
+      "VolFitReproduction": {
+        "additionalProperties": true,
+        "description": "A stored fit run again (job `reproduce`): the same quotes, how far the parameters moved, and both errors.",
+        "properties": {
+          "calibration_id": {
+            "title": "Calibration Id",
+            "type": "string"
+          },
+          "same_quotes": {
+            "title": "Same Quotes",
+            "type": "boolean"
+          },
+          "largest_parameter_gap": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Largest Parameter Gap"
+          },
+          "identical": {
+            "title": "Identical",
+            "type": "boolean"
+          },
+          "stored_rmse_bp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Stored Rmse Bp"
+          },
+          "new_rmse_bp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "New Rmse Bp"
+          }
+        },
+        "required": [
+          "calibration_id",
+          "same_quotes",
+          "identical"
+        ],
+        "title": "VolFitReproduction",
         "type": "object"
       },
       "FieldError": {
@@ -14322,6 +15812,18 @@
     },
     "var": {
       "$ref": "#/components/schemas/VarRun"
+    },
+    "script": {
+      "$ref": "#/components/schemas/ScriptPrice"
+    },
+    "replay": {
+      "$ref": "#/components/schemas/Replay"
+    },
+    "fit": {
+      "$ref": "#/components/schemas/VolFit"
+    },
+    "reproduce": {
+      "$ref": "#/components/schemas/VolFitReproduction"
     }
   }
 }

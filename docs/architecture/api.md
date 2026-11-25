@@ -215,7 +215,9 @@ npx openapi-typescript ../api/openapi.json --default-non-nullable false -o src/a
   `Method`, `CancelOut`, `Pipeline`, `UserOut`, `AuditPage`, `Problem`) and `Estimate`.
 - Described: the domain answers a screen reads (`optlab.server.payloads`: the market context, snapshots, the lake's
   coverage, universe and quality, presets, quotes, trades, upcoming events, risk runs, the P&L history, the scenario
-  library, the VaR backtest, the engine, the system, the admin's jobs). A route names its model in `responses`, which
+  library, the VaR backtest, a snapshot's smile and term structure, the other names, the volatility indices, the
+  model-risk table, the vol lab's days, quotes and runs, the replays, a script's check, the engine, the system, the network
+  check, the admin's jobs). A route names its model in `responses`, which
   changes the document only, never what the route sends; each model allows fields it does not name, and
   `test_api_payloads.py` checks the real answers against them. Answers not yet described are open objects in the
   document; session 2 describes them as its screens read them, without changing a field. A stored run

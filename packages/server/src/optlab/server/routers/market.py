@@ -8,7 +8,18 @@ import datetime as dt
 from fastapi import APIRouter, Query, Request
 from fastapi import Path as PathParam
 
-from optlab.server.payloads import LakeCoverage, LakeQuality, MarketContext, SnapshotPage, Universe, documented
+from optlab.server.payloads import (
+    LakeCoverage,
+    LakeQuality,
+    MarketContext,
+    OtherUnderlyings,
+    Smile,
+    SnapshotPage,
+    TermStructure,
+    Universe,
+    VolIndex,
+    documented,
+)
 from optlab.server.routers._common import ACCEPTED, audited, desk, page, submit
 from optlab.server.schemas import MarketFromLakeIn, MarketInUse, OtherUnderlyingsIn, body
 from optlab.server.web import access
@@ -39,13 +50,13 @@ def use_market(m: MarketInUse, request: Request):
     )
 
 
-@router.get("/snapshots/{snapshot_id}/smile", **access())
+@router.get("/snapshots/{snapshot_id}/smile", **access(), responses=documented(Smile))
 def smile(request: Request, snapshot_id: str = PathParam(..., pattern=SNAPSHOT), T: float = Query(1.0, gt=0, le=30)):
     """Implied volatilities of a snapshot's surface at T (`in-use` for the market in use)."""
     return desk(request).smile(T, snapshot_id)
 
 
-@router.get("/snapshots/{snapshot_id}/term", **access())
+@router.get("/snapshots/{snapshot_id}/term", **access(), responses=documented(TermStructure))
 def term(request: Request, snapshot_id: str = PathParam(..., pattern=SNAPSHOT)):
     """ATM term structure, forward and discount of a snapshot (`in-use` for the market in use)."""
     return desk(request).term_structure(snapshot_id)
@@ -57,7 +68,7 @@ def market_from_lake(m: MarketFromLakeIn, request: Request):
     return submit(request, "market_from_lake", lambda: desk(request).market_from_lake(body(m)), target=m.underlying)
 
 
-@router.get("/other-underlyings", **access())
+@router.get("/other-underlyings", **access(), responses=documented(OtherUnderlyings))
 def other_underlyings(request: Request):
     """Names typed for worst-ofs beyond the calibrated one: flat markets (vol, dividend, rate) and correlations."""
     return desk(request).basket_settings()
@@ -99,7 +110,7 @@ def lake_quality(request: Request):
     }
 
 
-@router.get("/lake/vol-indices/{name}", **access())
+@router.get("/lake/vol-indices/{name}", **access(), responses=documented(VolIndex))
 def vol_index(
     request: Request, name: str = PathParam(..., pattern=r"^[A-Za-z0-9.]{1,16}$"), start: dt.date | None = None
 ):

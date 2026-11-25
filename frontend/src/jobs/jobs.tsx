@@ -47,6 +47,9 @@ const KIND_LABEL: Record<string, string> = {
   eod_today: "EOD of the day",
 };
 
+/** The kinds of job the desk runs, as the screens name them. */
+export const JOB_KINDS = Object.keys(KIND_LABEL);
+
 export function kindLabel(kind: string): string {
   return KIND_LABEL[kind] ?? kind.replaceAll("_", " ");
 }
@@ -66,6 +69,9 @@ const REFRESHES: Record<string, string[][]> = {
   scenarios: RISK_LISTS,
   var: RISK_LISTS,
   eod: RISK_LISTS,
+  replay: [["quant", "replay", "runs"]],
+  fit: [["quant", "vollab", "runs"]],
+  reproduce: [["quant", "vollab", "runs"]],
 };
 
 type Jobs = {

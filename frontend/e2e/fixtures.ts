@@ -20,6 +20,7 @@ export const test = base.extend<{ page: Page }>({
   },
 });
 
+export type { Page };
 export { expect };
 
 export async function signIn(page: Page, name = user, secret = password): Promise<void> {

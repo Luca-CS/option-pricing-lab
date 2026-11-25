@@ -1,0 +1,16 @@
+.schedule {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.detail {
+  display: block;
+  white-space: normal;
+  max-width: 420px;
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 11.5px;
+  color: var(--ol-muted);
+}

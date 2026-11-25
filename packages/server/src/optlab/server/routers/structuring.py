@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
 
-from optlab.server.payloads import PresetList, QuotePage, SavedQuote, TermSheetFormOut, documented
+from optlab.server.payloads import PresetList, QuotePage, SavedQuote, ScriptCheck, TermSheetFormOut, documented
 from optlab.server.present import estimates
 from optlab.server.report import quote_report
 from optlab.server.routers._common import ACCEPTED, Id, desk, page, report, submit
@@ -74,7 +74,7 @@ def quote_report_page(quote_id: Id, request: Request):
     return report(quote_report(desk(request).saved_quote(quote_id)), f"quote-{quote_id}")
 
 
-@router.post("/script/check", **access())
+@router.post("/script/check", **access(), responses=documented(ScriptCheck))
 def script_check(s: ScriptIn, request: Request):
     """Parse and validate a payoff script: errors at their line and column."""
     return desk(request).script_check(body(s))

@@ -12,7 +12,7 @@ from fastapi import Path as PathParam
 from optlab.server.backups import lake_snapshots
 from optlab.server.jobs import Workers, iso
 from optlab.server.netcheck import lan_blockers
-from optlab.server.payloads import JobRowPage, SystemInfo, documented
+from optlab.server.payloads import JobRowPage, NetworkInfo, SystemInfo, documented
 from optlab.server.routers._common import ACCEPTED, audited, desk, page, submit
 from optlab.server.schedules import Schedules
 from optlab.server.schemas import (
@@ -134,7 +134,7 @@ def all_jobs(
     return page(desk(request).jobs.history(everyone=True, kind=kind), cursor, limit)
 
 
-@router.get("/network", **access("admin"))
+@router.get("/network", **access("admin"), responses=documented(NetworkInfo))
 def network(request: Request):
     """What would stop other machines from reaching this one on the LAN (Windows firewall and network profile;
     read-only, fixed commands)."""
