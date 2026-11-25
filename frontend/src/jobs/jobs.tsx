@@ -69,6 +69,9 @@ const REFRESHES: Record<string, string[][]> = {
   scenarios: RISK_LISTS,
   var: RISK_LISTS,
   eod: RISK_LISTS,
+  replay: [["quant", "replay", "runs"]],
+  fit: [["quant", "vollab", "runs"]],
+  reproduce: [["quant", "vollab", "runs"]],
 };
 
 type Jobs = {
