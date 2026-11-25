@@ -1,4 +1,4 @@
-import { accessible, ensureUsers, expect, signInAs, test } from "./fixtures";
+import { accessible, ensureUsers, expect, settled, signInAs, test } from "./fixtures";
 
 test.beforeAll(async ({ baseURL }) => {
   await ensureUsers(baseURL ?? "", ["structurer+trader", "structurer"]);
@@ -57,8 +57,11 @@ test("the builder keeps its edits and its options in this browser, until started
   await expect(knockIn).toHaveValue("60");
   await knockIn.fill("55");
   await knockIn.press("Enter");
+  await page.waitForLoadState("networkidle"); // the server's form answers the edit
   await page.getByRole("button", { name: "Pricing options" }).click();
+  await settled(page); // the panel opens with a transition: a control still moving lets the click land elsewhere
   await page.getByRole("combobox", { name: "Delta convention" }).click();
+  await settled(page);
   await page.getByRole("option", { name: "Sticky strike" }).click();
   await expect(page.getByRole("switch", { name: "Forward control variates" })).toBeVisible();
   await accessible(page);
