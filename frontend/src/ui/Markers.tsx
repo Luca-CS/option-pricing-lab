@@ -22,7 +22,8 @@ export function originKind(origin: string | null | undefined): OriginKind {
   const o = (origin ?? "").toLowerCase();
   if (o.includes("reconstruct") || o.includes("extrapolat")) return "reconstructed";
   if (o.includes("observ") || o.includes("quote")) return "observed";
-  if (o.includes("deriv") || o.includes("fit") || o.includes("calibrat")) return "derived";
+  if (o.includes("deriv") || o.includes("fit") || o.includes("calibrat") || o.includes("total_return"))
+    return "derived";
   if (o.includes("typed") || o.includes("flat") || o.includes("manual") || o.includes("hand")) return "typed";
   return "synthetic";
 }

@@ -1,13 +1,20 @@
 // The charts, loaded on demand: ECharts stays out of the first page's JavaScript (HANDOFF_REFACTOR_2_UX.md §7).
 import { Skeleton } from "@mantine/core";
 import { type ComponentProps, lazy, Suspense } from "react";
-import type { CurveChart as C, LadderChart as L, SeriesChart as S, WaterfallChart as W } from "./charts";
+import type {
+  CurveChart as C,
+  DistributionChart as D,
+  LadderChart as L,
+  SeriesChart as S,
+  WaterfallChart as W,
+} from "./charts";
 
 const charts = () => import("./charts");
 const Ladder = lazy(() => charts().then((m) => ({ default: m.LadderChart })));
 const Waterfall = lazy(() => charts().then((m) => ({ default: m.WaterfallChart })));
 const Curves = lazy(() => charts().then((m) => ({ default: m.CurveChart })));
 const Lines = lazy(() => charts().then((m) => ({ default: m.SeriesChart })));
+const Distribution = lazy(() => charts().then((m) => ({ default: m.DistributionChart })));
 
 function Wait({ height = 260 }: { height?: number | undefined }) {
   return (
@@ -45,6 +52,14 @@ export function SeriesChart(props: ComponentProps<typeof S>) {
   return (
     <Suspense fallback={<Wait height={props.height} />}>
       <Lines {...props} />
+    </Suspense>
+  );
+}
+
+export function DistributionChart(props: ComponentProps<typeof D>) {
+  return (
+    <Suspense fallback={<Wait height={props.height} />}>
+      <Distribution {...props} />
     </Suspense>
   );
 }

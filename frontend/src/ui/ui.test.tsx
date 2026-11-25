@@ -59,10 +59,27 @@ describe("the node heatmap", () => {
         tenors={["6m", "1y"]}
         cells={cells}
         selected={{ row: 1, col: 1 }}
+        onSelect={() => undefined}
         caption="vega"
       />,
     );
     expect(screen.getByRole("button", { pressed: true })).toHaveTextContent("+3,264");
+  });
+
+  it("is a table of figures when nothing opens behind a cell, its colours named", () => {
+    renderInApp(
+      <NodeHeatmap
+        strikes={["−10 %", "+0 %"]}
+        tenors={["−5 pts", "+5 pts"]}
+        cells={cells}
+        caption="P&L by spot and vol"
+        tones={["loss", "gain"]}
+      />,
+    );
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    expect(screen.getByRole("table", { name: "P&L by spot and vol" })).toHaveTextContent("−2,539");
+    expect(screen.getByText("loss")).toBeInTheDocument();
+    expect(screen.getByText("gain")).toBeInTheDocument();
   });
 });
 
@@ -71,6 +88,7 @@ describe("markers and progress", () => {
     expect(originKind("lake:reconstructed")).toBe("reconstructed");
     expect(originKind("observed")).toBe("observed");
     expect(originKind("derived")).toBe("derived");
+    expect(originKind("total_return")).toBe("derived");
     expect(originKind("flat")).toBe("typed");
     expect(originKind("simulated")).toBe("synthetic");
     expect(originKind(null)).toBe("synthetic");

@@ -94,8 +94,9 @@ export const theme = createTheme({
   components: {
     // a modal or a drawer locks the page's scroll through react-remove-scroll, which writes a <style> element: the
     // page CSP refuses it (ADR-0024), so they leave the page as it is (the palette is a modal too)
-    Modal: { defaultProps: { lockScroll: false } },
-    Drawer: { defaultProps: { lockScroll: false } },
+    // a dialog's close button is an icon: it needs its name (axe: button-name)
+    Modal: { defaultProps: { lockScroll: false, closeButtonProps: { "aria-label": "Close" } } },
+    Drawer: { defaultProps: { lockScroll: false, closeButtonProps: { "aria-label": "Close" } } },
     Notification: { defaultProps: { closeButtonProps: { "aria-label": "Hide this notification" } } },
   },
 });

@@ -18,6 +18,7 @@ async function quote(page: import("@playwright/test").Page, barrier: string) {
 }
 
 test("the structurer builds a Phoenix, solves its coupon, and books it into the trader's book", async ({ page }) => {
+  test.setTimeout(240_000); // the quote may wait behind another job in the queue
   await signInAs(page, "structurer+trader");
   await quote(page, "55");
   await expect(page.getByText(/% p\.a\./).first()).toBeVisible();
@@ -48,6 +49,7 @@ test("a field out of its bounds is refused under the field, and the quote waits"
 });
 
 test("two kept quotes compare side by side, with what differs in their sheets", async ({ page }) => {
+  test.setTimeout(420_000); // two quotes, each of which may wait behind another job
   await signInAs(page, "structurer");
   await quote(page, "50");
   await page.goto("/structuring/quotes");

@@ -67,3 +67,43 @@ def test_a_greeks_run_through_the_api(a, risk):
     from optlab.server import payloads
 
     payloads.RiskRun.model_validate(res)  # the document's description of a Greeks run (test_api_payloads.py)
+
+
+def test_the_backtest_counts_the_losses_beyond_the_var(monkeypatch):
+    """A VaR run's 1-day VaR against the stored days' explained P&L: a loss beyond it is an exception, and Kupiec's test
+    reads their count (one VaR, not a VaR per day: the route says what it compares)."""
+    import optlab.risk.pnl as pnl_module
+    from optlab.server import payloads
+    from optlab.server.risk_api import RiskApi
+
+    class Store:
+        def runs(self, kind, latest=True):
+            stored = {
+                "var": [{"run_id": "var-2021-06-30-v1"}],
+                "pnl": [{"day": "2020-03-31", "params": {"from": "2020-02-18"}}],
+            }
+            return stored.get(kind, [])
+
+        def run(self, run_id):
+            return {"payload": {"day": "2021-06-30", "one_day": {"var": {"value": 100.0, "se": 1.0}}}}
+
+    days = [
+        {"to": "2020-02-19", "total": -150.0},
+        {"to": "2020-02-20", "total": 20.0},
+        {"to": "2020-02-21", "total": -99.0},
+    ]
+    monkeypatch.setattr(pnl_module, "cumulative", lambda store, start, end: {"daily": days})
+    risk = RiskApi.__new__(RiskApi)
+    risk.store = Store()  # pyright: ignore[reportAttributeAccessIssue] (a stand-in: the two kinds of run the backtest reads)
+    out = risk.backtest(None, None, None)
+    assert [d["exception"] for d in out["days"]] == [True, False, False]
+    assert out["var"] == 100.0 and out["from"] == "2020-02-18" and out["to"] == "2020-03-31"
+    assert out["kupiec"]["exceptions"] == 1 and out["kupiec"]["n"] == 3 and 0 <= out["kupiec"]["p_value"] <= 1
+    payloads.VarBacktest.model_validate(out)
+
+
+def test_the_backtest_says_what_it_lacks(a, risk):
+    r = risk.get("/api/v1/risk/backtest")
+    assert r.status_code == 200 and r.json()["note"].startswith("no VaR run yet") and r.json()["days"] == []
+    assert risk.get("/api/v1/risk/backtest?var_run=var-none").status_code == 404
+    assert risk.get("/api/v1/risk/backtest?var_run=../x").status_code == 422

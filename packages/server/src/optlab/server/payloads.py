@@ -9,7 +9,7 @@ stops being true fails a test. A model is added when a screen reads the payload,
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.json_schema import models_json_schema
@@ -21,9 +21,7 @@ class Doc(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
-def documented(
-    model: type[BaseModel], description: str = "the answer", status: int = 200
-) -> dict[int | str, dict[str, Any]]:
+def documented(model: Any, description: str = "the answer", status: int = 200) -> dict[int | str, dict[str, Any]]:
     """The `responses` of a route whose answer the model describes (the document only; the route sends its dict)."""
     return {status: {"model": model, "description": description}}
 
@@ -657,6 +655,34 @@ class ScenarioRun(Doc):
     seconds: float | None = None
 
 
+class ScenarioDef(Doc):
+    name: str
+    description: str = ""
+    label: str | None = None
+    shock: dict[str, Any] = Field(
+        default={},
+        description="the shock's fields as `optlab.risk.shocks.Shock` reads them (moves as fractions, curves in bp)",
+    )
+
+
+class ScenarioVersion(Doc):
+    version: int
+    meta: dict[str, Any] = Field(default={}, description="signed_by, note")
+    created_at: str | None = None
+
+
+class ScenarioLibrary(Doc):
+    """The signed scenario set in use (the starting values when nothing is saved) and its versions."""
+
+    scenarios: list[ScenarioDef]
+    version: int | None = None
+    signed_by: str | None = None
+    note: str | None = None
+    created_at: str | None = None
+    starting: bool = False
+    history: list[ScenarioVersion] = []
+
+
 class PnlDay(Doc):
     """One day of the explained P&L: the cascade of full revaluations, each step's [value, se], the Greeks' prediction
     of each step and what they leave unexplained."""
@@ -697,6 +723,142 @@ class PnlHistory(Doc):
     runs: list[dict[str, Any]] = []
     eod: list[RiskRunItem] = []
     note: str | None = None
+
+
+class VarTaylor(Doc):
+    """The same VaR from the Greeks (delta, gamma, vega), against the full revaluation."""
+
+    var: float | None = None
+    es: float | None = None
+    mean_abs_gap: float | None = None
+    pnl: list[float] = []
+
+
+class VarHorizon(Doc):
+    """One VaR: a horizon (1 day, 10 days) or the stressed window, its distribution, the VaR day and what made it."""
+
+    label: str
+    horizon: int
+    start: str
+    end: str
+    dates: list[str]
+    pnl: list[Estimate] = Field(..., description="the book's P&L of each historical move, currency")
+    var: Estimate = Field(..., description="the loss at the level, positive")
+    es: float = Field(..., description="the mean loss beyond the ES level, positive")
+    var_date: str = Field(..., description="the historical day whose move is the VaR")
+    contributions: dict[str, dict[str, float]] = Field(
+        default={}, description="'var' and 'es' -> position -> its P&L (on the VaR day; mean over the tail)"
+    )
+    factors: dict[str, Estimate] = Field(
+        default={}, description="the VaR day's move one factor at a time, and the interaction"
+    )
+    taylor: VarTaylor | None = None
+    n: int = 0
+    seconds: float | None = None
+    origins: dict[str, Any] = {}
+    note: str | None = None
+    window: dict[str, Any] | None = Field(default=None, description="the stressed window and how it was found")
+
+
+class VarRun(Doc):
+    """A historical VaR by full revaluation (job `var`): 1 day, 10 days and the stressed window."""
+
+    run_id: str
+    day: str
+    names: list[str] = []
+    currency: str | None = None
+    level: float
+    es_level: float
+    factors: list[str] = []
+    one_day: VarHorizon
+    ten_day: VarHorizon | None = None
+    stressed: VarHorizon | None = None
+    origins: dict[str, Any] = {}
+    scenarios: int | None = None
+    seconds: float | None = None
+
+
+class BacktestDay(Doc):
+    day: str
+    pnl: float
+    exception: bool = Field(..., description="the loss went beyond the VaR")
+
+
+class VarBacktest(Doc):
+    """A VaR run's 1-day VaR against each stored day's explained P&L (one VaR, not a VaR per day)."""
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+    var_run: str | None = None
+    var_day: str | None = None
+    var: float | None = Field(default=None, description="the 1-day VaR, a positive loss, currency")
+    level: float
+    from_: str | None = Field(default=None, alias="from")
+    to: str | None = None
+    days: list[BacktestDay] = []
+    kupiec: dict[str, Any] | None = Field(
+        default=None, description="Kupiec's test: exceptions, n, expected, rate, lr, p_value"
+    )
+    note: str | None = None
+
+
+class EodPosition(Doc):
+    trade_id: str
+    group: str | None = None
+    quantity: float | None = None
+    value: Estimate
+    notional: float | None = None
+    reserve: float | None = Field(default=None, description="the reserve still held at the close")
+    greeks: dict[str, Estimate] | None = None
+
+
+class EodGroup(Doc):
+    label: str
+    method: str | None = None
+    model: str | None = None
+    n_paths: int | None = None
+    currency: str | None = None
+    value: Estimate
+    positions: list[str] = []
+    warnings: list[Any] = []
+
+
+class EodRun(Doc):
+    """A stored EOD run: the book's value and Greeks at a day's close, on that day's market from the lake."""
+
+    run_id: str
+    kind: Literal["eod"]
+    day: str
+    value: Estimate
+    positions: list[EodPosition] = []
+    groups: list[EodGroup] = []
+    greeks: dict[str, Estimate] | None = Field(default=None, description='"greek|name|bucket" -> {value, se}')
+    provenance: dict[str, Any] = Field(default={}, description="what each name's market was made of (origins only)")
+    trades: list[dict[str, Any]] = Field(default=[], description="the trades alive that day: id, version, status")
+    params: dict[str, Any] = {}
+    code: str | None = None
+    seconds: float | None = None
+    created_at: str | None = None
+
+
+class PnlRun(Doc):
+    """A stored day of the explained P&L (kind `pnl`): the cascade from the day before's EOD run to this one's."""
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+    run_id: str
+    kind: Literal["pnl"]
+    from_: str = Field(..., alias="from")
+    to: str
+    total: float
+    steps: dict[str, list[float]] = {}
+    predicted: dict[str, float] = {}
+    unexplained: dict[str, float] = {}
+    order: list[str] = []
+    eod: list[str | None] = Field(default=[], description="the EOD runs of the two days")
+    created_at: str | None = None
+
+
+# a stored run (GET /risk/runs/{run_id}): its fields follow its kind (the job result's, plus kind and created_at)
+StoredRun = RiskRun | LadderRun | ScenarioRun | VarRun | EodRun | PnlRun
 
 
 class EodDay(Doc):
@@ -829,6 +991,7 @@ JOB_RESULTS: dict[str, type[BaseModel]] = {
     "ladder": LadderRun,
     "scenarios": ScenarioRun,
     "eod": EodResult,
+    "var": VarRun,
 }
 
 

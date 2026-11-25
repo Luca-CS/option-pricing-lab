@@ -19,6 +19,8 @@ DESCRIBED = {  # the domain routes of session 2's screens, so far; each names it
     "/api/v1/trading/events/upcoming": "Upcoming",
     "/api/v1/risk/runs": "RiskRunPage",
     "/api/v1/risk/pnl": "PnlHistory",
+    "/api/v1/risk/scenarios": "ScenarioLibrary",
+    "/api/v1/risk/backtest": "VarBacktest",
     "/api/v1/quant/engine": "EngineInfo",
     "/api/v1/admin/system": "SystemInfo",
     "/api/v1/admin/jobs": "JobRowPage",
@@ -35,7 +37,6 @@ OPEN = {
     "/api/v1/market/other-underlyings",
     "/api/v1/market/lake/vol-indices/{name}",
     "/api/v1/market/lake/basket-quotes",
-    "/api/v1/risk/scenarios",
     "/api/v1/quant/model-risk",
     "/api/v1/quant/vollab/days",
     "/api/v1/quant/vollab/quotes",
@@ -70,6 +71,8 @@ def admin(a):
     c.valuation = a.wait(c, r.json()["job_id"])  # type: ignore[attr-defined]
     r = c.post("/api/v1/trading/book/valuations", json=quick)
     c.book = a.wait(c, r.json()["job_id"])  # type: ignore[attr-defined]
+    library = c.get("/api/v1/risk/scenarios").json()["scenarios"]
+    assert c.put("/api/v1/risk/scenarios", json={"scenarios": library, "note": "signed"}).status_code == 200
     r = c.post("/api/v1/risk/scenarios/runs", json={"options": {"precision": "quick"}, "grid": False})
     assert r.status_code == 202, r.text
     c.scenarios = a.wait(c, r.json()["job_id"], timeout=900)  # type: ignore[attr-defined]
@@ -77,17 +80,16 @@ def admin(a):
 
 
 def _documented(a) -> dict[str, str]:
-    """GET path -> the name of the model its 200 names in the document."""
+    """GET path -> the name of the model its 200 names in the document ("A|B" for one of several)."""
     out = {}
     for path, item in a.app.openapi()["paths"].items():
         op = item.get("get")
         if op is None:
             continue
-        ref = (
-            op["responses"].get("200", {}).get("content", {}).get("application/json", {}).get("schema", {}).get("$ref")
-        )
-        if ref:
-            out[path] = ref.rsplit("/", 1)[-1]
+        schema = op["responses"].get("200", {}).get("content", {}).get("application/json", {}).get("schema", {})
+        refs = [schema["$ref"]] if "$ref" in schema else [x["$ref"] for x in schema.get("anyOf", []) if "$ref" in x]
+        if refs:
+            out[path] = "|".join(r.rsplit("/", 1)[-1] for r in refs)
     return out
 
 
@@ -109,6 +111,7 @@ DESCRIBED_WITH_ITEMS = {
     "/api/v1/structuring/quotes": ("items",),
     "/api/v1/trading/trades": ("items",),
     "/api/v1/risk/runs": ("items",),
+    "/api/v1/risk/scenarios": ("scenarios", "history"),
     "/api/v1/admin/system": ("workers",),
     "/api/v1/admin/jobs": ("items",),
 }
@@ -190,6 +193,8 @@ def test_the_trading_answers_and_results_are_described(a, admin):
     s = payloads.ScenarioRun.model_validate(admin.scenarios["result"])
     assert s.scenarios and s.scenarios[0].book.se is not None
     run = admin.get(f"/api/v1/risk/runs/{s.run_id}")
-    assert run.status_code == 200 and documented["/api/v1/risk/runs/{run_id}"] == "RiskRun"
-    payloads.RiskRun.model_validate(run.json())
+    kinds = documented["/api/v1/risk/runs/{run_id}"]
+    assert run.status_code == 200 and kinds == "RiskRun|LadderRun|ScenarioRun|VarRun|EodRun|PnlRun"
+    stored = payloads.ScenarioRun.model_validate(run.json())  # a stored run has its job result's fields
+    assert stored.scenarios == s.scenarios
     assert set(a.app.openapi()["x-job-results"]) >= {"quote", "value", "book", "risk", "ladder", "scenarios"}

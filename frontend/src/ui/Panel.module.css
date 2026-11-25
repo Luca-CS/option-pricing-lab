@@ -43,6 +43,8 @@
   padding: 0 0 4px;
 }
 
+/* positioned, so the text hidden for screen readers (absolutely placed) scrolls with the table, not the page */
 .scroll {
   overflow-x: auto;
+  position: relative;
 }

@@ -81,6 +81,7 @@ Routes are written without the `/api/v1` prefix. `202` marks a route that answer
 | `PUT /api/risk/scenarios` | edit and sign scenarios | `PUT /risk/scenarios` (`signed_by` = the authenticated user, audited) | risk | risk | kept |
 | `POST /api/risk/scenarios/run` | run the scenarios on the book | `POST /risk/scenarios/runs` 202 | risk | trader, risk | kept |
 | `POST /api/risk/var` | historical VaR (1 day, 10 days, stressed), contributions | `POST /risk/var` 202 | risk | risk | kept |
+| — | backtest of a VaR run's 1-day VaR on the stored explained P&L, Kupiec's test (CLI and report only in v0) | `GET /risk/backtest?var_run=&from=&to=` | risk | viewer | new route for an existing function (session 2, Risk > Backtest) |
 | `GET /api/pnl?from=&to=` | cumulated explained P&L from EOD runs | `GET /risk/pnl?from=&to=` | risk | viewer | kept |
 | `POST /api/pnl/eod` | EOD runs for a period (idempotent backfill) | `POST /risk/eod-runs` 202 (idempotency key = the run key) | risk | risk | kept |
 
