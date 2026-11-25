@@ -913,6 +913,27 @@ class VolIndex(Doc):
     source: str | None = None
 
 
+class BasketQuote(Doc):
+    """One pseudo-quote: the option on the basket against the same options on its members, at one year."""
+
+    basket: str = Field(description="the members joined by '+'")
+    kind: str = Field(description="cvc (a call on the basket against calls on the members) or pvp (puts)")
+    strike: float = Field(description="a fraction of the spot")
+    price: float | None = Field(None, description="long the basket, short the members: in % of notional, undiscounted")
+    price_se: float | None = Field(None, description="in % of notional")
+    basket_vol: float | None = None
+    rho: float | None = Field(None, description="the average correlation the quote was simulated with")
+    implied_rho: float | None = Field(None, description="the flat correlation that gives the basket's price")
+    origin: str | None = None
+
+
+class BasketQuotes(Doc):
+    """The latest day's CvC and PvP pseudo-quotes (origin synthetic: no broker level); `day` is null without any."""
+
+    day: str | None = None
+    rows: list[BasketQuote] = []
+
+
 class ModelRisk(Doc):
     """The calibration's exotics under each model (price ± SE), and its fit by maturity; `note` when there is none."""
 

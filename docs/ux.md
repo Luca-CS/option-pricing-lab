@@ -52,7 +52,7 @@ its page, and its "Open in…" menu lists the other places it opens.
 | # | From | To |
 |---|---|---|
 | 1 | A quote, "Book it" | its page with the booking dialog open (`?book=1`), then the trade. Back: the trade's quote |
-| 2 | A quote | its model risk (`/quant/calibration?quote=`: its model provisions, its control); its backtest (the replay lab) |
+| 2 | A quote | its model risk (`/quant/calibration?quote=`: its model provisions, its control); its backtest (`/quant/replay?quote=`: the quote's own product struck on a past date) |
 | 3 | A trade | its Greeks (`/trading/risk?trade=`), its P&L explained (`/trading/pnl?trade=`), its lifecycle, its replay |
 | 4 | A risk figure (a vega node, a VaR contribution) | the trades that carry it, then the market object behind it (`/quant/market/:name?strike=&tenor=`) |
 | 5 | A market object (a name's page) | the trades exposed to it and the quotes priced on it |

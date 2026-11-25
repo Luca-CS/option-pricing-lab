@@ -1,17 +1,20 @@
 // The replay lab (Quant › Replay lab, and a replay's page `/quant/replay/:id`): a product struck on a past date and
 // lived on real closes: its value and cash at each valuation, its events, each name's performance since the strike,
 // the P&L explained by the Greeks with what they leave, and the reserve released. The stored replays are listed, the
-// desk's and the repository's.
+// desk's and the repository's. From a quote (`?quote=`), the product backtest: the quote's own product, struck on a
+// past date.
 import { Anchor, Button, Group, NumberInput, Select, Text, TextInput } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { api, ok, type Schemas } from "../../api/client";
+import { usePresets, useSavedQuote } from "../../api/queries";
 import { SpacePage } from "../../app/Shell";
 import { can, useMe } from "../../auth/session";
 import { SeriesChart, WaterfallChart } from "../../charts";
 import { useScreenJob } from "../../jobs/useScreenJob";
 import { formatDate, formatNumber, formatPercent, formatSeconds } from "../../lib/format";
+import { replayStart } from "../../lib/replay";
 import { JobProgress } from "../../ui/Flow";
 import { Kpi, KpiRow } from "../../ui/Kpi";
 import { Panel } from "../../ui/Panel";
@@ -187,12 +190,45 @@ export default function Replay() {
   const [paths, setPaths] = useState<number | string>(20_000);
   const r = runs.data;
   const run = job.envelope?.result ?? stored.data ?? null;
-  const from = params.get("trade") ?? params.get("quote");
+  const quoteId = params.get("quote");
+  const from = params.get("trade") ?? quoteId;
+  // a quote's backtest: its own product, as the closest preset of its shape and the fields that differ
+  const quote = useSavedQuote(quoteId);
+  const presets = usePresets();
+  const backtest = useMemo(
+    () =>
+      quote.data && presets.data && r?.presets
+        ? replayStart(quote.data.sheet as Record<string, unknown>, presets.data.presets ?? [], r.presets)
+        : null,
+    [quote.data, presets.data, r?.presets],
+  );
+  useEffect(() => {
+    if (backtest) {
+      setPreset(backtest.preset);
+      setUnderlying(backtest.underlying);
+    }
+  }, [backtest]);
+  const changes = backtest && (preset ?? r?.presets?.[0]) === backtest.preset ? backtest.changes : undefined;
+  const nChanges = Object.keys(backtest?.changes ?? {}).length;
   return (
     <SpacePage title={id ? `Replay ${id}` : undefined}>
-      {from && (
+      {from && !backtest && (
         <Text size="sm" c="dimmed">
           A replay starts from a preset and a strike date: pick the preset of {from}'s kind, struck on a past date.
+        </Text>
+      )}
+      {quoteId && backtest && (
+        <Text size="sm" c="dimmed">
+          The backtest of quote{" "}
+          <Anchor component={Link} to={`/structuring/quotes/${encodeURIComponent(quoteId)}`} className={c.mono}>
+            {quoteId}
+          </Anchor>
+          : the {backtest.preset.replaceAll("_", " ")} preset on {backtest.underlying}
+          {nChanges > 0
+            ? ` with the quote's ${nChanges} other field${nChanges > 1 ? "s" : ""} (${Object.keys(backtest.changes).join(", ")})`
+            : ", as the quote has it"}
+          , struck on the past date you pick{backtest.dates.length > 0 ? " (the quote's own dates are left out)" : ""}.
+          {!can(me, "replay_run") && " Running one needs the quant role: the stored replays are below."}
         </Text>
       )}
       {r && !r.available && (
@@ -270,6 +306,7 @@ export default function Replay() {
                         body: {
                           preset: preset ?? r.presets?.[0] ?? "barrier_reverse_convertible",
                           underlying,
+                          ...(changes ? { changes } : {}),
                           strike,
                           model,
                           every: typeof every === "number" ? every : 5,

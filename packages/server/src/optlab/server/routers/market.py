@@ -9,6 +9,7 @@ from fastapi import APIRouter, Query, Request
 from fastapi import Path as PathParam
 
 from optlab.server.payloads import (
+    BasketQuotes,
     LakeCoverage,
     LakeQuality,
     MarketContext,
@@ -118,7 +119,7 @@ def vol_index(
     return desk(request).data_vol_index(name, start.isoformat() if start else None)
 
 
-@router.get("/lake/basket-quotes", **access())
+@router.get("/lake/basket-quotes", **access(), responses=documented(BasketQuotes))
 def basket_quotes(request: Request):
     """CvC and PvP pseudo-quotes (origin synthetic), the last year."""
     return desk(request).data_baskets()

@@ -24,6 +24,7 @@ import { Kpi, KpiRow } from "../../ui/Kpi";
 import { COVERAGE, OriginBadge, PIPELINES } from "../../ui/Markers";
 import { Panel } from "../../ui/Panel";
 import { Empty, Failure, Loading } from "../../ui/States";
+import { Est } from "../../ui/Value";
 import { commonClasses as c, DataTable, QuoteLink, TradeLink } from "../common";
 
 const TENORS: [string, number][] = [
@@ -82,6 +83,59 @@ function VolIndexChart({ name }: { name: string }) {
       />
       <OriginBadge origin={v.origin} label={v.source ?? "source"} to={COVERAGE} />
     </>
+  );
+}
+
+const KIND: Record<string, string> = { cvc: "CvC (calls)", pvp: "PvP (puts)" };
+
+/** The CvC and PvP pseudo-quotes: an option on the basket against the same options on its members, at one year. */
+function BasketQuotes() {
+  const q = useQuery({
+    queryKey: ["market", "basket-quotes"],
+    queryFn: () => ok(api.GET("/api/v1/market/lake/basket-quotes")),
+  });
+  const d = q.data;
+  return (
+    <Panel
+      title="Baskets against their members"
+      hint={`CvC and PvP pseudo-quotes at one year${d?.day ? `, ${formatDate(d.day)}` : ""}`}
+      flush
+    >
+      {q.isPending && <Loading lines={2} />}
+      {q.error && <Failure error={q.error} />}
+      {d && (d.rows ?? []).length === 0 && (
+        <p className={`${c.faint} ${c.pad}`}>
+          None in this lake: the lake's derive step builds them from the surfaces and the correlations.
+        </p>
+      )}
+      {d && (d.rows ?? []).length > 0 && (
+        <DataTable
+          caption="CvC and PvP pseudo-quotes"
+          head={["Basket", "Kind", "Strike", "Spread, % of notional", "Basket vol", "Correlation", "Implied", "Origin"]}
+          num={[2, 3, 4, 5, 6]}
+          rows={(d.rows ?? []).map((r) => ({
+            key: `${r.basket}-${r.kind}-${r.strike}`,
+            cells: [
+              <span key="b" className={c.mono}>
+                {r.basket.replaceAll("+", " + ")}
+              </span>,
+              KIND[r.kind] ?? r.kind,
+              formatPercent(r.strike, { digits: 0 }),
+              <Est
+                key="p"
+                value={r.price === null || r.price === undefined ? null : { value: r.price, se: r.price_se }}
+                digits={3}
+                signed
+              />,
+              formatPercent(r.basket_vol, { digits: 2 }),
+              formatNumber(r.rho, { digits: 3 }),
+              formatNumber(r.implied_rho, { digits: 3 }),
+              <OriginBadge key="o" origin={r.origin} to={COVERAGE} />,
+            ],
+          }))}
+        />
+      )}
+    </Panel>
   );
 }
 
@@ -397,6 +451,7 @@ export default function Market() {
             )}
           </p>
         </Panel>
+        <BasketQuotes />
       </div>
     </SpacePage>
   );

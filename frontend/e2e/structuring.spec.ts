@@ -48,6 +48,36 @@ test("a field out of its bounds is refused under the field, and the quote waits"
   await expect(page.getByRole("button", { name: "Book it" })).toHaveCount(0);
 });
 
+test("the builder keeps its edits and its options in this browser, until started again or forgotten", async ({
+  page,
+}) => {
+  await signInAs(page, "structurer");
+  await page.goto("/structuring/builder?preset=phoenix");
+  const knockIn = page.getByRole("textbox", { name: "Knock-in barrier" });
+  await expect(knockIn).toHaveValue("60");
+  await knockIn.fill("55");
+  await knockIn.press("Enter");
+  await page.getByRole("button", { name: "Pricing options" }).click();
+  await page.getByRole("combobox", { name: "Delta convention" }).click();
+  await page.getByRole("option", { name: "Sticky strike" }).click();
+  await expect(page.getByRole("switch", { name: "Forward control variates" })).toBeVisible();
+  await accessible(page);
+  // away and back: the edit and the option are where they were
+  await page.goto("/structuring/quotes");
+  await page.goto("/structuring/builder?preset=phoenix");
+  await expect(knockIn).toHaveValue("55");
+  await page.getByRole("button", { name: "Pricing options" }).click();
+  await expect(page.getByRole("combobox", { name: "Delta convention" })).toHaveValue("Sticky strike");
+  await page.getByRole("button", { name: "Start again from the preset" }).click();
+  await expect(knockIn).toHaveValue("60");
+  // the user menu forgets the options too
+  await page.getByRole("button", { name: /preferences and sign out/ }).click();
+  await page.getByRole("menuitem", { name: "Forget this browser's preferences" }).click();
+  await page.reload();
+  await page.getByRole("button", { name: "Pricing options" }).click();
+  await expect(page.getByRole("combobox", { name: "Delta convention" })).toHaveValue("Sticky moneyness");
+});
+
 test("two kept quotes compare side by side, with what differs in their sheets", async ({ page }) => {
   test.setTimeout(420_000); // two quotes, each of which may wait behind another job
   await signInAs(page, "structurer");

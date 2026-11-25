@@ -9,6 +9,14 @@ test("the trader values the book and reads it by group", async ({ page }) => {
   await signInAs(page, "trader");
   await page.goto("/trading/book");
   await expect(page.getByRole("button", { name: /^SPX\s*\d+ rows/ })).toBeVisible();
+  // the filters live in the URL, and the grid follows them (a grid that kept rendering once held them back for ever)
+  await expect(page.getByRole("link", { name: "DEMO-01", exact: true })).toHaveCount(0); // called: not live
+  await page.getByText("All", { exact: true }).click();
+  await expect(page.getByRole("link", { name: "DEMO-01", exact: true })).toBeVisible();
+  await page.getByRole("combobox", { name: "Group by" }).click();
+  await page.getByRole("option", { name: "By status" }).click();
+  await expect(page.getByRole("button", { name: /^called\s*\d+ rows?/ })).toBeVisible();
+  await expect(page).toHaveURL(/show=all/);
   await page.getByRole("button", { name: "Value the book" }).click();
   await expect(page.getByRole("heading", { name: "Simulations" })).toBeVisible({ timeout: 180_000 });
   await expect(page.getByText("Net of the reserve")).toBeVisible();

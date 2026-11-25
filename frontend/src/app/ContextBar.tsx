@@ -1,15 +1,16 @@
 // The bar above every screen: the valuation date and the market in use (a click opens the market drawer), the engine
 // that computes, the search, the jobs in flight and the person signed in, with their preferences.
 import { Avatar, Menu, SegmentedControl, Stack, Text, UnstyledButton, useMantineColorScheme } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import { spotlight } from "@mantine/spotlight";
-import { IconLogout, IconSearch } from "@tabler/icons-react";
+import { IconEraser, IconLogout, IconSearch } from "@tabler/icons-react";
 import { type ReactNode, useState } from "react";
 import { useNavigate } from "react-router";
 import { useEngine, useMarketContext } from "../api/queries";
 import { useMe, useSignOut } from "../auth/session";
 import { formatDate } from "../lib/format";
 import { MarketBadge } from "../ui/Markers";
-import { type Density, density, type Palette, palette, setDensity, setPalette } from "./preferences";
+import { type Density, density, forgetAll, type Palette, palette, setDensity, setPalette } from "./preferences";
 import classes from "./Shell.module.css";
 
 /** A market more than this many days older than today is called old (the demo's always is, and says so). */
@@ -27,7 +28,7 @@ function UserMenu() {
   const me = useMe().data;
   const signOut = useSignOut();
   const navigate = useNavigate();
-  const { colorScheme, setColorScheme } = useMantineColorScheme();
+  const { colorScheme, setColorScheme, clearColorScheme } = useMantineColorScheme({ keepTransitions: true });
   const [pal, setPal] = useState<Palette>(palette());
   const [dens, setDens] = useState<Density>(density());
   const initials = (me?.name ?? "?").slice(0, 2).toUpperCase();
@@ -90,6 +91,18 @@ function UserMenu() {
             Kept in this browser. Press ? for the keyboard.
           </Text>
         </Stack>
+        <Menu.Item
+          leftSection={<IconEraser size={15} />}
+          onClick={() => {
+            forgetAll();
+            clearColorScheme();
+            setPal(palette());
+            setDens(density());
+            notifications.show({ message: "This browser forgot the display, the pricing options and the drafts." });
+          }}
+        >
+          Forget this browser's preferences
+        </Menu.Item>
         <Menu.Divider />
         <Menu.Item
           leftSection={<IconLogout size={15} />}

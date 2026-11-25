@@ -1,6 +1,6 @@
 [project]
 name = "optlab-marketdata"
-version = "1.0.0"
+version = "2.0.0"
 description = "optlab's market data: the historical lake (Parquet, DuckDB), its sources and derivations, point-in-time markets, replays"
 requires-python = ">=3.14"
 license = "MIT"

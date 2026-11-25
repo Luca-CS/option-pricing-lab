@@ -36,7 +36,7 @@ function setRoot(name: string, value: string | null) {
 }
 
 export default function Gallery() {
-  const { colorScheme, setColorScheme } = useMantineColorScheme();
+  const { colorScheme, setColorScheme } = useMantineColorScheme({ keepTransitions: true });
   const [cell, setCell] = useState<Cell | null>({ row: 2, col: 3 });
   const [palette, setPalette] = useState("standard");
   const [density, setDensity] = useState("compact");

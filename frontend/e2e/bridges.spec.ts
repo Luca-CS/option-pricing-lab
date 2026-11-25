@@ -47,6 +47,17 @@ test("a quote opens its booking, its model risk and the pricing policy", async (
   await expect(page.getByRole("heading", { name: `The model risk of quote ${quote}` })).toBeVisible();
   await expect(page.getByText(/Local vol|Black-Scholes|Heston|SLV/).first()).toBeVisible();
   await accessible(page);
+  // the quote's sheet copies as JSON (to the clipboard, or shown selected where the page may not write it)
+  await page.goto(`/structuring/quotes/${quote}`);
+  await page.getByRole("button", { name: "Copy term sheet" }).click();
+  const shown = page.getByRole("dialog", { name: "Term sheet (JSON)" });
+  await expect(page.getByText("Term sheet copied as JSON").or(shown)).toBeVisible();
+  if (await shown.isVisible()) await page.keyboard.press("Escape");
+  // bridge 2: the quote → its backtest, the quote's own product struck on a past date
+  await page.getByRole("link", { name: "Backtest" }).click();
+  await expect(page).toHaveURL(new RegExp(`/quant/replay\\?quote=${quote}$`));
+  await expect(page.getByText(/The backtest of quote/)).toContainText("phoenix preset on SPX");
+  await accessible(page);
 });
 
 test("a trade opens its P&L explained and its replay; a name lists its trades", async ({ page }) => {
@@ -83,5 +94,7 @@ test("an origin badge opens what the lake holds", async ({ page }) => {
   await expect(page).toHaveURL(/\/quant\/market#lake$/);
   await expect(page.getByRole("table", { name: "The lake's datasets" })).toBeInViewport();
   await expect(page.getByRole("table", { name: "The lake's datasets" })).toContainText("synthetic");
+  // the baskets against their members (v0's Data screen): pseudo-quotes, synthetic by construction
+  await expect(page.getByRole("table", { name: "CvC and PvP pseudo-quotes" })).toContainText("SPX + NDX");
   await accessible(page);
 });

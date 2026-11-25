@@ -15,9 +15,11 @@ An equity derivatives lab in Python, C++ and CUDA:
 
 Every stochastic number is checked against an independent reference, within four standard errors.
 
-**Demo**: [luca-cs.github.io/option-pricing-lab](https://luca-cs.github.io/option-pricing-lab/), a pricing desk in the
-browser. It gives prices and Greeks, animated Monte Carlo under Black-Scholes or the SPX-calibrated Heston model, the American
-exercise boundary, and the model-risk results below.
+**Demo**: [luca-cs.github.io/option-pricing-lab](https://luca-cs.github.io/option-pricing-lab/), the desk's front on a
+session recorded on made-up data, with a guided story for each of three profiles: the structurer, the trader and the quant.
+The [pricing lab](https://luca-cs.github.io/option-pricing-lab/lab/) computes in the browser: prices and Greeks, animated
+Monte Carlo under Black-Scholes or the SPX-calibrated Heston model, the American exercise boundary, and the model-risk
+results below.
 
 ![SPX smiles: quotes, SVI surface and the Monte Carlo smiles of local vol and SLV](reports/figures/spx_smiles.png)
 

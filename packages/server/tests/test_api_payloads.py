@@ -13,6 +13,7 @@ DESCRIBED = {  # the domain routes of session 2's screens, so far; each names it
     "/api/v1/market/lake/coverage": "LakeCoverage",
     "/api/v1/market/universe": "Universe",
     "/api/v1/market/lake/quality": "LakeQuality",
+    "/api/v1/market/lake/basket-quotes": "BasketQuotes",
     "/api/v1/structuring/presets": "PresetList",
     "/api/v1/structuring/quotes": "QuotePage",
     "/api/v1/trading/trades": "TradePage",
@@ -38,7 +39,6 @@ DESCRIBED = {  # the domain routes of session 2's screens, so far; each names it
 OPEN = {
     "/api/v1/ready",
     "/api/v1/structuring/schema",  # a JSON Schema itself
-    "/api/v1/market/lake/basket-quotes",
 }
 NOT_JSON = {"/api/v1/jobs/{job_id}/events"}  # Server-Sent Events
 
