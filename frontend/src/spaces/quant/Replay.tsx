@@ -187,12 +187,12 @@ export default function Replay() {
   const [paths, setPaths] = useState<number | string>(20_000);
   const r = runs.data;
   const run = job.envelope?.result ?? stored.data ?? null;
-  const trade = params.get("trade");
+  const from = params.get("trade") ?? params.get("quote");
   return (
     <SpacePage title={id ? `Replay ${id}` : undefined}>
-      {trade && (
+      {from && (
         <Text size="sm" c="dimmed">
-          A replay starts from a preset and a strike date: pick the preset of {trade}'s kind, struck on a past date.
+          A replay starts from a preset and a strike date: pick the preset of {from}'s kind, struck on a past date.
         </Text>
       )}
       {r && !r.available && (
