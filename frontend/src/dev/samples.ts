@@ -211,7 +211,12 @@ export const samples = {
         { key: "repo", label: "Overrepo", coupon_bp: -1.9292862827179984, in_price: true },
         { key: "spot", label: "Delta bid-ask", coupon_bp: -1.0961010288237794, in_price: true },
         { key: "coupon", label: "Digital overhedge: coupon barrier", coupon_bp: -0.6832097088657226, in_price: true },
-        { key: "autocall", label: "Digital overhedge: autocall trigger", coupon_bp: -10.272830323773722, in_price: true },
+        {
+          key: "autocall",
+          label: "Digital overhedge: autocall trigger",
+          coupon_bp: -10.272830323773722,
+          in_price: true,
+        },
         { key: "barrier", label: "Digital overhedge: final barrier", coupon_bp: -62.89474807678842, in_price: true },
         {
           key: "digital_interaction",
