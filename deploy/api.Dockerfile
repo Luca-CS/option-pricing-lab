@@ -6,7 +6,7 @@
 #
 # Base images are pinned by digest in the FROM lines (where Dependabot finds them and proposes their updates); the process runs as an unprivileged user on a
 # read-only root file system (compose.yaml), with its data on volumes under /data.
-FROM ghcr.io/astral-sh/uv:0.13.8@sha256:5cc1805e2426484abca4ad46ea783bab281fdb225fd82d8ce6d66a81254bac85 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.10@sha256:a3ea1357342c1a4bf9a0c53a3deb1b55379aefa037338d8113d5771efa01774f AS uv
 
 # the front's static build (ADR-0024), served by the API on the same origin; Node stays in this stage
 FROM node:26.13.1-trixie-slim@sha256:abe7e5a82b61a8ef67b315b85497c9e65173387ccf2f4a029248184b8e020be5 AS front
