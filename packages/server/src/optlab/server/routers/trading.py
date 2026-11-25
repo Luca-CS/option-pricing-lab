@@ -7,7 +7,7 @@ import datetime as dt
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
 
-from optlab.server.payloads import TradePage, Upcoming, documented
+from optlab.server.payloads import Trade, TradePage, Upcoming, documented
 from optlab.server.report import book_report, desk_snapshot
 from optlab.server.routers._common import ACCEPTED, Id, audited, desk, page, report, submit
 from optlab.server.schemas import (
@@ -48,7 +48,7 @@ def get_trade(trade_id: Id, request: Request):
     return desk(request).trade(trade_id)
 
 
-@router.post("/trades", **access("trader"), status_code=201)
+@router.post("/trades", **access("trader"), status_code=201, responses=documented(Trade, "the trade booked", 201))
 def create_trade(t: TradeIn, request: Request):
     """Book a trade on a term sheet (from a quote: its sheet and its solved coupon)."""
     d = desk(request)

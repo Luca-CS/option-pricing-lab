@@ -24,6 +24,7 @@ from starlette.types import Scope
 from optlab.server.api import Desk
 from optlab.server.audit import Audit
 from optlab.server.logs import attach_server_logs
+from optlab.server.payloads import describe_results
 from optlab.server.routers import admin, market, quant, risk, structuring, system, trading
 from optlab.server.security import COOKIE, CSRF_HEADER, Accounts
 from optlab.server.settings import Settings
@@ -100,7 +101,9 @@ def api_app(docs: bool = False) -> FastAPI:
 
     def openapi() -> dict[str, Any]:
         if app.openapi_schema is None:
-            describe_problems(base())  # base() keeps the document in app.openapi_schema
+            doc = base()  # base() keeps the document in app.openapi_schema
+            describe_results(doc)
+            describe_problems(doc)
         doc = app.openapi_schema
         assert doc is not None  # noqa: S101 (narrows the type for pyright: checked above)
         return doc

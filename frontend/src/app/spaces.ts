@@ -35,9 +35,9 @@ export const SPACES: Space[] = [
     key: "s",
     screens: [
       { path: "/structuring", label: "Home" },
-      { path: "/structuring/builder", label: "Builder", step: "F4" },
-      { path: "/structuring/compare", label: "Compare", step: "F4" },
-      { path: "/structuring/quotes", label: "Quotes", step: "F4" },
+      { path: "/structuring/builder", label: "Builder" },
+      { path: "/structuring/compare", label: "Compare" },
+      { path: "/structuring/quotes", label: "Quotes" },
     ],
   },
   {
@@ -104,7 +104,7 @@ export const SPACES: Space[] = [
 
 /** Pages of one entity, reached by links and the palette; each lands with the step that builds its space. */
 export const ENTITY_PAGES: Screen[] = [
-  { path: "/structuring/quotes/:id", label: "A quote", step: "F4" },
+  { path: "/structuring/quotes/:id", label: "A quote" },
   { path: "/trading/trades/:id", label: "A trade", step: "F5" },
   { path: "/trading/lifecycle/:id", label: "A trade's lifecycle", step: "F5" },
   { path: "/risk/var/:id", label: "A VaR run", step: "F6" },

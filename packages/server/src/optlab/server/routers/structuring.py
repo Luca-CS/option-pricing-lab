@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
 
-from optlab.server.payloads import PresetList, QuotePage, documented
+from optlab.server.payloads import PresetList, QuotePage, SavedQuote, TermSheetFormOut, documented
 from optlab.server.present import estimates
 from optlab.server.report import quote_report
 from optlab.server.routers._common import ACCEPTED, Id, desk, page, report, submit
@@ -27,7 +27,11 @@ def schema(request: Request):
     return desk(request).schema()
 
 
-@router.post("/termsheet/form", **access(), responses={422: {"description": "the sheet has a field in error"}})
+@router.post(
+    "/termsheet/form",
+    **access(),
+    responses={**documented(TermSheetFormOut), 422: {"description": "the sheet has a field in error"}},
+)
 def termsheet_form(sheet: TermSheetIn, request: Request):
     """A partial sheet in; out, the validated sheet, its visible form (fields shown by `visible_if`), the bounds and
     the costs that apply. A field in error answers 422 problem+json: `errors` [{field, message}] with the dotted path,
@@ -57,7 +61,7 @@ def list_quotes(request: Request, cursor: str | None = None, limit: int = Query(
     return page(items, cursor, limit)
 
 
-@router.get("/quotes/{quote_id}", **access())
+@router.get("/quotes/{quote_id}", **access(), responses=documented(SavedQuote))
 def get_quote(quote_id: Id, request: Request):
     """A saved quote: its sheet and its result, Monte Carlo numbers as {value, se} (the job's result shape)."""
     q = desk(request).saved_quote(quote_id)

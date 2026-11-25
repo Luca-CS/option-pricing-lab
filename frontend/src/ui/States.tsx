@@ -7,7 +7,7 @@ import classes from "./States.module.css";
 
 export function Loading({ lines = 3, label = "Loading" }: { lines?: number; label?: string }) {
   return (
-    <Stack gap={8} aria-busy="true" aria-label={label}>
+    <Stack gap={8} role="status" aria-busy="true" aria-label={label}>
       {Array.from({ length: lines }, (_, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: placeholders have no identity
         <Skeleton key={i} height={14} radius="sm" width={i === lines - 1 ? "60%" : "100%"} />

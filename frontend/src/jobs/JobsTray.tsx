@@ -12,15 +12,15 @@ export function JobsTray() {
   return (
     <Popover position="bottom-end" width={380} withinPortal shadow="md">
       <Popover.Target>
-        <Indicator label={running.length} size={16} disabled={running.length === 0} color="accent">
-          <ActionIcon
-            variant="default"
-            size="lg"
-            aria-label={running.length ? `${running.length} jobs running` : "Jobs"}
-          >
+        <ActionIcon
+          variant="default"
+          size="lg"
+          aria-label={running.length ? `Jobs, ${running.length} running` : "Jobs"}
+        >
+          <Indicator label={running.length} size={15} disabled={running.length === 0} color="accent" offset={-2}>
             <IconActivity size={17} />
-          </ActionIcon>
-        </Indicator>
+          </Indicator>
+        </ActionIcon>
       </Popover.Target>
       <Popover.Dropdown>
         <Text fw={600} size="sm" mb={8}>

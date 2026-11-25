@@ -49,14 +49,15 @@ export type MarketRef = {
 /** The market a number was priced on: underlying, date, origin of its surface. A button when it opens the drawer. */
 export function MarketBadge({ market, stale, onOpen }: { market: MarketRef; stale?: boolean; onOpen?: () => void }) {
   const underlying = market.underlying ?? market.snapshot_id?.split("-")[0] ?? "market";
-  const kind = originKind(market.origin);
+  // an origin the caller does not know is not shown: never claim one
+  const kind = market.origin ? originKind(market.origin) : null;
   const content = (
     <>
-      <span className={`${classes.dot} ${classes[kind]}`} aria-hidden="true" />
+      {kind && <span className={`${classes.dot} ${classes[kind]}`} aria-hidden="true" />}
       <span className={classes.mono}>
         {underlying} · {formatDate(market.as_of)}
       </span>
-      <span className={classes.muted}>{ORIGIN_LABEL[kind]}</span>
+      {kind && <span className={classes.muted}>{ORIGIN_LABEL[kind]}</span>}
       {stale && <span className={classes.stale}>old data</span>}
     </>
   );

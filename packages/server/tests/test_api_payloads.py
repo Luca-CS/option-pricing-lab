@@ -28,7 +28,6 @@ DESCRIBED = {  # the domain routes of session 2's screens, so far; each names it
 OPEN = {
     "/api/v1/ready",
     "/api/v1/structuring/schema",  # a JSON Schema itself
-    "/api/v1/structuring/quotes/{quote_id}",
     "/api/v1/trading/trades/{trade_id}",
     "/api/v1/trading/trades/{trade_id}/events",
     "/api/v1/trading/fixings",
@@ -66,7 +65,7 @@ def admin(a):
     quote = {"sheet": preset_sheet(c, "phoenix"), "options": {"precision": "quick"}}
     r = c.post("/api/v1/structuring/quotes", json=quote)
     assert r.status_code == 202, r.text
-    a.wait(c, r.json()["job_id"])
+    c.quote = a.wait(c, r.json()["job_id"])  # type: ignore[attr-defined]
     r = c.post("/api/v1/risk/scenarios/runs", json={"options": {"precision": "quick"}, "grid": False})
     assert r.status_code == 202, r.text
     a.wait(c, r.json()["job_id"], timeout=900)
@@ -131,3 +130,39 @@ def test_a_described_route_still_sends_its_own_dict(a, admin):
     assert "product" in trade and "term_sheet" in trade["product"]
     ctx = admin.get("/api/v1/market/context").json()
     assert set(payloads.MarketContext.model_fields) <= set(ctx)
+
+
+def test_a_quote_s_result_and_its_stored_copy_are_described(a, admin):
+    doc = a.app.openapi()
+    assert doc["x-job-results"]["quote"] == {"$ref": "#/components/schemas/QuoteResult"}
+    result = admin.quote["result"]
+    q = payloads.QuoteResult.model_validate(result)
+    assert q.headline.kind == "coupon" and q.result.price.se and q.policy.class_
+    path = "/api/v1/structuring/quotes/{quote_id}"
+    assert _documented(a)[path] == "SavedQuote"
+    saved = admin.get(path.format(quote_id=result["quote_id"]))
+    assert saved.status_code == 200
+    payloads.SavedQuote.model_validate(saved.json())
+
+
+def test_the_sheet_form_is_described_and_its_problem_keeps_the_form(a, admin):
+    op = a.app.openapi()["paths"]["/api/v1/structuring/termsheet/form"]["post"]
+    assert op["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/TermSheetFormOut")
+    ok = admin.post("/api/v1/structuring/termsheet/form", json={"type": "autocall", "values": {}})
+    form = payloads.TermSheetFormOut.model_validate(ok.json())
+    assert form.form.sections and all(f.path for s in form.form.sections for f in s.fields)
+    bad = admin.post(
+        "/api/v1/structuring/termsheet/form",
+        json={"type": "autocall", "values": {"coupon": {"type": "conditional", "barrier": 5}}},
+    )
+    assert bad.status_code == 422 and bad.json()["errors"][0]["field"] == "coupon.barrier"
+    payloads.SheetForm.model_validate(bad.json()["form"])
+
+
+def test_a_booked_trade_is_described(a, admin):
+    op = a.app.openapi()["paths"]["/api/v1/trading/trades"]["post"]
+    assert op["responses"]["201"]["content"]["application/json"]["schema"]["$ref"].endswith("/Trade")
+    body = {"sheet": preset_sheet(admin, "phoenix"), "coupon_rate": 0.05, "quantity": -1.0, "tags": ["e2e"]}
+    r = admin.post("/api/v1/trading/trades", json=body)
+    assert r.status_code == 201
+    payloads.Trade.model_validate(r.json())

@@ -96,6 +96,7 @@ export const theme = createTheme({
     // page CSP refuses it (ADR-0024), so they leave the page as it is (the palette is a modal too)
     Modal: { defaultProps: { lockScroll: false } },
     Drawer: { defaultProps: { lockScroll: false } },
+    Notification: { defaultProps: { closeButtonProps: { "aria-label": "Hide this notification" } } },
   },
 });
 

@@ -692,10 +692,12 @@
         },
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TermSheetFormOut"
+                }
               }
             }
           },
@@ -966,10 +968,12 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SavedQuote"
+                }
               }
             }
           },
@@ -1430,10 +1434,12 @@
         },
         "responses": {
           "201": {
-            "description": "Successful Response",
+            "description": "the trade booked",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/Trade"
+                }
               }
             }
           },
@@ -6557,6 +6563,38 @@
         "type": "object",
         "title": "BookValuationIn"
       },
+      "Bound": {
+        "properties": {
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "default": {
+            "title": "Default"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "Bound"
+      },
       "Bumps": {
         "properties": {
           "spot": {
@@ -6736,6 +6774,129 @@
         ],
         "title": "CoverageRow"
       },
+      "DeskLine": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "model, bump, digital, interaction"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "cost": {
+            "$ref": "#/components/schemas/Estimate",
+            "description": "% of nominal"
+          },
+          "coupon_bp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coupon Bp",
+            "description": "what it costs the coupon, bp per annum"
+          },
+          "in_price": {
+            "type": "boolean",
+            "title": "In Price"
+          },
+          "overridden": {
+            "type": "boolean",
+            "title": "Overridden",
+            "default": false
+          },
+          "note": {
+            "type": "string",
+            "title": "Note",
+            "default": ""
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "key",
+          "kind",
+          "label",
+          "cost",
+          "in_price"
+        ],
+        "title": "DeskLine",
+        "description": "One line of the desk price: a provision, a bump, a digital or an interaction, on the base's random numbers."
+      },
+      "DeskPrice": {
+        "properties": {
+          "base_price": {
+            "$ref": "#/components/schemas/Estimate"
+          },
+          "final_price": {
+            "$ref": "#/components/schemas/Estimate"
+          },
+          "coupon_base": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coupon Base",
+            "description": "the coupon before the desk's lines (fraction per annum)"
+          },
+          "coupon_final": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coupon Final",
+            "description": "the client's coupon (fraction per annum)"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/DeskLine"
+            },
+            "type": "array",
+            "title": "Lines"
+          },
+          "side": {
+            "type": "string",
+            "title": "Side"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "base_price",
+          "final_price",
+          "lines",
+          "side"
+        ],
+        "title": "DeskPrice"
+      },
       "Device": {
         "properties": {
           "name": {
@@ -6906,6 +7067,25 @@
         ],
         "title": "EodIn"
       },
+      "Estimate": {
+        "type": "object",
+        "required": [
+          "value",
+          "se"
+        ],
+        "description": "every Monte Carlo number of a job result: its value and its standard error (null when the library gives none)",
+        "properties": {
+          "value": {
+            "type": "number"
+          },
+          "se": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
+      },
       "FitIn": {
         "properties": {
           "underlying": {
@@ -7055,6 +7235,89 @@
           "underlying"
         ],
         "title": "FixingsIn"
+      },
+      "FormField": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "description": "section.field, the key of `bounds` and of a problem's `errors[].field`"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "choice, number, int, date, bool, names"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit",
+            "description": "what one unit of the value is: per annum, of initial, bp, vol points, months...",
+            "default": ""
+          },
+          "choices": {
+            "items": {},
+            "type": "array",
+            "title": "Choices",
+            "default": []
+          },
+          "value": {
+            "title": "Value"
+          },
+          "read_only": {
+            "type": "boolean",
+            "title": "Read Only",
+            "default": false
+          },
+          "optional": {
+            "type": "boolean",
+            "title": "Optional",
+            "default": false
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name",
+          "path",
+          "label",
+          "kind"
+        ],
+        "title": "FormField"
+      },
+      "FormSection": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/FormField"
+            },
+            "type": "array",
+            "title": "Fields"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name",
+          "label",
+          "fields"
+        ],
+        "title": "FormSection"
       },
       "GpuState": {
         "properties": {
@@ -8618,6 +8881,87 @@
         "title": "PnlHistory",
         "description": "The explained P&L cumulated from the EOD runs (`note` says why it is empty)."
       },
+      "Policy": {
+        "properties": {
+          "class": {
+            "type": "string",
+            "title": "Class"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "n_paths": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Paths"
+          },
+          "control": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Control"
+          },
+          "provisions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Provisions",
+            "default": []
+          },
+          "forced": {
+            "type": "boolean",
+            "title": "Forced",
+            "default": false
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "class",
+          "label",
+          "reason",
+          "method",
+          "model"
+        ],
+        "title": "Policy",
+        "description": "Why this method and model: the product's class, the base model and its provisions."
+      },
       "Preset": {
         "properties": {
           "name": {
@@ -8671,6 +9015,77 @@
           "masks"
         ],
         "title": "PresetList"
+      },
+      "Pricing": {
+        "properties": {
+          "price": {
+            "$ref": "#/components/schemas/Estimate"
+          },
+          "expected_life": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Life"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "n_paths": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Paths"
+          },
+          "numerical_error": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numerical Error"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "price",
+          "method"
+        ],
+        "title": "Pricing",
+        "description": "A Monte Carlo run of the quote: the price and how it was got."
       },
       "PricingOptions": {
         "properties": {
@@ -8765,6 +9180,157 @@
         "type": "object",
         "title": "PricingOptions"
       },
+      "Product": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format"
+          },
+          "maturity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maturity"
+          },
+          "maturity_months": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maturity Months"
+          },
+          "strike_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strike Date"
+          },
+          "underlyings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Underlyings",
+            "default": []
+          },
+          "script": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Script",
+            "description": "the payoff script the sheet compiles to"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "label",
+          "type"
+        ],
+        "title": "Product"
+      },
+      "QuoteGreeks": {
+        "properties": {
+          "delta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Estimate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "vega": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Estimate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "units": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Units",
+            "default": {}
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "QuoteGreeks"
+      },
       "QuoteIn": {
         "properties": {
           "sheet": {
@@ -8842,6 +9408,176 @@
           "items"
         ],
         "title": "QuotePage"
+      },
+      "QuoteResult": {
+        "properties": {
+          "quote_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote Id"
+          },
+          "snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Id"
+          },
+          "headline": {
+            "$ref": "#/components/schemas/Headline"
+          },
+          "coupon_rate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Estimate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "upfront": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Estimate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "margin": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Margin"
+          },
+          "result": {
+            "$ref": "#/components/schemas/Pricing"
+          },
+          "control": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Pricing"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "control_gap_se": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Control Gap Se"
+          },
+          "desk": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeskPrice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "policy": {
+            "$ref": "#/components/schemas/Policy"
+          },
+          "greeks": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuoteGreeks"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schedule": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleRow"
+            },
+            "type": "array",
+            "title": "Schedule",
+            "default": []
+          },
+          "product": {
+            "$ref": "#/components/schemas/Product"
+          },
+          "sheet": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Sheet"
+          },
+          "options": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Options",
+            "default": {}
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "headline",
+          "result",
+          "policy",
+          "product",
+          "sheet"
+        ],
+        "title": "QuoteResult",
+        "description": "A quote, as the job returns it (`result` of its envelope) and as it is stored."
       },
       "ReplayIn": {
         "properties": {
@@ -9229,6 +9965,33 @@
         ],
         "title": "RiskRunPage"
       },
+      "SavedQuote": {
+        "properties": {
+          "quote_id": {
+            "type": "string",
+            "title": "Quote Id"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "sheet": {
+            "$ref": "#/components/schemas/Sheet"
+          },
+          "result": {
+            "$ref": "#/components/schemas/QuoteResult"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "quote_id",
+          "created_at",
+          "sheet",
+          "result"
+        ],
+        "title": "SavedQuote"
+      },
       "ScenarioRunIn": {
         "properties": {
           "options": {
@@ -9284,6 +10047,62 @@
           "scenarios"
         ],
         "title": "ScenariosIn"
+      },
+      "ScheduleRow": {
+        "properties": {
+          "observation": {
+            "type": "string",
+            "title": "Observation"
+          },
+          "payment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment"
+          },
+          "t": {
+            "type": "number",
+            "title": "T"
+          },
+          "p_end": {
+            "type": "number",
+            "title": "P End",
+            "description": "probability that the product ends at this date"
+          },
+          "p_redeemed": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P Redeemed"
+          },
+          "flows": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Flows",
+            "description": "expected flows at this date, % of nominal, by kind",
+            "default": {}
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "observation",
+          "t",
+          "p_end"
+        ],
+        "title": "ScheduleRow"
       },
       "ScriptIn": {
         "properties": {
@@ -9360,6 +10179,34 @@
         ],
         "title": "Sheet",
         "description": "A term sheet as the library writes it (section -> field -> value; GET /structuring/schema has every field)."
+      },
+      "SheetForm": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/FormSection"
+            },
+            "type": "array",
+            "title": "Sections"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "type",
+          "label",
+          "sections"
+        ],
+        "title": "SheetForm",
+        "description": "The visible form of a sheet: the server decides which fields show (`visible_if`), the front draws them."
       },
       "SheetGeneral": {
         "properties": {
@@ -9672,6 +10519,57 @@
           "engine"
         ],
         "title": "SystemInfo"
+      },
+      "TermSheetFormOut": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "sheet": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Sheet",
+            "description": "the validated sheet, flat: section -> field -> value"
+          },
+          "form": {
+            "$ref": "#/components/schemas/SheetForm"
+          },
+          "bounds": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Bound"
+            },
+            "type": "object",
+            "title": "Bounds"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "costs": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Costs",
+            "description": "the cost table's parameters that apply to this sheet",
+            "default": {}
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "type",
+          "sheet",
+          "form",
+          "bounds"
+        ],
+        "title": "TermSheetFormOut"
       },
       "TermSheetIn": {
         "properties": {
@@ -10532,25 +11430,6 @@
           }
         },
         "additionalProperties": true
-      },
-      "Estimate": {
-        "type": "object",
-        "required": [
-          "value",
-          "se"
-        ],
-        "description": "every Monte Carlo number of a job result: its value and its standard error (null when the library gives none)",
-        "properties": {
-          "value": {
-            "type": "number"
-          },
-          "se": {
-            "type": [
-              "number",
-              "null"
-            ]
-          }
-        }
       }
     },
     "securitySchemes": {
@@ -10566,6 +11445,11 @@
         "name": "X-CSRF-Token",
         "description": "the csrf_token of POST /auth/login or GET /auth/me, on every state-changing request"
       }
+    }
+  },
+  "x-job-results": {
+    "quote": {
+      "$ref": "#/components/schemas/QuoteResult"
     }
   }
 }
