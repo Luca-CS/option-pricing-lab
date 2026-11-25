@@ -75,10 +75,9 @@ export async function signInAs(page: Page, role: string): Promise<void> {
   await expect(page).not.toHaveURL(/sign-in/);
 }
 
-/** No serious or critical accessibility violation on the page as it is (axe-core). */
-export async function accessible(page: Page): Promise<void> {
-  // a dialog fading out or a notification fading in is half transparent: axe measures the page once it has settled
-  // (the finite animations ended; a loader spins for ever and is left out)
+/** The page once its finite animations have ended (a panel opening, a dialog fading); a loader spins for ever and is
+ * left out. A click during a panel's opening may land on a control that is still moving. */
+export async function settled(page: Page): Promise<void> {
   await page
     .waitForFunction(
       () =>
@@ -89,6 +88,12 @@ export async function accessible(page: Page): Promise<void> {
       { timeout: 3_000 },
     )
     .catch(() => undefined);
+}
+
+/** No serious or critical accessibility violation on the page as it is (axe-core). */
+export async function accessible(page: Page): Promise<void> {
+  // a dialog fading out or a notification fading in is half transparent: axe measures the page once it has settled
+  await settled(page);
   const results = await new AxeBuilder({ page }).analyze();
   const bad = results.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
   expect(

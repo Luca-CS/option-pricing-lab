@@ -1,5 +1,6 @@
-// A person's display preferences, kept in this browser only (the user menu): the colourblind palette and the density.
-// The colour scheme is Mantine's (its own key). Applied as attributes of <html>, which tokens.css reads.
+// A person's preferences, kept in this browser only: the colourblind palette and the density (the user menu), applied
+// as attributes of <html>, which tokens.css reads; the colour scheme is Mantine's (its own key); and the screens' own
+// (the builder's pricing options and the sheet being edited). Every key starts with "optlab-".
 export type Palette = "standard" | "colorblind";
 export type Density = "compact" | "comfortable";
 
@@ -50,5 +51,30 @@ export function setDensity(d: Density): void {
 
 /** At start, before the first render. */
 export function applyPreferences(): void {
+  apply();
+}
+
+/** A JSON value this browser keeps for the person (the pricing options, the sheet being edited), or null. */
+export function stored<T>(key: string): T | null {
+  const text = read(key);
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
+export function store(key: string, value: unknown): void {
+  write(key, value === null ? null : JSON.stringify(value));
+}
+
+/** Everything this app keeps in this browser (display, options, drafts): forgotten, as v0's "clear local preferences". */
+export function forgetAll(): void {
+  try {
+    for (const k of Object.keys(localStorage)) if (k.startsWith("optlab-")) localStorage.removeItem(k);
+  } catch {
+    // blocked storage: nothing was kept
+  }
   apply();
 }

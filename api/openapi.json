@@ -3,7 +3,7 @@
   "info": {
     "title": "optlab",
     "summary": "Option pricing, structured products and risk: the desk's API (ADR-0005).",
-    "version": "1.0.0"
+    "version": "2.0.0"
   },
   "paths": {
     "/api/v1/health": {
@@ -3727,10 +3727,12 @@
         "operationId": "basket_quotes",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "the answer",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/BasketQuotes"
+                }
               }
             }
           },
@@ -6666,6 +6668,131 @@
           "at"
         ],
         "title": "Backup"
+      },
+      "BasketQuote": {
+        "properties": {
+          "basket": {
+            "type": "string",
+            "title": "Basket",
+            "description": "the members joined by '+'"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "cvc (a call on the basket against calls on the members) or pvp (puts)"
+          },
+          "strike": {
+            "type": "number",
+            "title": "Strike",
+            "description": "a fraction of the spot"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price",
+            "description": "long the basket, short the members: in % of notional, undiscounted"
+          },
+          "price_se": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Se",
+            "description": "in % of notional"
+          },
+          "basket_vol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basket Vol"
+          },
+          "rho": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rho",
+            "description": "the average correlation the quote was simulated with"
+          },
+          "implied_rho": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Implied Rho",
+            "description": "the flat correlation that gives the basket's price"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "basket",
+          "kind",
+          "strike"
+        ],
+        "title": "BasketQuote",
+        "description": "One pseudo-quote: the option on the basket against the same options on its members, at one year."
+      },
+      "BasketQuotes": {
+        "properties": {
+          "day": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/BasketQuote"
+            },
+            "type": "array",
+            "title": "Rows",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "BasketQuotes",
+        "description": "The latest day's CvC and PvP pseudo-quotes (origin synthetic: no broker level); `day` is null without any."
       },
       "BookPricingOptions": {
         "properties": {

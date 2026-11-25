@@ -300,6 +300,12 @@ async function structurerAndTrader(page: Page, browser: Browser, admin: Admin): 
   ]) {
     await visit(traderPage, t, to);
   }
+  // the book valued as its button does (quick): the demo's "Value the book", and the home's "Revalue the book" (the
+  // same request), replay it
+  await visit(traderPage, t, "/trading/book");
+  await traderPage.getByRole("button", { name: "Value the book" }).click();
+  await expect(traderPage.getByRole("heading", { name: "Simulations" })).toBeVisible({ timeout: 600_000 });
+  await settle(traderPage, t);
   const trades = (await (await traderPage.request.get("/api/v1/trading/trades?limit=200")).json()) as {
     items: { trade_id: string }[];
   };

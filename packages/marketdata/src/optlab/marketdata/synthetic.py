@@ -11,7 +11,7 @@ import pandas as pd
 from optlab.core.instruments import instrument
 from optlab.marketdata.derive.bank import BankParams, build_bank
 from optlab.marketdata.derive.carry import build_carry
-from optlab.marketdata.derive.correl import build_premium
+from optlab.marketdata.derive.correl import build_basket_quotes, build_premium
 from optlab.marketdata.derive.curves import build_discount_curves
 from optlab.marketdata.derive.surfaces import ShapePrior, build_reconstructed
 from optlab.marketdata.lake import Lake
@@ -170,4 +170,6 @@ def synthetic_lake(
     derive_all(lake, start)
     if options:
         fill_option_quotes(lake, days, paths, origin)
+        # the CvC and PvP pseudo-quotes of the last day, on the reconstructed surfaces (origin synthetic either way)
+        build_basket_quotes(lake, [("SPX", "NDX")], [days[-1]], n_pairs=20_000)
     return lake, days, paths

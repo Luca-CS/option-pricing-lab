@@ -1,16 +1,20 @@
 // A quote as a structurer reads it: what was solved and how sure it is, why this method, where each basis point goes
 // from the base to the client, when the product ends, its Greeks, and the script it compiles to. The same view for a
 // fresh quote (the job's result) and a stored one.
-import { Anchor, Button, Code, Group, Tooltip } from "@mantine/core";
-import type { CSSProperties, ReactNode } from "react";
+import { Anchor, Button, Code, Group, Modal, Text, Textarea, Tooltip } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { type CSSProperties, type ReactNode, useState } from "react";
 import { Link } from "react-router";
 import type { Schemas } from "../../api/client";
+import { savedQuote } from "../../api/queries";
 import { WaterfallChart } from "../../charts";
 import { formatDate, formatNumber, formatPercent, formatSeconds } from "../../lib/format";
 import { describeSheet } from "../../lib/sheet";
 import { Kpi, KpiRow } from "../../ui/Kpi";
 import { MarketBadge } from "../../ui/Markers";
 import { Panel } from "../../ui/Panel";
+import { Failure } from "../../ui/States";
 import { Est } from "../../ui/Value";
 import { commonClasses as c, DataTable } from "../common";
 import classes from "./QuoteView.module.css";
@@ -255,6 +259,53 @@ export function QuoteView({
 }
 
 /** The links a quote opens: book it, its model risk, its backtest, its report, the builder, a comparison. */
+/** The quote's term sheet as JSON: to the clipboard where the page may write it (a secure context: this machine, or
+ * HTTPS), else shown selected, for Ctrl C (the desk over plain HTTP on the LAN). */
+function CopySheet({ quoteId }: { quoteId: string }) {
+  const client = useQueryClient();
+  const [text, setText] = useState<string | null>(null);
+  const copy = useMutation({
+    mutationFn: async () => {
+      const q = await client.fetchQuery(savedQuote(quoteId));
+      const json = JSON.stringify(q.sheet, null, 1);
+      if (navigator.clipboard && window.isSecureContext) {
+        try {
+          await navigator.clipboard.writeText(json);
+          notifications.show({ message: "Term sheet copied as JSON" });
+          return;
+        } catch {
+          // refused: shown instead
+        }
+      }
+      setText(json);
+    },
+  });
+  return (
+    <>
+      <Button size="xs" variant="subtle" loading={copy.isPending} onClick={() => copy.mutate()}>
+        Copy term sheet
+      </Button>
+      <Modal opened={text !== null} onClose={() => setText(null)} title="Term sheet (JSON)" size="lg">
+        <Text size="sm" c="dimmed" mb="xs">
+          Selected: Ctrl C copies it.
+        </Text>
+        <Textarea
+          value={text ?? ""}
+          readOnly
+          autosize
+          minRows={8}
+          maxRows={20}
+          classNames={{ input: c.mono }}
+          aria-label="The term sheet as JSON"
+          onFocus={(ev) => ev.currentTarget.select()}
+          data-autofocus
+        />
+      </Modal>
+      {copy.error && <Failure error={copy.error} title="Not copied" />}
+    </>
+  );
+}
+
 export function QuoteActions({ quoteId, onBook }: { quoteId: string; onBook?: (() => void) | undefined }) {
   const e = encodeURIComponent(quoteId);
   return (
@@ -276,6 +327,7 @@ export function QuoteActions({ quoteId, onBook }: { quoteId: string; onBook?: ((
       <Button component={Link} to={`/quant/replay?quote=${e}`} size="xs" variant="subtle">
         Backtest
       </Button>
+      <CopySheet quoteId={quoteId} />
       {/* a report is a page the desk writes: the demo has no desk behind it */}
       {import.meta.env.MODE !== "demo" && (
         <Button

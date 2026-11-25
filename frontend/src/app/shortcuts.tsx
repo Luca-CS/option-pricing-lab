@@ -15,7 +15,7 @@ function typing(target: EventTarget | null): boolean {
 export function useShortcuts({ onHelp }: { onHelp: () => void }) {
   const navigate = useNavigate();
   const me = useMe().data;
-  const { toggleColorScheme } = useMantineColorScheme();
+  const { toggleColorScheme } = useMantineColorScheme({ keepTransitions: true });
   useEffect(() => {
     let pending = 0;
     const onKey = (e: KeyboardEvent) => {

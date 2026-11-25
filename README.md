@@ -15,9 +15,11 @@ An equity derivatives lab in Python, C++ and CUDA:
 
 Every stochastic number is checked against an independent reference, within four standard errors.
 
-**Demo**: [luca-cs.github.io/option-pricing-lab](https://luca-cs.github.io/option-pricing-lab/), a pricing desk in the
-browser. It gives prices and Greeks, animated Monte Carlo under Black-Scholes or the SPX-calibrated Heston model, the American
-exercise boundary, and the model-risk results below.
+**Demo**: [luca-cs.github.io/option-pricing-lab](https://luca-cs.github.io/option-pricing-lab/), the desk's front on a
+session recorded on made-up data, with a guided story for each of three profiles: the structurer, the trader and the quant.
+The [pricing lab](https://luca-cs.github.io/option-pricing-lab/lab/) computes in the browser: prices and Greeks, animated
+Monte Carlo under Black-Scholes or the SPX-calibrated Heston model, the American exercise boundary, and the model-risk
+results below.
 
 ![SPX smiles: quotes, SVI surface and the Monte Carlo smiles of local vol and SLV](reports/figures/spx_smiles.png)
 
@@ -120,7 +122,15 @@ compiled engine. The others ask for an engine by name. The architecture, its dec
 
 The desk is a local API over the library ([docs/architecture/api.md](docs/architecture/api.md)). Its web front
 (`frontend/`, [docs/ux.md](docs/ux.md)) is one application on that API, in five spaces: Structuring, Trading, Risk,
-Quant and Admin. The public demo replays a session recorded on it.
+Quant and Admin. The public demo replays a session recorded on it. The captures below come from the demo, on made-up
+data.
+
+| | |
+|---|---|
+| ![A Phoenix quoted: the coupon solved with its standard error, the policy's model, and the desk's lines from the base coupon to the client's](docs/screens/quote.png) | ![The book's vega by node of the surface, a node picked, and the trades that carry it](docs/screens/vega-nodes.png) |
+| A quote: the coupon solved on the client price, the model the policy chose, the desk's lines | The book's vega by node (K × T), down to the trades behind a node |
+| ![Three weeks of explained P&L: cumulated, day by day, and the cascade by step against the Greeks' prediction](docs/screens/pnl-explained.png) | ![The vol lab: a day's bid and ask implied vols, and SSVI, SVI and Heston fitted to them](docs/screens/vol-lab.png) |
+| The explained P&L: each day revalued step by step, against what the Greeks predicted | The vol lab: SSVI, SVI and Heston fitted to a chain, with their error against the spread |
 
 - **Pricer**: a term-sheet form generated from the schema, and a quote run as a background job with its progress. The result
   gives:

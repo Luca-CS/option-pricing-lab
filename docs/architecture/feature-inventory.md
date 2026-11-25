@@ -154,6 +154,22 @@ Shell functions of the old front, for parity: status bar (connection, snapshot, 
 (`g` + letter, `?`, `t` for the theme), light and dark themes, sortable `table.data`, form state and last results kept in
 `localStorage`, delete with undo, confirmation dialogs.
 
+**Checked by session 2 (F9, 25 November 2026).** Every line above was read against its new screen. Six were short and
+were completed:
+
+- the pricer's advanced options: the delta convention, the fast models, the forward control variates and the SLV vega
+  (Structuring > Builder, Pricing options);
+- the form state: the sheet being edited and the pricing options are kept in this browser, with "Start again";
+- "Copy term sheet" on a quote (to the clipboard, or shown selected over plain HTTP);
+- the CvC and PvP pseudo-quotes (Quant > Market explorer; `GET /market/lake/basket-quotes` is now described);
+- "clear local preferences" (the user menu, "Forget this browser's preferences");
+- the product backtest from a quote: the replay lab starts from the quote's own product (the closest preset of its
+  shape and the fields that differ), struck on a past date. Running it needs the quant role, as `POST /quant/replay/runs`
+  does.
+
+Changed on purpose: the last results are reopened by their job's id in the URL (`?job=`), not from `localStorage`, so a
+link shows the same run to anyone.
+
 ## 3. Scripts (19 in `scripts/`, 1 in `cuda/bench/`) -> `optlab` CLI
 
 Every option is kept unless the row says otherwise. **Done in A7**: every script below is a command of `optlab`

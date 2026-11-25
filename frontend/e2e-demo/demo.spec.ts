@@ -69,6 +69,10 @@ test("the trader's book filters and groups its trades, and stays responsive", as
   await expect(page.getByRole("button", { name: /^called\s*\d+ rows?/ })).toBeVisible();
   await page.getByText("Standard", { exact: true }).click();
   await expect(page.getByRole("radio", { name: "Standard" })).toBeChecked();
+  // the book's quick valuation is recorded: it replays, with its progress, then its simulations
+  await page.getByText("Quick", { exact: true }).click();
+  await page.getByRole("button", { name: "Value the book" }).click();
+  await expect(page.getByRole("heading", { name: "Simulations" })).toBeVisible({ timeout: 20_000 });
   await accessible(page);
 });
 
