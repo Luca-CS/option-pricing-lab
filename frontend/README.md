@@ -20,7 +20,7 @@ The design system is on `/dev/gallery` in development (`npm run dev`), fed with 
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `src/api`    | the generated types, the client (CSRF, problem+json as `ApiError`), compile-time checks of the contract                                                                                    |
 | `src/auth`   | the session: `GET /auth/me`, login, logout, `can(me, operation)`                                                                                                                           |
-| `src/lib`    | pure functions: how a number is written (`format.ts`), how a risk run's keys are read (`greeks.ts`), a scenario's shock in words (`shocks.ts`)                                              |
+| `src/lib`    | pure functions: how a number is written (`format.ts`), how a risk run's keys are read (`greeks.ts`), a scenario's shock in words (`shocks.ts`)                                             |
 | `src/ui`     | the shared components: values (`Num`, `Pct`, `Est`), KPI tiles, panels, origin and market badges, entity links, job progress, timeline, Greeks table, node heatmap, empty and error states |
 | `src/charts` | ECharts, loaded on demand: ladder, waterfall, curves, series, the distribution of a VaR                                                                                                    |
 | `src/theme`  | the Mantine theme and the desk's tokens (`tokens.css`: graphite and paper, the colourblind palette, density)                                                                               |

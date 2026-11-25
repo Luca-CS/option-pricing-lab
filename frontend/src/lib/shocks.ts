@@ -69,7 +69,7 @@ export function describeShock(shock: Record<string, unknown>): { what: string; m
     const by = shock[key] as Record<string, never> | undefined;
     for (const [name, move] of Object.entries(by ?? {})) {
       const text = say(move);
-      if (text) out.push({ what, move: `${key === "corr_pairs" ? name.replace("|", " / ") : who(name)} ${text}` });
+      if (text) out.push({ what, move: `${key === "corr_pairs" ? name.replaceAll("|", " / ") : who(name)} ${text}` });
     }
   }
   if (typeof shock.corr === "number" && shock.corr)
