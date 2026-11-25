@@ -29,6 +29,7 @@ export function Panel({
   children,
   className,
   labelledBy,
+  id,
 }: {
   title?: ReactNode;
   hint?: ReactNode;
@@ -37,9 +38,11 @@ export function Panel({
   children?: ReactNode;
   className?: string;
   labelledBy?: string;
+  /** an anchor a link may land on (`/quant/market#lake`) */
+  id?: string;
 }) {
   return (
-    <section className={[classes.panel, className].filter(Boolean).join(" ")} aria-labelledby={labelledBy}>
+    <section className={[classes.panel, className].filter(Boolean).join(" ")} aria-labelledby={labelledBy} id={id}>
       {(title || hint || actions) && (
         <div className={classes.head}>
           {title && (

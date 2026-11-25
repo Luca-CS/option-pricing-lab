@@ -66,6 +66,7 @@ class CleanDay:
     slices: list
     table: pd.DataFrame
     meta: dict
+    origin: str = "observed"  # the quotes' origin in the lake: a synthetic chain says so on the vol lab's screens
 
     @property
     def maturities(self) -> np.ndarray:
@@ -109,7 +110,8 @@ def clean_day(
         discount=discount_function(lake, currency, day),
         min_strikes=min_strikes,
     )
-    return CleanDay(underlying, day, used, spot, market, slices, table, meta)
+    origin = str(rows["origin"].iloc[0]) if "origin" in rows else "observed"
+    return CleanDay(underlying, day, used, spot, market, slices, table, meta, origin)
 
 
 def quote_days(lake: Lake, underlying: str, source: str | None = None) -> list:

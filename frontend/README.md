@@ -10,9 +10,31 @@ npm run lint                   # Biome (lint and format); npm run format writes 
 npm test                       # Vitest: formatting, the client, the components
 npm run build                  # dist/, served by `OPTLAB_FRONTEND=dist optlab serve`
 npm run e2e                    # Playwright against the API serving dist/ on E2E_DATA (see playwright.config.ts)
+npm run build:demo             # the public demo: dist-demo/, under /option-pricing-lab/, from demo/recorded/
+npm run e2e:demo               # the demo's own tests, on Vite's preview of dist-demo/ (no desk behind it)
+npm run demo:record            # records demo/recorded/ on a fresh demo folder (E2E_DATA, E2E_PASSWORD)
 ```
 
 The design system is on `/dev/gallery` in development (`npm run dev`), fed with numbers the API gave on the demo data.
+Principles, spaces, bridges and the design system are in [docs/ux.md](../docs/ux.md).
+
+## The public demo
+
+The same front, built with `--mode demo`, is the GitHub Pages site (`.github/workflows/pages.yml`, docs/ux.md §5):
+three profiles (structurer, trader, quant), each with a guided story, replaying sessions recorded on a desk. Nothing
+leaves the browser: `src/demo/transport.ts` answers the client from `demo/<profile>.json`, a job of the story replays
+over a couple of seconds, and a request the recording does not hold is refused as read-only.
+
+To record again, after a change to the API or to a screen the stories open:
+
+```bash
+uv run optlab demo data --to DIR --password-stdin    # a fresh folder: synthetic numbers only
+npm run build                                       # the front the recorder walks
+E2E_DATA=DIR E2E_PASSWORD=... npm run demo:record   # on the fastest engine at hand (E2E_ENGINE, default auto)
+```
+
+The recorder signs in as `structurer`, `trader` and `quant` (accounts it adds), never records the login, drops the
+session token, and refuses to write a file holding a local path.
 
 ## Layout
 
@@ -28,8 +50,11 @@ The design system is on `/dev/gallery` in development (`npm run dev`), fed with 
 | `src/spaces` | each space's screens, one chunk per space, loaded when the space is first opened                                                                                                           |
 | `src/jobs`   | the jobs: their events, the tray, a screen's job (`useScreenJob`), a stored run or a fresh one (`useStoredRun`)                                                                            |
 | `src/dev`    | the gallery (development only)                                                                                                                                                             |
-| `tooling`    | the build step that writes Mantine's CSS variables statically                                                                                                                              |
-| `e2e`        | Playwright tests                                                                                                                                                                           |
+| `src/demo`   | the public demo: the recorded transport, the stories, the first page, the banner                                                                                                           |
+| `tooling`    | the build steps: Mantine's CSS variables written statically, the demo's recordings, 404 page and CSP                                                                                       |
+| `e2e`        | Playwright tests (`e2e/record` is the demo's recorder, run on its own)                                                                                                                     |
+| `e2e-demo`   | the demo's Playwright tests                                                                                                                                                                |
+| `demo`       | the recorded sessions (`demo/recorded`, synthetic numbers only)                                                                                                                            |
 
 ## Rules
 

@@ -31,7 +31,7 @@ from optlab.core.log import get_logger
 from optlab.core.market import Market
 from optlab.core.snapshot import MarketSnapshot
 from optlab.marketdata.derive.correl import correlation_at
-from optlab.marketdata.lake import Lake
+from optlab.marketdata.lake import Lake, sql_str
 from optlab.marketdata.names import NameMarkets
 from optlab.server.fixings import parse_fixings
 from optlab.server.jobs import JobQueue
@@ -528,8 +528,17 @@ class Desk:
             "stored": self.repo.put_fixings(und, levels, "lake"),
             "first": min(levels),
             "last": max(levels),
-            "origin": "observed",
+            "origin": self._closes_origin(und),
         }
+
+    def _closes_origin(self, name: str | None = None) -> str:
+        """The origin of the lake's closes (of one name, else any): observed in a real lake, synthetic in the demo's."""
+        where = f"instrument = {sql_str(name)}" if name else ""
+        try:
+            rows = self.lake.read("prices_eod", where=where, columns="origin", order="obs_date DESC LIMIT 1")
+        except Exception:  # noqa: BLE001 (a lake without closes says nothing better than the default)
+            return "observed"
+        return str(rows["origin"].iloc[0]) if not rows.empty else "observed"
 
     # --- Vol Fitting Lab ---
     def lab_days(self) -> dict:
@@ -580,7 +589,8 @@ class Desk:
             )
         )
         method = {"name": "fit", "models": p["models"], **p["settings"]}
-        return envelope(market_of(None, "observed", p["day"]), method, out)
+        origin = out.get("origin") if isinstance(out, dict) else None
+        return envelope(market_of(None, str(origin or "observed"), p["day"]), method, out)
 
     def lab_runs(self, underlying: str | None = None) -> dict:
         from optlab.marketdata.vollab import list_runs
@@ -596,7 +606,8 @@ class Desk:
         progress.step(f"fit {p['calibration_id']} again")
         out = clean(reproduce(self.lake, p["calibration_id"]))
         day = out.get("day") if isinstance(out, dict) else None
-        return envelope(market_of(None, "observed", day), {"name": "fit", "reproduce": True}, out)
+        origin = out.get("origin") if isinstance(out, dict) else None
+        return envelope(market_of(None, str(origin or "observed"), day), {"name": "fit", "reproduce": True}, out)
 
     # --- replay ---
     def replay_runs(self) -> dict:
@@ -651,7 +662,7 @@ class Desk:
         out = clean(result_json(replay(self.lake, trade, end, cfg, info)))
         self.replays.save(f"replay-{trade_id}-{cfg.model}", out)
         method = {"name": "replay", "model": cfg.model, "n_paths": cfg.n_paths, "every": cfg.reval_every}
-        return envelope(market_of(None, "observed", strike), method, out)
+        return envelope(market_of(None, self._closes_origin(), strike), method, out)
 
     def _replay_inputs(self, body: dict, table: dict | None):
         """(sheet, strike date, end, config, trade id, cost inputs) of a replay request, or the 422 that says why not."""

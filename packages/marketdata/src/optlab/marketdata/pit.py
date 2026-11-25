@@ -33,20 +33,26 @@ ONE_DAY = 1 / 365
 MODEL_SPOT = 100.0
 
 
-def real_close(lake: Lake, name: str, day, as_of=None, max_age_days: int = 5) -> tuple[float, dt.date]:
-    """The last close at or before `day`, not older than `max_age_days`: (level, its date)."""
+def last_close(lake: Lake, name: str, day, as_of=None, max_age_days: int = 5) -> tuple[float, dt.date, str]:
+    """The last close at or before `day`, not older than `max_age_days`: (level, its date, its origin in the lake)."""
     day = pd.Timestamp(day).date()
     rows = lake.read(
         "prices_eod",
         where=f"instrument = {sql_str(name)} AND obs_date <= DATE '{day}' AND obs_date >= DATE '{day}'"
         f" - INTERVAL {max_age_days} DAY",
-        columns="obs_date, close",
+        columns="obs_date, close, origin",
         order="obs_date DESC LIMIT 1",
         as_of=as_of,
     )
     if rows.empty:
         raise KeyError(f"no close of {name} in the {max_age_days} days up to {day}")
-    return float(rows["close"].iloc[0]), pd.Timestamp(rows["obs_date"].iloc[0]).date()
+    return float(rows["close"].iloc[0]), pd.Timestamp(rows["obs_date"].iloc[0]).date(), str(rows["origin"].iloc[0])
+
+
+def real_close(lake: Lake, name: str, day, as_of=None, max_age_days: int = 5) -> tuple[float, dt.date]:
+    """The last close at or before `day`, not older than `max_age_days`: (level, its date)."""
+    level, date, _ = last_close(lake, name, day, as_of, max_age_days)
+    return level, date
 
 
 def real_fixings(lake: Lake, name: str, start, end, as_of=None) -> dict:
@@ -75,7 +81,7 @@ def market_curves(lake: Lake, name: str, day, as_of=None) -> tuple[Market, float
     """(market at spot 100, real spot, provenance): discount curve and carry known at `day`."""
     inst = instrument(name)
     day = pd.Timestamp(day).date()
-    spot, spot_day = real_close(lake, name, day, as_of)
+    spot, spot_day, spot_origin = last_close(lake, name, day, as_of)
     disc = discount_function(lake, inst.currency, day, as_of)
     stream = dividend_stream(lake, name, day, spot, as_of)
     pillars = curve_pillars(stream)
@@ -85,7 +91,7 @@ def market_curves(lake: Lake, name: str, day, as_of=None) -> tuple[Market, float
         Market(MODEL_SPOT, pillars, discounts, forwards),
         spot,
         {
-            "spot": {"origin": "observed", "date": spot_day.isoformat(), "source": "prices_eod"},
+            "spot": {"origin": spot_origin, "date": spot_day.isoformat(), "source": "prices_eod"},
             "discount": {"origin": "derived", "curve": inst.currency},
             "carry": {"origin": stream.origin, "method": stream.method, "dividend_yield": stream.annual_yield},
         },

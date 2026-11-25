@@ -10,6 +10,7 @@ const baseURL = external ?? `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   testDir: "e2e",
+  testIgnore: ["record/**"], // the demo's recorder runs on its own (playwright.record.config.ts)
   // logins are counted per address and per account (docs/architecture/api.md §2): one browser at a time
   workers: 1,
   fullyParallel: false,

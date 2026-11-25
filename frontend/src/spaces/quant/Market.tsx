@@ -4,19 +4,27 @@
 // `?strike=80%&tenor=1y` marks that point on its smile.
 import { Anchor, Badge, Select, Text } from "@mantine/core";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useLocation, useParams, useSearchParams } from "react-router";
 import { api, ok } from "../../api/client";
-import { useLakeCoverage, useLakeQuality, useMarketContext, useUniverse } from "../../api/queries";
+import {
+  useLakeCoverage,
+  useLakeQuality,
+  useMarketContext,
+  useQuotes,
+  useTrades,
+  useUniverse,
+} from "../../api/queries";
 import { SpacePage } from "../../app/Shell";
+import { useMe } from "../../auth/session";
 import { CurveChart, SeriesChart } from "../../charts";
 import type { Curve } from "../../charts/charts";
 import { formatDate, formatNumber, formatPercent } from "../../lib/format";
 import { Kpi, KpiRow } from "../../ui/Kpi";
-import { OriginBadge } from "../../ui/Markers";
+import { COVERAGE, OriginBadge, PIPELINES } from "../../ui/Markers";
 import { Panel } from "../../ui/Panel";
 import { Empty, Failure, Loading } from "../../ui/States";
-import { commonClasses as c, DataTable } from "../common";
+import { commonClasses as c, DataTable, QuoteLink, TradeLink } from "../common";
 
 const TENORS: [string, number][] = [
   ["1m", 1 / 12],
@@ -72,7 +80,7 @@ function VolIndexChart({ name }: { name: string }) {
         height={220}
         label={`The ${name} index, close by close`}
       />
-      <OriginBadge origin={v.origin} label={v.source ?? "source"} />
+      <OriginBadge origin={v.origin} label={v.source ?? "source"} to={COVERAGE} />
     </>
   );
 }
@@ -122,6 +130,22 @@ export default function Market() {
   ];
   const [index, setIndex] = useState<string | null>(null);
   const shownIndex = index ?? indices[0] ?? null;
+  const admin = useMe().data?.roles.includes("admin") ?? false;
+  // an origin badge anywhere lands on #lake: the router does not scroll to an anchor, so this page does once it is read
+  const { hash } = useLocation();
+  const covered = Boolean(coverage.data);
+  useEffect(() => {
+    if (hash === "#lake" && covered) document.getElementById("lake")?.scrollIntoView({ block: "start" });
+  }, [hash, covered]);
+  // bridge 5: the trades exposed to this name and the quotes priced on it
+  const trades = useTrades();
+  const quotes = useQuotes();
+  const onName = (names: (string | null | undefined)[]) => names.includes(name);
+  const exposedTrades = (trades.data?.items ?? []).filter((t) => onName(t.summary?.underlyings ?? []));
+  const pricedQuotes = (quotes.data?.items ?? []).filter((q) => {
+    const g = q.sheet.general;
+    return onName([g.underlying, g.basket, ...(g.underlyings ?? [])]);
+  });
 
   const curves: Curve[] = smiles.flatMap((q, i) => {
     const d = q.data;
@@ -158,7 +182,7 @@ export default function Market() {
           {Object.entries(ctx.origin ?? {})
             .filter(([k, v]) => typeof v === "string" && !["source", "layer"].includes(k))
             .map(([k, v]) => (
-              <OriginBadge key={k} label={k} origin={String(v)} />
+              <OriginBadge key={k} label={k} origin={String(v)} to={COVERAGE} />
             ))}
         </Text>
       )}
@@ -247,6 +271,46 @@ export default function Market() {
           </Panel>
         </div>
       )}
+      {name && (
+        <Panel title={`On ${name}`} hint="the trades exposed to it and the quotes priced on it" flush>
+          {exposedTrades.length + pricedQuotes.length === 0 ? (
+            <p className={`${c.faint} ${c.pad}`}>
+              {trades.isPending || quotes.isPending ? "Reading the book…" : `No trade and no recent quote on ${name}.`}
+            </p>
+          ) : (
+            <DataTable
+              caption={`The trades and quotes on ${name}`}
+              head={["", "Id", "What", "When"]}
+              rows={[
+                ...exposedTrades.map((t) => ({
+                  key: `t-${t.trade_id}`,
+                  cells: [
+                    <span key="k" className={c.faint}>
+                      trade
+                    </span>,
+                    <TradeLink key="id" id={t.trade_id} />,
+                    `${(t.summary?.type ?? "").replaceAll("_", " ")} · ${t.status}`,
+                    formatDate(t.trade_date),
+                  ],
+                })),
+                ...pricedQuotes.map((q) => ({
+                  key: `q-${q.quote_id}`,
+                  cells: [
+                    <span key="k" className={c.faint}>
+                      quote
+                    </span>,
+                    <QuoteLink key="id" id={q.quote_id} />,
+                    q.headline
+                      ? `${q.headline.label} ${formatNumber(q.headline.value, { digits: 2 })} ${q.headline.unit}`
+                      : q.sheet.type,
+                    formatDate(q.created_at),
+                  ],
+                })),
+              ]}
+            />
+          )}
+        </Panel>
+      )}
       <div className={c.grid}>
         <Panel
           title="Other names"
@@ -288,7 +352,19 @@ export default function Market() {
             />
           )}
         </Panel>
-        <Panel title="The lake" hint="what it holds, and where it comes from" flush>
+        <Panel
+          id="lake"
+          title="The lake"
+          hint="what it holds, and where it comes from"
+          flush
+          actions={
+            admin && (
+              <Anchor component={Link} to={PIPELINES} size="xs" underline="always">
+                Its pipelines (Admin)
+              </Anchor>
+            )
+          }
+        >
           {coverage.isPending && <Loading lines={2} />}
           <DataTable
             caption="The lake's datasets"

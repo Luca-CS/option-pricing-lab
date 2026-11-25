@@ -82,7 +82,6 @@ frontend/                         session 2 (React + TS + Vite); the api serves 
 api/openapi.json                  the versioned contract (drift checked in CI)
 deploy/                           Dockerfiles, compose.yaml, Caddyfile, example .wslconfig
 docs/architecture/                this folder
-legacy/desk-static/               the v0 front, not served, removed by session 2 at parity
 ```
 
 ### Dependency direction (measured in A0, ADR-0004)

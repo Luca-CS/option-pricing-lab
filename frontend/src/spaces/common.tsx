@@ -38,6 +38,7 @@ export function TradeLink({ id }: { id: string }) {
       to={`/trading/trades/${e}`}
       places={[
         { label: "Its Greeks", to: `/trading/risk?trade=${e}` },
+        { label: "Its P&L explained", to: `/trading/pnl?trade=${e}` },
         { label: "Its lifecycle", to: `/trading/lifecycle/${e}` },
         { label: "Its replay", to: `/quant/replay?trade=${e}` },
       ]}
@@ -52,7 +53,8 @@ export function QuoteLink({ id }: { id: string }) {
       label={id}
       to={`/structuring/quotes/${e}`}
       places={[
-        { label: "Book it", to: `/trading/book?from-quote=${e}` },
+        // the quote's page opens its booking dialog (to a role that may book)
+        { label: "Book it", to: `/structuring/quotes/${e}?book=1` },
         { label: "Its model risk", to: `/quant/calibration?quote=${e}` },
         { label: "Its backtest", to: `/quant/replay?quote=${e}` },
       ]}

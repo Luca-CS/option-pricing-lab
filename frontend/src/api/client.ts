@@ -2,6 +2,7 @@
 // session cookie sent on the same origin, the CSRF token added to every request that changes something
 // (docs/architecture/api.md §2), and errors raised as ApiError with the problem+json of the server (§3).
 import createClient, { type Middleware } from "openapi-fetch";
+import { demoFetch } from "../demo/transport";
 import type { components, paths } from "./schema";
 
 export type Schemas = components["schemas"];
@@ -35,7 +36,11 @@ export function makeClient(baseUrl: string, fetchImpl?: typeof fetch) {
   return client;
 }
 
-export const api = makeClient(globalThis.location?.origin ?? "");
+// the demo build (GitHub Pages) answers from a recorded session instead of a desk: src/demo/transport.ts
+export const api = makeClient(
+  globalThis.location?.origin ?? "",
+  import.meta.env.MODE === "demo" ? demoFetch : undefined,
+);
 
 /** An answer of the API that is not a success: its status and its problem+json. */
 export class ApiError extends Error {

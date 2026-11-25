@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { lazy, type ReactNode, Suspense } from "react";
 import { createBrowserRouter, Navigate, Outlet, RouterProvider, useLocation } from "react-router";
 import { useMe } from "../auth/session";
+import { DemoLanding } from "../demo/Demo";
 import { JobPage } from "../pages/JobPage";
 import { NotFound } from "../pages/NotFound";
 import { SignIn } from "../pages/SignIn";
@@ -26,7 +27,7 @@ function RequireSession() {
   if (me.isPending) {
     return (
       <Center h="100vh">
-        <Loader size="sm" aria-label="Loading" />
+        <Loader size="sm" role="status" aria-label="Loading" />
       </Center>
     );
   }
@@ -105,7 +106,7 @@ function Lazy({ path }: { path: string }) {
 function SpaceLoading() {
   return (
     <Center h={240}>
-      <Loader size="sm" aria-label="Loading the screen" />
+      <Loader size="sm" role="status" aria-label="Loading the screen" />
     </Center>
   );
 }
@@ -118,36 +119,45 @@ function screen(spaceId: string, path: string): ReactNode {
 // the design system's gallery, in development only: the production build drops this branch and its chunk
 const Gallery = import.meta.env.DEV ? lazy(() => import("../dev/Gallery")) : null;
 
-const router = createBrowserRouter([
-  { path: "/sign-in", element: <SignIn /> },
-  ...(Gallery
-    ? [
+// the demo build has a first page of profiles instead of the sign-in, and lives under the Pages path
+const DEMO = import.meta.env.MODE === "demo";
+const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || undefined;
+
+const router = createBrowserRouter(
+  [
+    { path: "/sign-in", element: DEMO ? <DemoLanding /> : <SignIn /> },
+    ...(Gallery
+      ? [
+          {
+            path: "/dev/gallery",
+            element: (
+              <Suspense>
+                <Gallery />
+              </Suspense>
+            ),
+          },
+        ]
+      : []),
+    {
+      element: <RequireSession />,
+      children: [
         {
-          path: "/dev/gallery",
-          element: (
-            <Suspense>
-              <Gallery />
-            </Suspense>
-          ),
+          element: <Shell />,
+          children: [
+            { path: "/", element: <Home /> },
+            ...SPACES.flatMap((space) =>
+              space.screens.map((s) => ({ path: s.path, element: screen(space.id, s.path) })),
+            ),
+            ...ENTITY_PAGES.map((p) => ({ path: p.path, element: <Lazy path={p.path} /> })),
+            { path: "/jobs/:id", element: <JobPage /> },
+            { path: "*", element: <NotFound /> },
+          ],
         },
-      ]
-    : []),
-  {
-    element: <RequireSession />,
-    children: [
-      {
-        element: <Shell />,
-        children: [
-          { path: "/", element: <Home /> },
-          ...SPACES.flatMap((space) => space.screens.map((s) => ({ path: s.path, element: screen(space.id, s.path) }))),
-          ...ENTITY_PAGES.map((p) => ({ path: p.path, element: <Lazy path={p.path} /> })),
-          { path: "/jobs/:id", element: <JobPage /> },
-          { path: "*", element: <NotFound /> },
-        ],
-      },
-    ],
-  },
-]);
+      ],
+    },
+  ],
+  { basename },
+);
 
 export function Providers({ children, client }: { children: ReactNode; client: QueryClient }) {
   return (

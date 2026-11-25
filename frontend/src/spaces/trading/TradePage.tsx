@@ -280,7 +280,13 @@ export default function TradePage() {
                     <Link to={`/trading/risk?trade=${encodeURIComponent(id)}`}>Its Greeks in the book risk</Link>
                   </li>
                   <li>
+                    <Link to={`/trading/pnl?trade=${encodeURIComponent(id)}`}>Its P&L explained</Link>
+                  </li>
+                  <li>
                     <Link to={`/trading/lifecycle/${encodeURIComponent(id)}`}>Its lifecycle and fixings</Link>
+                  </li>
+                  <li>
+                    <Link to={`/quant/replay?trade=${encodeURIComponent(id)}`}>Its replay on past closes</Link>
                   </li>
                 </ul>
               </Panel>

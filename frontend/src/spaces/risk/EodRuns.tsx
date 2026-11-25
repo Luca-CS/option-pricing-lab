@@ -14,7 +14,7 @@ import { type Estimate, formatDate, formatSeconds } from "../../lib/format";
 import { greekLabel, parseKey, rows } from "../../lib/greeks";
 import { JobProgress } from "../../ui/Flow";
 import { Kpi, KpiRow } from "../../ui/Kpi";
-import { OriginBadge } from "../../ui/Markers";
+import { COVERAGE, OriginBadge } from "../../ui/Markers";
 import { Panel } from "../../ui/Panel";
 import { GreeksTable } from "../../ui/Risk";
 import { Empty, Failure, Loading } from "../../ui/States";
@@ -46,7 +46,7 @@ function Market({ provenance }: { provenance: Record<string, unknown> }) {
           <dt>{name}</dt>
           <dd>
             {Object.entries((parts ?? {}) as Record<string, { origin?: string }>).map(([part, p]) => (
-              <OriginBadge key={part} label={part} origin={p?.origin} />
+              <OriginBadge key={part} label={part} origin={p?.origin} to={COVERAGE} />
             ))}
           </dd>
         </div>

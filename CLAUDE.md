@@ -24,7 +24,7 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
 
 - Structured products: `uv run pytest -q packages/structured/tests` (about a minute);
   `uv run optlab structured examples [--quick]` prints the autocall model-risk table, timings and example quotes.
-- Desk (API v1; the front is `frontend/`, the v0 page stays in `legacy/desk-static/`, not served, until parity):
+- Desk (API v1; the front is `frontend/`, its principles, spaces and bridges in `docs/ux.md`):
   `uv run optlab users create <name> --roles admin` (password asked twice), then
   `uv run optlab serve [--port 8765] [--workers 6] [--engine auto] [--store FILE] [--market ID] [--open]` serves
   `http://127.0.0.1:8765/api/v1` (127.0.0.1 only; another host needs `OPTLAB_LAN=true`, with Luca's agreement);
@@ -42,7 +42,9 @@ or PATH (pyright's own node in `~/.cache/pyright-python/nodeenv` will do).
   `api/openapi.json` first; not versioned), `npm run lint` (Biome), `npm test` (Vitest), `npm run build` (`dist/`, served
   by the API when `OPTLAB_FRONTEND` names it; a page path without a file gets `index.html`), and `npm run e2e`
   (Playwright against `optlab serve` on `E2E_DATA`, a folder from `optlab demo data --to DIR --password-stdin`, with
-  `E2E_PASSWORD`; `npx playwright install chromium` once). The page CSP has no `'unsafe-inline'`: Mantine's CSS
+  `E2E_PASSWORD`; `npx playwright install chromium` once). The public demo (`docs/ux.md` §5, GitHub Pages):
+  `npm run build:demo` (`dist-demo/`, replaying `demo/recorded/`), `npm run e2e:demo`, and `npm run demo:record` to
+  record the sessions again on a fresh demo folder (synthetic numbers only; the recorder refuses a local path). The page CSP has no `'unsafe-inline'`: Mantine's CSS
   variables are built statically (`tooling/mantine-vars.ts`) and Biome refuses the components that write `<style>`;
   every e2e test fails on a console error.
 - `packages/core/tests/test_widget_js.py` runs `docs/lab.js` under `node` and compares it to the Python library; it is

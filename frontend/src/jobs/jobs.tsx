@@ -9,6 +9,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import { Link } from "react-router";
 import { api, ok, type Schemas } from "../api/client";
 import { ME } from "../auth/session";
+import { openEvents } from "../demo/transport";
 
 export type Job = Schemas["Job"];
 export type JobState = Job["state"];
@@ -126,7 +127,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
   const follow = useCallback(
     (id: string) => {
       if (sources.current.has(id) || typeof EventSource === "undefined") return;
-      const es = new EventSource(`/api/v1/jobs/${encodeURIComponent(id)}/events`);
+      const es = openEvents(`/api/v1/jobs/${encodeURIComponent(id)}/events`);
       sources.current.set(id, es);
       const close = () => {
         es.close();

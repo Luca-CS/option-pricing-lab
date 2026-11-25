@@ -1,7 +1,7 @@
 // The explained P&L (Trading › P&L explained): the book's P&L from the EOD runs over a period, cumulated, explained
 // step by step by full revaluations (time, spot, vol, skew, rates, dividends, correlation, FX), set against what the
-// Greeks predicted, with what they leave unexplained, by day and by trade. The worst day is one click away: on a crisis
-// day this is where a trader sees what moved the book.
+// Greeks predicted, with what they leave unexplained, by day and by trade. The day that moved the book most, either way,
+// is one click away: on a crisis day this is where a trader sees what moved it.
 import { Anchor, Button, Group, TextInput } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -34,7 +34,7 @@ function stepLabel(k: string): string {
 }
 
 /** The day whose P&L moved most, either way. */
-export function worstDay(daily: { total: number }[]): number {
+export function largestDay(daily: { total: number }[]): number {
   let at = -1;
   for (let i = 0; i < daily.length; i++) {
     const d = daily[i];
@@ -102,9 +102,12 @@ export default function Pnl() {
   const p = pnl.data;
   const daily = p?.daily ?? [];
   const order = p?.order ?? [];
-  const worst = worstDay(daily);
+  const largest = largestDay(daily);
+  // a trade's page links here with ?trade=: its own P&L over the period comes first
+  const tradeId = params.get("trade");
+  const trade = tradeId ? p?.trades?.[tradeId] : undefined;
   const pickedDay = params.get("day");
-  const dayAt = pickedDay ? daily.findIndex((d) => d.to === pickedDay) : worst;
+  const dayAt = pickedDay ? daily.findIndex((d) => d.to === pickedDay) : largest;
   const day = dayAt >= 0 ? daily[dayAt] : undefined;
   const sum = (m: Record<string, number> | undefined) => Object.values(m ?? {}).reduce((a, b) => a + b, 0);
   const released = daily.reduce((a, d) => a + (d.release ?? 0), 0);
@@ -164,12 +167,30 @@ export default function Pnl() {
             <Kpi label="Reserve released" unit="currency" sub="as the trades' lives run">
               <Num value={released} />
             </Kpi>
-            {daily[worst] && (
-              <Kpi label="Worst day" unit="currency" sub={formatDate(daily[worst].to)}>
-                <Num value={daily[worst].total} signed />
+            {daily[largest] && (
+              <Kpi label="Largest day" unit="currency" sub={formatDate(daily[largest].to)}>
+                <Num value={daily[largest].total} signed />
               </Kpi>
             )}
           </KpiRow>
+          {tradeId && (
+            <Panel title={`${tradeId} over the period, step by step`} hint="currency">
+              {trade ? (
+                <WaterfallChart
+                  start={{ label: "start", value: 0 }}
+                  steps={order.map((k) => ({ label: stepLabel(k), value: trade.steps?.[k] ?? 0 }))}
+                  end={{ label: tradeId, value: trade.total ?? 0 }}
+                  height={240}
+                  label={`The P&L of ${tradeId} over the period explained step by step`}
+                />
+              ) : (
+                <p className={c.muted}>
+                  {tradeId} has no explained P&L between {formatDate(p.from)} and {formatDate(p.to)}: it was not in the
+                  book on those days, or no EOD run covers them.
+                </p>
+              )}
+            </Panel>
+          )}
           <div className={c.grid}>
             <Panel title="Cumulated, and day by day" hint="currency">
               <SeriesChart
@@ -209,9 +230,9 @@ export default function Pnl() {
                   <Num key="t" value={d.total} signed />,
                   ...order.map((k) => formatNumber(d.steps?.[k]?.[0], { sign: true })),
                   formatNumber(sum(d.unexplained), { sign: true }),
-                  i === worst ? (
+                  i === largest ? (
                     <span key="w" className={c.faint}>
-                      worst
+                      largest
                     </span>
                   ) : (
                     ""

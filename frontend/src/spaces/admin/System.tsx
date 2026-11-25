@@ -8,7 +8,7 @@ import { useSystem } from "../../api/queries";
 import { SpacePage } from "../../app/Shell";
 import { formatDate, formatNumber } from "../../lib/format";
 import { Kpi, KpiRow } from "../../ui/Kpi";
-import { OriginBadge } from "../../ui/Markers";
+import { OriginBadge, PIPELINES } from "../../ui/Markers";
 import { Panel } from "../../ui/Panel";
 import { Failure, Loading } from "../../ui/States";
 import { commonClasses as c, DataTable } from "../common";
@@ -169,7 +169,7 @@ export default function System() {
               {s.origin &&
                 Object.entries(s.origin)
                   .filter(([, v]) => typeof v === "string")
-                  .map(([part, v]) => <OriginBadge key={part} label={part} origin={String(v)} />)}
+                  .map(([part, v]) => <OriginBadge key={part} label={part} origin={String(v)} to={PIPELINES} />)}
               <Text size="sm" mt="md" c="dimmed">
                 Jobs:{" "}
                 {Object.entries(s.job_counts ?? {}).map(([k, v]) => (

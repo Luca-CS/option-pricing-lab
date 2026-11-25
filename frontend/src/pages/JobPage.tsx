@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { Link, useParams } from "react-router";
 import { api, ok } from "../api/client";
 import { SpacePage } from "../app/Shell";
+import { useMe } from "../auth/session";
 import { kindLabel, useJobs, useTracked } from "../jobs/jobs";
 import { formatDate, formatSeconds } from "../lib/format";
 import { JobProgress } from "../ui/Flow";
@@ -61,6 +62,7 @@ export function JobPage() {
     queryFn: () => ok(api.GET("/api/v1/jobs/{job_id}", { params: { path: { job_id: id } } })),
   });
   const j = job.data;
+  const admin = useMe().data?.roles.includes("admin") ?? false;
   const running = j?.state === "queued" || j?.state === "running";
   useEffect(() => {
     if (j && running) track(j.id, { kind: j.kind });
@@ -135,9 +137,10 @@ export function JobPage() {
               </details>
             </Panel>
           )}
-          {!screen && j.state === "done" && (
-            <Anchor component={Link} to="/admin/jobs" size="sm">
-              Every job of the desk (admin)
+          {/* bridge 8: a failed job, or one without a screen, opens among the desk's jobs of its kind (Admin) */}
+          {admin && !screen && (j.state === "done" || j.state === "error") && (
+            <Anchor component={Link} to={`/admin/jobs?kind=${encodeURIComponent(j.kind)}`} size="sm" underline="always">
+              The desk's {kindLabel(j.kind).toLowerCase()} jobs (Admin)
             </Anchor>
           )}
         </>

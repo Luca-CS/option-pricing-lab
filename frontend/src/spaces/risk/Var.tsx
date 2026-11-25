@@ -5,13 +5,14 @@ import { Anchor, Checkbox, NumberInput, Tabs, Text } from "@mantine/core";
 import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { api, ok, type Schemas } from "../../api/client";
+import { usePnl } from "../../api/queries";
 import { SpacePage } from "../../app/Shell";
 import { CurveChart, DistributionChart, WaterfallChart } from "../../charts";
 import { useScreenJob } from "../../jobs/useScreenJob";
 import { useStoredRun } from "../../jobs/useStoredRun";
 import { type Estimate, formatDate, formatNumber, formatPercent, formatSeconds } from "../../lib/format";
 import { Kpi, KpiRow } from "../../ui/Kpi";
-import { OriginBadge } from "../../ui/Markers";
+import { COVERAGE, OriginBadge } from "../../ui/Markers";
 import { Panel } from "../../ui/Panel";
 import { Empty, Failure, Loading } from "../../ui/States";
 import { Est, Num } from "../../ui/Value";
@@ -44,7 +45,7 @@ function Origins({ origins }: { origins: Record<string, unknown> | undefined }) 
   return (
     <span className={c.faint}>
       {entries.map(([part, o]) => (
-        <OriginBadge key={part} label={part} origin={Array.isArray(o) ? o.join(", ") : String(o)} />
+        <OriginBadge key={part} label={part} origin={Array.isArray(o) ? o.join(", ") : String(o)} to={COVERAGE} />
       ))}
     </span>
   );
@@ -54,6 +55,9 @@ function HorizonView({ run, h }: { run: Run; h: Horizon }) {
   const values = h.pnl.map((e) => e.value);
   const var_ = h.var.value;
   const factors = [...(run.factors ?? []), "interaction"].filter((f) => h.factors?.[f]);
+  // bridge 6: the VaR day's factor moves, then the desk's own explained P&L of that day when an EOD run covers it
+  const pnl = usePnl();
+  const explained = (pnl.data?.daily ?? []).some((d) => d.to === h.var_date);
   const contributions = Object.entries(h.contributions?.var ?? {})
     .map(([name, v]) => ({ name, var: v, es: h.contributions?.es?.[name] }))
     .sort((a, b) => Math.abs(b.var) - Math.abs(a.var));
@@ -101,7 +105,17 @@ function HorizonView({ run, h }: { run: Run; h: Horizon }) {
             label={`The book's P&L over the ${h.label} window, with the VaR and the ES`}
           />
         </Panel>
-        <Panel title={`The VaR day: ${formatDate(h.var_date)}`} hint="that day's move, one factor at a time">
+        <Panel
+          title={`The VaR day: ${formatDate(h.var_date)}`}
+          hint="that day's move, one factor at a time"
+          actions={
+            explained && (
+              <Anchor component={Link} to={`/trading/pnl?day=${h.var_date}`} size="xs" underline="always">
+                The book's P&L explained that day
+              </Anchor>
+            )
+          }
+        >
           <WaterfallChart
             start={{ label: "base", value: 0 }}
             steps={factors.map((f) => ({ label: FACTOR[f] ?? f, value: h.factors?.[f]?.value ?? 0 }))}

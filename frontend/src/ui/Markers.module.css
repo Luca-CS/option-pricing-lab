@@ -11,6 +11,17 @@
   background: transparent;
 }
 
+/* an origin that opens the lake's coverage or its pipelines: the pill's border sets it apart from the text */
+.badgeLink {
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.badgeLink:hover {
+  border-color: var(--ol-line-strong);
+  color: var(--ol-text);
+}
+
 .dot {
   width: 8px;
   height: 8px;
