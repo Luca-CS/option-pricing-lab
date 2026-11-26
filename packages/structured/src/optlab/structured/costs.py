@@ -66,7 +66,8 @@ def forward_bumped(market: Market, dividend: float = 0.0, repo: float = 0.0, spo
 @dataclass(frozen=True)
 class CostInputs:
     """What to add to a base price. `bumps` holds the values used, signed; `defaults` the ones they replace, for the summary.
-    `candidates` holds two values for a parameter whose groups disagree in sign: the one against the desk on this product is kept, measured."""
+    `candidates` holds two values for a parameter whose groups disagree in sign, or whose sign the product decides
+    (`measured`, defaults.MEASURED_SIGNS): the one against the desk on this product is kept, measured."""
 
     bumps: dict = field(default_factory=dict)
     side: str = "sell"
@@ -75,6 +76,7 @@ class CostInputs:
     mix: float | None = None  # mixing fraction of the SLV provision; None keeps the market's
     min_spread: float | None = None  # digitals as call spreads when given, with `delta_max` by kind of digital
     delta_max: dict = field(default_factory=dict)
+    measured: tuple = ()  # the candidates whose two signs come from the product, not from groups that disagree
 
     def __post_init__(self):
         if self.side not in SIDES:
@@ -592,7 +594,11 @@ def _bump_lines(single, x, base_pairs, at_base, inputs, values, line):
         note = ""
         if key in inputs.candidates:
             a, b = inputs.candidates[key]
-            note = f"the groups disagree ({a:+.4f}, {b:+.4f}): the one against the desk on this product"
+            note = (
+                f"its sign measured on this product ({a:+.4f}, {b:+.4f}): the one against the desk"
+                if key in inputs.measured
+                else f"the groups disagree ({a:+.4f}, {b:+.4f}): the one against the desk on this product"
+            )
         out.append(
             line(
                 key,

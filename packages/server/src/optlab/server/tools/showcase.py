@@ -80,6 +80,9 @@ DEALS = (
     Deal("SHOW-05", "airbag", ("SPX",), "2025-06-16", 36, 4e6, "Insurer D"),
     Deal("SHOW-06", "capital_protected", ("SPX",), "2023-06-15", 60, 12e6, "Insurer D", {"upside.participation": 0.6}),
     Deal("SHOW-07", "athena", ("SPX",), "2026-02-17", 36, 6e6, "Private bank A", {"autocall.first_call": 4}),
+    # The light exotics: a variance swap sold to a fund (vega notional per point), an accumulator sold outright.
+    Deal("SHOW-13", "variance_swap", ("SPX",), "2026-03-16", 12, 50e3, "Hedge fund E"),
+    Deal("SHOW-14", "accumulator", ("SPX",), "2026-06-15", 12, 5e6, "Family office F"),
     # Worst-ofs: each name on its own market from the lake.
     Deal(
         "SHOW-08",
@@ -141,10 +144,11 @@ def sheet_of(lake: Lake, deal: Deal):
     )
     values = {**who, "general.maturity_months": deal.months, "general.notional": deal.notional, **deal.changes}
     spreads = wrapper_spreads(lake, deal.strike, deal.months / 12)
-    if deal.changes.get("wrapper.format") == "swap":
-        values["wrapper.funding_spread"] = spreads["wrapper.funding_spread"]
-    else:
+    fmt = deal.changes.get("wrapper.format", preset(deal.preset).get("wrapper.format"))
+    if fmt == "note":
         values["wrapper.issuer_spread"] = spreads["wrapper.issuer_spread"]
+    elif deal.changes.get("wrapper.funding") == "floating":  # a swap's funding leg; a variance swap has none
+        values["wrapper.funding_spread"] = spreads["wrapper.funding_spread"]
     values["costs.side"] = "sell" if deal.quantity < 0 else "buy"
     return preset(deal.preset, **values)
 

@@ -138,10 +138,10 @@ def strike_trade(
         payment=sheet.payment_currency,
     )
     info = {"strike": strike.isoformat(), "provenance": prov}
-    has_coupon = sheet.get("coupon.type") != "none"  # an airbag or a capital-protected note has nothing to solve
+    has_coupon = sheet.solved_parameter()  # an airbag, a capital-protected note or an accumulator solves nothing
     desk = None
     if costs is not None:
-        priced = sheet if coupon is None else sheet.replace(**{"wrapper.solve": "upfront", "coupon.rate": coupon})
+        priced = sheet if coupon is None else sheet.with_solved(coupon)
         q = quote(
             priced, ctx, control=None, n_paths=max(cfg.n_paths, 20_000), batch=cfg.batch, seed=cfg.seed, costs=costs
         )
@@ -155,7 +155,7 @@ def strike_trade(
         )
         coupon, info["coupon_se"], info["policy"] = q.coupon_rate, q.coupon_rate_se, q.decision.label
     info.update(coupon=coupon, seconds=time.perf_counter() - t0)
-    fixed = sheet.replace(**{"wrapper.solve": "upfront", **({"coupon.rate": coupon} if has_coupon else {})})
+    fixed = sheet.with_solved(coupon if has_coupon else None)
     trade = Trade.from_term_sheet(trade_id, fixed, quantity, strike, strike)
     if desk is None:
         return trade, info

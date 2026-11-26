@@ -12,6 +12,11 @@ Base                  local vol, or replication for a European product
 = Client price        the coupon is solved on it and the 2 % margin
 ```
 
+The overs are signed as the table says for the notes, whose investor is short vol. A variance swap's investor is long it,
+and an accumulator's exposure depends on where its strike and knock-out sit: for these products each over keeps the
+table's size and takes the sign against the desk, measured on the product on the base's random numbers, as for groups
+of a worst-of that disagree. A swap's strike is solved on the client price like a coupon, in variance for a var swap.
+
 ## Results
 
 | | Phoenix SPX | Athena SPX | BRC SPX | RC SPX | Phoenix AAPL | Worst of SPX, NDX, RUT | Worst of SPX, SX5E |

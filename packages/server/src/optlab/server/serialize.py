@@ -227,6 +227,9 @@ def trade_json(trade) -> dict:
             "swap": sheet.get("variance.type"),
             "strike": sheet.get("variance.strike"),
             "corridor": sheet.get("variance.corridor"),
+            "direction": sheet.get("accumulator.direction"),
+            "level": sheet.get("accumulator.strike"),
+            "knock_out": sheet.get("accumulator.knock_out"),
         }
     return clean(
         {

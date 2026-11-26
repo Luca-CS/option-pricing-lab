@@ -347,6 +347,9 @@ class TradeSummary(Doc):
     swap: str | None = Field(None, description="a variance or volatility swap: what it is on")
     strike: float | None = Field(None, description="a swap's strike, in vol (0.2 = 20 points)")
     corridor: str | None = Field(None, description="a swap's corridor: none, down, up or range")
+    direction: str | None = Field(None, description="an accumulator's: accumulate or decumulate")
+    level: float | None = Field(None, description="an accumulator's strike, a fraction of the initial level")
+    knock_out: float | None = Field(None, description="an accumulator's knock-out, a fraction of the initial level")
 
 
 class ReserveLine(Doc):

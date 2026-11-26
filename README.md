@@ -4,11 +4,13 @@ An equity derivatives lab in Python, C++ and CUDA:
 
 - **Models** calibrated on real SPX quotes: an arbitrage-free SVI surface, Heston, Dupire local vol, and a stochastic-local-vol
   model whose leverage is fitted by the particle method.
-- **Structured products**: autocalls, reverse convertibles, worst-ofs. Products are written in a payoff script language of
-  its own or built from a term sheet. The desk price is a base plus explicit model reserves, overs and digital
-  overhedges.
-- **A risk engine**: Greeks with their standard errors, ladders, scenarios, a historical VaR by full revaluation and the
-  explained P&L.
+- **Structured products**: autocalls (asynchronous calls on a worst-of, lizards), reverse convertibles, worst-ofs, and the
+  light exotics: variance and volatility swaps and their corridors, accumulators and decumulators, outright or fully
+  funded. Products are written in a payoff script language of its own or built from a term sheet. The desk price is a
+  base plus explicit model reserves, overs and digital overhedges.
+- **A risk engine**: Greeks with their standard errors (a shifted vega among them), ladders, scenarios, a historical VaR
+  by full revaluation, and the explained P&L, its vol move opened node by node and by delta bucket under each spot-vol
+  rule.
 - **A market-data lake**: ten years built from free sources, where every row says whether it was observed, derived or
   reconstructed.
 - **A GPU Monte Carlo engine**: the same paths on every CPU thread or on the card.

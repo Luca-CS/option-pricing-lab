@@ -249,6 +249,20 @@ def _describe(sheet: dict) -> str:
     if c.get("type") not in (None, "none"):
         solving = (sheet.get("wrapper") or {}).get("solve") == "coupon"
         parts.append(f"{c['type']} coupon" + ("" if solving or c.get("rate") is None else f" {100 * c['rate']:.2f} %"))
+    v, acc, a = sheet.get("variance") or {}, sheet.get("accumulator") or {}, sheet.get("autocall") or {}
+    if v:
+        parts.append(
+            f"{v.get('type', 'variance')} swap"
+            + (f", corridor {v['corridor']}" if v.get("corridor", "none") != "none" else "")
+        )
+    if acc:
+        parts.append(
+            f"{acc.get('direction', 'accumulate')} at {100 * acc.get('strike', 0):.0f} %, knock-out {100 * acc.get('knock_out', 0):.0f} %"
+        )
+    if a.get("mechanism") == "asynchronous":
+        parts.append("asynchronous call")
+    if a.get("lizard") and a.get("lizard_barrier") is not None:
+        parts.append(f"lizard {100 * a['lizard_barrier']:.0f} %")
     if d.get("type") == "pdi" and d.get("barrier") is not None:
         parts.append(f"PDI {100 * d['barrier']:.0f} % {d.get('observation', '')}".strip())
     if d.get("type") == "geared_put" and d.get("strike") is not None:

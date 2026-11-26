@@ -7,8 +7,8 @@ The words of the desk, as the code, the API and the screens use them.
 | Term | Meaning |
 |---|---|
 | **Term sheet** | The structured description of a product: sections (`general`, `coupon`, `downside`, `wrapper`, hedging costs...) of typed fields with dotted paths (`coupon.rate`). `TermSheet` in `structured/schema.py`. |
-| **Mask** | A product family that decides which sections and fields exist: `autocall`, `bullet` or `variance`. |
-| **Preset** | A named, filled term sheet of one mask (`phoenix`, `athena`, `barrier_reverse_convertible`, `reverse_convertible`, `airbag`, `capital_protected`, `variance_swap`, `volatility_swap`, `corridor_variance_swap`, `corridor_volatility_swap`, `lizard_phoenix`, `asynchronous_autocall`). |
+| **Mask** | A product family that decides which sections and fields exist: `autocall`, `bullet`, `variance` or `accumulator`. |
+| **Preset** | A named, filled term sheet of one mask (`phoenix`, `athena`, `barrier_reverse_convertible`, `reverse_convertible`, `airbag`, `capital_protected`, `variance_swap`, `volatility_swap`, `corridor_variance_swap`, `corridor_volatility_swap`, `lizard_phoenix`, `asynchronous_autocall`, `accumulator`, `decumulator`, `funded_accumulator`, `funded_decumulator`). |
 | **`visible_if`** | The condition under which a field is shown and validated; the form is re-asked from the server when a choice changes. |
 | **Script** | A product written in the payoff script language (`structured/script/`): a hand-written lexer and parser, an AST, a vectorised evaluator. A term sheet compiles to a script. |
 | **Compiled product** | The script, its timeline (observation and payment dates on a calendar) and its parameters, ready to price. |
@@ -23,6 +23,7 @@ The words of the desk, as the code, the API and the screens use them.
 | **Solve** | `wrapper.solve`: `coupon` (find the coupon that gives the target price), `strike` (a swap's fair strike) or `upfront` (price at a given coupon or strike). |
 | **Asynchronous autocall** | A worst-of that locks each name the first time it closes at or above its trigger on a call date, and calls once every name is locked, on different dates or not (`autocall.mechanism`). |
 | **Lizard** | An autocall's extra early redemption: on the lizard date, par plus a bonus when no close breached the lizard barrier since the strike (`autocall.lizard`). |
+| **Accumulator (decumulator)** | Buys (sells) a unit of the underlying at the strike every business day, `gearing` units beyond the strike, until a close at or beyond the knock-out; settled each period. Outright: a swap on the units' value against the strike. Fully funded: a note whose notional buys (holds) the most it can buy (sell), every day geared, and returns what it did not spend (sell). |
 | **Variance swap** | Pays the realised variance of the daily closes (252 days a year) against a strike, on a vega notional: N (σ² − K²) / 2K, about N per vol point at the strike, capped at (2.5 K)² by default. Its fair strike is the log contract replicated on the smile, up to the daily sampling (`structured/varswap.py`). |
 | **Volatility swap** | The same on the realised vol: N (σ − K). Its fair strike lies below the variance swap's by a convexity that grows with the vol of vol. |
 | **Corridor variance (vol) swap** | Counts a day's squared return only when the close before it lies in the corridor [floor, ceiling] (fractions of the initial level), normalised by every day of the window; a down corridor has no floor, an up corridor no ceiling. |

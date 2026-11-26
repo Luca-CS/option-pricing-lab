@@ -97,3 +97,16 @@ describe("an autocall's mechanisms in its line", () => {
     expect(describeSheet(sheet)).toContain("asynchronous call · lizard 75 % at 12M");
   });
 });
+
+describe("an accumulator in its line and its cell", () => {
+  it("says its direction, its levels and whether it is funded", () => {
+    const sheet = {
+      type: "accumulator",
+      general: { maturity_months: 12, underlying: "SPX" },
+      wrapper: { format: "note" },
+      accumulator: { direction: "decumulate", strike: 1.1, knock_out: 0.95, gearing: 2 },
+    };
+    expect(describeSheet(sheet)).toBe("12M · SPX · funded decumulator · strike 110 %, knock-out 95 %, gearing 2");
+    expect(couponOrStrike({ level: 0.9 })).toBe("strike 90 %");
+  });
+});

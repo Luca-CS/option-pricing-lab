@@ -84,6 +84,58 @@ PRESETS = {
         "variance",
         {"variance": {"type": "volatility", "strike": 0.2, "corridor": "range", "lower": 0.8, "upper": 1.1}},
     ),
+    "accumulator": (
+        "accumulator",
+        {
+            "wrapper": {"format": "swap"},
+            "accumulator": {
+                "direction": "accumulate",
+                "strike": 0.9,
+                "knock_out": 1.05,
+                "gearing": 2.0,
+                "guarantee_months": 1,
+            },
+        },
+    ),
+    "decumulator": (
+        "accumulator",
+        {
+            "wrapper": {"format": "swap"},
+            "accumulator": {
+                "direction": "decumulate",
+                "strike": 1.1,
+                "knock_out": 0.95,
+                "gearing": 2.0,
+                "guarantee_months": 1,
+            },
+        },
+    ),
+    "funded_accumulator": (
+        "accumulator",
+        {
+            "wrapper": {"format": "note"},
+            "accumulator": {
+                "direction": "accumulate",
+                "strike": 0.9,
+                "knock_out": 1.05,
+                "gearing": 2.0,
+                "guarantee_months": 1,
+            },
+        },
+    ),
+    "funded_decumulator": (
+        "accumulator",
+        {
+            "wrapper": {"format": "note"},
+            "accumulator": {
+                "direction": "decumulate",
+                "strike": 1.1,
+                "knock_out": 0.95,
+                "gearing": 2.0,
+                "guarantee_months": 1,
+            },
+        },
+    ),
     "capital_protected": (
         "bullet",
         {

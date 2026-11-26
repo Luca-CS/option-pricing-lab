@@ -97,6 +97,9 @@ def deals():
             {"downside.barrier": 0.9},
             quantity=0.5,
         ),
+        # a variance swap sold to a fund (vega notional per vol point), and an accumulator sold outright
+        Deal("DEMO-05", "variance_swap", ("SPX",), "2021-01-04", 12, 50e3, "Demo fund D"),
+        Deal("DEMO-06", "accumulator", ("SPX",), "2021-03-15", 6, 2e6, "Demo family office E"),
     )
 
 

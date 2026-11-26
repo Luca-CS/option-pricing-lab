@@ -69,6 +69,27 @@ test("a lizard Phoenix is quoted with its lizard barrier overhedged as a daily b
   await accessible(page);
 });
 
+test("an accumulator is priced as it stands and booked", async ({ page }) => {
+  test.setTimeout(240_000);
+  await signInAs(page, "structurer+trader");
+  await page.goto("/structuring/builder?preset=accumulator");
+  await expect(page.getByRole("textbox", { name: "Knock-out, every close" })).toHaveValue("105");
+  await page.getByRole("textbox", { name: "Maturity" }).fill("3");
+  await page.getByText("Quick", { exact: true }).click();
+  const go = page.getByRole("button", { name: "Quote", exact: true });
+  await expect(go).toBeEnabled();
+  await go.click();
+  await expect(page.getByText(/^Upfront paid by the investor/)).toBeVisible({ timeout: 180_000 });
+  await expect(page.getByText(/accumulator · strike 90 %, knock-out 105 %, gearing 2/).first()).toBeVisible();
+  await accessible(page);
+  await page.getByRole("button", { name: "Book it" }).click();
+  const dialog = page.getByRole("dialog", { name: "Book this quote" });
+  await dialog.getByRole("textbox", { name: "Counterparty" }).fill("E2E office");
+  await dialog.getByRole("button", { name: "Book", exact: true }).click();
+  await expect(page).toHaveURL(/\/trading\/trades\/[\w-]+$/);
+  await expect(page.getByText(/^Booked as /)).toBeVisible();
+});
+
 test("a field out of its bounds is refused under the field, and the quote waits", async ({ page }) => {
   await signInAs(page, "structurer");
   await page.goto("/structuring/builder?preset=phoenix");

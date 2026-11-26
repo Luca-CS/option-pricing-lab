@@ -19,7 +19,7 @@ from optlab.structured.script.lexer import ScriptError
 from optlab.structured.script.nodes import Program
 from optlab.structured.script.timeline import Clock, build_timeline
 
-KINDS = ("coupon_paid", "coupon_missed", "called", "knocked_in", "matured")
+KINDS = ("coupon_paid", "coupon_missed", "settled", "called", "knocked_in", "matured")
 
 
 @dataclass(frozen=True)
@@ -65,6 +65,9 @@ def events(product, fixings: dict, upto, calendar=None, trade_id: str = "") -> l
     for k, ev in enumerate(kept[1:], start=1):
         day, t_pay = as_date(ev.when.value), timeline.pay_times[k]
         pay_day = as_date(ev.pay.value) if ev.pay is not None else None
+        settled = out.flows.get((t_pay, "upside")) if not (final and k == len(kept) - 1) else None
+        if settled is not None and np.ndim(settled) and _alive_before(out, k):  # an accumulator's period
+            result.append(Event(trade_id, day, "settled", float(settled[0]), pay_day))
         coupon = out.flows.get((t_pay, "coupon"))
         if coupon is not None and np.ndim(coupon) and _alive_before(out, k):
             amount = float(coupon[0])

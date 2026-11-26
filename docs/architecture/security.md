@@ -40,7 +40,8 @@ A guard in front of every route (`optlab.server.web.Guard`):
   Other content types get 415, a body over the limit 413, a request with both a length and a chunked encoding 400.
 - **Validation**: every request model refuses unknown fields, NaN and infinity. Costly fields (paths, days, script
   length) are bounded, so every job is finite. A payoff script is parsed by a hand-written parser with bounded size,
-  nesting and tree height: no `eval`, no `exec`.
+  nesting and tree height: no `eval`, no `exec`. What a script observes is bounded too (10,000 dates in all, a window's
+  fixings and span included), checked before its job is queued: a batch of paths holds a column per date.
 - **No path from a request**: ids are checked against a pattern and looked up among stored records; no file name
   comes from a client.
 - **Errors** are `problem+json` without a trace or a local path. A job's error message reaches its submitter and

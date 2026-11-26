@@ -32,7 +32,7 @@ def body(model: BaseModel | None) -> dict[str, Any]:
 
 # --- structuring ---------------------------------------------------------------------------------------------------
 class TermSheetIn(Body):
-    type: Literal["autocall", "bullet", "variance"] = (
+    type: Literal["autocall", "bullet", "variance", "accumulator"] = (
         "autocall"  # the masks of structured.schema (test_api_structuring)
     )
     values: dict[str, dict[str, Any]] = Field(default_factory=dict, description="section -> field -> value")
