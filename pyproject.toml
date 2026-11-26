@@ -3,7 +3,7 @@
 # them all, editable, with the tools.
 [project]
 name = "optlab"
-version = "2.0.1"
+version = "2.2.0"
 description = "Option pricing under Black-Scholes, Heston, Dupire local volatility and Heston SLV"
 requires-python = ">=3.14"
 license = "MIT"
