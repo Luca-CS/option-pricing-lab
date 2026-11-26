@@ -402,6 +402,7 @@ def explain_detail(
             "buckets": list(DELTA_LABELS),
             "bucket_deltas": list(DELTA_BUCKETS),
         },
+        "n_paths": settings.n_paths,
         "pnl_run": day.get("run_id"),
         "revaluations": revaluations,
         "seconds": time.perf_counter() - t0,

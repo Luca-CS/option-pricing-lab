@@ -10371,6 +10371,18 @@
             "title": "Grid",
             "default": {}
           },
+          "n_paths": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Paths",
+            "description": "paths of each revaluation"
+          },
           "pnl_run": {
             "anyOf": [
               {

@@ -55,6 +55,25 @@ test("the risk manager backfills two closes and compares them", async ({ page })
   await accessible(page);
 });
 
+test("the day's vol move opens by maturity, under each spot-vol rule", async ({ page }) => {
+  test.setTimeout(900_000);
+  await signInAs(page, "risk");
+  // the day the backfill above explained: its vol move tenor by tenor, quick, under sticky strike
+  await page.goto("/trading/pnl?day=2021-06-30");
+  await expect(page.getByRole("heading", { name: "The vol move, opened" })).toBeVisible();
+  const panel = page.getByRole("region", { name: "The vol move, opened" });
+  await panel.getByText("Sticky strike", { exact: true }).click();
+  await panel.getByText("Tenor by tenor", { exact: true }).click();
+  await panel.getByText("Quick, 20,000 paths", { exact: true }).click();
+  const open = panel.getByRole("button", { name: /^(Open the day|Open at this precision|Opened)$/ });
+  if ((await open.textContent()) !== "Opened") await open.click();
+  await expect(page.getByRole("table", { name: /under each spot-vol rule$/ })).toBeVisible({ timeout: 840_000 });
+  await expect(page.getByRole("table", { name: /vol P&L of 2021-06-30 by maturity$/ })).toBeVisible();
+  await expect(page.getByText(/^Sticky strike \(opened below\)$/)).toBeVisible();
+  await expect(page.getByText(/revaluations of [d,]+ paths; the nodes and the residual/)).toBeVisible();
+  await accessible(page);
+});
+
 test("the risk manager signs a version of the library, then the one before again", async ({ page }) => {
   await signInAs(page, "risk");
   await page.goto("/risk/stress");

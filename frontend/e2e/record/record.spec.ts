@@ -275,9 +275,19 @@ async function structurerAndTrader(page: Page, browser: Browser, admin: Admin): 
   const [, name = "SPX", at = "100%@1y"] = (nodes[0]?.[0] ?? "").split("|");
   const [strike = "100%", tenor = "1y"] = at.split("@");
   const pnl = (await (await traderPage.request.get("/api/v1/risk/pnl?from=2020-03-02&to=2020-03-20")).json()) as {
-    daily: { to: string; total: number }[];
+    daily: { from: string; to: string; total: number }[];
   };
-  const worst = [...pnl.daily].sort((a, b) => Math.abs(b.total) - Math.abs(a.total))[0]?.to ?? "2020-03-16";
+  const worstDay = [...pnl.daily].sort((a, b) => Math.abs(b.total) - Math.abs(a.total))[0];
+  const worst = worstDay?.to ?? "2020-03-16";
+  // that day's vol move opened node by node, as its panel asks (the panel reads the stored opening back)
+  if (worstDay) {
+    const opened = await submit(admin, "/api/v1/risk/pnl/detail", {
+      from: worstDay.from,
+      to: worstDay.to,
+      options: { precision: "quick" },
+    });
+    await done(admin.ctx, opened, 120);
+  }
   const varId = String((varRun.result as { result?: { run_id?: string } }).result?.run_id ?? "");
   t.rec.refs = {
     greeks: greeksRun,

@@ -25,6 +25,7 @@ const LABELS: Record<string, string> = {
   vega_relative: "Vega, relative",
   vega_weighted: "Vega, weighted",
   vega_weighted_direct: "Vega, weighted (direct)",
+  vega_shifted: "Vega, shifted (ATM up a point, the wings in proportion)",
   vega_tenor: "Vega by tenor",
   vega_node: "Vega by node",
   skew_vega: "Skew vega",
@@ -60,13 +61,29 @@ export function unitOf(greek: string, units: Record<string, unknown> | undefined
   return best === undefined ? undefined : (units[best] as string);
 }
 
+/** A node's forward call delta as a desk reads it: 0.523 → "52Δ". */
+export function deltaNote(d: number | null | undefined): string | null {
+  return typeof d === "number" && Number.isFinite(d) ? `${Math.round(100 * d)}Δ` : null;
+}
+
+/** The node deltas of a name in a Greeks run (strikes × tenors), from the group that holds it. */
+export function nodeDeltas(groups: Record<string, unknown>[] | undefined, name: string): number[][] | null {
+  for (const g of groups ?? []) {
+    const all = g.node_deltas as Record<string, number[][]> | undefined;
+    if (all?.[name]) return all[name];
+  }
+  return null;
+}
+
 /** The headline greeks of a name, in a trader's order, as the run has them. */
 export const HEADLINE = [
   "delta",
   "delta_sticky_strike",
+  "delta_realistic",
   "gamma",
   "gamma_5",
   "vega",
+  "vega_shifted",
   "skew_vega",
   "vanna",
   "volga",

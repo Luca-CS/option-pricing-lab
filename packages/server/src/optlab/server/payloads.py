@@ -897,6 +897,7 @@ class PnlDetail(Doc):
     vol_total: float = Field(..., description="vol + skew under the rule: the nodes and the residual add up to it")
     check: float = Field(..., description="vol_total less the nodes and the residual: zero but for rounding")
     grid: dict[str, Any] = {}
+    n_paths: int | None = Field(default=None, description="paths of each revaluation")
     pnl_run: str | None = None
     revaluations: int = 0
     seconds: float | None = None
