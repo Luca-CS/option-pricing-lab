@@ -5733,7 +5733,7 @@
           "quant"
         ],
         "summary": "Engine",
-        "description": "The Monte Carlo engines of this machine: the compiled one, its CUDA build, the devices and the CPU threads.",
+        "description": "The Monte Carlo engine the jobs run on: the live worker's (from its last heartbeat), else this process's; the\ncompiled engine, its CUDA build, the devices and the CPU threads.",
         "operationId": "engine",
         "responses": {
           "200": {
@@ -7699,6 +7699,18 @@
             "type": "string",
             "title": "Resolved",
             "description": "the engine that runs: gpu, cpu or numpy"
+          },
+          "runs_in": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runs In",
+            "description": "whose engine: the worker's (its last heartbeat) or the api's"
           }
         },
         "additionalProperties": true,

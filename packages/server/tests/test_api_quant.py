@@ -35,7 +35,25 @@ def test_model_risk_and_engine(quant):
     assert len(params["svi"]["params"]) == len(params["svi"]["maturities"]) and len(params["svi"]["params"][0]) == 5
     assert params["feller"] > 0 and params["slv"]["mix"] is not None and "butterfly_free" in params["arbitrage"]
     e = quant.get("/api/v1/quant/engine").json()
-    assert e and isinstance(e, dict)
+    assert e and e["runs_in"] in ("worker", "api")
+
+
+def test_the_engine_shown_is_the_one_the_jobs_run_on(a, quant):
+    """In the containers the api has no GPU and the worker has it: the engine shown is the live worker's."""
+    from optlab.server.jobs import Workers
+
+    leases = Workers(a.state.desk.db)
+    for w in leases.alive():
+        leases.stop(w["worker_id"])
+    gpu = {"engine": "auto", "compiled": True, "cuda_build": True, "devices": [{"name": "a card"}], "resolved": "gpu"}
+    assert leases.register("w-gpu", "elsewhere", 1, "worker", "auto", 2)
+    leases.beat("w-gpu", {"engine": gpu})
+    try:
+        e = quant.get("/api/v1/quant/engine").json()
+        assert e["resolved"] == "gpu" and e["runs_in"] == "worker" and e["devices"][0]["name"] == "a card"
+    finally:
+        leases.stop("w-gpu")
+    assert quant.get("/api/v1/quant/engine").json()["runs_in"] in ("worker", "api")
 
 
 def test_vol_lab_on_an_empty_lake(a, quant):
