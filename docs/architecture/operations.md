@@ -211,23 +211,32 @@ The schedules need the machine awake; a missed one runs once at the next start.
 ### Open to the LAN (off by default)
 
 The `lan` profile puts Caddy in front of the API with TLS by its internal CA, for the names of `OPTLAB_LAN_NAMES`
-only (any other `Host` gets a 403). It needs three things outside the repository, each a deliberate choice of the
-machine's owner ([ADR-0002](adr/0002-never-exposed.md)):
+only: a request for any other name gets Caddy's empty answer and never reaches the API. It needs three things outside
+the repository, each a deliberate choice of the machine's owner ([ADR-0002](adr/0002-never-exposed.md)):
 
-1. WSL is behind NAT: a Windows port forward from the LAN address to WSL's
-   (`netsh interface portproxy add v4tov4 listenaddress=<LAN IP> listenport=8443 connectaddress=<WSL IP>
-   connectport=8443`, as administrator);
-2. a Windows firewall rule for that port, the Private profile and the local subnet only;
-3. each device that opens the desk trusts Caddy's root certificate once (`docker compose cp proxy:/data/caddy/pki/authorities/local/root.crt .`).
+1. the LAN settings, in `deploy/.env` (never committed), which compose reads on every run, `deploy.sh` included:
 
-```bash
-OPTLAB_LAN=true OPTLAB_LAN_NAMES="optlab.home.arpa, <LAN IP>" OPTLAB_LAN_ADDRESS=0.0.0.0 \
-  docker compose -f $D --profile lan up -d
-```
+   ```bash
+   OPTLAB_LAN=true
+   OPTLAB_LAN_NAMES=192.168.1.205       # the names and addresses the LAN opens it by, "a, b" for several
+   OPTLAB_LAN_SNI=192.168.1.205         # the certificate for a client that sends no name (a browser opening an IP)
+   OPTLAB_LAN_ADDRESS=0.0.0.0           # where Caddy listens in WSL
+   COMPOSE_PROFILES=lan
+   ```
 
-Admin › System (`GET /api/v1/admin/network`) reads what still blocks it on Windows. Never a router port forward, UPnP
-or a tunnel. Behind `netsh portproxy`, every LAN client reaches Caddy from the Windows host's address: the sign-in
-throttle by address and the audit log then see one address (the per-account lockout still holds).
+   then `OPTLAB_TAG=<tag> docker compose -f $D up -d --no-build` (the api and the worker restart with `OPTLAB_LAN`);
+2. WSL is behind NAT: a Windows port forward from the LAN address to WSL's, and a Windows firewall rule for that port,
+   on the Private profile and for the local subnet only. `deploy\wsl\open-lan.ps1`, from a PowerShell opened as
+   administrator, does both (`-SetPrivate` makes the home network Private, `-Undo` removes both). WSL's address changes
+   when it restarts: run it again then;
+3. each device that opens the desk trusts Caddy's root certificate once
+   (`docker compose cp proxy:/data/caddy/pki/authorities/local/root.crt .`).
+
+Caddy's binary carries the file capability `cap_net_bind_service`, so the proxy alone keeps that one capability
+(every other is dropped, with no new privileges). Admin › System (`GET /api/v1/admin/network`) reads what still blocks
+it on Windows. Never a router port forward, UPnP or a tunnel. Behind `netsh portproxy`, every LAN client reaches Caddy
+from the Windows host's address: the sign-in throttle by address and the audit log then see one address (the
+per-account lockout still holds).
 
 ## When something goes wrong
 
