@@ -545,7 +545,9 @@ def presets_spx_gpu() -> dict:
     engines.set_default("gpu")
     try:
         ctx = _spx_context()
-        return {name: _quote_numbers(quote(preset(name), ctx, n_paths=100_000, batch=25_000)) for name in _single_presets()}
+        return {
+            name: _quote_numbers(quote(preset(name), ctx, n_paths=100_000, batch=25_000)) for name in _single_presets()
+        }
     finally:
         engines.set_default("numpy")
 

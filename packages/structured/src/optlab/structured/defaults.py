@@ -214,7 +214,8 @@ class Resolved:
         mix = self.params["slv_mix"]["value"] if "slv_mix" in self.params else None
         delta = {kind: self.params[f]["value"] for kind, f in DELTA_FIELD.items() if f in self.params}
         spread = self.params["min_spread"]["value"] if "min_spread" in self.params else None
-        return CostInputs(bumps, self.side, defaults, candidates, mix, spread, delta)
+        measured = tuple(k for k in candidates if self.params[k].get("measured"))
+        return CostInputs(bumps, self.side, defaults, candidates, mix, spread, delta, measured)
 
     def as_json(self) -> dict:
         return {
@@ -268,7 +269,9 @@ def resolve(table: dict | None, sheet: TermSheet) -> Resolved:
         values = {g: t[f.name] for g, t in by_group.items() if f.name in t}
         override = sheet.get(f"costs.{f.name}")
         default, conflict = _prudent(f.name, values) if values and complete else (None, None)
-        if sheet.mask.name in MEASURED_SIGNS and f.name in BUMPS and default and conflict is None:
+        measured = sheet.mask.name in MEASURED_SIGNS and f.name in BUMPS and conflict is None and default is not None
+        measured = measured and default != 0
+        if measured and default is not None:
             conflict = (-abs(default), abs(default))
         missing = override is None and default is None
         params[f.name] = {
@@ -278,6 +281,7 @@ def resolve(table: dict | None, sheet: TermSheet) -> Resolved:
             "missing": missing,
             "by_group": values,
             "conflict": conflict,
+            "measured": measured,
             "starting": bool(values) and all(g in start and start[g].get(f.name) == v for g, v in values.items()),
         }
     return Resolved({n: g for n, g in names.items()}, tiers, params, sheet.get("costs.side", "sell"), alerts)

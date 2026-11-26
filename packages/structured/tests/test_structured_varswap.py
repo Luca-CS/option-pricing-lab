@@ -182,4 +182,3 @@ def test_the_overs_of_a_variance_swap_take_their_sign_against_the_desk():
     lines = {line.key: line for line in q.desk.lines}
     assert lines["vol"].cost > 0 and "measured on this product" in lines["vol"].note
     assert sum(line.cost for line in q.desk.lines if line.kind == "bump") > 0
-
