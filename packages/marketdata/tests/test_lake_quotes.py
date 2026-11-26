@@ -272,3 +272,21 @@ def test_parity_carry_goes_in_the_lake_without_touching_the_yield_estimates(lake
     assert rows["carry"].to_numpy() == pytest.approx(CARRY, abs=2e-4)
     assert rows["origin"].iloc[0] == "derived" and rows["source"].iloc[0] == "parity_on_archive"
     assert dividend_yield_at(lake, "SPX", DAY)[1:] == ("synthetic", "assumed_yield")
+
+
+def test_a_chain_without_any_close_reads_its_spot_from_put_call_parity(lake):
+    """The DoltHub chains of SPY carry no underlying close and the lake has no close of SPY: the spot is the one
+    put-call parity implies on the shortest expiry, its dividends neglected over it (here 1.5 % over 30 days)."""
+    rows = synthetic_rows().assign(underlying_close=np.nan)
+    lake.ingest("option_quotes", rows, "archive", "observed")
+    day = clean_day(lake, "SPX", DAY)
+    assert day.spot == pytest.approx(SPOT, rel=2e-3) and day.spot_source.startswith("put-call parity on the")
+    for s in day.slices:
+        assert np.abs(s["iv"] - smile(s["k"], s["T"])).max() < 1e-4  # the smile is read in moneyness of the forward
+    assert clean_day(lake, "SPX", DAY, spot=SPOT).spot_source == "given"
+    one_sided = rows.assign(bid=0.0)
+    lake2 = Lake(lake.root.parent / "lake2")
+    lake2.ingest("discount_curves", curve_rows(), "test", "derived")
+    lake2.ingest("option_quotes", one_sided, "archive", "observed")
+    with pytest.raises(KeyError, match="put-call parity"):
+        clean_day(lake2, "SPX", DAY)

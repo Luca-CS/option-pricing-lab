@@ -23,6 +23,7 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 
+from optlab.core import progress
 from optlab.marketdata.days import as_day, shifted_day
 from optlab.risk import grid
 from optlab.risk.curves import CurveMove
@@ -227,11 +228,12 @@ def ladder(
     settings = settings or RiskSettings(smoothing=0.005)
     env = env_with_betas(env, betas) if betas else (env or RiskEnv())
     positions, book_v, book_var, rows = [], {}, {}, []
-    for g in groups:
+    for g_i, g in enumerate(groups):
         shocks, measures = plan(g.ctx, o, env)
         aliases = [m for m in measures if "__alias__" in m.weights]
         real = [m for m in measures if "__alias__" not in m.weights]
-        run = run_group_safe(g, shocks, real, settings, env)
+        with progress.part(g_i, len(groups)):
+            run = run_group_safe(g, shocks, real, settings, env)
         for m in aliases:  # the point 0's Greeks, shared by the rules
             src = next(k for k in m.weights if k != "__alias__")
             run.measures[m.name] = run.measures[src]

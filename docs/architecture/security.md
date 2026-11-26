@@ -67,7 +67,9 @@ A guard in front of every route (`optlab.server.web.Guard`):
 - Market data from Yahoo is for personal use. The lake, `data/` and the stores never enter the repository, an image or
   the demo; `.gitignore`, the images' allow-list `.dockerignore` and a test keep it so.
 - Published results hold performances and calibrated parameters, never market levels.
-- With the LAN profile on, raw quotes and levels are refused to requests from beyond this machine.
+- With the LAN profile on, the API's answers hold no local path of the machine, and raw option quotes and index levels
+  are refused, unless the owner serves them on the LAN (`OPTLAB_LAN_DATA=true`): the LAN is then the owner's own
+  devices, and the data's terms (personal use) stay the owner's to keep.
 - The demo's data folder is built from fixed seeds and marked `synthetic` on every row. Its recorder refuses to write a
   file that holds a local path, and never records a login or a session token.
 

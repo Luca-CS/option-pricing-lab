@@ -18,6 +18,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from optlab.core import progress
 from optlab.risk.curves import CurveMove
 from optlab.risk.engine import RiskSettings, run_group_safe
 from optlab.risk.shocks import RiskEnv, Shock, VolMove, apply
@@ -167,10 +168,11 @@ def run(
                         spot={"*": a} if a else {}, vol={"*": VolMove(b)} if b else {}
                     )
     book_v, book_var, positions, rows, flags = {}, {}, [], [], {s.name: {} for s in scenarios}
-    for g in groups:
+    for g_i, g in enumerate(groups):
         for s in scenarios:
             flags[s.name].update({f"{g.label}:{k}": v for k, v in _arbitrage_flags(g.ctx, s.shock, env).items()})
-        r = run_group_safe(g, shocks, None, settings, env)
+        with progress.part(g_i, len(groups)):
+            r = run_group_safe(g, shocks, None, settings, env)
         for i, name in enumerate(r.names):
             positions.append(
                 {

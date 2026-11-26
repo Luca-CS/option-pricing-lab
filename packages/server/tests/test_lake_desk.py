@@ -106,7 +106,7 @@ def test_lab_lists_fits_and_replays_runs(desk):
 
 
 def test_a_shared_desk_keeps_quotes_and_levels_private(desk):
-    desk.shared = True
+    desk.shared = desk.private_data = True
     try:
         with pytest.raises(ApiError) as exc:
             desk.lab_quotes("SPX", str(DAY), "archive")
@@ -122,8 +122,13 @@ def test_a_shared_desk_keeps_quotes_and_levels_private(desk):
         )
         text = json.dumps(res)
         assert "iv_bid" not in text and "iv_ask" not in text and "bid" not in text.replace("median_half", "")
+        # the owner's LAN (OPTLAB_LAN_DATA): the quotes and the levels, the local paths still out
+        desk.private_data = False
+        assert desk.lab_quotes("SPX", str(DAY), "archive")["slices"]
+        over = desk.data_overview()
+        assert over["lake"] is None and over["private_data"] is False
     finally:
-        desk.shared = False
+        desk.shared = desk.private_data = False
 
 
 def test_the_lab_fit_result_never_carries_raw_quotes(desk):

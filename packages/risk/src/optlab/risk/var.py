@@ -213,7 +213,8 @@ def revalue_many(
     else:
         _init(groups, env)
         for k, job in enumerate(jobs):
-            results.append(_chunk(job))
+            with progress.part(k, len(jobs)):  # in this process the chunk's own simulations tick too
+                results.append(_chunk(job))
             if log:
                 log(f"chunk {k + 1}/{len(jobs)} ({time.perf_counter() - t0:.0f} s)")
             progress.tick(k + 1, len(jobs), "chunks")

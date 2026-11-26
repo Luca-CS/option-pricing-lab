@@ -30,6 +30,7 @@ from typing import Any
 
 import numpy as np
 
+from optlab.core import progress
 from optlab.risk import grid
 from optlab.risk.curves import CurveMove
 from optlab.risk.engine import Measure, RiskSettings, run_group
@@ -383,14 +384,15 @@ def compute(
     settings = settings or RiskSettings(smoothing=0.005)
     env = env or RiskEnv()
     positions, book_v, book_var, gross_nodes, group_rows = [], {}, {}, {}, []
-    for g in groups:
+    for g_i, g in enumerate(groups):
         ctx = g.ctx
         items = g.book._prepare(ctx)
         used = sorted({n for it in items for n in it["underlyings"]})
         names = [n for n in ctx.names if n in used] if isinstance(ctx, BasketContext) else used
         roll_spots = _forward_drift(ctx, names, bumps.roll_days) if options.theta else None
         shocks, measures = plan(ctx, bumps, options, env, names, roll_spots)
-        run = run_group(g, shocks, measures, settings, env)
+        with progress.part(g_i, len(groups)):  # each group one part of the run's progress
+            run = run_group(g, shocks, measures, settings, env)
         spots = {n: float((ctx.markets[n] if isinstance(ctx, BasketContext) else ctx.market).spot) for n in names}
         dt_roll = year_fraction(ctx.valuation, roll_date(ctx.valuation, bumps.roll_days))
         D = ctx.market

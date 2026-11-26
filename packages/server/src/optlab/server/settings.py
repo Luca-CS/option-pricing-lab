@@ -88,6 +88,11 @@ class Settings(BaseSettings):
     host: str = Field("127.0.0.1", description="where the server listens; beyond this machine only with lan")
     port: int = Field(8765, ge=1, le=65535)
     lan: bool = Field(False, description="the LAN profile (ADR-0002): off by default")
+    lan_data: bool = Field(
+        False,
+        description="with lan: the raw option quotes and index levels are served on the LAN too. The LAN is then the "
+        "owner's own devices, and the data's terms (personal use) stay the owner's to keep",
+    )
     lan_names: str = Field(
         "",
         description="with lan: the names the desk answers to, separated by a comma and a space as Caddy wants them "

@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from optlab.core import progress
 from optlab.core.config import DEFAULT_SEED
 from optlab.risk.curves import bumped_market, forward_ratio
 from optlab.risk.shocks import (
@@ -368,8 +369,9 @@ def run_group(
     for k, s in shocks.items():
         buckets.setdefault(sim_key(group.ctx, s, env), []).append(k)
     ordered = sorted(buckets.items(), key=lambda kv: "base" not in kv[1])  # the base's simulation first
-    for _key, members in ordered:
-        _run_bucket(g, members)
+    for i, (_key, members) in enumerate(ordered):
+        with progress.part(i, len(ordered)):  # each simulation one part of the group's progress
+            _run_bucket(g, members)
     unfinished = g.results.unfinished()
     if unfinished:
         raise RuntimeError(f"measures not evaluated: {', '.join(unfinished)}")

@@ -36,6 +36,7 @@ services:
       OPTLAB_WORKER: external  # the jobs belong to the worker, the only process with the GPU
       OPTLAB_LAN: ${OPTLAB_LAN:-false}
       OPTLAB_LAN_NAMES: ${OPTLAB_LAN_NAMES:-}
+      OPTLAB_LAN_DATA: ${OPTLAB_LAN_DATA:-false}  # the raw quotes and index levels on the owner's LAN too (ADR-0002)
       FORWARDED_ALLOW_IPS: 172.30.0.10  # uvicorn trusts the proxy's X-Forwarded-For, nobody else's
     ports:
       - 127.0.0.1:${OPTLAB_PORT:-8765}:8765
@@ -65,6 +66,7 @@ services:
     environment:
       OPTLAB_LAN: ${OPTLAB_LAN:-false}  # the same LAN rule as the api's for what a job returns (desk.shared)
       OPTLAB_LAN_NAMES: ${OPTLAB_LAN_NAMES:-}
+      OPTLAB_LAN_DATA: ${OPTLAB_LAN_DATA:-false}
     gpus: all
     stop_grace_period: 30s  # SIGTERM stops the worker as Ctrl+C does: running jobs end interrupted, the lease is freed
     shm_size: 1g  # the process pools of the VaR (spawn) and their semaphores

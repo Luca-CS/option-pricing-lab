@@ -91,7 +91,7 @@ Routes are written without the `/api/v1` prefix. `202` marks a route that answer
 | v0 route | Does | v1 route | Package | Role | Status |
 |---|---|---|---|---|---|
 | `GET /api/vollab/days` | days with option quotes | `GET /quant/vollab/days` | marketdata | viewer | kept |
-| `GET /api/vollab/quotes` | quotes of a day (bid, ask) | `GET /quant/vollab/quotes?underlying=&day=&source=` (403 for raw quotes and levels when the request comes from beyond this machine, as v0's `shared` mode) | marketdata | quant | kept |
+| `GET /api/vollab/quotes` | quotes of a day (bid, ask) | `GET /quant/vollab/quotes?underlying=&day=&source=` (403 for raw quotes and levels with the LAN profile on, unless its owner serves them there, `OPTLAB_LAN_DATA`) | marketdata | quant | kept |
 | `POST /api/vollab/fit` | fit SSVI, SVI, Heston against the quotes | `POST /quant/vollab/fits` 202 | marketdata | quant | kept |
 | `GET /api/vollab/runs` | stored fits | `GET /quant/vollab/runs` | marketdata | viewer | kept |
 | `POST /api/vollab/runs/{id}/reproduce` | replay a stored fit | `POST /quant/vollab/runs/{run_id}/reproduce` 202 | marketdata | quant | kept |
@@ -126,7 +126,7 @@ Reports carry inline CSS and SVG and no script: they are served with their own C
 |---|---|---|---|
 | shared token (`--token`, `?token=`, cookie `optlab_token`) | access beyond localhost | local accounts, sessions, roles (`POST /auth/login`, `POST /auth/logout`, `GET /auth/me`) | **dropped** ([ADR-0020](adr/0020-accounts-roles-audit.md)) |
 | `--tunnel` (localhost.run over SSH, `tunnel.py`) | a public link to the desk | none: the real instance is never exposed; the public showcase is the static demo on GitHub Pages | **dropped** ([ADR-0002](adr/0002-never-exposed.md)) |
-| `desk.shared` (403 on raw quotes and levels beyond this machine) | personal-use data never leaves the PC | kept as a rule of the market routes when the LAN profile is on | kept |
+| `desk.shared` (403 on raw quotes and levels beyond this machine) | personal-use data never leaves the PC | kept as two rules when the LAN profile is on: no local path in an answer (`shared`), raw quotes and levels refused (`private_data`) unless the owner serves them on the LAN (`OPTLAB_LAN_DATA`) | kept |
 | `netcheck.py` (Windows firewall, network profile; read-only) | says why the LAN cannot connect | `GET /admin/network` (fixed arguments only) | kept |
 
 ## 2. Screens of the desk (14, `optlab/app/static/js/views/`)
