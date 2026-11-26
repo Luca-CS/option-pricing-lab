@@ -1,6 +1,6 @@
 [project]
 name = "optlab-server"
-version = "2.0.0"
+version = "2.0.1"
 description = "optlab's desk: API v1 (FastAPI), accounts, the job queue, its worker and schedules, the SQLite database"
 requires-python = ">=3.14"
 license = "MIT"
