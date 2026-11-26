@@ -70,7 +70,7 @@ test("the day's vol move opens by maturity, under each spot-vol rule", async ({ 
   await expect(page.getByRole("table", { name: /under each spot-vol rule$/ })).toBeVisible({ timeout: 840_000 });
   await expect(page.getByRole("table", { name: /vol P&L of 2021-06-30 by maturity$/ })).toBeVisible();
   await expect(page.getByText(/^Sticky strike \(opened below\)$/)).toBeVisible();
-  await expect(page.getByText(/revaluations of [d,]+ paths; the nodes and the residual/)).toBeVisible();
+  await expect(page.getByText(/revaluations of [\d,]+ paths; the nodes and the residual/)).toBeVisible();
   await accessible(page);
 });
 
