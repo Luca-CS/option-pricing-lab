@@ -84,6 +84,7 @@ Routes are written without the `/api/v1` prefix. `202` marks a route that answer
 | — | backtest of a VaR run's 1-day VaR on the stored explained P&L, Kupiec's test (CLI and report only in v0) | `GET /risk/backtest?var_run=&from=&to=` | risk | viewer | new route for an existing function (Risk › Backtest) |
 | `GET /api/pnl?from=&to=` | cumulated explained P&L from EOD runs | `GET /risk/pnl?from=&to=` | risk | viewer | kept |
 | `POST /api/pnl/eod` | EOD runs for a period (idempotent backfill) | `POST /risk/eod-runs` 202 (idempotency key = the run key) | risk | risk | kept |
+| — | a day of the explained P&L opened: spot, vol and skew under each spot-vol rule, the vol move node by node or tenor by tenor, the delta buckets | `POST /risk/pnl/detail` 202 | risk | trader, risk | new (Trading › P&L explained) |
 
 ### Quant labs
 
@@ -142,7 +143,7 @@ Each screen of the first desk, and where its functions live in the current front
 | Cost defaults (`costs`) | the cost table by group and notional tier, starting values in italics, versions | `trading/cost-defaults` | Trading > Pricing policy | kept |
 | Market (`market`) | snapshots and switch, SVI smile per maturity, ATM term, forward and discount, calibration fit, model-risk table, other underlyings (worst-of inputs and correlations) | `market/*`, `quant/model-risk` | Quant > Market explorer, and the Market drawer | kept |
 | Risk (`risk`) | Greeks run (delta three rules, gamma 1 % and 5 %, vega, buckets, theta split, rho, epsilon, correlation), ladder chart, scenarios (edit and sign), VaR (distribution, contributions, VaR day), risk report | `risk/*` | Trading > Book risk, and Risk > VaR, Stress | kept |
-| P&L explained (`pnl`) | EOD run for a period, cumulated P&L against the Greeks' prediction, cascade by step, by trade, new trades, reserve released, unexplained | `risk/pnl`, `risk/eod-runs` | Trading > P&L explained, Risk > EOD runs | kept |
+| P&L explained (`pnl`) | EOD run for a period, cumulated P&L against the Greeks' prediction, cascade by step, by trade, new trades, reserve released, unexplained; a day's vol move opened by node, maturity and delta bucket under each spot-vol rule | `risk/pnl`, `risk/eod-runs`, `risk/pnl/detail` | Trading > P&L explained, Risk > EOD runs | kept |
 | Script lab (`script`) | editor with line numbers, errors at line and column, language reference, price under a model | `structuring/script/*` | Quant > Script lab | kept |
 | Vol lab (`vollab`) | day and source picker, smile with bid and ask, error against the spread by model and maturity (RMSE bp, share within the spread), stored runs, reproduce | `quant/vollab/*` | Quant > Vol lab | kept |
 | Replay (`replay`) | preset, strike date, frequency, model; value and cash over the life, events, performance since strike, P&L explained with residual, reserve released | `quant/replay/*` | Quant > Replay lab, Structuring > product backtest | kept |

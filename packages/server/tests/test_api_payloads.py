@@ -189,7 +189,7 @@ def test_the_trading_answers_and_results_are_described(a, admin):
     assert s.scenarios and s.scenarios[0].book.se is not None
     run = admin.get(f"/api/v1/risk/runs/{s.run_id}")
     kinds = documented["/api/v1/risk/runs/{run_id}"]
-    assert run.status_code == 200 and kinds == "RiskRun|LadderRun|ScenarioRun|VarRun|EodRun|PnlRun"
+    assert run.status_code == 200 and kinds == "RiskRun|LadderRun|ScenarioRun|VarRun|EodRun|PnlRun|PnlDetail"
     stored = payloads.ScenarioRun.model_validate(run.json())  # a stored run has its job result's fields
     assert stored.scenarios == s.scenarios
     assert set(a.app.openapi()["x-job-results"]) >= {"quote", "value", "book", "risk", "ladder", "scenarios"}

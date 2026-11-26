@@ -1,13 +1,13 @@
 {
  "meta": {
-  "recorded": "2026-11-07T16:43:15+00:00",
-  "commit": "4612e786becc54aa16c02a63a2490368d4292e59",
+  "recorded": "2026-11-26T01:38:34+00:00",
+  "commit": "9bc648bb0c87218966ad3f123e692cdc06a043b6",
   "platform": "Windows-11-10.0.26200-SP0",
   "machine": "AMD64",
   "python": "3.14.7",
   "numpy": "2.5.4",
   "scipy": "1.18.1",
-  "seconds": 38.22,
+  "seconds": 28.68,
   "times": {}
  },
  "values": {
@@ -129,7 +129,7 @@
      "lines": [
       {
        "key": "slv",
-       "label": "Model: SLV (mix 0.5)",
+       "label": "Model reserve: SLV (mix 0.5)",
        "kind": "model",
        "cost": 0.0,
        "se": 0.035447827079768984,
@@ -145,7 +145,7 @@
       },
       {
        "key": "vol",
-       "label": "Volatility, parallel",
+       "label": "Overvol",
        "kind": "bump",
        "cost": 0.08242838459141813,
        "se": 0.006430313472779599,
@@ -161,7 +161,7 @@
       },
       {
        "key": "skew",
-       "label": "Volatility skew (90-110 % at 1 year)",
+       "label": "Overskew (90-110 % at 1 year)",
        "kind": "bump",
        "cost": 0.07642374404169097,
        "se": 0.0050941325682070625,
@@ -177,7 +177,7 @@
       },
       {
        "key": "dividend",
-       "label": "Dividends",
+       "label": "Overdiv",
        "kind": "bump",
        "cost": 0.008665417758449158,
        "se": 0.0023964239058673438,
@@ -193,7 +193,7 @@
       },
       {
        "key": "repo",
-       "label": "Repo",
+       "label": "Overrepo",
        "kind": "bump",
        "cost": 0.005692542866259211,
        "se": 0.001712212407726942,
@@ -209,7 +209,7 @@
       },
       {
        "key": "spot",
-       "label": "Spot, delta bid-ask",
+       "label": "Delta bid-ask",
        "kind": "bump",
        "cost": 0.003035674361189961,
        "se": 0.0011568623084122975,
@@ -251,7 +251,7 @@
       },
       {
        "key": "interaction",
-       "label": "Interaction of the bumps",
+       "label": "Interaction of the overs",
        "kind": "interaction",
        "cost": 0.01096511634570893,
        "se": 0.010497895814181346,
@@ -315,7 +315,7 @@
      "lines": [
       {
        "key": "slv",
-       "label": "Model: SLV (mix 0.5)",
+       "label": "Model reserve: SLV (mix 0.5)",
        "kind": "model",
        "cost": 0.3262261889279939,
        "se": 0.041981832817349546,
@@ -331,7 +331,7 @@
       },
       {
        "key": "vol",
-       "label": "Volatility, parallel",
+       "label": "Overvol",
        "kind": "bump",
        "cost": 0.06373929558139002,
        "se": 0.008388249332065417,
@@ -347,7 +347,7 @@
       },
       {
        "key": "skew",
-       "label": "Volatility skew (90-110 % at 1 year)",
+       "label": "Overskew (90-110 % at 1 year)",
        "kind": "bump",
        "cost": 0.054713513756289446,
        "se": 0.012199096879625853,
@@ -363,7 +363,7 @@
       },
       {
        "key": "dividend",
-       "label": "Dividends",
+       "label": "Overdiv",
        "kind": "bump",
        "cost": 0.015164261119547877,
        "se": 0.00454237763517747,
@@ -379,7 +379,7 @@
       },
       {
        "key": "repo",
-       "label": "Repo",
+       "label": "Overrepo",
        "kind": "bump",
        "cost": 0.012640546499927541,
        "se": 0.004146288377866191,
@@ -395,7 +395,7 @@
       },
       {
        "key": "spot",
-       "label": "Spot, delta bid-ask",
+       "label": "Delta bid-ask",
        "kind": "bump",
        "cost": 0.0019178608279176543,
        "se": 0.0003437213831788194,
@@ -411,7 +411,7 @@
       },
       {
        "key": "coupon",
-       "label": "Digital: coupon barrier",
+       "label": "Digital overhedge: coupon barrier",
        "kind": "digital",
        "cost": 0.0026233547628947505,
        "se": 0.00044293752158295946,
@@ -500,7 +500,7 @@
       },
       {
        "key": "autocall",
-       "label": "Digital: autocall trigger",
+       "label": "Digital overhedge: autocall trigger",
        "kind": "digital",
        "cost": 0.04131824952998294,
        "se": 0.006062623766331526,
@@ -580,7 +580,7 @@
       },
       {
        "key": "barrier",
-       "label": "Digital: final barrier",
+       "label": "Digital overhedge: final barrier",
        "kind": "digital",
        "cost": 0.2010361697745258,
        "se": 0.016235567856967333,
@@ -606,7 +606,7 @@
       },
       {
        "key": "digital_interaction",
-       "label": "Interaction of the digitals",
+       "label": "Interaction of the digital overhedges",
        "kind": "interaction",
        "cost": -0.0035373127748057065,
        "se": 0.0016266463734033803,
@@ -622,7 +622,7 @@
       },
       {
        "key": "interaction",
-       "label": "Interaction of the bumps",
+       "label": "Interaction of the overs",
        "kind": "interaction",
        "cost": -0.004991165459028835,
        "se": 0.017256589651974144,
