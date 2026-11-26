@@ -330,8 +330,29 @@ def _atm_move(sa, sb) -> list:
     return list(np.asarray(sb.iv(np.zeros(len(T)), T)) - np.asarray(sa.iv(np.zeros(len(T)), T)))
 
 
-def _step_contexts(ga: RiskGroup, gb_ctx, ratio: dict, a: dt.date, b: dt.date) -> dict:
-    """{step: context} of one group from d-1's context to d's, in d-1's scale."""
+def spot_surface(surface, ratio: float, rule: str = "sticky_moneyness", betas=None):
+    """d-1's surface once the spot has moved by `ratio`, under a spot-vol rule (`shocks.RULES`): sticky moneyness keeps it
+    (the model's coordinate), sticky strike reads it at k + ln(ratio) (vols fixed at absolute strikes), realistic adds the
+    at-the-money move beta_T ln(ratio) of each tenor (`betas`, one per tenor of the grid). A flat vol stays flat."""
+    from optlab.structured.greeks import StickyStrikeSurface
+
+    if rule == "sticky_moneyness" or np.isscalar(surface):
+        return surface
+    if rule == "sticky_strike":
+        return StickyStrikeSurface(surface, ratio - 1.0)
+    if rule == "realistic":
+        if betas is None:
+            raise KeyError("no spot-vol betas: the realistic rule needs them")
+        return TentBumpedSurface(surface, term=[float(x) * float(np.log(ratio)) for x in betas])
+    raise ValueError(f"unknown vol rule {rule!r}")
+
+
+def _step_contexts(
+    ga: RiskGroup, gb_ctx, ratio: dict, a: dt.date, b: dt.date, rule: str = "sticky_moneyness", betas=None
+) -> dict:
+    """{step: context} of one group from d-1's context to d's, in d-1's scale. The rule decides the surface of the spot
+    step (`spot_surface`, with `betas` {name: per tenor} for the realistic one); the skew step ends on d's surface under any
+    rule."""
     out = {}
     ctx = ga.ctx
     basket = isinstance(ctx, BasketContext)
@@ -343,11 +364,16 @@ def _step_contexts(ga: RiskGroup, gb_ctx, ratio: dict, a: dt.date, b: dt.date) -
     mb_a = {n: mb[n].scaled(ma[n].spot * ratio[n]) for n in names}
     corr_a = ctx.corr if basket else None
     corr_b = gb_ctx.corr if basket else None
+    ss = (
+        sa
+        if rule == "sticky_moneyness"
+        else {n: spot_surface(sa[n], ratio[n], rule, (betas or {}).get(n)) for n in names}
+    )
     stages = {
         "time": (ma, sa, corr_a),
-        "spot": ({n: ma[n].scaled(ma[n].spot * ratio[n]) for n in names}, sa, corr_a),
+        "spot": ({n: ma[n].scaled(ma[n].spot * ratio[n]) for n in names}, ss, corr_a),
     }
-    vol = {n: (sa[n] if np.isscalar(sa[n]) else TentBumpedSurface(sa[n], term=_atm_move(sa[n], sb[n]))) for n in names}
+    vol = {n: (ss[n] if np.isscalar(ss[n]) else TentBumpedSurface(ss[n], term=_atm_move(ss[n], sb[n]))) for n in names}
     stages["vol"] = (stages["spot"][0], vol, corr_a)
     stages["skew"] = (stages["spot"][0], sb, corr_a)
     stages["rates"] = ({n: _rates_market(ma[n], mb_a[n], ma[n].spot * ratio[n]) for n in names}, sb, corr_a)
@@ -422,6 +448,27 @@ def _predict(greeks: dict, row: dict, names, cur, days: int) -> dict:
     return out
 
 
+def end_context(lake, ga: RiskGroup, bda: BookDay, bdb: BookDay, b: dt.date, layer: str):
+    """(d's context of a group of d-1, {name: real spot of d over real spot of d-1}). A group whose trades all ended takes
+    d's market of its names from the lake."""
+    ctx = ga.ctx
+    names = list(ctx.names) if isinstance(ctx, BasketContext) else [ctx.underlying]
+    gb = next((g for g in bdb.groups if g.label == ga.label), None)
+    if gb is None:
+        from optlab.marketdata.pit import basket_at, context_at
+
+        if isinstance(ctx, BasketContext):
+            gb_ctx, snaps, _ = basket_at(lake, names, b, layer=layer, payment=ctx.payment_currency)
+            scale_b = {n: s.spot_scale for n, s in snaps.items()}
+        else:
+            gb_ctx, snap = context_at(lake, names[0], b, layer=layer, payment=ctx.payment_currency)
+            scale_b = {names[0]: snap.spot_scale}
+    else:
+        gb_ctx = gb.ctx
+        scale_b = {n: bdb.scales[n] for n in names}
+    return gb_ctx, {n: scale_b[n] / bda.scales[n] for n in names}
+
+
 def explain_day(
     lake,
     trades,
@@ -464,22 +511,9 @@ def explain_day(
     greeks_a = {p["trade_id"]: p["greeks"] for p in ea["positions"]}
     for ga in bda.groups:
         cur = context_currency(ga.ctx)
-        gb = next((g for g in bdb.groups if g.label == ga.label), None)
         basket = isinstance(ga.ctx, BasketContext)
         names = list(ga.ctx.names) if basket else [ga.ctx.underlying]
-        if gb is None:  # every trade of the group ended: d's market of its names from the lake
-            from optlab.marketdata.pit import basket_at, context_at
-
-            if basket:
-                gb_ctx, snaps, _ = basket_at(lake, names, b, layer=layer, payment=ga.ctx.payment_currency)
-                scale_b = {n: s.spot_scale for n, s in snaps.items()}
-            else:
-                gb_ctx, snap = context_at(lake, names[0], b, layer=layer, payment=ga.ctx.payment_currency)
-                scale_b = {names[0]: snap.spot_scale}
-        else:
-            gb_ctx = gb.ctx
-            scale_b = {n: bdb.scales[n] for n in names}
-        ratio = {n: scale_b[n] / bda.scales[n] for n in names}  # real spot of b over real spot of a
+        gb_ctx, ratio = end_context(lake, ga, bda, bdb, b, layer)
         contexts = _step_contexts(ga, gb_ctx, ratio, a, b)
         trades_a = {p.name: bda.fixings[p.name] for p in ga.book.positions}
         real_b = {tid: real_fixings(lake, bda.trades[tid], b) for tid in trades_a}

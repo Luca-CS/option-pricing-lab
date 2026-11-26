@@ -570,7 +570,7 @@ class BookValuation(Doc):
 # --- risk --------------------------------------------------------------------------------------------------------------
 class RiskRunItem(Doc):
     run_id: str
-    kind: str = Field(..., description="risk, ladder, scenarios, var, eod, pnl")
+    kind: str = Field(..., description="risk, ladder, scenarios, var, eod, pnl, pnl_detail")
     day: str
     run_key: str
     version: int
@@ -875,8 +875,55 @@ class PnlRun(Doc):
     created_at: str | None = None
 
 
+class PnlRuleSteps(Doc):
+    """The spot, vol and skew steps of a day under one spot-vol rule, and what the Greeks of that rule predicted."""
+
+    steps: dict[str, Estimate] = Field(default={}, description="spot, vol, skew: each a full revaluation, ± SE")
+    predicted: dict[str, float] = Field(default={}, description="the rule's delta and gamma, vega per tenor, skew vega")
+    unexplained: dict[str, float] = {}
+
+
+class PnlNameDetail(Doc):
+    """One name's vol move, opened: arrays by tenor, or (strikes, tenors) on the risk grid."""
+
+    level: list[Estimate] = Field(default=[], description="per tenor: its at-the-money move on every strike")
+    shape: list[Any] = Field(default=[], description="per tenor: its nodes beyond the level (± SE by tenor)")
+    by_tenor: list[float] = Field(default=[], description="level + shape: which maturity made or lost")
+    predicted_level: list[float] = Field(default=[], description="vega per tenor x the at-the-money move")
+    moves: list[list[float]] = Field(default=[], description="the implied vol move at each node (strikes, tenors)")
+    deltas: list[list[float]] = Field(default=[], description="each node's forward call delta after the spot step")
+    nodes: list[list[Estimate]] | None = Field(default=None, description="node by node (strikes, tenors), ± SE")
+    buckets: list[list[float]] | None = Field(default=None, description="the nodes by delta bucket (buckets, tenors)")
+    skipped: list[int] = Field(default=[], description="tenors whose tent the book does not reach: zero, exactly")
+    groups: list[str] = []
+
+
+class PnlDetail(Doc):
+    """A day of the explained P&L opened (job `pnl_detail`): the vol and skew steps node by node under one rule."""
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+    run_id: str | None = None
+    kind: Literal["pnl_detail"] | None = None
+    from_: str = Field(..., alias="from")
+    to: str
+    rule: str
+    detail: str
+    rules: dict[str, PnlRuleSteps] = Field(default={}, description="by rule: the same total, split differently")
+    unavailable: dict[str, str] = Field(default={}, description="a rule left out, and why")
+    names: dict[str, PnlNameDetail] = {}
+    residual: Estimate | None = Field(default=None, description="the part of the move the grid does not hold")
+    vol_total: float = Field(..., description="vol + skew under the rule: the nodes and the residual add up to it")
+    check: float = Field(..., description="vol_total less the nodes and the residual: zero but for rounding")
+    grid: dict[str, Any] = {}
+    n_paths: int | None = Field(default=None, description="paths of each revaluation")
+    pnl_run: str | None = None
+    revaluations: int = 0
+    seconds: float | None = None
+    created_at: str | None = None
+
+
 # a stored run (GET /risk/runs/{run_id}): its fields follow its kind (the job result's, plus kind and created_at)
-StoredRun = RiskRun | LadderRun | ScenarioRun | VarRun | EodRun | PnlRun
+StoredRun = RiskRun | LadderRun | ScenarioRun | VarRun | EodRun | PnlRun | PnlDetail
 
 
 class EodDay(Doc):
@@ -1300,6 +1347,7 @@ JOB_RESULTS: dict[str, type[BaseModel]] = {
     "ladder": LadderRun,
     "scenarios": ScenarioRun,
     "eod": EodResult,
+    "pnl_detail": PnlDetail,
     "var": VarRun,
     "script": ScriptPrice,
     "replay": Replay,

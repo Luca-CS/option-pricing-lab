@@ -67,6 +67,8 @@ export function NodeHeatmap({
   caption,
   cornerLabel = "K / F",
   tones = ["short", "long"],
+  notes,
+  digits = 0,
 }: {
   strikes: string[];
   tenors: string[];
@@ -78,6 +80,9 @@ export function NodeHeatmap({
   cornerLabel?: string;
   /** what the two colours mean: [negative, positive] */
   tones?: [string, string];
+  /** a second line per cell, as the cells (a node's delta: "52Δ") */
+  notes?: (string | null)[][];
+  digits?: number;
 }) {
   const max = Math.max(1e-12, ...cells.flat().map((e) => (e && !isNoise(e) ? Math.abs(e.value) : 0)));
   return (
@@ -102,20 +107,27 @@ export function NodeHeatmap({
               <th scope="row">{k}</th>
               {tenors.map((t, j) => {
                 const e = cells[i]?.[j] ?? null;
+                const note = notes?.[i]?.[j] ?? null;
+                const sub = note ? <span className={classes.note}>{note}</span> : null;
                 if (e === null || (e.value === 0 && !e.se)) {
                   return (
                     <td key={t}>
-                      <span className={`${classes.cell} ${classes.empty}`}>0</span>
+                      <span className={`${classes.cell} ${classes.empty}`}>
+                        0{sub && " "}
+                        {sub}
+                      </span>
                     </td>
                   );
                 }
-                const f = formatEstimate(e, { digits: 0, sign: true });
+                const f = formatEstimate(e, { digits, sign: true });
                 const noise = isNoise(e);
                 const tone = noise ? classes.noise : f.sign < 0 ? classes.neg : f.sign > 0 ? classes.pos : "";
                 const isSelected = selected?.row === i && selected?.col === j;
                 // at most 50 %: the strongest cell stays dark enough for the light text on it (WCAG AA)
                 const share = `${Math.round(12 + (38 * Math.abs(e.value)) / max)}%`;
-                const title = `${k} at ${t}: ${f.value} ± ${f.se}${noise ? " (in the noise)" : ""}`;
+                // the name reads as the cell does, value then delta, so the visible text is part of it (WCAG 2.5.3)
+                const shown = note ? `${f.value} ${note}` : f.value;
+                const title = `${k} at ${t}: ${shown} ± ${f.se}${noise ? " (in the noise)" : ""}`;
                 return (
                   <td key={t}>
                     {onSelect ? (
@@ -124,11 +136,13 @@ export function NodeHeatmap({
                         className={[classes.cell, tone, isSelected ? classes.selected : ""].join(" ")}
                         style={{ "--a": share } as CSSProperties}
                         aria-pressed={isSelected}
-                        aria-label={`${k} at ${t}: ${f.value} plus or minus ${f.se}${noise ? ", in the noise" : ""}`}
+                        aria-label={`${k} at ${t}: ${shown} plus or minus ${f.se}${noise ? ", in the noise" : ""}`}
                         title={title}
                         onClick={() => onSelect({ row: i, col: j })}
                       >
                         {f.value}
+                        {sub && " "}
+                        {sub}
                       </button>
                     ) : (
                       <span
@@ -137,6 +151,8 @@ export function NodeHeatmap({
                         title={title}
                       >
                         {f.value}
+                        {sub && " "}
+                        {sub}
                       </span>
                     )}
                   </td>
