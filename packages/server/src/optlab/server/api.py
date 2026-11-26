@@ -1161,16 +1161,11 @@ class Desk:
 
     def create_trade(self, body: dict) -> dict:
         sheet = _sheet(body.get("sheet") or {}, strict=True)
-        rate = body.get("coupon_rate")
-        if rate is not None and sheet.mask.name == "variance":  # the solved strike, in variance for a var swap
-            if sheet.get("variance.type") == "variance" and float(rate) <= 0:
-                raise ApiError("a variance strike must be positive", 422, "coupon_rate")
-            strike = float(rate) ** 0.5 if sheet.get("variance.type") == "variance" else float(rate)
-            sheet = sheet.replace(**{"variance.strike": strike, "wrapper.solve": "upfront"})
-        elif rate is not None and sheet.get("coupon.type") not in (None, "none"):
-            sheet = sheet.replace(**{"coupon.rate": float(rate), "wrapper.solve": "upfront"})
-        elif sheet.get("wrapper.solve") in ("coupon", "strike"):
-            sheet = sheet.replace(**{"wrapper.solve": "upfront"})
+        rate = body.get("coupon_rate")  # what the quote solved: a coupon, or a swap's strike (in variance)
+        try:
+            sheet = sheet.with_solved(None if rate is None else float(rate))
+        except TermSheetError as exc:
+            raise ApiError(str(exc), 422, "coupon_rate") from exc
         trade_date = dt.date.fromisoformat(body.get("trade_date") or self.ctx.valuation.isoformat())
         trade = Trade.from_term_sheet(
             body.get("trade_id") or self.repo.new_trade_id(sheet.mask.name[:3].upper()),

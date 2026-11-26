@@ -9,6 +9,7 @@ from _paths import SPX_CALIBRATION
 
 from optlab.core import BlackScholesModel, Market
 from optlab.structured import preset
+from optlab.structured.calendars import calendar
 from optlab.structured.cashflows import Note, Swap
 from optlab.structured.compiler import compile_sheet
 from optlab.structured.context import PricingContext
@@ -76,7 +77,7 @@ def test_the_sheet_keeps_its_knock_out_on_the_right_side_of_the_strike():
 def test_an_accumulator_settles_each_period_and_a_knock_out_ends_it():
     sheet = _sheet("accumulator", **{"accumulator.guarantee_months": 0})
     product = compile_sheet(sheet, START)
-    days = product.calendar.business_days(START, product.maturity)
+    days = calendar(sheet.get("general.calendar")).business_days(START, product.maturity)
     first_settle = next(dt.date.fromisoformat(str(e.when.value)) for e in product.program.events if e.pay is not None)
     p = product.program.param_values
     # every close at 95 % (between the strike 90 % and the knock-out 105 %): one unit a day, settled at 95 %
@@ -98,4 +99,9 @@ def test_the_presets_quote_their_upfront_under_local_vol():
 
     for name in ("accumulator", "funded_decumulator"):
         q = quote(preset(name, **{"general.maturity_months": 3}), CTX, control=None, n_paths=4_000)
-        assert q.coupon_rate is None and np.isfinite(q.upfront) and q.decision.product_class == "callable"
+        assert (
+            q.coupon_rate is None
+            and q.upfront is not None
+            and np.isfinite(q.upfront)
+            and q.decision.product_class == "callable"
+        )

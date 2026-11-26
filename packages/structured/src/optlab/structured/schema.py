@@ -678,6 +678,24 @@ class TermSheet:
                         f"{first} to {m - freq}"
                     )
 
+    def solved_parameter(self) -> bool:
+        """True when a quote of this sheet solves a parameter that the trade then keeps: a coupon, or a swap's strike."""
+        if not solves(self):
+            return False
+        return self.mask.name == "variance" or self.get("coupon.type", "none") != "none"
+
+    def with_solved(self, rate: float | None) -> TermSheet:
+        """The sheet priced as it stands, the solve set to upfront and the solved parameter written in: a coupon's rate,
+        or a swap's strike in vol (the root of a variance strike)."""
+        changes: dict = {"wrapper.solve": "upfront"}
+        if rate is not None and self.mask.name == "variance":
+            if self.get("variance.type") == "variance" and float(rate) <= 0:
+                raise TermSheetError("variance.strike: a variance strike must be positive")
+            changes["variance.strike"] = float(rate) ** 0.5 if self.get("variance.type") == "variance" else float(rate)
+        elif rate is not None and self.get("coupon.type", "none") != "none":
+            changes["coupon.rate"] = float(rate)
+        return self.replace(**changes)
+
     def replace(self, **changes) -> TermSheet:
         """Copy with dotted-path changes, e.g. replace(**{"coupon.rate": 0.1}). Fields that the changes hide are
         dropped; changing a field that ends up hidden is an error."""
