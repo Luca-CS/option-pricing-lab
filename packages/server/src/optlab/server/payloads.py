@@ -350,6 +350,9 @@ class TradeSummary(Doc):
     direction: str | None = Field(None, description="an accumulator's: accumulate or decumulate")
     level: float | None = Field(None, description="an accumulator's strike, a fraction of the initial level")
     knock_out: float | None = Field(None, description="an accumulator's knock-out, a fraction of the initial level")
+    label: str | None = Field(None, description="an instrument's name on the blotter")
+    currency: str | None = Field(None, description="an instrument's payment currency")
+    maturity: str | None = Field(None, description="an instrument's expiry or maturity")
 
 
 class ReserveLine(Doc):
@@ -386,7 +389,7 @@ class Trade(Doc):
     trade_id: str
     version: int
     book: str
-    status: str = Field(..., description="live, called, matured, knocked_out, deleted, ...")
+    status: str = Field(..., description="live, simulated, called, matured, closed, cancelled")
     quantity: float = Field(..., description="signed: > 0 when the book holds the investor side")
     desk_side: str = Field(..., description="short when the desk sold the product (a negative quantity), else long")
     side_check: SideCheck | None = Field(None, description="set when the sign contradicts the sheet's costs.side")
@@ -397,6 +400,39 @@ class Trade(Doc):
     product: dict[str, Any]
     summary: TradeSummary | None = None
     reserves: Reserves | None = None
+
+
+class Roll(Doc):
+    """A future rolled: the closed trade and the one opened on the next expiry."""
+
+    closed: Trade
+    opened: Trade
+
+
+class MarkUnit(Doc):
+    value: float = Field(..., description="currency per unit, the flows to come")
+    fair: float = Field(
+        ..., description="the fair level: a future's or a dividend's points, a swap's or deposit's rate"
+    )
+    half_spread: float = Field(..., description="currency per unit: what entering or leaving one unit costs")
+
+
+class InstrumentMark(Doc):
+    """An instrument at the market in use."""
+
+    instrument: dict[str, Any]
+    label: str
+    currency: str
+    home: str = Field(..., description="the name whose market values it")
+    valuation: str
+    unit: MarkUnit
+    quantity: float
+    value: float
+    cost: float = Field(..., description="|quantity| x the half-spread")
+    fill: float = Field(..., description="the cash per unit a booking takes when none is given")
+    origin: str
+    funding_origin: str | None = None
+    swap_spread: float = Field(..., description="fraction over the government curve")
 
 
 class TradePage(Next):
@@ -496,10 +532,24 @@ class CostGroup(Doc):
     tiers: list[CostTier]
 
 
+class HedgeRows(Doc):
+    """The hedging instruments' half-spreads and the swap spread per currency (structured/hedges/costs.py)."""
+
+    future_ticks: float
+    cash_bp: float
+    irs_bp: float
+    deposit_bp: float
+    dividend_pct: float
+    swap_spread_bp: dict[str, float]
+
+
 class CostDefaults(Doc):
     """The desk's cost table by group of underlyings and size band, its versions and the starting values."""
 
     groups: dict[str, CostGroup]
+    hedges: HedgeRows
+    hedges_starting: list[str] = Field([], description="the hedging rows still at their starting value (assumptions)")
+    hedge_fields: list[CostField] = []
     starting: dict[str, CostGroup] = {}
     version: int | None = None
     recorded_at: str | None = None

@@ -199,14 +199,14 @@ class DeskRepository:
             )
 
     # --- defaults of the hedging costs (every version kept) ---
-    def save_defaults(self, groups: dict) -> int:
+    def save_defaults(self, groups: dict, hedges: dict | None = None) -> int:
+        """A new version of the table: the notes' groups, and the hedging instruments' rows when given."""
+        payload: dict = {"groups": groups}
+        if hedges is not None:
+            payload["hedges"] = hedges
         with self.db.write() as c:
             version = (c.execute(select(func.max(cost_defaults.c.version))).scalar() or 0) + 1
-            c.execute(
-                insert(cost_defaults).values(
-                    version=version, payload=json.dumps({"groups": groups}), recorded_at=_now()
-                )
-            )
+            c.execute(insert(cost_defaults).values(version=version, payload=json.dumps(payload), recorded_at=_now()))
         return version
 
     def defaults(self, version: int | None = None) -> dict | None:

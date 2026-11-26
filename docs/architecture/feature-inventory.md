@@ -68,6 +68,10 @@ Routes are written without the `/api/v1` prefix. `202` marks a route that answer
 | `DELETE /api/fixings/{u}/{d}` | delete a fixing | `DELETE /trading/fixings/{underlying}/{date}` (audited) | server | trader | kept |
 | `GET /api/costs/defaults` | the cost table by group and size, its versions | `GET /trading/cost-defaults` | structured | viewer | kept |
 | `PUT /api/costs/defaults` | save a new version of the table | `PUT /trading/cost-defaults` (audited) | structured | trader | kept |
+| — | book an instrument as a trade, live or simulated (futures, cash, swaps, deposits, funding swaps, dividend swaps and futures) | `POST /trading/hedges` (audited) | structured | trader | new (Trading › Hedging) |
+| — | an instrument at the market in use: value, fair level, half-spread | `POST /trading/hedges/marks` | structured | viewer | new (Trading › Hedging) |
+| — | a simulated trade booked live, or discarded | `POST /trading/trades/{trade_id}/promote`, `POST /trading/trades/{trade_id}/discard` (audited) | server | trader | new (Trading › Hedging) |
+| — | a future rolled onto the next quarterly expiry | `POST /trading/trades/{trade_id}/roll` (audited) | structured | trader | new (Trading › Hedging) |
 
 ### Risk
 

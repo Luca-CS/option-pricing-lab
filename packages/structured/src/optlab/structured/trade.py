@@ -1,8 +1,12 @@
-"""Trades: a product (term sheet or script) with its quantity and dates, serialisable to JSON.
+"""Trades: a product (term sheet, script or hedging instrument) with its quantity and dates, serialisable to JSON.
 
 A trade stores what was dealt, not market data: past fixings live in a fixings store, because real index levels
 from Yahoo are personal-use data that must not be versioned. The strike date is part of the trade, so a stored
 trade never re-strikes on a later valuation date.
+
+An instrument trade (ADR-0025) holds `{"kind": "instrument", "instrument": {...}, "fill", "fees"}`: what was dealt, the
+cash paid per unit at the fill (negative: received) and the fees of the whole trade. Its strike date is its trade date.
+A `simulated` trade is a what-if: never in the official EOD nor in the P&L history.
 """
 
 from __future__ import annotations
@@ -13,7 +17,7 @@ from dataclasses import asdict, dataclass, field
 
 from optlab.structured.schema import TermSheet, TermSheetError
 
-STATUSES = ("live", "called", "matured", "cancelled")
+STATUSES = ("live", "called", "matured", "cancelled", "simulated", "closed")
 
 
 def _date(d) -> dt.date:
@@ -51,8 +55,16 @@ class Trade:
         elif kind == "script":
             if not isinstance(self.product.get("script"), str):
                 raise ValueError("a script product needs its text under 'script'")
+        elif kind == "instrument":
+            from optlab.structured.hedges import parse
+
+            parse(self.product.get("instrument"))
+            for k in ("fill", "fees"):
+                x = self.product.get(k, 0.0)
+                if isinstance(x, bool) or not isinstance(x, (int, float)) or x != x or abs(x) == float("inf"):
+                    raise ValueError(f"an instrument trade's {k} is a finite number")
         else:
-            raise ValueError("product kind must be 'term_sheet' or 'script'")
+            raise ValueError("product kind must be 'term_sheet', 'script' or 'instrument'")
 
     @classmethod
     def from_term_sheet(
@@ -71,8 +83,28 @@ class Trade:
             **kw,
         )
 
+    @classmethod
+    def from_instrument(
+        cls, trade_id: str, instrument, quantity: float, trade_date, fill: float = 0.0, fees: float = 0.0, **kw
+    ) -> Trade:
+        """A trade on a hedging instrument (an `Instrument` or its JSON form), struck on its trade date."""
+        from optlab.structured.hedges import parse
+
+        inst = parse(instrument) if isinstance(instrument, dict) else instrument
+        d = _date(trade_date)
+        product = {"kind": "instrument", "instrument": inst.to_dict(), "fill": float(fill), "fees": float(fees)}
+        return cls(trade_id, product, quantity, d, d, **kw)
+
     def term_sheet(self) -> TermSheet | None:
         return TermSheet.from_dict(self.product["term_sheet"]) if self.product["kind"] == "term_sheet" else None
+
+    def instrument(self):
+        """The hedging instrument of an instrument trade, else None."""
+        if self.product["kind"] != "instrument":
+            return None
+        from optlab.structured.hedges import parse
+
+        return parse(self.product["instrument"])
 
     @property
     def desk_side(self) -> str:
@@ -102,6 +134,8 @@ class Trade:
 
         if self.product["kind"] == "term_sheet":
             return Position(self.trade_id, self.term_sheet(), self.quantity, fixings=fixings)
+        if self.product["kind"] == "instrument":
+            return Position(self.trade_id, self.instrument(), self.quantity)
         return Position(
             self.trade_id,
             self.product["script"],

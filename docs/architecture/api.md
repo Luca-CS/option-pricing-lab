@@ -84,6 +84,13 @@ Every error is `application/problem+json` (RFC 9457), never a stack trace:
 - The model works at a spot of 100: fixings, smiles and the market context are in that scale; a real level is
   converted with the real spot of the market (`real_spot` on `POST /trading/fixings`).
 - Ids are stable strings: `trade_id`, `quote_id`, `run_id`, `snapshot_id`, `job_id`.
+- A trade's `quantity` is signed: positive when the book holds the investor's side of a note, or when the desk is long
+  an instrument. Every trade says `desk_side` (`short` or `long`) and, for a note, `side_check` when the sign
+  contradicts the side its sheet was priced for (a warning, not a refusal).
+- A hedge is a trade with `product.kind = "instrument"` (`POST /trading/hedges`, ADR-0025): `instrument` is
+  `{type, fields}`, `fill` the cash paid per unit at the fill and `fees` those of the whole trade. Its status may be
+  `simulated` (a what-if, `promote` books it, `discard` removes it); Greeks, scenarios, VaR and the book's valuation take
+  the what-ifs with `options.include_simulated`, the EOD never does.
 - Every job result is one envelope:
 
   ```json

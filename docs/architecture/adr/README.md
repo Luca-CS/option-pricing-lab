@@ -27,3 +27,4 @@ compete, the safer one wins and the record says so.
 | [0022](0022-lake-in-a-wsl-volume.md) | The containers' lake lives in a WSL volume (9P is 19 to 49 times slower) |
 | [0023](0023-calibrations-compact-in-repo.md) | The calibrations stay in the repository, in compact JSON |
 | [0024](0024-front-end-stack.md) | The front's stack (Vite, React, Mantine, TanStack), and how it keeps the strict CSP |
+| [0025](0025-hedges-are-trades.md) | Hedges are trades: instruments in the same table and book, linear ones in closed form |

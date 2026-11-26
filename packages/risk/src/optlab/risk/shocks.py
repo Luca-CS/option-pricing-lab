@@ -2,9 +2,13 @@
 
 A `Shock` holds moves by factor. Spots are relative (0.01 = +1 %), volatilities absolute (0.01 = one vol point) or relative
 (0.01 = +1 % of the vol), skew in vol points of the 90-110 % gap at one year, rates, dividend yields and repo in basis
-points, dividends also relative to the flows (-0.3 = cut by 30 %), correlations absolute, FX relative, the roll in business
-days. Dicts are keyed by name (or currency, or pair); "*" applies to every one. Shocks add up (`a + b`) and round-trip
-through JSON (`to_dict`, `from_dict`).
+points, dividends also relative to the flows (-0.3 = cut by 30 %) in total or by calendar year, correlations absolute, FX
+relative, the issuer's funding spread in basis points (by entity), the roll in business days. Dicts are keyed by name (or
+currency, pair, entity); "*" applies to every one. Shocks add up (`a + b`) and round-trip through JSON (`to_dict`,
+`from_dict`).
+
+The funding spread moves what is discounted on the issuer's curve: notes (their present values) and the instruments on the
+bank's curve (deposits, funding swaps). It never needs a simulation of its own.
 
 The rule of the volatility when a spot moves:
 - sticky_moneyness: the surface moves with the forward (the model's own coordinate; a spot move only scales the paths);
@@ -156,12 +160,17 @@ class Shock:
     fx_vol: dict = field(default_factory=dict)  # {name: absolute move of the FX vol of its quanto link}
     roll_days: int = 0  # business days
     rule_spot: dict | None = None  # the part of the spot move the vol rule applies to (None: all of it)
+    funding: dict = field(default_factory=dict)  # {entity: CurveMove} on the issuer's funding spread
+    dividend_years: dict = field(default_factory=dict)  # {name: {calendar year: relative move of that year's flows}}
 
     def __post_init__(self):
         if self.rule not in RULES:
             raise ValueError(f"unknown vol rule {self.rule!r}, expected one of {', '.join(RULES)}")
         self.vol = {n: v if isinstance(v, VolMove) else VolMove.from_dict(v) for n, v in self.vol.items()}
-        for name in ("rates", "discount", "forward_rate", "dividend", "repo"):
+        self.dividend_years = {
+            n: {int(y): float(x) for y, x in (years or {}).items()} for n, years in self.dividend_years.items()
+        }
+        for name in ("rates", "discount", "forward_rate", "dividend", "repo", "funding"):
             setattr(
                 self,
                 name,
@@ -197,6 +206,8 @@ class Shock:
             _merge(self.fx_vol, o.fx_vol, add),
             self.roll_days + o.roll_days,
             rule_spot,
+            funding=_merge(self.funding, o.funding, add),
+            dividend_years=_merge(self.dividend_years, o.dividend_years, lambda a, b: _merge(a, b, mult)),
         )
 
     def to_dict(self) -> dict:
@@ -206,8 +217,9 @@ class Shock:
             "rule": self.rule,
             **{
                 k: {c: m.to_dict() for c, m in getattr(self, k).items()}
-                for k in ("rates", "discount", "forward_rate", "dividend", "repo")
+                for k in ("rates", "discount", "forward_rate", "dividend", "repo", "funding")
             },
+            "dividend_years": {n: {str(y): x for y, x in ys.items()} for n, ys in self.dividend_years.items()},
             "dividend_relative": dict(self.dividend_relative),
             "corr": self.corr,
             "corr_pairs": dict(self.corr_pairs),
@@ -238,12 +250,14 @@ BASE = Shock()
 @dataclass
 class RiskEnv:
     """What a shock needs beyond the context: spot-vol betas per name ({name: list per tenor}), quanto links
-    ({name: (rho, vol_fx)}), the reporting currency, and SLV settings when the base model is SLV."""
+    ({name: (rho, vol_fx)}), the reporting currency, SLV settings when the base model is SLV, and the swap spreads over
+    the government curve ({currency: fraction}) of the books the EOD and the P&L build."""
 
     betas: dict = field(default_factory=dict)
     quanto: dict = field(default_factory=dict)
     currency: str = "USD"
     slv_particles: int = 100_000
+    swap_spreads: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -256,6 +270,7 @@ class NameMove:
     carry: CurveMove = field(default_factory=CurveMove)  # bp on the forward's carry (rates up, dividends and repo down)
     dividend_relative: float = 0.0
     quanto_drift: float = 0.0  # change of rho * vol_fx in the quanto forward F exp(-rho vol_fx int sigma)
+    dividend_years: dict = field(default_factory=dict)  # {calendar year: relative move of that year's flows}
 
 
 def name_moves(shock: Shock, name: str, currency: str, env: RiskEnv | None = None) -> NameMove:
@@ -285,7 +300,18 @@ def name_moves(shock: Shock, name: str, currency: str, env: RiskEnv | None = Non
     if (dc or dv) and name in env.quanto:
         rho, vfx = env.quanto[name]
         drift = (rho + dc) * (vfx + dv) - rho * vfx
-    return NameMove(h, vol, strike_shift, carry, float(_get(shock.dividend_relative, name, 0.0, "mult")), drift)
+    years: dict = {}
+    for key in ("*", name):
+        for y, x in (shock.dividend_years.get(key) or {}).items():
+            years[int(y)] = (1 + years.get(int(y), 0.0)) * (1 + float(x)) - 1
+    rel = float(_get(shock.dividend_relative, name, 0.0, "mult"))
+    return NameMove(h, vol, strike_shift, carry, rel, drift, {y: x for y, x in years.items() if x})
+
+
+def funding_move(shock: Shock, entity: str) -> CurveMove | None:
+    """The move of an entity's funding spread (its own and the "*" one), None when it does not move."""
+    m = _get(shock.funding, entity)
+    return m if m else None
 
 
 def discount_move(shock: Shock, currency: str) -> CurveMove:
@@ -346,9 +372,27 @@ def _quanto_forward(market, surface, drift: float):
     )
 
 
-def shocked_market(market, surface, move: NameMove, discount: CurveMove | None = None, with_spot: bool = True):
+def dividend_windows(years: dict, valuation) -> tuple:
+    """((a, b, relative), ...) in years from the valuation: each calendar year's span, for `bumped_market`."""
+    import datetime as dt
+
+    from optlab.structured.dates import year_fraction
+
+    if not years:
+        return ()
+    if valuation is None:
+        raise ValueError("a dividend move by calendar year needs the valuation date")
+    return tuple(
+        (year_fraction(valuation, dt.date(y, 1, 1)), year_fraction(valuation, dt.date(y + 1, 1, 1)), float(x))
+        for y, x in sorted(years.items())
+    )
+
+
+def shocked_market(
+    market, surface, move: NameMove, discount: CurveMove | None = None, with_spot: bool = True, valuation=None
+):
     m = _quanto_forward(market, surface, move.quanto_drift)
-    m = bumped_market(m, discount, move.carry, move.dividend_relative)
+    m = bumped_market(m, discount, move.carry, move.dividend_relative, dividend_windows(move.dividend_years, valuation))
     if with_spot and move.spot:
         m = m.scaled(m.spot * (1 + move.spot))
     return m
@@ -382,7 +426,7 @@ def apply(ctx, shock: Shock, env: RiskEnv | None = None):
         markets, vols = dict(ctx.markets), dict(ctx.vols)
         for n in ctx.names:
             mv = name_moves(shock, n, cur, env)
-            markets[n] = shocked_market(ctx.markets[n], ctx.vols[n], mv, disc)
+            markets[n] = shocked_market(ctx.markets[n], ctx.vols[n], mv, disc, valuation=ctx.valuation)
             vols[n] = shocked_surface(ctx.vols[n], mv)
         out = BasketContext(
             ctx.names,
@@ -398,7 +442,7 @@ def apply(ctx, shock: Shock, env: RiskEnv | None = None):
         mv = name_moves(shock, ctx.underlying, cur, env)
         out = dataclasses.replace(
             ctx,
-            market=shocked_market(ctx.market, ctx.surface, mv, disc),
+            market=shocked_market(ctx.market, ctx.surface, mv, disc, valuation=ctx.valuation),
             surface=shocked_surface(ctx.surface, mv),
             slv_cache={},
         )

@@ -108,6 +108,7 @@ class Desk:
         `settings` (`Settings.load()` when not given), from which every other path comes. `run_jobs`: run the queue's
         jobs in this process (the embedded worker, `max_jobs` at a time) unless another worker already serves this
         database; False for an api that leaves them to `optlab worker`."""
+        from optlab.server.hedges_api import HedgesApi
         from optlab.server.risk_api import RiskApi
 
         if engine is not None:
@@ -134,6 +135,7 @@ class Desk:
         self.max_jobs = max_jobs or self.settings.job_concurrency
         self.started = dt.datetime.now(dt.UTC)
         self.risk = RiskApi(self)
+        self.hedges = HedgesApi(self)
         self.worker: Any = None
         self._lease_wait: threading.Event | None = None  # set: stop waiting for another worker's lease
         self._worker_lock = threading.Lock()
@@ -226,6 +228,9 @@ class Desk:
     def _names_of(trades) -> list[str]:
         names: list[str] = []
         for t in trades:
+            inst = t.instrument()
+            if inst is not None:  # an instrument has no fixing: its name's market is enough
+                continue
             sheet = t.term_sheet()
             observed = (
                 sheet.underlyings if sheet is not None else tuple(validate(parse(t.product["script"])).underlying_names)
@@ -980,10 +985,19 @@ class Desk:
     # --- defaults of the hedging costs ---
     def cost_defaults(self) -> dict:
         """The table in use, what is still a starting value, the fields of the form and the saved versions."""
+        from optlab.structured.hedges import costs as hedge_costs
+
         stored = self.repo.defaults()
+        rows = hedge_costs.merged((stored or {}).get("hedges"))
         return clean(
             {
                 "groups": merged(stored),
+                "hedges": rows,
+                "hedges_starting": hedge_costs.starting(rows),
+                "hedge_fields": [
+                    {"name": k, "label": label, "unit": unit, "min": lo, "max": hi}
+                    for k, label, unit, lo, hi in (*hedge_costs.FIELDS, hedge_costs.SWAP_SPREAD)
+                ],
                 "starting": STARTING,
                 "version": stored["version"] if stored else None,
                 "recorded_at": stored["recorded_at"] if stored else None,
@@ -1003,11 +1017,16 @@ class Desk:
         )
 
     def put_cost_defaults(self, body: dict) -> dict:
+        """A new version of the table. The hedging rows are kept from the last version when the body has none."""
+        from optlab.structured.hedges import costs as hedge_costs
+
         try:
             groups = validate_table(body.get("groups") or {})
+            hedges = body.get("hedges")
+            hedges = hedge_costs.validate(hedges) if hedges is not None else (self.repo.defaults() or {}).get("hedges")
         except (TypeError, KeyError, ValueError) as exc:
             raise ApiError(str(exc), 422) from exc
-        self.repo.save_defaults(groups)
+        self.repo.save_defaults(groups, hedges)
         return self.cost_defaults()
 
     def _cost_inputs(self, sheet: TermSheet, table: dict | None = None, frozen: bool = False):
@@ -1228,14 +1247,26 @@ class Desk:
         return {"ok": True}
 
     def _positions_by_market(
-        self, ctx: PricingContext, trades: list | None = None, stored: dict | None = None
+        self,
+        ctx: PricingContext,
+        trades: list | None = None,
+        stored: dict | None = None,
+        include_simulated: bool = False,
     ) -> tuple[dict, dict]:
         """Live trades as ({(single name, payment currency): positions}, {payment currency: (worst-of positions, their names)}):
-        trades paying in different currencies cannot share a market. `trades` and `stored` (fixings): a job's frozen
-        ones, else the store's."""
+        trades paying in different currencies cannot share a market. An instrument joins its name's group, a rates
+        instrument its currency's reference index's (`hedges_api.home`). `trades` and `stored` (fixings): a job's frozen
+        ones, else the store's; `include_simulated` adds the what-ifs."""
+        from optlab.structured.hedges.instruments import home
+
+        statuses = ("live", "simulated") if include_simulated else ("live",)
         singles, baskets = {}, {}
         for t in self.repo.trades() if trades is None else trades:
-            if t.status != "live":
+            if t.status not in statuses:
+                continue
+            inst = t.instrument()
+            if inst is not None:
+                singles.setdefault(home(inst), []).append(t.to_position())
                 continue
             sheet = t.term_sheet()
             observed = (
@@ -1256,27 +1287,34 @@ class Desk:
                 singles.setdefault((first, pay), []).append(t.to_position(fix))
         return singles, baskets
 
-    def book_groups(self, ctx: PricingContext, trades: list, f: Frozen) -> list[tuple]:
+    def book_groups(self, ctx: PricingContext, trades: list, f: Frozen, include_simulated: bool = False) -> list[tuple]:
         """The live trades of a frozen book in independent groups, each on its own shared simulation: one per single
         name and payment currency, on that name's market, then the worst-ofs of each payment currency under the basket
-        context. The groups use different seeds, so their errors add in quadrature. A group is (label, book, context,
-        what the page shows of its markets, seed, its one name or None for a basket); the book's valuation and the
-        risk engine read the same ones."""
-        singles, baskets = self._positions_by_market(ctx, trades, f.fixings_by_date() or {})
+        context. The groups use different seeds, so their errors add in quadrature; a group of instruments only takes
+        no seed of the sequence, so hedges never move the notes' numbers. A group is (label, book, context, what the
+        page shows of its markets, seed, its one name or None for a basket); the book's valuation and the risk engine
+        read the same ones."""
+        singles, baskets = self._positions_by_market(ctx, trades, f.fixings_by_date() or {}, include_simulated)
         if not singles and not baskets:
             raise ApiError("no live trade in the book", 422)
         groups: list[tuple] = []
+        seeds = 0
         key = lambda x: (x[0][0] != ctx.underlying, x[0][0], str(x[0][1]))  # noqa: E731
         for (name, pay), positions in sorted(singles.items(), key=key):
             gctx, shown = self._single_ctx(name, ctx, pay)
             if gctx.underlying != name:
                 held = ", ".join(p.name for p in positions)
                 raise ApiError(f"{held}: no market of {name} on {ctx.valuation}, from the lake or in use", 422)
-            groups.append((name, Book(positions), gctx, shown, DEFAULT_SEED + len(groups), name))
+            book = Book(positions)
+            if book.linear_positions:
+                book.linear = self.hedges.linear_env([name], gctx, f.costs)
+            groups.append((name, book, gctx, shown, DEFAULT_SEED + seeds, name))
+            seeds += 1 if book.simulated else 0
         for pay, (positions, names) in sorted(baskets.items(), key=lambda x: str(x[0])):
             bctx, shown = self._basket_ctx(names, f.basket, ctx=ctx, payment=pay)
             label = "worst-of" if len(baskets) == 1 else f"worst-of ({pay})"
-            groups.append((label, Book(positions), bctx, shown, DEFAULT_SEED + len(groups), None))
+            groups.append((label, Book(positions), bctx, shown, DEFAULT_SEED + seeds, None))
+            seeds += 1
         return groups
 
     def price_book(self, body: dict) -> dict:
@@ -1299,7 +1337,7 @@ class Desk:
         trades = self._trades_of(f)
         reserves = {t.trade_id: remaining(t, ctx.valuation) for t in trades if t.status == "live"}
         t0 = time.perf_counter()
-        groups = self.book_groups(ctx, trades, f)
+        groups = self.book_groups(ctx, trades, f, bool(p["options"].get("include_simulated")))
         parts = []
         steps = len(groups) * (2 if greeks else 1)
         for k, (label, book, gctx, shown, seed, name) in enumerate(groups):
@@ -1364,6 +1402,22 @@ class Desk:
     def trade_events(self, trade_id: str) -> dict:
         ctx = self.ctx
         trade = self.repo.trade(trade_id)
+        inst = trade.instrument()
+        if inst is not None:  # an instrument's dates: an expiry, coupons, a maturity
+            dates = inst.dates()
+            return clean(
+                {
+                    "trade_id": trade_id,
+                    "past": [],
+                    "upcoming": [
+                        {"observation": d.isoformat(), "payment": d.isoformat()} for d, _ in dates if d > ctx.valuation
+                    ],
+                    "missing": None,
+                    "maturity": None if inst.maturity == dt.date.max else inst.maturity,
+                    "strike_date": trade.trade_date,
+                    "underlyings": [inst.underlying] if inst.underlying else [],
+                }
+            )
         sheet = trade.term_sheet()
         assert sheet is not None  # noqa: S101 (narrows the type for pyright: the trades screen lists term sheets' events)
         compiled = compile_sheet(sheet, ctx.valuation)
@@ -1400,6 +1454,19 @@ class Desk:
         rows = []
         for t in self.repo.trades():
             if t.status != "live":
+                continue
+            inst = t.instrument()
+            if inst is not None:
+                for d, _what in inst.dates():
+                    if ctx.valuation <= d <= horizon:
+                        rows.append(
+                            {
+                                "trade_id": t.trade_id,
+                                "observation": d.isoformat(),
+                                "payment": d.isoformat(),
+                                "final": d == inst.maturity,
+                            }
+                        )
                 continue
             sheet = t.term_sheet()
             if sheet is None:

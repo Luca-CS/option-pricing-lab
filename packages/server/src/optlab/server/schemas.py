@@ -80,13 +80,39 @@ class TradeIn(Body):
     tags: list[str] = Field(default_factory=list, max_length=20)
 
 
+class HedgeIn(Body):
+    """An instrument booked as a trade (structured/hedges): live, or simulated (a what-if)."""
+
+    instrument: dict[str, Any] = Field(
+        ..., max_length=16, description="{type, its fields}: future, cash, irs, deposit, funding_swap, ..."
+    )
+    quantity: float = Field(
+        ..., ge=-1e12, le=1e12, description="signed: > 0 when the desk is long; lots, units or notional"
+    )
+    status: Literal["live", "simulated"] = "live"
+    fill: float | None = Field(
+        None, ge=-1e12, le=1e12, description="cash paid per unit at the fill (negative: received); by type when omitted"
+    )
+    fees: float = Field(0.0, ge=0.0, le=1e12, description="currency, the whole trade")
+    trade_id: str | None = Field(None, pattern=r"^[\w-]{1,64}$")
+    trade_date: dt.date | None = None
+    book: str = Field("default", max_length=64)
+    counterparty: str = Field("", max_length=128)
+    tags: list[str] = Field(default_factory=list, max_length=20)
+
+
+class MarkIn(Body):
+    instrument: dict[str, Any] = Field(..., max_length=16)
+    quantity: float = Field(1.0, ge=-1e12, le=1e12)
+
+
 class TradeUpdate(Body):
     """What an edit may change; every edit is a new version of the trade."""
 
     quantity: float | None = Field(None, ge=-1e9, le=1e9)
     book: str | None = Field(None, max_length=64)
     counterparty: str | None = Field(None, max_length=128)
-    status: Literal["live", "called", "matured", "cancelled"] | None = None
+    status: Literal["live", "called", "matured", "cancelled", "closed"] | None = None
 
 
 class ValuationIn(Body):
@@ -95,6 +121,7 @@ class ValuationIn(Body):
 
 class BookPricingOptions(PricingOptions):
     greeks: bool = Field(True, description="delta and vega by name, on by default for the book")
+    include_simulated: bool = Field(False, description="the simulated what-ifs too")
 
 
 class BookValuationIn(Body):
@@ -118,6 +145,9 @@ class FixingsFromLakeIn(Body):
 
 class CostDefaultsIn(Body):
     groups: dict[str, Any] = Field(..., description="group of underlyings -> size bands -> lines (structured/defaults)")
+    hedges: dict[str, Any] | None = Field(
+        None, max_length=8, description="the hedging rows (structured/hedges/costs); omitted: the last version's"
+    )
 
 
 # --- market ----------------------------------------------------------------------------------------------------------
@@ -151,6 +181,9 @@ class RiskOptions(Body):
     realistic: bool = Field(True, description="Greeks: the variants on the lake's spot-vol betas")
     cross: bool = Field(True, description="Greeks: vanna, volga, cross gamma, correlation")
     theta: bool = Field(True, description="Greeks: the roll of one day")
+    include_simulated: bool = Field(
+        False, description="Greeks, ladder, scenarios and VaR: the simulated what-ifs too (never the EOD)"
+    )
 
 
 class Bumps(Body):

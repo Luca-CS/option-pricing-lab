@@ -92,6 +92,15 @@ Three layers.
   names (`multiasset.py`, SLV with one leverage per name), funded swaps (`cashflows.py`), past fixings for running
   products, lifecycle events (`lifecycle.py`), the NYSE calendar, vol and skew bumps with exact derivatives
   (`surfaces.py`).
+- **Hedges** (`hedges/`, [ADR-0025](adr/0025-hedges-are-trades.md)): the instruments a desk hedges with, booked as
+  trades of the same book. Linear ones (`instruments.py`: futures, cash, interest rate swaps, deposits, funding swaps,
+  dividend swaps and futures) are valued in closed form on a `Valuation`: a context's market in the model's scale, the
+  real spot over the model's, the issuer's funding curve (`SpreadCurve`) and the swap spread. The value is that of the
+  flows to come (a future: the variation margin, multiplier × (F(T) − price)); dividends are what the forward carries.
+  A `Book` holds them after its simulated positions (`Book.linear`: their `LinearEnv`), adds their exact values to
+  every result and never simulates them; `home()` names the group an instrument joins (its name's, or its currency's
+  reference index for a rates instrument). `contracts.py` holds the listed contracts (multipliers, quarterly
+  expiries), `costs.py` their half-spreads in the cost table.
 
 ## 4. Market data (`optlab.marketdata`)
 
@@ -116,8 +125,10 @@ One block, with JSON-ready dataclasses in and out, reading `structured` and `mar
 ([reports/risk.md](../../reports/risk.md)).
 
 - **Principle**: a risk is a list of `Shock`s (`shocks.py`: spots, vols parallel, relative, per node or per tenor,
-  skew, curves per tenor, dividends, repo, correlation, FX, quanto, the roll, and the vol rule: sticky moneyness,
-  sticky strike or realistic), revalued by one engine (`engine.run_group`) on the base's seed.
+  skew, curves per tenor, dividends in total or by calendar year, repo, the issuer's funding spread per tenor,
+  correlation, FX, quanto, the roll, and the vol rule: sticky moneyness, sticky strike or realistic), revalued by one
+  engine (`engine.run_group`) on the base's seed. Linear instruments are valued in closed form on each shock's moved
+  market, beside the simulated positions of their group (SE 0); a group of instruments only runs no simulation.
 - Shocks that only move spots, forwards or discounts ride on one simulation (an exact factor on the paths); vol,
   correlation and the roll resimulate on the same seed. `Measure`s combine revaluations into Greeks with paired
   standard errors.
