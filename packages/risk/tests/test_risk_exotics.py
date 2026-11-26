@@ -50,4 +50,3 @@ def test_a_lizard_phoenix_goes_through_the_eod_run_and_the_cascade(lake, tmp_pat
     assert np.isfinite(e["positions"][0]["value"]) and "delta|SPX|" in e["positions"][0]["greeks"]
     day = P.explain_day(lake, [trade], A, B, store, SETTINGS)
     assert sum(v[0] for v in day["steps"].values()) == pytest.approx(day["total"], abs=1e-9)
-
