@@ -73,12 +73,14 @@ export function suffix(f: FieldLike): string {
 }
 
 /** A flat sheet (section -> field -> value, with its `type`) as the API takes it back: {type, values}. */
-export function toRequest(sheet: Record<string, unknown>): { type: "autocall" | "bullet"; values: Values } {
+export type Mask = "autocall" | "bullet" | "variance"; // the API's product types (TermSheetIn), checked there
+
+export function toRequest(sheet: Record<string, unknown>): { type: Mask; values: Values } {
   const values: Values = {};
   for (const [k, v] of Object.entries(sheet)) {
     if (k !== "type" && v !== null && typeof v === "object" && !Array.isArray(v)) values[k] = { ...(v as object) };
   }
-  return { type: sheet.type === "bullet" ? "bullet" : "autocall", values };
+  return { type: typeof sheet.type === "string" ? (sheet.type as Mask) : "autocall", values };
 }
 
 /** One line that says what a sheet is: "24M · SPX · conditional coupon · PDI 60 % european". */
@@ -91,7 +93,18 @@ export function describeSheet(sheet: Record<string, unknown> | null | undefined)
   const names = Array.isArray(g.underlyings) ? (g.underlyings as string[]).join(", ") : "";
   const und = g.basket === "worst_of" ? `worst of ${names}` : String(g.underlying ?? "SPX");
   const parts = [`${g.maturity_months ?? "?"}M`, und];
-  const solving = w.solve === "coupon";
+  const solving = w.solve === "coupon" || w.solve === "strike";
+  const v = sheet.variance as Record<string, unknown> | undefined;
+  if (v) {
+    const strike = typeof v.strike === "number" && !solving ? ` ${(100 * v.strike).toFixed(2)} vol` : "";
+    parts.push(`${v.type === "volatility" ? "volatility" : "variance"} swap${strike}`);
+    const lo = typeof v.lower === "number" ? `${(100 * v.lower).toFixed(0)} %` : null;
+    const hi = typeof v.upper === "number" ? `${(100 * v.upper).toFixed(0)} %` : null;
+    if (v.corridor === "range" && lo && hi) parts.push(`corridor ${lo} to ${hi}`);
+    if (v.corridor === "down" && hi) parts.push(`below ${hi}`);
+    if (v.corridor === "up" && lo) parts.push(`above ${lo}`);
+    return parts.join(" · ");
+  }
   if (c.type && c.type !== "none") {
     const rate = typeof c.rate === "number" && !solving ? ` ${(100 * c.rate).toFixed(2)} %` : "";
     parts.push(`${c.type} coupon${rate}`);
@@ -107,4 +120,13 @@ export function describeSheet(sheet: Record<string, unknown> | null | undefined)
 /** A choice's words for people: "modified_following" → "modified following". */
 export function choiceLabel(value: unknown): string {
   return String(value).replaceAll("_", " ");
+}
+
+/** What a trade pays on, for a table's cell: a note's coupon per annum, or a swap's strike in vol points. */
+export function couponOrStrike(
+  summary: { coupon_rate?: number | null; strike?: number | null } | null | undefined,
+): string {
+  if (typeof summary?.coupon_rate === "number") return `${(100 * summary.coupon_rate).toFixed(2)} %`;
+  if (typeof summary?.strike === "number") return `${(100 * summary.strike).toFixed(2)} vol`;
+  return "—";
 }

@@ -1,13 +1,13 @@
 {
  "meta": {
-  "recorded": "2026-11-07T16:40:52+00:00",
-  "commit": "4612e786becc54aa16c02a63a2490368d4292e59",
+  "recorded": "2026-11-26T05:03:17+00:00",
+  "commit": "8e3eae306d9595307caa37ce3c34ccbfbe7d82ff",
   "platform": "Windows-11-10.0.26200-SP0",
   "machine": "AMD64",
   "python": "3.14.7",
   "numpy": "2.5.4",
   "scipy": "1.18.1",
-  "seconds": 10.46,
+  "seconds": 16.95,
   "times": {}
  },
  "values": {
@@ -139,6 +139,94 @@
    "control": {
     "value": 100.96511860206039,
     "se": 0.043689989118610224
+   }
+  },
+  "variance_swap": {
+   "coupon_rate": 0.03345564126561826,
+   "coupon_rate_se": 0.0002115018083734955,
+   "upfront": null,
+   "target": -25.0,
+   "margin": 25.0,
+   "result": {
+    "value": -25.000000000000206,
+    "se": 5.0763219373637
+   },
+   "model": "lv",
+   "method": "monte_carlo",
+   "termination": [
+    0.0,
+    0.0
+   ],
+   "expected_life": 1.0,
+   "control": {
+    "value": -3.5026553434428354,
+    "se": 5.056068752427888
+   }
+  },
+  "volatility_swap": {
+   "coupon_rate": 0.16692941562037306,
+   "coupon_rate_se": 0.0003940256887982055,
+   "upfront": null,
+   "target": -25.0,
+   "margin": 25.0,
+   "result": {
+    "value": -24.999999999999577,
+    "se": 3.782854176639427
+   },
+   "model": "lv",
+   "method": "monte_carlo",
+   "termination": [
+    0.0,
+    0.0
+   ],
+   "expected_life": 1.0,
+   "control": {
+    "value": -28.830077916099377,
+    "se": 3.5655853027305136
+   }
+  },
+  "corridor_variance_swap": {
+   "coupon_rate": 0.02288351520937293,
+   "coupon_rate_se": 6.39501051310573e-05,
+   "upfront": null,
+   "target": -25.0,
+   "margin": 25.0,
+   "result": {
+    "value": -24.999999999999936,
+    "se": 1.534886741962167
+   },
+   "model": "lv",
+   "method": "monte_carlo",
+   "termination": [
+    0.0,
+    0.0
+   ],
+   "expected_life": 1.0,
+   "control": {
+    "value": -21.233736668212664,
+    "se": 1.8557070751500513
+   }
+  },
+  "corridor_volatility_swap": {
+   "coupon_rate": 0.14141660174056236,
+   "coupon_rate_se": 0.00018311840445152687,
+   "upfront": null,
+   "target": -25.0,
+   "margin": 25.0,
+   "result": {
+    "value": -25.00000000000011,
+    "se": 1.758033145533736
+   },
+   "model": "lv",
+   "method": "monte_carlo",
+   "termination": [
+    0.0,
+    0.0
+   ],
+   "expected_life": 1.0,
+   "control": {
+    "value": -34.15379485059413,
+    "se": 2.0708574787783034
    }
   },
   "capital_protected": {

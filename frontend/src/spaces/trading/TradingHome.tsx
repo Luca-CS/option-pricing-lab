@@ -10,6 +10,7 @@ import { SpacePage } from "../../app/Shell";
 import { can, useMe } from "../../auth/session";
 import { useJobs } from "../../jobs/jobs";
 import { formatDate, formatPercent, formatSeconds } from "../../lib/format";
+import { couponOrStrike } from "../../lib/sheet";
 import { Timeline, type TimelineEvent } from "../../ui/Flow";
 import { Kpi, KpiRow } from "../../ui/Kpi";
 import { Panel } from "../../ui/Panel";
@@ -102,7 +103,16 @@ export function TradingHome() {
           {items.length > 0 && (
             <DataTable
               caption="Trades of the book"
-              head={["Trade", "Product", "Underlying", "Coupon", "Barrier", "Quantity", "Status", "Counterparty"]}
+              head={[
+                "Trade",
+                "Product",
+                "Underlying",
+                "Coupon or strike",
+                "Barrier",
+                "Quantity",
+                "Status",
+                "Counterparty",
+              ]}
               num={[3, 4, 5]}
               rows={items.map((t) => ({
                 key: t.trade_id,
@@ -110,9 +120,7 @@ export function TradingHome() {
                   <TradeLink key="id" id={t.trade_id} />,
                   `${t.summary?.type ?? "—"} ${t.summary?.maturity_months ? `${t.summary.maturity_months}m` : ""}`,
                   t.summary?.underlyings.join(", ") ?? "—",
-                  t.summary?.coupon_rate !== null && t.summary?.coupon_rate !== undefined
-                    ? formatPercent(t.summary.coupon_rate)
-                    : "—",
+                  couponOrStrike(t.summary),
                   t.summary?.barrier !== null && t.summary?.barrier !== undefined
                     ? formatPercent(t.summary.barrier, { digits: 0 })
                     : "—",

@@ -8,7 +8,12 @@ from dataclasses import dataclass
 import numpy as np
 
 from optlab.structured.dates import WeekendCalendar, year_fraction
+from optlab.structured.script.lexer import ScriptError
 from optlab.structured.script.nodes import Binary, Call, DateLit, If, Pay, Program, Unary, Window
+
+# Dates a script may observe in all: forty years of business days. A batch of paths holds one column per date (a variance
+# window keeps every day), so a script observing more would be refused by memory instead, mid-run.
+MAX_DATES = 10_000
 
 
 @dataclass
@@ -49,9 +54,17 @@ class Clock:
         return np.array([year_fraction(self.valuation, d, "ACT/365F") for d in days])
 
 
+def _days(start, end) -> int:
+    """Calendar days between two date literals."""
+    return (dt.date.fromisoformat(str(end.value)) - dt.date.fromisoformat(str(start.value))).days
+
+
 def _windows(node, out: list):
     if isinstance(node, Window):
         out.append(node)
+        for bound in (node.lower, node.upper):
+            if bound is not None:
+                _windows(bound, out)
     elif isinstance(node, Unary):
         _windows(node.operand, out)
     elif isinstance(node, Binary):
@@ -76,7 +89,15 @@ def build_timeline(program: Program, clock: Clock | None = None) -> Timeline:
     for ev in program.events:
         for s in ev.body:
             _windows(s, found)
-    windows = {w: clock.window_times(w) for w in found}
+    windows = {}
+    for w in found:
+        if w.n is not None and w.n > MAX_DATES:
+            raise ScriptError(f"{w.func} reads {w.n:,} fixings: at most {MAX_DATES:,}", w.line, w.col)
+        if isinstance(w.start, DateLit) and _days(w.start, w.end) > MAX_DATES * 7 / 5:
+            raise ScriptError(f"{w.func} spans more than {MAX_DATES:,} business days", w.line, w.col)
+        windows[w] = clock.window_times(w)
     every = np.concatenate([event_times, *windows.values()]) if windows else event_times
     sim_times = np.unique(every[every > 0])
+    if len(sim_times) > MAX_DATES:
+        raise ScriptError(f"the script observes {len(sim_times):,} dates: at most {MAX_DATES:,}", 0)
     return Timeline(event_times, pay_times, windows, sim_times)

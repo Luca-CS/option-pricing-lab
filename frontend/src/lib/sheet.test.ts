@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeSheet, display, isPercent, parse, scaleOf, suffix, toRequest } from "./sheet";
+import { couponOrStrike, describeSheet, display, isPercent, parse, scaleOf, suffix, toRequest } from "./sheet";
 
 const barrier = { name: "barrier", kind: "number", unit: "of initial" };
 const rate = { name: "rate", kind: "number", unit: "per annum" };
@@ -75,5 +75,13 @@ describe("a sheet as a whole", () => {
     expect(
       describeSheet({ ...sheet, general: { basket: "worst_of", underlyings: ["SPX", "SX5E"], maturity_months: 12 } }),
     ).toContain("worst of SPX, SX5E");
+  });
+});
+
+describe("what a trade pays on", () => {
+  it("reads a coupon per annum or a swap's strike in vol", () => {
+    expect(couponOrStrike({ coupon_rate: 0.0625 })).toBe("6.25 %");
+    expect(couponOrStrike({ strike: 0.215 })).toBe("21.50 vol");
+    expect(couponOrStrike(null)).toBe("—");
   });
 });

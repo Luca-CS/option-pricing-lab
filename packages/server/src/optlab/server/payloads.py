@@ -126,7 +126,8 @@ class PresetList(Doc):
 
 
 class Headline(Doc):
-    """A quote's headline: what it solved (a coupon, a price) as `{kind, value, se, unit, label}`."""
+    """A quote's headline: what it solved (a coupon, a swap's strike in vol points, a price) as `{kind, value, se, unit,
+    label}`; kind is coupon, strike or upfront."""
 
     kind: str
     value: float
@@ -291,12 +292,23 @@ class Product(Doc):
     script: str | None = Field(None, description="the payoff script the sheet compiles to")
 
 
+class VarianceReference(Doc):
+    """A fresh variance swap's strike (or its corridor's) by the log contract on the surface, in vol points."""
+
+    label: str
+    strike: float
+    unit: str = "vol"
+
+
 class QuoteResult(Doc):
     """A quote, as the job returns it (`result` of its envelope) and as it is stored."""
 
     quote_id: str | None = None
     snapshot_id: str | None = None
     headline: Headline
+    reference: VarianceReference | None = Field(
+        default=None, description="a variance swap's strike replicated on the smile, model-free"
+    )
     coupon_rate: Estimate | None = None
     upfront: Estimate | float | None = None
     target: float | None = None
@@ -332,6 +344,9 @@ class TradeSummary(Doc):
     downside: str | None = None
     barrier: float | None = Field(None, description="fraction of the initial level")
     format: str | None = None
+    swap: str | None = Field(None, description="a variance or volatility swap: what it is on")
+    strike: float | None = Field(None, description="a swap's strike, in vol (0.2 = 20 points)")
+    corridor: str | None = Field(None, description="a swap's corridor: none, down, up or range")
 
 
 class ReserveLine(Doc):

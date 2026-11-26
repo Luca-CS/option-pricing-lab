@@ -64,7 +64,8 @@ def expr(e) -> str:
         return f"{e.func}({', '.join(expr(a) for a in e.args)})"
     if isinstance(e, Window):
         n = f", n={e.n}" if e.n is not None else ""
-        return f"{e.func}({e.underlying}, {when(e.start)}, {when(e.end)}{n})"
+        bounds = f", {expr(e.lower)}, {expr(e.upper)}" if e.lower is not None and e.upper is not None else ""
+        return f"{e.func}({e.underlying}, {when(e.start)}, {when(e.end)}{n}{bounds})"
     raise TypeError(f"not an expression: {e!r}")
 
 

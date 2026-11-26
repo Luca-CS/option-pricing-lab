@@ -9,8 +9,9 @@ Grammar (one statement per line, blocks closed by `end`):
     expr      := and { or and } ;  and := not { and not } ;  not := not not | cmp
     cmp       := arith [ (< <= > >= ==) arith ] ;  arith := term { (+ -) term } ;  term := unary { (* /) unary }
     unary     := - unary | primary
-    primary   := NUMBER | NAME | ( expr ) | FUNC ( expr {, expr} ) | lowest|highest ( NAME , WHEN , WHEN [, n = INT] )
-    FUNC      := min | max (2 args) | abs | exp | log (1 arg) | worst | best (2 or more, e.g. worst-of baskets)
+    primary   := NUMBER | NAME | ( expr ) | FUNC ( expr {, expr} ) | WINDOW ( NAME , WHEN , WHEN [, n = INT] [, expr , expr] )
+    FUNC      := min | max (2 args) | abs | exp | log | sqrt (1 arg) | worst | best (2 or more, e.g. worst-of baskets)
+    WINDOW    := lowest | highest | variance (the realised variance; two more arguments: its corridor's bounds)
 
 Depth is bounded: the parser, and every pass over the tree after it (validation, timeline, evaluation, printing), is
 recursive, so a script nested without limit (thousands of parentheses, or one sum of thousands of terms) would end in
@@ -261,16 +262,24 @@ class Parser:
         start = self.when()
         self.expect("OP", ",")
         end = self.when()
-        n = None
-        if self.accept("OP", ","):
-            self.expect("NAME", "n")
-            self.expect("OP", "=")
-            num = self.expect("NUMBER", what="number of fixings")
-            if not num.text.isdigit() or int(num.text) < 1:
-                raise self.error("n must be a positive integer", num)
-            n = int(num.text)
+        n = lower = upper = None
+        while self.accept("OP", ","):
+            nxt = self.tokens[self.i + 1] if self.i + 1 < len(self.tokens) else None
+            if n is None and lower is None and self.check("NAME", "n") and nxt is not None and nxt.text == "=":
+                self.expect("NAME", "n")
+                self.expect("OP", "=")
+                num = self.expect("NUMBER", what="number of fixings")
+                if not num.text.isdigit() or int(num.text) < 1:
+                    raise self.error("n must be a positive integer", num)
+                n = int(num.text)
+                continue
+            if lower is not None:
+                raise self.error("a window takes at most two bounds (its corridor)", self.tok)
+            lower = self.nested(self.expr, tok)
+            self.expect("OP", ",")
+            upper = self.nested(self.expr, tok)
         self.expect("OP", ")")
-        return Window(tok.text, und, start, end, n, tok.line, tok.col)
+        return Window(tok.text, und, start, end, n, tok.line, tok.col, lower, upper)
 
 
 def _check_depth(program: Program) -> None:

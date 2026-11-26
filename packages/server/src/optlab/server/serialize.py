@@ -104,7 +104,17 @@ def desk_json(desk) -> dict | None:
 
 def quote_json(q) -> dict:
     p, d = q.product, q.decision
-    if q.coupon_rate is not None:
+    strike = q.strike
+    if strike is not None:
+        what = "variance" if p.sheet.get("variance.type") == "variance" else "volatility"
+        headline = {
+            "kind": "strike",
+            "value": 100 * strike["value"],
+            "se": None if strike["se"] is None else 100 * strike["se"],
+            "unit": "vol",
+            "label": f"Fair {what} strike solved for a swap worth the margin to the desk",
+        }
+    elif q.coupon_rate is not None:
         target = f"a note price of {q.target:.2f} %" if q.fmt == "note" else "a zero upfront swap"
         headline = {
             "kind": "coupon",
@@ -124,6 +134,9 @@ def quote_json(q) -> dict:
     return clean(
         {
             "headline": headline,
+            "reference": None
+            if q.reference is None
+            else {"label": q.reference["label"], "strike": 100 * q.reference["strike"], "unit": "vol"},
             "product": {
                 "type": p.sheet.mask.name,
                 "label": p.sheet.mask.label,
@@ -211,6 +224,9 @@ def trade_json(trade) -> dict:
             "downside": sheet.get("downside.type"),
             "barrier": sheet.get("downside.barrier"),
             "format": sheet.get("wrapper.format"),
+            "swap": sheet.get("variance.type"),
+            "strike": sheet.get("variance.strike"),
+            "corridor": sheet.get("variance.corridor"),
         }
     return clean(
         {

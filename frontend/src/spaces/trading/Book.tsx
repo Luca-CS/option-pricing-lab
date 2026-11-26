@@ -10,6 +10,7 @@ import { SpacePage } from "../../app/Shell";
 import { can, useMe } from "../../auth/session";
 import { useScreenJob } from "../../jobs/useScreenJob";
 import { type Estimate, formatNumber, formatPercent } from "../../lib/format";
+import { couponOrStrike } from "../../lib/sheet";
 import { JobProgress } from "../../ui/Flow";
 import { Grid, type GridColumn } from "../../ui/Grid";
 import { Kpi, KpiRow } from "../../ui/Kpi";
@@ -50,9 +51,9 @@ function columns(valued: boolean): GridColumn<Row>[] {
     { id: "book", header: "Book", accessorKey: "book" },
     {
       id: "coupon",
-      header: "Coupon",
-      accessorFn: (r) => r.summary?.coupon_rate ?? null,
-      cell: (x) => (x.getValue() === null ? "—" : formatPercent(x.getValue() as number)),
+      header: "Coupon or strike",
+      accessorFn: (r) => r.summary?.coupon_rate ?? r.summary?.strike ?? null,
+      cell: (x) => couponOrStrike(x.row.original.summary),
       meta: { numeric: true },
     },
     {

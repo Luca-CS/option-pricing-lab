@@ -29,7 +29,9 @@ export function BookDialog({
   const [book, setBook] = useState("default");
   const queries = useQueryClient();
   const navigate = useNavigate();
-  const coupon = quote.headline.kind === "coupon" ? (quote.coupon_rate?.value ?? null) : null;
+  // what the quote solved goes into the trade: a coupon, or a swap's strike (the server writes it into the sheet)
+  const solvedKind = quote.headline.kind === "coupon" || quote.headline.kind === "strike";
+  const coupon = solvedKind ? (quote.coupon_rate?.value ?? null) : null;
   const create = useMutation({
     mutationFn: () => {
       const body: Schemas["TradeIn"] = {

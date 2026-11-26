@@ -7,8 +7,8 @@ The words of the desk, as the code, the API and the screens use them.
 | Term | Meaning |
 |---|---|
 | **Term sheet** | The structured description of a product: sections (`general`, `coupon`, `downside`, `wrapper`, hedging costs...) of typed fields with dotted paths (`coupon.rate`). `TermSheet` in `structured/schema.py`. |
-| **Mask** | A product family that decides which sections and fields exist: `autocall` or `bullet`. |
-| **Preset** | A named, filled term sheet of one mask (`phoenix`, `athena`, `barrier_reverse_convertible`, `reverse_convertible`, `airbag`, `capital_protected`). |
+| **Mask** | A product family that decides which sections and fields exist: `autocall`, `bullet` or `variance`. |
+| **Preset** | A named, filled term sheet of one mask (`phoenix`, `athena`, `barrier_reverse_convertible`, `reverse_convertible`, `airbag`, `capital_protected`, `variance_swap`, `volatility_swap`, `corridor_variance_swap`, `corridor_volatility_swap`). |
 | **`visible_if`** | The condition under which a field is shown and validated; the form is re-asked from the server when a choice changes. |
 | **Script** | A product written in the payoff script language (`structured/script/`): a hand-written lexer and parser, an AST, a vectorised evaluator. A term sheet compiles to a script. |
 | **Compiled product** | The script, its timeline (observation and payment dates on a calendar) and its parameters, ready to price. |
@@ -20,7 +20,10 @@ The words of the desk, as the code, the API and the screens use them.
 | **Digital overhedge** | A discontinuous payoff priced as a call spread on the side against the desk; the width comes from the cost table. |
 | **Desk price** | Base + model reserves + overs + digital overhedges (`structured/costs.py`). |
 | **Client price** | The price shown to the client: the desk price plus the margin; in coupon mode the coupon is solved on it. |
-| **Solve** | `wrapper.solve`: `coupon` (find the coupon that gives the target price) or `upfront` (price at a given coupon). |
+| **Solve** | `wrapper.solve`: `coupon` (find the coupon that gives the target price), `strike` (a swap's fair strike) or `upfront` (price at a given coupon or strike). |
+| **Variance swap** | Pays the realised variance of the daily closes (252 days a year) against a strike, on a vega notional: N (σ² − K²) / 2K, about N per vol point at the strike, capped at (2.5 K)² by default. Its fair strike is the log contract replicated on the smile, up to the daily sampling (`structured/varswap.py`). |
+| **Volatility swap** | The same on the realised vol: N (σ − K). Its fair strike lies below the variance swap's by a convexity that grows with the vol of vol. |
+| **Corridor variance (vol) swap** | Counts a day's squared return only when the close before it lies in the corridor [floor, ceiling] (fractions of the initial level), normalised by every day of the window; a down corridor has no floor, an up corridor no ceiling. |
 | **Cost defaults** | The table of overs, SLV mix and digital limits by group of underlyings and notional tier, versioned (Trading › Pricing policy). |
 | **Group (of underlyings)** | The row of the cost table a name takes (`index_us`, `index_eu`, `equity_us`...); a worst-of takes its most prudent group. |
 | **Reserve** | The lines of a quote frozen when it is booked (`structured/reserves.py`); released over the trade's life. |
