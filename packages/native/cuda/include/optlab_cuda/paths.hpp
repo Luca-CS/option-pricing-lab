@@ -16,8 +16,11 @@
 // common factor by a weight that depends on the level of the basket (`optlab.structured.localcorr`). The variance is
 // always driven by the spot draws (rho z + ...), so local vol and SLV share their spot normals on a seed.
 //
-// Draws come from philox.hpp, a function of (seed, global pair index, rank of the normal along the pair): pair p
-// gives rows p (z) and n_pairs + p (-z) of the output. Prices therefore depend on (seed, number of pairs) only.
+// Draws come from philox.hpp, a function of (seed, global pair index, stream, rank of the normal along the stream):
+// pair p gives rows p (z) and n_pairs + p (-z) of the output. Prices therefore depend on (seed, number of pairs) only.
+// Stream 0 holds the spots (then Heston's variance residuals and the mixer's common normal, interleaved per step as
+// they always were); stream 1 holds the variance residuals of a simulation with an SLV name. An SLV name thus reads
+// exactly the spot normals of local vol on the same seed, and its provision is a difference on common random numbers.
 #pragma once
 
 #include <cmath>
@@ -116,12 +119,17 @@ OPTLAB_PD R table_value(const PathSpec<R>& s, int row, R x) {
     return y[i] * (R(1) - w) + y[i + 1] * w;
 }
 
-// The normals of one pair, read in order: Philox block b of the pair gives normals 4 b to 4 b + 3, so no draw is
+// The tag of the stream of a simulation's extra normals (SLV variance residuals): the top bit of the counter's last
+// word, the high half of the block index, which stays 0 for any realistic path (2^32 blocks of four normals).
+constexpr std::uint32_t kAuxStream = 0x80000000u;
+
+// The normals of one pair on one stream, read in order: Philox block b gives normals 4 b to 4 b + 3, so no draw is
 // wasted whatever the number a step needs (one for a single local vol name, two with a variance, ...).
 template <typename R>
 struct NormalStream {
     std::uint64_t pair;
     std::uint32_t k0, k1;
+    std::uint32_t tag = 0;  // 0: the spots' stream; kAuxStream: the extra normals
     std::uint64_t block = 0;
     R buf[4];
     int used = 4;
@@ -129,7 +137,7 @@ struct NormalStream {
     OPTLAB_PD R next() {
         if (used == 4) {
             const U4 r = philox4x32_10({static_cast<std::uint32_t>(pair), static_cast<std::uint32_t>(pair >> 32),
-                                        static_cast<std::uint32_t>(block), static_cast<std::uint32_t>(block >> 32)},
+                                        static_cast<std::uint32_t>(block), static_cast<std::uint32_t>(block >> 32) | tag},
                                        k0, k1);
             box_muller<R>(r.x, r.y, buf[0], buf[1]);
             box_muller<R>(r.z, r.w, buf[2], buf[3]);
@@ -184,11 +192,12 @@ OPTLAB_PD void simulate_pair(const PathSpec<R>& s, long long p) {
     const int n = s.n_names;
     const std::uint64_t pair = static_cast<std::uint64_t>(s.first_pair + p);
     R x[2][N], v[2][N];
-    bool has_var = false;
+    bool has_var = false, has_slv = false;
     for (int a = 0; a < n; ++a) {
         const int k = s.kind[a];
         const bool hv = k == kHestonVar || k == kSlvVar;
         has_var |= hv;
+        has_slv |= k == kSlvVar;
         x[0][a] = x[1][a] = R(0);
         v[0][a] = v[1][a] = hv ? s.hes[a * 5] : R(0);
     }
@@ -197,11 +206,12 @@ OPTLAB_PD void simulate_pair(const PathSpec<R>& s, long long p) {
     while (j < s.n_obs && s.obs_step[j] == 0) record<R, N>(s, p, j++, x[0], x[1], ext);
     R zs[N], zr[N], fresh[1];
     NormalStream<R> rng{pair, s.key0, s.key1};
+    NormalStream<R> aux{pair, s.key0, s.key1, kAuxStream};  // read only with an SLV name
     for (int i = 1; i <= s.n_steps; ++i) {
         const R dt = s.dt[i - 1], t0 = s.t0[i - 1];
         for (int a = 0; a < n; ++a) zs[a] = rng.next();  // per step: the spots, then the variances, then the mixer
         if (has_var)
-            for (int a = 0; a < n; ++a) zr[a] = rng.next();
+            for (int a = 0; a < n; ++a) zr[a] = has_slv ? aux.next() : rng.next();
         if (s.mixer) fresh[0] = rng.next();
         for (int leg = 0; leg < 2; ++leg) {
             const R sign = leg ? R(-1) : R(1);
