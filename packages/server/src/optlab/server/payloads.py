@@ -1245,6 +1245,7 @@ class EngineInfo(Doc):
     devices: list[Device] = []
     cpu_threads: int | None = None
     resolved: str = Field(..., description="the engine that runs: gpu, cpu or numpy")
+    runs_in: str | None = Field(None, description="whose engine: the worker's (its last heartbeat) or the api's")
 
 
 class GpuState(Doc):

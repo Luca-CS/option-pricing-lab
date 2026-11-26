@@ -286,6 +286,17 @@ class Desk:
             "engine": native.summary(),
         }
 
+    def engine(self) -> dict:
+        """The engine of the process that runs the jobs: the live worker's, from its last heartbeat (in the containers the
+        api has no GPU, the worker has it), else this process's."""
+        from optlab.server.jobs import Workers
+
+        for w in Workers(self.db).alive():
+            summary = (w.get("info") or {}).get("engine")
+            if summary:
+                return {**summary, "runs_in": "worker"}
+        return {**native.summary(), "runs_in": "api"}
+
     def context(self) -> dict:
         c = self.ctx
         tenors = [0.25, 0.5, 1.0, 1.5, 2.0]

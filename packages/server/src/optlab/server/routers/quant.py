@@ -7,7 +7,6 @@ import datetime as dt
 from fastapi import APIRouter, Query, Request
 from fastapi import Path as PathParam
 
-from optlab import native
 from optlab.server.payloads import (
     EngineInfo,
     ModelRisk,
@@ -89,5 +88,6 @@ def replay_get(
 
 @router.get("/engine", **access(), responses=documented(EngineInfo))
 def engine(request: Request):
-    """The Monte Carlo engines of this machine: the compiled one, its CUDA build, the devices and the CPU threads."""
-    return native.summary()
+    """The Monte Carlo engine the jobs run on: the live worker's (from its last heartbeat), else this process's; the
+    compiled engine, its CUDA build, the devices and the CPU threads."""
+    return desk(request).engine()

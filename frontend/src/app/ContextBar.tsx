@@ -140,7 +140,7 @@ export function ContextBar({ onMarket, jobs }: { onMarket: () => void; jobs: Rea
       {engine && (
         <span
           className={classes.hideNarrow}
-          title={`asked: ${engine.engine}; ${engine.cpu_threads ?? "?"} CPU threads`}
+          title={`asked: ${engine.engine}; ${engine.cpu_threads ?? "?"} CPU threads; the ${engine.runs_in === "worker" ? "worker's, which runs the jobs" : "desk's own"}`}
         >
           <span className={classes.label}>Engine</span>
           {ENGINE[engine.resolved] ?? engine.resolved}
