@@ -112,7 +112,10 @@ export function NodeHeatmap({
                 if (e === null || (e.value === 0 && !e.se)) {
                   return (
                     <td key={t}>
-                      <span className={`${classes.cell} ${classes.empty}`}>0{sub}</span>
+                      <span className={`${classes.cell} ${classes.empty}`}>
+                        0{sub && " "}
+                        {sub}
+                      </span>
                     </td>
                   );
                 }
@@ -122,8 +125,9 @@ export function NodeHeatmap({
                 const isSelected = selected?.row === i && selected?.col === j;
                 // at most 50 %: the strongest cell stays dark enough for the light text on it (WCAG AA)
                 const share = `${Math.round(12 + (38 * Math.abs(e.value)) / max)}%`;
-                const at = note ? `${k} (${note}) at ${t}` : `${k} at ${t}`;
-                const title = `${at}: ${f.value} ± ${f.se}${noise ? " (in the noise)" : ""}`;
+                // the name reads as the cell does, value then delta, so the visible text is part of it (WCAG 2.5.3)
+                const shown = note ? `${f.value} ${note}` : f.value;
+                const title = `${k} at ${t}: ${shown} ± ${f.se}${noise ? " (in the noise)" : ""}`;
                 return (
                   <td key={t}>
                     {onSelect ? (
@@ -132,11 +136,12 @@ export function NodeHeatmap({
                         className={[classes.cell, tone, isSelected ? classes.selected : ""].join(" ")}
                         style={{ "--a": share } as CSSProperties}
                         aria-pressed={isSelected}
-                        aria-label={`${at}: ${f.value} plus or minus ${f.se}${noise ? ", in the noise" : ""}`}
+                        aria-label={`${k} at ${t}: ${shown} plus or minus ${f.se}${noise ? ", in the noise" : ""}`}
                         title={title}
                         onClick={() => onSelect({ row: i, col: j })}
                       >
                         {f.value}
+                        {sub && " "}
                         {sub}
                       </button>
                     ) : (
@@ -146,6 +151,7 @@ export function NodeHeatmap({
                         title={title}
                       >
                         {f.value}
+                        {sub && " "}
                         {sub}
                       </span>
                     )}
