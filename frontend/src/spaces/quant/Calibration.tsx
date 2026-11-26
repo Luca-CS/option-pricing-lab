@@ -12,6 +12,7 @@ import { Panel } from "../../ui/Panel";
 import { Empty, Failure, Loading } from "../../ui/States";
 import { Est, Num } from "../../ui/Value";
 import { commonClasses as c, DataTable } from "../common";
+import { HestonTable, SviTable } from "./Params";
 
 /** The largest price less the smallest, across the models of one product. */
 export function modelSpread(prices: Estimate[]): number | null {
@@ -118,6 +119,40 @@ export default function Calibration() {
             })}
           />
         </Panel>
+      )}
+      {r?.params && (
+        <div className={c.grid}>
+          <Panel title="The SVI surface" hint="per maturity, the raw SVI of the total variance" flush>
+            <SviTable
+              params={r.params.svi as Record<string, unknown> | undefined}
+              caption="The surface's SVI parameters"
+            />
+          </Panel>
+          <Panel
+            title="Heston, and the leverage"
+            hint={
+              r.params.slv
+                ? `SLV mix ${formatNumber(r.params.slv.mix as number | undefined, { digits: 2 })}, ${formatNumber(
+                    r.params.slv.particles as number | undefined,
+                  )} particles`
+                : "the stochastic part of the SLV"
+            }
+            flush
+          >
+            <HestonTable
+              params={r.params.heston as Record<string, unknown> | undefined}
+              caption="Heston's parameters"
+            />
+            {r.params.arbitrage && (
+              <p className={`${c.faint} ${c.pad}`}>
+                Surface: {r.params.arbitrage.butterfly_free ? "free of butterfly arbitrage" : "butterfly arbitrage"},{" "}
+                {r.params.arbitrage.calendar_free ? "free of calendar arbitrage" : "calendar arbitrage"} (min g{" "}
+                {formatNumber(r.params.arbitrage.min_g as number | undefined, { digits: 3 })}, largest Lee slope{" "}
+                {formatNumber(r.params.arbitrage.max_lee_slope as number | undefined, { digits: 2 })}).
+              </p>
+            )}
+          </Panel>
+        </div>
       )}
       {errors.length > 0 && (
         <Panel

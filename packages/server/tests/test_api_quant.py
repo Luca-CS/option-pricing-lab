@@ -29,6 +29,11 @@ def quant(a):
 def test_model_risk_and_engine(quant):
     r = quant.get("/api/v1/quant/model-risk").json()
     assert "exotics" in r and r["errors"]
+    # the calibrated parameters of the market in use: SVI per maturity, Heston, Feller, the arbitrage checks, the SLV mix
+    params = r["params"]
+    assert set(params["heston"]) == {"v0", "kappa", "theta", "xi", "rho"}
+    assert len(params["svi"]["params"]) == len(params["svi"]["maturities"]) and len(params["svi"]["params"][0]) == 5
+    assert params["feller"] > 0 and params["slv"]["mix"] is not None and "butterfly_free" in params["arbitrage"]
     e = quant.get("/api/v1/quant/engine").json()
     assert e and isinstance(e, dict)
 
@@ -61,3 +66,21 @@ def test_the_bounds_of_a_replay(quant):
     assert r.status_code == 422 and r.json()["errors"][0]["field"] == "n_paths"
     r = quant.post("/api/v1/quant/replay/runs", json={"strike": "2020-01-15", "model": "heston"})
     assert r.status_code == 422
+
+
+def test_a_fit_takes_its_settings_within_bounds(quant):
+    base = {"day": "2025-01-06", "models": ["svi"]}
+    for bad in (
+        {"moneyness": [1.2, 0.8]},
+        {"moneyness": [0.1, 1.2]},
+        {"maturities": [0.0]},
+        {"maturities": [20.0]},
+        {"weights": "vega"},
+        {"max_rel_spread": 0.0},
+        {"n_strikes_heston": 2},
+    ):
+        r = quant.post("/api/v1/quant/vollab/fits", json={**base, **bad})
+        assert r.status_code == 422, (bad, r.text)
+    good = {**base, "maturities": [0.25, 1.0], "weights": "equal", "moneyness": [0.8, 1.2], "max_rel_spread": 0.4}
+    r = quant.post("/api/v1/quant/vollab/fits", json=good)
+    assert r.status_code == 202, r.text  # accepted: the empty lake fails the job itself, not the request

@@ -40,7 +40,24 @@ DEFAULTS = {
     "seed": 2026,
     "n_mc_strikes": 7,
     "max_rel_spread": 0.5,
+    "weights": "spread",  # each quote weighted by the inverse of its bid-ask in vol; "equal": every quote alike
+    "moneyness": None,  # (lo, hi) of K/F: only the quotes inside are fitted; None keeps every quote the cleaning kept
 }
+# the settings a run's id leaves out when they keep their default, so a run fitted before they existed keeps its id
+_NEUTRAL = {"weights": "spread", "moneyness": None}
+MIN_QUOTES = 5  # a maturity needs at least as many quotes as SVI has parameters
+
+
+def _window(s: dict, lo: float, hi: float) -> dict:
+    """The slice's quotes with K/F between lo and hi (every per-quote array cut alike)."""
+    m = np.exp(np.asarray(s["k"], dtype=float))
+    keep = (m >= lo) & (m <= hi)
+    n = len(keep)
+    return {key: (v[keep] if isinstance(v, np.ndarray) and v.shape == (n,) else v) for key, v in s.items()}
+
+
+def _equal(s: dict) -> np.ndarray:
+    return np.ones_like(np.asarray(s["k"], dtype=float))
 
 
 def _code_version() -> str:
@@ -156,13 +173,19 @@ def _curves(fn, slices) -> list[dict]:
 def fit_day(cleaned: CleanDay, models=MODELS, settings: dict | None = None) -> dict:
     """{model: {params, by_maturity, overall, curves, seconds}} on one cleaned day."""
     cfg = {**DEFAULTS, **(settings or {})}
+    weigh = _weights if cfg["weights"] == "spread" else _equal
     slices = select_maturities(cleaned.slices, tuple(cfg["targets"]))
+    if cfg["moneyness"]:
+        lo, hi = cfg["moneyness"]
+        slices = [w for s in slices if len((w := _window(s, float(lo), float(hi)))["k"]) >= MIN_QUOTES]
+    if not slices:
+        raise ValueError(f"no maturity keeps {MIN_QUOTES} quotes with these settings")
     out = {"quotes_hash": quotes_hash(cleaned, slices), "settings": cfg, "maturities": [float(s["T"]) for s in slices]}
     fits = {}
     surface = ssvi = None
     if {"svi", "ssvi", "slv"} & set(models):
         t0 = time.perf_counter()
-        surface, ssvi = fit_svi_surface(slices, [_weights(s) for s in slices])
+        surface, ssvi = fit_svi_surface(slices, [weigh(s) for s in slices])
         fit_seconds = time.perf_counter() - t0
         if "svi" in models:
             rows = [_errors(surface.iv(s["k"], s["T"]), s) for s in slices]
@@ -187,7 +210,7 @@ def fit_day(cleaned: CleanDay, models=MODELS, settings: dict | None = None) -> d
     if {"heston", "slv"} & set(models):
         t0 = time.perf_counter()
         thin = [_thin(s, cfg["n_strikes_heston"]) for s in slices]
-        heston, _ = calibrate_heston(thin, None, [_weights(s) for s in thin])
+        heston, _ = calibrate_heston(thin, None, [weigh(s) for s in thin])
         seconds = time.perf_counter() - t0
         if "heston" in models:
             rows = [_errors(heston_iv(s["F"], s["K"], s["T"], heston, s["D"]), s) for s in slices]
@@ -257,7 +280,8 @@ def fit_day(cleaned: CleanDay, models=MODELS, settings: dict | None = None) -> d
 
 
 def run_id_of(name: str, day, source: str, model: str, quotes: str, settings: dict) -> str:
-    text = json.dumps([name, str(day), source, model, quotes, settings], sort_keys=True, default=str)
+    keyed = {k: v for k, v in settings.items() if not (k in _NEUTRAL and v == _NEUTRAL[k])}
+    text = json.dumps([name, str(day), source, model, quotes, keyed], sort_keys=True, default=str)
     return f"{model}-{hashlib.sha256(text.encode()).hexdigest()[:12]}"
 
 

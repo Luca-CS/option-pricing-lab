@@ -6993,6 +6993,71 @@
         "type": "object",
         "title": "Bumps"
       },
+      "CalibrationParams": {
+        "properties": {
+          "svi": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SviSurfaceParams"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "heston": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HestonFit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "feller": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feller",
+            "description": "2 kappa theta / xi^2: at least 1 keeps the variance positive"
+          },
+          "arbitrage": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arbitrage",
+            "description": "the surface's butterfly and calendar checks"
+          },
+          "slv": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slv",
+            "description": "mix and particles of the leverage"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "CalibrationParams"
+      },
       "CancelOut": {
         "properties": {
           "ok": {
@@ -7903,6 +7968,95 @@
               }
             ],
             "title": "Models"
+          },
+          "maturities": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number",
+                  "maximum": 10.0,
+                  "exclusiveMinimum": 0.01
+                },
+                "type": "array",
+                "maxItems": 12,
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maturities",
+            "description": "target maturities in years: the closest expiry to each is fitted"
+          },
+          "weights": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "spread",
+                  "equal"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weights",
+            "description": "spread: each quote by the inverse of its bid-ask in vol (the default); equal: alike"
+          },
+          "moneyness": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number",
+                    "maximum": 3.0,
+                    "minimum": 0.2
+                  },
+                  {
+                    "type": "number",
+                    "maximum": 3.0,
+                    "minimum": 0.2
+                  }
+                ],
+                "type": "array",
+                "maxItems": 2,
+                "minItems": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moneyness",
+            "description": "(lo, hi) of K/F: only the quotes inside are fitted"
+          },
+          "max_rel_spread": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 2.0,
+                "exclusiveMinimum": 0.01
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Rel Spread",
+            "description": "quotes wider than this, relative to mid, are dropped"
+          },
+          "n_strikes_heston": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 80.0,
+                "minimum": 6.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Strikes Heston",
+            "description": "strikes per maturity in Heston's fit"
           }
         },
         "additionalProperties": false,
@@ -8259,6 +8413,40 @@
         },
         "type": "object",
         "title": "Health"
+      },
+      "HestonFit": {
+        "properties": {
+          "v0": {
+            "type": "number",
+            "title": "V0"
+          },
+          "kappa": {
+            "type": "number",
+            "title": "Kappa"
+          },
+          "theta": {
+            "type": "number",
+            "title": "Theta"
+          },
+          "xi": {
+            "type": "number",
+            "title": "Xi"
+          },
+          "rho": {
+            "type": "number",
+            "title": "Rho"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "v0",
+          "kappa",
+          "theta",
+          "xi",
+          "rho"
+        ],
+        "title": "HestonFit"
       },
       "Instrument": {
         "properties": {
@@ -9419,6 +9607,17 @@
               }
             ],
             "title": "Note"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CalibrationParams"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "the calibrated parameters of the market in use"
           }
         },
         "additionalProperties": true,
@@ -12917,6 +13116,44 @@
           "items"
         ],
         "title": "SnapshotPage"
+      },
+      "SviSurfaceParams": {
+        "properties": {
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "maturities": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Maturities",
+            "default": []
+          },
+          "params": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Params",
+            "description": "per maturity, raw SVI of the total variance: a, b, rho, m, sigma",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "SviSurfaceParams"
       },
       "SystemInfo": {
         "properties": {
