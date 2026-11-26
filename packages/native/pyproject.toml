@@ -1,6 +1,6 @@
 [project]
 name = "optlab-native"
-version = "2.2.0"
+version = "2.2.1"
 description = "optlab's compiled engine (C++, CUDA when a toolkit is found) as a Python module, found through the optlab.engines entry point"
 requires-python = ">=3.14"
 license = "MIT"
