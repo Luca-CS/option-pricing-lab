@@ -75,7 +75,11 @@ def events(product, fixings: dict, upto, calendar=None, trade_id: str = "") -> l
         if final and k == len(kept) - 1:
             red = out.flows.get((t_pay, "redemption"))
             if red is not None and _alive_before(out, k):
-                result.append(Event(trade_id, day, "matured", float(red[0]), pay_day))
+                amount = float(red[0])
+                if product.get("wrapper.format") == "swap":  # a swap settles its payoff: the notional is taken back
+                    paid = sum(float(np.asarray(f).reshape(-1)[0]) for (t, _), f in out.flows.items() if t == t_pay)
+                    amount = paid - float(program.param_values.get("N", 0.0))
+                result.append(Event(trade_id, day, "matured", amount, pay_day))
     ki = _knock_in(product, fixings, upto, compiled, final)
     if ki is not None:
         result.append(Event(trade_id, ki, "knocked_in"))

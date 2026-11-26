@@ -23,7 +23,7 @@ from optlab.structured.pricer import StructuredResult, check_fixing_scale, histo
 from optlab.structured.profile import ProductProfile, profile
 from optlab.structured.quanto import payment_warnings
 from optlab.structured.replication import replication_result
-from optlab.structured.schema import TermSheet
+from optlab.structured.schema import TermSheet, solves
 from optlab.structured.script.nodes import Param, Program
 from optlab.structured.script.printer import to_text
 from optlab.structured.script.timeline import Clock, build_timeline
@@ -49,6 +49,7 @@ class Quote:
     snapshot_id: str | None = None  # the market the quote was priced on
     mix_band: dict | None = None  # {mix: {"value", "se", "atm_error_bp"}}: coupon p.a. or upfront per SLV mix
     desk: DeskPrice | None = None  # base, lines and client price, when costs were asked
+    reference: dict | None = None  # a swap's strike replicated on the smile, model-free: {"label", "strike"}
 
     @property
     def control_gap_se(self) -> float | None:
@@ -56,6 +57,18 @@ class Quote:
             return None
         se = np.hypot(self.result.stderr, self.control.stderr)
         return (self.result.price - self.control.price) / se if se > 0 else float("inf")
+
+    @property
+    def strike(self) -> dict | None:
+        """A variance or volatility swap's solved strike, in vol: the root of the solved variance strike (its error by
+        the delta method), or the vol strike itself. None for another product or when the strike was not solved."""
+        sheet = self.product.sheet
+        if sheet.mask.name != "variance" or self.coupon_rate is None:
+            return None
+        if sheet.get("variance.type") == "variance":
+            k = float(np.sqrt(max(self.coupon_rate, 0.0)))
+            return {"value": k, "se": (self.coupon_rate_se or 0.0) / (2 * k) if k > 0 else None}
+        return {"value": float(self.coupon_rate), "se": self.coupon_rate_se}
 
     @property
     def script(self) -> str:
@@ -74,6 +87,29 @@ class Quote:
 
 
 LOG = get_logger(__name__)
+
+
+def variance_reference(sheet: TermSheet, product: CompiledProduct, ctx) -> dict | None:
+    """The strike of a fresh variance swap (or of its corridor) replicated on the smile by the log contract
+    (`varswap.fair_variance`), in vol: model-free, with continuous monitoring and no cap. For a vol swap the same root
+    is the strike before its convexity. None for another product, a basket, a running swap or a flat vol."""
+    from optlab.structured.compiler import CORRIDOR_UP
+    from optlab.structured.varswap import fair_variance
+
+    if sheet.mask.name != "variance" or isinstance(ctx, BasketContext) or product.strike_date > product.valuation:
+        return None
+    if product.strike_date < product.valuation or np.isscalar(getattr(ctx, "surface", None)):
+        return None
+    params = product.program.param_values
+    spot = float(ctx.market.spot)
+    lower = params.get("floor", 0.0) * spot or None
+    ceiling = params.get("ceiling")
+    upper = None if ceiling is None or ceiling >= CORRIDOR_UP else ceiling * spot
+    T = max(product.horizon, 1 / 365)
+    k = float(np.sqrt(max(fair_variance(ctx.surface, ctx.market, T, lower, upper), 0.0)))
+    vol = sheet.get("variance.type") == "volatility"
+    label = "the replicated variance's root, before the vol swap's convexity" if vol else "replicated on the smile"
+    return {"label": f"Log contract on the surface: {label}", "strike": k}
 
 
 def _book_greeks(
@@ -182,7 +218,7 @@ def _mix_band(mixes, product, ctx, fmt, decision, prof, fixings, workers, margin
             workers=workers,
             model_object=model,
         )
-        if sheet.get("wrapper.solve") == "coupon":
+        if solves(sheet):
             target = 100 - margin if fmt.name == "note" else -margin
             r0, r1 = run([{product.coupon_param: 0.0}, {product.coupon_param: 1.0}])
             x, x_se = solve_affine(r0, r1, target)
@@ -255,7 +291,7 @@ def _pricer(
 def _refuse(sheet: TermSheet, ctx, product, basket: bool) -> None:
     """The term sheets a market cannot price: a running product asked for its coupon, a basket on a single name's
     market (or the reverse), a sheet on another name's market."""
-    if product.strike_date < product.valuation and sheet.get("wrapper.solve") == "coupon":
+    if product.strike_date < product.valuation and solves(sheet):
         raise ValueError("a running product has a fixed coupon: price it with wrapper.solve = 'upfront'")
     if basket != isinstance(ctx, BasketContext):
         raise ValueError("a worst-of term sheet needs a BasketContext, a single-name one a PricingContext")
@@ -355,7 +391,7 @@ def quote(
             f"no hedging costs under {decision.model.upper()}: they are measured on a base in local vol or replication"
         )
     if costs is not None:
-        aim = (100 - margin if fmt.name == "note" else -margin) if sheet.get("wrapper.solve") == "coupon" else None
+        aim = (100 - margin if fmt.name == "note" else -margin) if solves(sheet) else None
         desk, base, x, x_se = desk_price(
             product, ctx, fmt, decision, prof, costs, aim, cpn, product.coupon_scale, fixings, workers, fast
         )
@@ -369,7 +405,7 @@ def quote(
             result = base.at(None)
             upfront = desk.final_price if fmt.name == "note" else desk.final_price + margin
             params = {}
-    elif sheet.get("wrapper.solve") == "coupon":
+    elif solves(sheet):
         target = 100 - margin if fmt.name == "note" else -margin
         r0, r1 = run([{cpn: 0.0}, {cpn: 1.0}])
         x, x_se = solve_affine(r0, r1, target)
@@ -403,7 +439,11 @@ def quote(
         (ctrl,) = ctrl_run([params])
     warnings = list(decision.warnings) + payment_notes + (desk.warnings if desk else [])
     if rate is not None and rate < 0:
-        warnings.append("the solved coupon is negative: the product cannot reach the target price with a coupon")
+        warnings.append(
+            "the solved variance strike is negative: the margin is larger than the variance"
+            if sheet.mask.name == "variance"
+            else "the solved coupon is negative: the product cannot reach the target price with a coupon"
+        )
     g = None
     if with_greeks:
         g = _quote_greeks(sheet, product, ctx, decision, fmt, params, fixings, basket, slv_vega, workers, sticky)
@@ -441,4 +481,5 @@ def quote(
         getattr(ctx, "snapshot_id", None),
         band,
         desk,
+        variance_reference(sheet, product, ctx),
     )

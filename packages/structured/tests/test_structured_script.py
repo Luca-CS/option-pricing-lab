@@ -373,3 +373,19 @@ def test_a_script_nested_without_limit_is_a_located_error_not_a_recursion():
         parse("\n".join(["underlying SPX", "event 2030-01-07", *ifs, "end", ""]))
     program = validate(parse(script(" + ".join(["SPX"] * 100) + " - (((((1)))))")))  # what a product may need
     assert len(program.events) == 1
+
+
+def test_a_script_observing_too_many_dates_is_a_located_error():
+    """A batch of paths holds a column per date it observes (a variance window keeps every day): a script observing more
+    than `MAX_DATES` is refused before it runs, where it says so, not by memory mid-run."""
+    from optlab.structured.script.timeline import MAX_DATES, Clock, build_timeline
+
+    many = f"underlying SPX\nevent t=1 pay t=1\n  pay variance(SPX, t=0, t=1, n={MAX_DATES + 1}) as redemption\nend\n"
+    with pytest.raises(ScriptError, match="fixings: at most") as err:
+        build_timeline(validate(parse(many)))
+    assert err.value.line == 3
+    long = "underlying SPX\nevent 2090-01-02 pay 2090-01-09\n  pay lowest(SPX, 2020-01-02, 2090-01-02) as redemption\nend\n"
+    with pytest.raises(ScriptError, match="business days"):
+        build_timeline(validate(parse(long)), Clock("2020-01-02"))
+    fine = f"underlying SPX\nevent t=1 pay t=1\n  pay variance(SPX, t=0, t=1, n={MAX_DATES}) as redemption\nend\n"
+    assert len(build_timeline(validate(parse(fine))).sim_times) == MAX_DATES

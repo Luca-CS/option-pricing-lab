@@ -21,7 +21,7 @@ from optlab.structured.script.lexer import ScriptError
 from optlab.structured.script.nodes import Assign, Binary, Call, If, Name, Num, Pay, Program, Terminate, Unary, Window
 from optlab.structured.script.timeline import Timeline
 
-FUNCS = {"min": np.minimum, "max": np.maximum, "abs": np.abs, "exp": np.exp, "log": np.log}
+FUNCS = {"min": np.minimum, "max": np.maximum, "abs": np.abs, "exp": np.exp, "log": np.log, "sqrt": np.sqrt}
 ARITH = {"+": np.add, "-": np.subtract, "*": np.multiply, "/": np.divide}
 HARD = {"<": np.less, "<=": np.less_equal, ">": np.greater, ">=": np.greater_equal, "==": np.equal}
 
@@ -212,9 +212,23 @@ class Evaluator:
                 return functools.reduce(np.minimum if e.func == "worst" else np.maximum, args)
             return FUNCS[e.func](*args)
         if isinstance(e, Window):
-            times = self.timeline.windows[e]
-            if hasattr(self.scenario, "extreme"):  # a path source without it still works through fixings
-                return self.scenario.extreme(e.underlying, times, "min" if e.func == "lowest" else "max")
-            fix = self.scenario.fixings(e.underlying, times)
-            return fix.min(axis=1) if e.func == "lowest" else fix.max(axis=1)
+            return self.window(e)
         raise TypeError(f"cannot evaluate {e!r}")
+
+    def window(self, e: Window):
+        """A window's lowest or highest fixing, or the realised variance of all its fixings (in its corridor)."""
+        times = self.timeline.windows[e]
+        if e.func == "variance":  # every fixing of the window (the engine keeps them: engine.reduction)
+            from optlab.structured.varswap import realised_variance
+
+            fix = self.scenario.fixings(e.underlying, times)
+            if e.lower is None or e.upper is None:
+                return realised_variance(fix)
+            n = fix.shape[0]
+            lower = np.broadcast_to(np.asarray(self.expr(e.lower), dtype=float), (n,))
+            upper = np.broadcast_to(np.asarray(self.expr(e.upper), dtype=float), (n,))
+            return realised_variance(fix, lower, upper)
+        if hasattr(self.scenario, "extreme"):  # a path source without it still works through fixings
+            return self.scenario.extreme(e.underlying, times, "min" if e.func == "lowest" else "max")
+        fix = self.scenario.fixings(e.underlying, times)
+        return fix.min(axis=1) if e.func == "lowest" else fix.max(axis=1)

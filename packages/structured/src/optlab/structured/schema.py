@@ -133,7 +133,7 @@ SECTIONS = {
                     minimum=1,
                     visible_if=(("wrapper.format", ("swap",)), ("wrapper.funding", ("floating",))),
                 ),
-                Field("solve", "choice", "coupon", "Solve for", choices=("coupon", "upfront")),
+                Field("solve", "choice", "coupon", "Solve for", choices=("coupon", "upfront", "strike")),
                 Field("margin", "number", 0.02, "Margin", "of notional", minimum=-0.5, maximum=0.5),
             ),
         ),
@@ -273,6 +273,46 @@ SECTIONS = {
                 ),
             ),
         ),
+        # Variance and volatility swaps (varswap.py): the notional is a vega notional, per vol point.
+        Section(
+            "variance",
+            "Variance and volatility",
+            (
+                Field("type", "choice", "variance", "Swap on", choices=("variance", "volatility")),
+                Field("strike", "number", 0.2, "Strike", "vol", minimum=0.01, maximum=2.0),
+                Field("corridor", "choice", "none", "Corridor", choices=("none", "down", "up", "range")),
+                Field(
+                    "lower",
+                    "number",
+                    0.8,
+                    "Corridor floor",
+                    "of initial",
+                    minimum=0.0,
+                    maximum=LEVEL_MAX,
+                    visible_if=_v("variance.corridor", "up", "range"),
+                ),
+                Field(
+                    "upper",
+                    "number",
+                    1.0,
+                    "Corridor ceiling",
+                    "of initial",
+                    minimum=0.0,
+                    maximum=LEVEL_MAX,
+                    visible_if=_v("variance.corridor", "down", "range"),
+                ),
+                Field(
+                    "cap",
+                    "number",
+                    2.5,
+                    "Cap on the realised vol, times the strike (0: none)",
+                    "",
+                    minimum=0.0,
+                    maximum=10.0,
+                    visible_if=_v("variance.type", "variance"),
+                ),
+            ),
+        ),
         # Empty takes the default of the groups and the size (defaults.py); a value overrides it, with its sign.
         Section(
             "costs",
@@ -366,6 +406,7 @@ class Mask:
     sections: tuple
     choices: dict = field(default_factory=dict)  # dotted field → allowed choices under this mask
     hidden: tuple = ()  # dotted fields this mask does not show
+    defaults: dict = field(default_factory=dict)  # dotted field → its default under this mask
 
 
 MASKS = {
@@ -373,16 +414,35 @@ MASKS = {
         "autocall",
         "Autocallable",
         ("general", "wrapper", "autocall", "coupon", "downside", "costs"),
-        {"coupon.type": ("fixed", "conditional", "snowball")},
+        {"coupon.type": ("fixed", "conditional", "snowball"), "wrapper.solve": ("coupon", "upfront")},
     ),
     "bullet": Mask(
         "bullet",
         "Bullet (non-callable)",
         ("general", "wrapper", "coupon", "upside", "downside", "costs"),
-        {"coupon.type": ("none", "fixed", "conditional")},
+        {"coupon.type": ("none", "fixed", "conditional"), "wrapper.solve": ("coupon", "upfront")},
         ("costs.delta_max_autocall",),
     ),
+    "variance": Mask(
+        "variance",
+        "Variance and volatility swaps",
+        ("general", "wrapper", "variance", "costs"),
+        {"general.basket": ("single",), "wrapper.format": ("swap",), "wrapper.solve": ("strike", "upfront")},
+        ("wrapper.funding", "costs.min_spread", "costs.delta_max_autocall"),
+        {
+            "wrapper.format": "swap",
+            "wrapper.solve": "strike",
+            "wrapper.margin": 0.25,
+            "general.calendar": "nyse",
+            "general.maturity_months": 12,
+        },
+    ),
 }
+
+
+def solves(sheet: TermSheet) -> bool:
+    """True when the quote solves a parameter (a coupon, or a swap's strike) rather than pricing the sheet as given."""
+    return sheet.get("wrapper.solve") in ("coupon", "strike")
 
 
 class TermSheetError(ValueError):
@@ -438,6 +498,8 @@ class TermSheet:
             raise TermSheetError(f"unknown product type {mask!r}, expected one of {', '.join(MASKS)}")
         self.mask = MASKS[mask]
         given = {s: dict(v) for s, v in (values or {}).items()}
+        if not strict:  # a form switched to another product shape keeps the sections the new one has
+            given = {s: v for s, v in given.items() if s in self.mask.sections or s not in SECTIONS}
         for s in given:
             if s not in self.mask.sections:
                 raise TermSheetError(
@@ -450,13 +512,17 @@ class TermSheet:
             unknown = set(given.get(s, {})) - {f.name for f in sec.fields}
             if unknown:
                 raise TermSheetError(f"unknown field(s) in {s}: {', '.join(sorted(unknown))}")
-            self.values[s] = {f.name: given.get(s, {}).get(f.name, f.default) for f in sec.fields}
+            own = self.mask.defaults
+            self.values[s] = {
+                f.name: given.get(s, {}).get(f.name, own.get(f"{s}.{f.name}", f.default)) for f in sec.fields
+            }
         for s in self.mask.sections:
             for f in SECTIONS[s].fields:
                 path = f"{s}.{f.name}"
                 visible = self.visible(path)
                 if not visible:
-                    if strict and f.name in given.get(s, {}) and given[s][f.name] != f.default:
+                    default = self.mask.defaults.get(path, f.default)
+                    if strict and f.name in given.get(s, {}) and given[s][f.name] != default:
                         cond = ", ".join(f"{p} in {v}" for p, v in f.visible_if)
                         raise TermSheetError(f"{path} is not used here (it needs {cond})")
                     del self.values[s][f.name]
@@ -505,8 +571,12 @@ class TermSheet:
             raise TermSheetError("the geared put needs a positive strike")
         if self.get("upside.type") == "call_spread" and self.get("upside.cap") <= self.get("upside.strike"):
             raise TermSheetError("the cap must be above the call strike")
+        if self.get("wrapper.solve") == "strike" and self.mask.name != "variance":
+            raise TermSheetError("only a variance or volatility swap solves its strike: use 'coupon' or 'upfront'")
         if self.get("wrapper.solve") == "coupon" and self.get("coupon.type", "none") == "none":
             raise TermSheetError("there is no coupon to solve for: use wrapper.solve = 'upfront'")
+        if self.get("variance.corridor") == "range" and self.get("variance.lower") >= self.get("variance.upper"):
+            raise TermSheetError("the corridor's floor must be below its ceiling")
         if self.mask.name == "autocall":
             n_calls = m // self.get("autocall.frequency_months")
             if self.get("autocall.first_call") > n_calls:
@@ -618,8 +688,9 @@ def json_schema() -> dict:
                     spec["minimum"] = f.minimum
                 if f.maximum is not None:
                     spec["maximum"] = f.maximum
-                if f.default is not None:
-                    spec["default"] = _json(f.default)
+                default = mask.defaults.get(path, f.default)
+                if default is not None:
+                    spec["default"] = _json(default)
                 if f.visible_if:
                     spec["x-visible-if"] = {dep: list(v) for dep, v in f.visible_if}
                 fields[f.name] = spec

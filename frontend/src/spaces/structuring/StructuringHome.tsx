@@ -34,7 +34,7 @@ export function StructuringHome() {
           {presets.data?.presets.map((p) => (
             <Link key={p.name} to={`/structuring/builder?preset=${encodeURIComponent(p.name)}`} className={c.card}>
               <strong>{p.label}</strong>
-              <span className={c.faint}>{p.type === "autocall" ? "autocallable" : "to maturity"}</span>
+              <span className={c.faint}>{String(presets.data?.masks?.[p.type] ?? p.type).toLowerCase()}</span>
             </Link>
           ))}
         </div>

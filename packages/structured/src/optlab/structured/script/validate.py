@@ -123,6 +123,9 @@ class _Checker:
                 self.expr(a, defined)
         elif isinstance(e, Window):
             self.window(e)
+            for bound in (e.lower, e.upper):
+                if bound is not None:
+                    self.expr(bound, defined)
         else:
             raise ScriptError(f"unexpected expression {e!r}", getattr(e, "line", 0))
 
@@ -142,6 +145,8 @@ class _Checker:
             raise ScriptError("n= is only for time windows; date windows use every business day", w.line, w.col)
         if self.mode is not DateLit and w.n is None:
             raise ScriptError("a time window needs the number of fixings, e.g. n=252", w.line, w.col)
+        if w.lower is not None and w.func != "variance":
+            raise ScriptError(f"{w.func} takes no corridor: only variance does", w.line, w.col)
 
 
 def validate(program: Program) -> Program:

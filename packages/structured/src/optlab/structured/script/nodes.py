@@ -75,15 +75,18 @@ class Call(Node):
 @dataclass(frozen=True)
 class Window(Node):
     """Lowest or highest fixing of an underlying between two dates (both business days included), or on n
-    equally spaced times in (start, end] in time mode."""
+    equally spaced times in (start, end] in time mode; or the annualised realised variance of those fixings
+    (`variance`), in a corridor [lower, upper] of spot levels when both bounds are given (`varswap`)."""
 
-    func: str  # lowest or highest
+    func: str  # lowest, highest or variance
     underlying: str
     start: When
     end: When
     n: int | None = None
     line: int = field(default=0, compare=False)
     col: int = field(default=0, compare=False)
+    lower: Node | None = None  # variance only: the corridor's bounds, levels of the spot
+    upper: Node | None = None
 
 
 # --- statements ---
@@ -163,5 +166,15 @@ class Program(Node):
 
 
 TAGS = ("coupon", "upside", "redemption")
-FUNCTIONS = {"min": 2, "max": 2, "abs": 1, "exp": 1, "log": 1, "worst": None, "best": None}  # None: 2 or more
-WINDOWS = ("lowest", "highest")
+FUNCTIONS = {
+    "min": 2,
+    "max": 2,
+    "abs": 1,
+    "exp": 1,
+    "log": 1,
+    "sqrt": 1,
+    "worst": None,
+    "best": None,
+}  # None: 2 or more
+EXTREMES = ("lowest", "highest")  # windows read through their lowest and highest spots
+WINDOWS = (*EXTREMES, "variance")

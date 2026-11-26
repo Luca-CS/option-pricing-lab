@@ -14,7 +14,7 @@ import { SpacePage } from "../../app/Shell";
 import { can, useMe } from "../../auth/session";
 import { kindLabel } from "../../jobs/jobs";
 import { useScreenJob } from "../../jobs/useScreenJob";
-import { toRequest, type Values } from "../../lib/sheet";
+import { type Mask, toRequest, type Values } from "../../lib/sheet";
 import { JobProgress } from "../../ui/Flow";
 import { Panel } from "../../ui/Panel";
 import { Empty, Failure, Loading } from "../../ui/States";
@@ -24,9 +24,12 @@ import classes from "./Builder.module.css";
 import { QuoteActions, QuoteView } from "./QuoteView";
 import { SheetForm } from "./SheetForm";
 
-type Sheet = { type: "autocall" | "bullet"; values: Values };
+type Sheet = { type: Mask; values: Values };
 type Draft = { key: string; sheet: Sheet };
 type Options = Schemas["PricingOptions"];
+
+// the API's masks, in a desk's words where shorter (the API's label otherwise)
+const SHAPE: Record<string, string> = { autocall: "Autocallable", bullet: "To maturity", variance: "Variance swap" };
 
 const DRAFT = "optlab-builder-draft";
 const OPTIONS = "optlab-pricing-options";
@@ -89,7 +92,9 @@ export default function Builder() {
   const preset = params.get("preset");
   const quoteParam = params.get("quote");
   const me = useMe().data;
-  const presets = usePresets().data?.presets ?? [];
+  const presetList = usePresets().data;
+  const presets = presetList?.presets ?? [];
+  const masks = presetList?.masks ?? { autocall: "Autocallable", bullet: "To maturity" };
   const tradeParam = params.get("trade");
   const start = useStartingSheet(preset, quoteParam, tradeParam);
   // the sheet being edited is a draft of its start (a preset, a quote, a trade), kept in this browser: coming back to
@@ -201,10 +206,10 @@ export default function Builder() {
                   size="xs"
                   value={sheet.type}
                   onChange={(v) => setSheet({ ...sheet, type: v as Sheet["type"] })}
-                  data={[
-                    { value: "autocall", label: "Autocallable" },
-                    { value: "bullet", label: "To maturity" },
-                  ]}
+                  data={Object.entries(masks).map(([value, label]) => ({
+                    value,
+                    label: SHAPE[value] ?? String(label),
+                  }))}
                   aria-label="Product shape"
                 />
               </div>

@@ -33,6 +33,27 @@ test("the structurer builds a Phoenix, solves its coupon, and books it into the 
   await expect(page.getByText(/^Booked as /)).toBeVisible();
 });
 
+test("a corridor variance swap is quoted on its fair strike and booked at it", async ({ page }) => {
+  test.setTimeout(240_000);
+  await signInAs(page, "structurer+trader");
+  await page.goto("/structuring/builder?preset=corridor_variance_swap");
+  await expect(page.getByRole("textbox", { name: "Corridor floor" })).toHaveValue("80");
+  await page.getByText("Quick", { exact: true }).click();
+  const go = page.getByRole("button", { name: "Quote", exact: true });
+  await expect(go).toBeEnabled();
+  await go.click();
+  await expect(page.getByText(/^Fair variance strike solved for a swap/)).toBeVisible({ timeout: 180_000 });
+  await expect(page.getByText(/^Log contract on the surface: replicated on the smile: \d/)).toBeVisible();
+  await expect(page.getByText(/variance swap · corridor 80 % to 110 %/)).toBeVisible();
+  await accessible(page);
+  await page.getByRole("button", { name: "Book it" }).click();
+  const dialog = page.getByRole("dialog", { name: "Book this quote" });
+  await dialog.getByRole("textbox", { name: "Counterparty" }).fill("E2E fund");
+  await dialog.getByRole("button", { name: "Book", exact: true }).click();
+  await expect(page).toHaveURL(/\/trading\/trades\/[\w-]+$/);
+  await expect(page.getByText(/^Booked as /)).toBeVisible();
+});
+
 test("a field out of its bounds is refused under the field, and the quote waits", async ({ page }) => {
   await signInAs(page, "structurer");
   await page.goto("/structuring/builder?preset=phoenix");

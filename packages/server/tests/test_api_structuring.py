@@ -92,3 +92,33 @@ def test_a_quote_end_to_end(a, structurer):
     rep = structurer.get(f"/api/v1/structuring/quotes/{q['quote_id']}/report")
     assert rep.status_code == 200 and "<svg" in rep.text and "script-src" not in rep.headers["content-security-policy"]
     assert any(e["action"] == "create_quote" for e in a.state.audit.entries(20))
+
+
+def test_a_variance_swap_is_quoted_on_its_strike_and_booked_with_it(a, structurer):
+    sheet = preset_sheet(structurer, "variance_swap")
+    sheet["values"]["general"]["maturity_months"] = 6
+    r = structurer.post("/api/v1/structuring/quotes", json={"sheet": sheet, "options": {"precision": "quick"}})
+    assert r.status_code == 202, r.text
+    q = a.wait(structurer, r.json()["job_id"])["result"]
+    head = q["headline"]
+    assert head["kind"] == "strike" and head["unit"] == "vol" and 5 < head["value"] < 80 and head["se"] > 0
+    assert q["reference"]["unit"] == "vol" and abs(q["reference"]["strike"] - head["value"]) < 3
+    rate = q["coupon_rate"]["value"]  # the solved variance strike, booked as the sheet's strike in vol
+    trader = a.client("trader")
+    t = trader.post("/api/v1/trading/trades", json={"sheet": sheet, "coupon_rate": rate, "quantity": -1.0})
+    assert t.status_code in (200, 201), t.text
+    summary = t.json()["summary"]
+    assert summary["swap"] == "variance" and summary["strike"] == pytest.approx(rate**0.5)
+    booked = t.json()["product"]["term_sheet"]
+    assert booked["variance"]["strike"] == pytest.approx(rate**0.5) and booked["wrapper"]["solve"] == "upfront"
+    bad = trader.post("/api/v1/trading/trades", json={"sheet": sheet, "coupon_rate": -0.01})
+    assert bad.status_code == 422
+
+
+def test_the_sheet_types_the_api_takes_are_the_library_s_masks():
+    from typing import get_args
+
+    from optlab.server.schemas import TermSheetIn
+    from optlab.structured.schema import MASKS
+
+    assert set(get_args(TermSheetIn.model_fields["type"].annotation)) == set(MASKS)

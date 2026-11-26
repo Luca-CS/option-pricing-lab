@@ -16,6 +16,7 @@ class ProductProfile:
     early_termination: bool
     horizon: float
     underlyings: tuple = ()
+    reads_variance: bool = False  # a realised variance window (every daily fixing)
 
     @property
     def description(self) -> str:
@@ -24,7 +25,13 @@ class ProductProfile:
         if self.product_class == "callable":
             return "early termination (autocall): the payoff depends on the path up to the call date"
         if self.product_class == "path_dependent":
-            what = "daily barrier window" if self.has_windows else f"{len(self.observation_times)} observation dates"
+            what = (
+                "realised variance of every daily fixing"
+                if self.reads_variance
+                else "daily barrier window"
+                if self.has_windows
+                else f"{len(self.observation_times)} observation dates"
+            )
             return f"path-dependent ({what}), no early termination"
         return "flows depend on the final fixing only (plus deterministic flows)"
 
@@ -35,6 +42,8 @@ def _reads(node, underlyings: set, found: dict):
             found["spot"] = True
     elif isinstance(node, Window):
         found["window"] = True
+        if node.func == "variance":
+            found["variance"] = True
     elif isinstance(node, Unary):
         _reads(node.operand, underlyings, found)
     elif isinstance(node, Binary):
@@ -55,12 +64,13 @@ def _reads(node, underlyings: set, found: dict):
 
 def profile(program: Program, timeline: Timeline) -> ProductProfile:
     underlyings = set(program.underlying_names)
-    times, windows, terminate = [], False, False
+    times, windows, terminate, variance = [], False, False, False
     for ev, t in zip(program.events, timeline.event_times):
         found: dict = {}
         for s in ev.body:
             _reads(s, underlyings, found)
         windows |= found.get("window", False)
+        variance |= found.get("variance", False)
         terminate |= found.get("terminate", False)
         if found.get("spot") and t > 0:
             times.append(float(t))
@@ -70,4 +80,4 @@ def profile(program: Program, timeline: Timeline) -> ProductProfile:
         cls = "path_dependent"
     else:
         cls = "european"
-    return ProductProfile(cls, tuple(times), windows, terminate, timeline.horizon, program.underlying_names)
+    return ProductProfile(cls, tuple(times), windows, terminate, timeline.horizon, program.underlying_names, variance)

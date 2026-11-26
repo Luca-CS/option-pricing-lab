@@ -172,6 +172,11 @@ export function QuoteView({
             <span className={classes.unit}>{q.headline.unit}</span>
           </span>
           <span className={c.faint}>{describeSheet(q.sheet)}</span>
+          {q.reference && (
+            <span className={c.faint}>
+              {q.reference.label}: {formatNumber(q.reference.strike, { digits: 2 })} {q.reference.unit}
+            </span>
+          )}
         </div>
         <div className={classes.how}>
           <span>

@@ -8506,7 +8506,7 @@
           "label"
         ],
         "title": "Headline",
-        "description": "A quote's headline: what it solved (a coupon, a price) as `{kind, value, se, unit, label}`."
+        "description": "A quote's headline: what it solved (a coupon, a swap's strike in vol points, a price) as `{kind, value, se, unit,\nlabel}`; kind is coupon, strike or upfront."
       },
       "Health": {
         "properties": {
@@ -11455,6 +11455,17 @@
           "headline": {
             "$ref": "#/components/schemas/Headline"
           },
+          "reference": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VarianceReference"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "a variance swap's strike replicated on the smile, model-free"
+          },
           "coupon_rate": {
             "anyOf": [
               {
@@ -13808,7 +13819,8 @@
             "type": "string",
             "enum": [
               "autocall",
-              "bullet"
+              "bullet",
+              "variance"
             ],
             "title": "Type",
             "default": "autocall"
@@ -14294,6 +14306,42 @@
               }
             ],
             "title": "Format"
+          },
+          "swap": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Swap",
+            "description": "a variance or volatility swap: what it is on"
+          },
+          "strike": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strike",
+            "description": "a swap's strike, in vol (0.2 = 20 points)"
+          },
+          "corridor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corridor",
+            "description": "a swap's corridor: none, down, up or range"
           }
         },
         "additionalProperties": true,
@@ -15107,6 +15155,31 @@
         "type": "object",
         "title": "VarTaylor",
         "description": "The same VaR from the Greeks (delta, gamma, vega), against the full revaluation."
+      },
+      "VarianceReference": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "strike": {
+            "type": "number",
+            "title": "Strike"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit",
+            "default": "vol"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "label",
+          "strike"
+        ],
+        "title": "VarianceReference",
+        "description": "A fresh variance swap's strike (or its corridor's) by the log contract on the surface, in vol points."
       },
       "VolIndex": {
         "properties": {

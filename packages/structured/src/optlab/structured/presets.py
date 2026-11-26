@@ -49,6 +49,16 @@ PRESETS = {
             "downside": {"type": "geared_put", "strike": 0.8},
         },
     ),
+    "variance_swap": ("variance", {"variance": {"type": "variance", "strike": 0.2, "cap": 2.5}}),
+    "volatility_swap": ("variance", {"variance": {"type": "volatility", "strike": 0.2}}),
+    "corridor_variance_swap": (
+        "variance",
+        {"variance": {"type": "variance", "strike": 0.2, "corridor": "range", "lower": 0.8, "upper": 1.1}},
+    ),
+    "corridor_volatility_swap": (
+        "variance",
+        {"variance": {"type": "volatility", "strike": 0.2, "corridor": "range", "lower": 0.8, "upper": 1.1}},
+    ),
     "capital_protected": (
         "bullet",
         {

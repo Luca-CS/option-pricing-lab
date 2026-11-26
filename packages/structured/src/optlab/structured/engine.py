@@ -197,10 +197,11 @@ def evaluation_threads(backend: str) -> int:
 
 def reduction(times, evaluations) -> tuple:
     """(kept observation indices, windows as (first, last) indices, their keys) when the scripts read the daily dates
-    of at most the engine's MAX_WINDOWS windows only through their lowest and highest spots (the only way the language
-    reads a window): the engine then returns the event dates and two columns per window instead of one per day.
+    of at most the engine's MAX_WINDOWS windows through their lowest and highest spots: the engine then returns the
+    event dates and two columns per window instead of one per day. A variance window reads every day: its days stay.
     (None, (), ()) when there is nothing to gain or a window is not a contiguous run of simulated dates."""
     from optlab.structured.scenario import window_key
+    from optlab.structured.script.nodes import EXTREMES
 
     for ev in evaluations:  # a factor per date (a forward bump) would scale a window's days unequally
         factors = ev.spot_factor.values() if isinstance(ev.spot_factor, dict) else [ev.spot_factor]
@@ -209,8 +210,12 @@ def reduction(times, evaluations) -> tuple:
     times = np.asarray(times, dtype=float)
     index = {round(float(t), 12): j for j, t in enumerate(times)}
     found = {}
+    daily: set = set()  # the days of a window read in full (a variance): kept as columns
     for ev in evaluations:
-        for wtimes in ev.timeline.windows.values():
+        for w, wtimes in ev.timeline.windows.items():
+            if w.func not in EXTREMES:
+                daily |= {round(float(t), 12) for t in wtimes if t > 0}
+                continue
             future = np.asarray(wtimes, dtype=float)
             future = future[future > 0]
             if len(future) < 3:
@@ -222,7 +227,7 @@ def reduction(times, evaluations) -> tuple:
             found[window_key(future)] = (j[0], j[-1])
     if not found or len(found) > engines.require().MAX_WINDOWS:
         return None, (), ()
-    needed = set()
+    needed = set(daily)
     for ev in evaluations:
         needed |= {round(float(t), 12) for t in ev.timeline.event_times if t > 0}
         needed |= {round(float(t), 12) for _, t, _ in ev.controls if t > 0}

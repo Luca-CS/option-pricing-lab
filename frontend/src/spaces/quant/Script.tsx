@@ -58,8 +58,9 @@ const REFERENCE: [string, string][] = [
   ["pay expr as coupon", "a payment, labelled"],
   ["terminate", "the product ends here"],
   ["if … then … [else …] end", "a condition; and, or, not; < <= > >= =="],
-  ["min, max, abs, exp, log", "functions; worst, best of two or more names"],
+  ["min, max, abs, exp, log, sqrt", "functions; worst, best of two or more names"],
   ["lowest(SPX, d1, d2)", "the lowest close between two dates; highest too"],
+  ["variance(SPX, d1, d2[, lo, hi])", "realised variance, 252 days a year; in a corridor of levels lo to hi"],
 ];
 
 type Model = Schemas["ScriptPriceIn"]["model"];

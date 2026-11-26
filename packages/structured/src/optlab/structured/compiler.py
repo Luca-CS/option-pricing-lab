@@ -138,12 +138,54 @@ def _redemption_lines(downside: str, observation, names, strike, o) -> list[str]
     ]
 
 
+CORRIDOR_UP = 1e9  # no ceiling: a level of the spot no path reaches
+
+
+def _variance_lines(sheet: TermSheet, strike: dt.date, maturity: dt.date, pay: dt.date) -> tuple[list[str], str]:
+    """A variance or volatility swap, plain or in a corridor: its script lines and the solved parameter. The notional
+    N is a vega notional: a var swap pays N (sigma^2 - K_var) / (2 K) per vol point, K the strike entered (so that a
+    move of one point at the strike pays about N), capped at (cap K)^2; a vol swap pays N (sigma - K_vol). The notional is
+    paid as the redemption and taken back by the swap wrapper, so that a product pays its redemption once."""
+    g = sheet.get
+    name = sheet.underlyings[0]
+    K = g("variance.strike")
+    kind, corridor = g("variance.type"), g("variance.corridor")
+    lines = [f"underlying {name}", f"param N = {number(g('general.notional'))}", f"param K = {number(K)}"]
+    if kind == "variance":
+        lines.append(f"param kvar = {number(K * K)}")
+        if g("variance.cap"):
+            lines.append(f"param cap = {number(g('variance.cap'))}")
+    else:
+        lines.append(f"param kvol = {number(K)}")
+    lo = g("variance.lower") if corridor in ("up", "range") else 0.0
+    hi = g("variance.upper") if corridor in ("down", "range") else CORRIDOR_UP
+    if corridor != "none":
+        lines += [f"param floor = {number(lo)}", f"param ceiling = {number(hi)}"]
+    bounds = ", floor * S0, ceiling * S0" if corridor != "none" else ""
+    lines += ["", f"event {strike}", f"  S0 = {name}", "end", "", f"event {maturity} pay {pay}"]
+    lines.append(f"  v = variance({name}, {strike}, {maturity}{bounds})")
+    if kind == "variance":
+        realised = "min(v, cap * cap * K * K)" if g("variance.cap") else "v"
+        lines.append(f"  pay N * 100 * ({realised} - kvar) / (2 * K) as upside")
+    else:
+        lines.append("  pay N * 100 * (sqrt(v) - kvol) as upside")
+    lines.append("  pay N as redemption")  # the swap wrapper takes the notional back: the swap is worth its payoff
+    lines.append("end")
+    return lines, "kvar" if kind == "variance" else "kvol"
+
+
 def compile_sheet(sheet: TermSheet, valuation, calendar=None) -> CompiledProduct:
     """The script of a term sheet. `calendar` overrides the sheet's general.calendar."""
     valuation = as_date(valuation)
     cal = calendars.calendar(calendar or sheet.get("general.calendar"))
     strike = sheet.get("general.strike_date") or valuation
     g = sheet.get
+    if sheet.mask.name == "variance":
+        maturity = cal.adjust(add_months(strike, g("general.maturity_months")), g("general.convention"))
+        lines, param = _variance_lines(sheet, strike, maturity, cal.add_business_days(maturity, g("general.pay_lag")))
+        script = "\n".join(lines) + "\n"
+        program = validate(parse(script))
+        return CompiledProduct(sheet, script, program, valuation, strike, maturity, param, 1.0, cal)
     coupon, upside, downside = g("coupon.type"), g("upside.type", "none"), g("downside.type")
     autocall = sheet.mask.name == "autocall"
     obs, maturity = _observations(sheet, strike, cal)

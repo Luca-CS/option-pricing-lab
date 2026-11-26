@@ -47,15 +47,23 @@ Three layers.
 - A payoff script language (`script/`): a hand-written lexer and recursive-descent parser, an AST, a printer,
   validation and a timeline. The evaluator is vectorised with float masks: `x = e` under a mask `m` is
   `m*e + (1-m)*x`, `pay` adds `m*alive*e`, `terminate` multiplies `alive` by `1-m`. A NaN condition or a non-finite
-  payment on a live path raises `ScriptError` at its line.
+  payment on a live path raises `ScriptError` at its line. Windows read the daily closes between two dates through
+  `lowest` and `highest`, or in full through `variance` (the realised variance, 252 days a year, optionally in a
+  corridor of spot levels); a script observes at most 10,000 dates.
 - `Scenario` batches come from `simulate` (one batch is `default_rng(seed)`, several are `SeedSequence(seed).spawn`),
   so scripts reproduce the hand-written pricers bit for bit.
 - `engine.py` evaluates on each simulated batch, sequentially or on a persistent process pool, with the same numbers
   bit for bit.
 
 **Builder.**
-- `schema.py` describes a term sheet: sections, fields with `visible_if`, the `autocall` and `bullet` masks, and
-  `describe()` for a front end. `compiler.py` turns a term sheet into a script; `presets.py` holds the presets.
+- `schema.py` describes a term sheet: sections, fields with `visible_if`, the `autocall`, `bullet` and `variance`
+  masks (a mask may restrict choices, hide fields and set its own defaults), and `describe()` for a front end.
+  `compiler.py` turns a term sheet into a script; `presets.py` holds the presets.
+- **Variance and volatility swaps** (`varswap.py`), plain or in a corridor: the swap pays its vega notional times
+  (sigma^2 - K^2) / 2K (capped) or (sigma - K). The quote solves the fair strike (in variance for a var swap) on the
+  base's paths and shows it in vol, beside the log-contract replication on the smile (model-free, continuous
+  monitoring). A vol swap's convexity, the gap to the variance strike, is the vol of vol that SLV carries as a reserve.
+  Booking writes the solved strike into the sheet.
 
 **Analysis and pricing.**
 - `profile.py` classifies a script: european, path-dependent or callable.
