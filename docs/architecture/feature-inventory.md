@@ -84,6 +84,7 @@ Routes are written without the `/api/v1` prefix. `202` marks a route that answer
 | — | backtest of a VaR run's 1-day VaR on the stored explained P&L, Kupiec's test (CLI and report only in v0) | `GET /risk/backtest?var_run=&from=&to=` | risk | viewer | new route for an existing function (Risk › Backtest) |
 | `GET /api/pnl?from=&to=` | cumulated explained P&L from EOD runs | `GET /risk/pnl?from=&to=` | risk | viewer | kept |
 | `POST /api/pnl/eod` | EOD runs for a period (idempotent backfill) | `POST /risk/eod-runs` 202 (idempotency key = the run key) | risk | risk | kept |
+| — | a day of the explained P&L opened: spot, vol and skew under each spot-vol rule, the vol move node by node or tenor by tenor, the delta buckets | `POST /risk/pnl/detail` 202 | risk | trader, risk | new (Trading › P&L explained) |
 
 ### Quant labs
 

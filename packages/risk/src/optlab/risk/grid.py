@@ -181,6 +181,26 @@ def weighted_factor(T) -> np.ndarray:
     return np.sqrt(1.0 / np.asarray(T, dtype=float))
 
 
+def node_vols(surface) -> np.ndarray:
+    """Implied vols of a surface at the nodes, (n_strikes, n_tenors); a flat vol (a number) is the same everywhere."""
+    shape = (len(STRIKES), len(TENORS))
+    if np.isscalar(surface):
+        return np.full(shape, float(surface))  # pyright: ignore[reportArgumentType] (a number, isscalar says so)
+    k = np.broadcast_to(np.asarray(LOG_STRIKES)[:, None], shape)
+    T = np.broadcast_to(np.asarray(TENORS)[None, :], shape)
+    return np.asarray(surface.iv(k, T), dtype=float)
+
+
+def node_deltas(surface) -> np.ndarray:
+    """Forward call delta N(d1) of each node on a surface, d1 = -k / (s sqrt T) + s sqrt T / 2, (n_strikes, n_tenors)."""
+    from scipy.special import ndtr
+
+    s = node_vols(surface)
+    k = np.asarray(LOG_STRIKES)[:, None]
+    root = np.sqrt(np.asarray(TENORS))[None, :]
+    return ndtr(-k / (s * root) + 0.5 * s * root)
+
+
 def grid_json() -> dict:
     return {
         "strikes": list(STRIKES),

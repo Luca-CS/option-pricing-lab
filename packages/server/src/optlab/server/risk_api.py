@@ -335,6 +335,33 @@ class RiskApi:
         frozen = Frozen(trades=[[t.trade_id, t.version] for t in trades])
         return self.desk._submit("eod", {**body, "from": start, "to": end}, frozen)
 
+    def pnl_detail(self, body: dict) -> dict:
+        self._settings(body.get("options") or {})
+        trades = self.desk.repo.trades()
+        frozen = Frozen(trades=[[t.trade_id, t.version] for t in trades])
+        return self.desk._submit("pnl_detail", body, frozen)
+
+    def run_pnl_detail(self, body: dict, f: Frozen) -> dict:
+        from optlab.risk.explain import explain_detail
+
+        settings = self._settings(body.get("options") or {})
+        trades = self.desk._trades_of(f)
+        start, end = body["from"], body["to"]
+        rule, detail = body.get("rule") or "sticky_moneyness", body.get("detail") or "node"
+        names = sorted({n for t in trades if t.term_sheet() is not None for n in t.term_sheet().underlyings})
+        try:
+            betas = {n: list(b["betas"]) for n, b in stored_betas(self.store, self.desk.lake, names, start).items()}
+        except (KeyError, ValueError) as exc:
+            LOG.warning("no spot-vol betas: %s", exc)
+            betas = {}
+        progress.step(f"The P&L of {end} opened: {rule}, by {detail}")
+        out = explain_detail(
+            self.desk.lake, trades, start, end, self.store, settings, rule=rule, detail=detail, betas=betas
+        )
+        market = {"snapshot_id": None, "origin": "lake (point in time, each day)", "as_of": end}
+        method = {"name": "pnl_detail", "rule": rule, "detail": detail, "n_paths": settings.n_paths}
+        return envelope(market, method, clean(out))
+
     def run_eod(self, body: dict, f: Frozen) -> dict:
         from optlab.risk.pnl import backfill
 
@@ -354,5 +381,6 @@ for _kind, _method in (
     ("scenarios", "run_scenario_set"),
     ("var", "run_var"),
     ("eod", "run_eod"),
+    ("pnl_detail", "run_pnl_detail"),
 ):
     register(_kind, lambda desk, p, f, _m=_method: getattr(desk.risk, _m)(p, f))
