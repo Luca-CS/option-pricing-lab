@@ -10,7 +10,7 @@ import { LadderChart } from "../../charts";
 import { useScreenJob } from "../../jobs/useScreenJob";
 import { useStoredRun } from "../../jobs/useStoredRun";
 import { type Estimate, formatNumber, isNoise } from "../../lib/format";
-import { greekLabel, HEADLINE, ladderSeries, nodeGrid, parseKey, rows } from "../../lib/greeks";
+import { deltaNote, greekLabel, HEADLINE, ladderSeries, nodeDeltas, nodeGrid, parseKey, rows } from "../../lib/greeks";
 import { Panel } from "../../ui/Panel";
 import { type Cell, GreeksTable, NodeHeatmap, shortUnit } from "../../ui/Risk";
 import { Empty, Failure, Loading } from "../../ui/States";
@@ -86,6 +86,9 @@ function VegaView({ run }: { run: Run }) {
     tenors: cols.map((j) => grid.tenors[j] ?? ""),
     cells: grid.cells.map((r) => cols.map((j) => r[j] ?? null)),
   };
+  // each node read in delta too: its forward call delta on the surface of the run
+  const deltas = nodeDeltas(run.groups as Record<string, unknown>[] | undefined, name);
+  const notes = deltas ? grid.strikes.map((_, i) => cols.map((j) => deltaNote(deltas[i]?.[j]))) : undefined;
   const node = params.get("node");
   const [k, t] = node ? node.split("@") : [undefined, undefined];
   const selected: Cell | null = k && t ? { row: shown.strikes.indexOf(k), col: shown.tenors.indexOf(t) } : null;
@@ -108,7 +111,7 @@ function VegaView({ run }: { run: Run }) {
     <div className={c.wide}>
       <Panel
         title="Vega by node"
-        hint={`${shortUnit(String(run.units?.vega ?? "per vol point"))} at one node · ${run.grid.moneyness ?? "K / F(T)"}`}
+        hint={`${shortUnit(String(run.units?.vega ?? "per vol point"))} at one node · ${run.grid.moneyness ?? "K / F(T)"}${notes ? " · each node's call delta below it" : ""}`}
         actions={
           names.length > 1 && (
             <Select
@@ -128,6 +131,7 @@ function VegaView({ run }: { run: Run }) {
           cells={shown.cells}
           selected={selected && selected.row >= 0 && selected.col >= 0 ? selected : null}
           onSelect={select}
+          notes={notes}
           caption={`Vega of the book on ${name}, by strike and tenor`}
         />
       </Panel>

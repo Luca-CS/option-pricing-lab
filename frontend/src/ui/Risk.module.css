@@ -151,3 +151,10 @@ span.cell {
 .swatchNoise {
   background: repeating-linear-gradient(135deg, var(--ol-line-strong) 0 2px, transparent 2px 5px);
 }
+
+/* a node's second line (its delta): the cell's own colour, smaller */
+.note {
+  display: block;
+  font-size: 0.68rem;
+  line-height: 1.1;
+}

@@ -118,6 +118,9 @@ One block, with JSON-ready dataclasses in and out, reading `structured` and `mar
   (`ladder.py`), signed and versioned scenarios (`scenarios.py`), historical VaR by full revaluation with a stressed
   window (`var.py`), and the explained P&L (`pnl.py`): end-of-day runs and a cascade (time, spot, vol, skew, rates,
   dividends, correlation, FX) on the seeds of the day before, against the Greeks' prediction.
+- **The vol move opened** (`explain.py`): a day's spot, vol and skew steps under each spot-vol rule (the same total, split
+  differently), and under one rule the vol move node by node or tenor by tenor, each step a full revaluation, read by
+  maturity (level and shape) and by delta bucket; the nodes and a residual add up to the vol and skew steps exactly.
 - **Storage** (`store.py`): versioned records and runs keyed by what determines them.
 
 ## 6. The desk (`optlab.server`)

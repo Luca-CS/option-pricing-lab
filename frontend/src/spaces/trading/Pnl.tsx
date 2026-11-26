@@ -15,6 +15,7 @@ import { Panel } from "../../ui/Panel";
 import { Empty, Failure, Loading } from "../../ui/States";
 import { Est, Num } from "../../ui/Value";
 import { commonClasses as c, DataTable, TradeLink } from "../common";
+import { PnlDetailPanel } from "./PnlDetail";
 
 type Day = Schemas["PnlDay"];
 
@@ -216,6 +217,7 @@ export default function Pnl() {
             </Panel>
           </div>
           {day && <DayDetail day={day} order={order} />}
+          {day && <PnlDetailPanel key={day.to} day={{ from: day.from, to: day.to }} />}
           <Panel title="Day by day" hint="click a day to explain it" flush>
             <DataTable
               caption="The P&L of each day, by step"

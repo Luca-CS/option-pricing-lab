@@ -29,7 +29,9 @@ put).
 
 **Greeks** (`greeks.py`, desk cash conventions): delta per +1 % spot (sticky moneyness, sticky strike and realistic side by
 side), gamma at 1 % and at 5 % (same unit), vega per point, per +1 % relative, per tenor, per node, net, gross and weighted
-(sqrt(1 y / T), also revalued as one shock), vanna, volga, skew vega, theta (one business day, market frozen, split into
+(sqrt(1 y / T), also revalued as one shock), the shifted vega (the at-the-money vol of every tenor up one point and each
+strike by (sigma + s) / (sigma_ATM + s) points: absolute at the money, relative in the wings at s = 0, the parallel vega as s
+grows), vanna, volga, skew vega, theta (one business day, market frozen, split into
 carry, events and decay), rho total, discount and forward, epsilon and repo per bp and per tenor, correlation per pair and
 parallel, cross gamma, quanto. Digitals are smoothed by the evaluator's centred ramp of 0.5 % for the Greeks, and the bias
 on the price is reported.
@@ -42,7 +44,21 @@ zero rates per tenor, dividend yields as zero rate less implied carry, 120-day r
 trade); 1-day over 500 business days, 10-day on overlapping moves, the stressed window searched over the lake's history by
 the delta-gamma-vega approximation, frozen, then revalued in full. **P&L**: EOD runs stored and replayable, and a cascade of
 full revaluations from one close to the next on the seeds of the day before: time, spot, vol (at-the-money per tenor), skew
-(the rest of the surface), rates, dividends (with repo and quanto drift), correlation, FX.
+(the rest of the surface), rates, dividends (with repo and quanto drift), correlation, FX. Each node of the grid is also
+read in delta: its forward call delta on the surface, N(-k / (s sqrt T) + s sqrt T / 2).
+
+**The vol move opened** (`explain.py`). Under each spot-vol rule the spot step reads the surface of the day before as the
+rule says (sticky moneyness keeps it, sticky strike holds each strike's vol, realistic adds beta_T ln(S_d / S_d-1) at the
+money), and the vol and skew steps carry the rest; the skew step ends on the day's surface whatever the rule, so spot + vol +
+skew is the same amount under the three rules and the rule decides its split. The spot step is predicted by the rule's own
+delta. Under one rule the vol move then runs node by node: for each tenor, shortest first, its at-the-money move on every
+strike (a tenor tent), then each other strike's move beyond it (a node tent), each a full revaluation on the seeds of the day
+before, and last the residual from the tents to the day's surface (the part of the move between the nodes). The steps add up
+to the vol and skew steps exactly; a cross effect between two nodes goes to the later one. A tenor whose tent does not reach
+the book's last date moves no value and is skipped. The nodes are summed by maturity (level, shape) and split into delta
+buckets (10 and 25 delta puts, at the money, 25 and 10 delta calls), each node linearly between the two buckets around its
+delta; deltas and moves are read after the rule's spot step, so the buckets depend on the rule. Tenor by tenor (level, then
+shape) costs two revaluations a tenor instead of ten.
 
 ## Validation (packages/risk/tests/test_risk_*.py)
 
@@ -63,6 +79,9 @@ full revaluations from one close to the next on the seeds of the day before: tim
 | VaR of a vanilla | delta-gamma-vega | within 10 % |
 | Cascade on 12-13/03/2020, the replay's BRC | the total P&L, d's EOD value | steps add up to 1e-9; reconciliation gap under 0.01 |
 | EOD replayed, backfill twice | the stored run | the same numbers; the second backfill reuses every run |
+| The vol move node by node, a six-month BRC on a synthetic lake | the cascade's vol and skew steps | sticky moneyness's steps are the stored cascade's to 1e-9; nodes and residual add up to vol + skew to 1e-9; tenors beyond the book exactly zero; buckets add up to the nodes |
+| The three rules on the same day | each other | spot + vol + skew equal to 1e-9; the split differs |
+| Shifted vega's move | the node vols | the at-the-money move is one point at every tenor exactly; the wings move by sigma / sigma_ATM; a large shift is the parallel move |
 
 ## Measured on the showcase book
 

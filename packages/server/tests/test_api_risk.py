@@ -42,13 +42,24 @@ def test_runs_pnl_and_report(risk):
     assert rep.status_code == 200 and "Risk and P&amp;L" in rep.text
 
 
-def test_bounds_on_what_costs(risk):
+def test_bounds_on_what_costs(a, risk):
     r = risk.post("/api/v1/risk/var", json={"days": 100_000})
     assert r.status_code == 422 and r.json()["errors"][0]["field"] == "days"
     r = risk.post("/api/v1/risk/ladder", json={"ladder": {"points": [0.01] * 100}})
     assert r.status_code == 422
     r = risk.post("/api/v1/risk/eod-runs", json={"from": "2025-01-06", "to": "nope"})
     assert r.status_code == 422 and r.json()["errors"][0]["field"] == "to"
+    day = {"from": "2025-01-06", "to": "2025-01-07"}
+    for bad in (
+        {"from": "2025-01-07", "to": "2025-01-06"},  # the day before comes first
+        {**day, "rule": "sticky_delta"},
+        {**day, "detail": "strike"},
+        {**day, "options": {"n_paths": 10**9}},
+        {**day, "nodes": 80},
+    ):
+        assert risk.post("/api/v1/risk/pnl/detail", json=bad).status_code == 422, bad
+    # opening a day runs revaluations: a trader's or a risk manager's, not a quant's
+    assert a.client("quant").post("/api/v1/risk/pnl/detail", json=day).status_code == 403
 
 
 @pytest.mark.slow
