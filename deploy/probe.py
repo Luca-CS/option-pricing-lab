@@ -167,7 +167,7 @@ def anonymous_walk(t: Target, doc: dict) -> None:
 
 def csrf_checks(t: Target, doc: dict, trader: Session, other: Session) -> None:
     g = "csrf"
-    fixing = {"underlying": PROBE_NAME, "text": "2025-01-06 100"}
+    fixing = {"underlying": PROBE_NAME, "text": "2019-01-07 100"}  # before any desk's valuation date, a demo's included
     path = "/api/v1/trading/fixings"
     s, _, _, _ = trader.call("POST", path, fixing)
     check(g, "the legitimate write passes (control)", s == 200, s)
@@ -343,6 +343,11 @@ def input_checks(t: Target, trader: Session, structurer: Session, limit: int) ->
     )
     s, _, body, _ = structurer.call("POST", "/api/v1/structuring/script/check", {"script": nested})
     check(g, "a script nested 9,000 deep is refused cleanly, not a 500", s in (200, 422), f"{s} {body[:80]!r}")
+    wide = "underlying SPX\nevent t=1 pay t=1\n  pay variance(SPX, t=0, t=1, n=10000000) as redemption\nend\n"
+    s, _, body, _ = structurer.call("POST", "/api/v1/structuring/script/check", {"script": wide})
+    check(g, "a script observing ten million dates is refused at the check", s == 200 and not json.loads(body)["ok"], s)
+    s, _, _, _ = structurer.call("POST", "/api/v1/structuring/script/price", {"script": wide, "n_paths": 1_000})
+    check(g, "and its price is refused before a job is queued", s == 422, s)
     for bad in ("..%2f..%2fetc%2fpasswd", "%2e%2e%2f%2e%2e", "..\\..\\x", "a/../../b", "%00", "x" * 300):
         s, _, _, _ = trader.call("GET", f"/api/v1/quant/replay/runs/{bad}")
         ok = s in (400, 404, 422)

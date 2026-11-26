@@ -64,6 +64,10 @@ def test_script_check_and_price(a, structurer):
     assert 50 < price["value"] < 130 and price["se"] > 0 and raw_errors(env) == []
     assert env["method"] == {"name": "monte_carlo", "model": "lv", "n_paths": 4000, "seed": 2026}
     assert env["market"]["snapshot_id"] == a.state.desk.ctx.snapshot_id and env["market"]["as_of"]
+    wide = "underlying SPX\nevent t=1 pay t=1\n  pay variance(SPX, t=0, t=1, n=10000000) as redemption\nend\n"
+    got = structurer.post("/api/v1/structuring/script/check", json={"script": wide}).json()
+    assert not got["ok"] and "at most" in got["message"] and got["line"] == 3
+    assert structurer.post("/api/v1/structuring/script/price", json={"script": wide}).status_code == 422  # no job
     viewer = a.client("viewer")
     assert viewer.post("/api/v1/structuring/script/check", json={"script": EXAMPLE}).status_code == 200
     assert viewer.post("/api/v1/structuring/script/price", json={"script": EXAMPLE}).status_code == 403

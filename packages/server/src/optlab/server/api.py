@@ -1402,8 +1402,11 @@ class Desk:
 
     # --- script lab ---
     def script_check(self, body: dict) -> dict:
+        from optlab.structured.script.timeline import Clock, build_timeline
+
         try:
             program = validate(parse(body.get("script", "")))
+            build_timeline(program, Clock(self.ctx.valuation))  # what it observes is bounded before a job is queued
         except ScriptError as exc:
             return {"ok": False, "message": exc.message, "line": exc.line, "col": exc.col}
         return {
