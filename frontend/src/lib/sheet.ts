@@ -73,7 +73,7 @@ export function suffix(f: FieldLike): string {
 }
 
 /** A flat sheet (section -> field -> value, with its `type`) as the API takes it back: {type, values}. */
-export type Mask = "autocall" | "bullet" | "variance"; // the API's product types (TermSheetIn), checked there
+export type Mask = "autocall" | "bullet" | "variance" | "accumulator"; // the API's product types (TermSheetIn), checked there
 
 export function toRequest(sheet: Record<string, unknown>): { type: Mask; values: Values } {
   const values: Values = {};
@@ -94,6 +94,14 @@ export function describeSheet(sheet: Record<string, unknown> | null | undefined)
   const und = g.basket === "worst_of" ? `worst of ${names}` : String(g.underlying ?? "SPX");
   const parts = [`${g.maturity_months ?? "?"}M`, und];
   const solving = w.solve === "coupon" || w.solve === "strike";
+  const acc = sheet.accumulator as Record<string, unknown> | undefined;
+  if (acc) {
+    const pct = (x: unknown) => (typeof x === "number" ? `${(100 * x).toFixed(0)} %` : "?");
+    const funded = w.format === "note" ? "funded " : "";
+    parts.push(`${funded}${acc.direction === "decumulate" ? "decumulator" : "accumulator"}`);
+    parts.push(`strike ${pct(acc.strike)}, knock-out ${pct(acc.knock_out)}, gearing ${String(acc.gearing ?? "?")}`);
+    return parts.join(" · ");
+  }
   const v = sheet.variance as Record<string, unknown> | undefined;
   if (v) {
     const strike = typeof v.strike === "number" && !solving ? ` ${(100 * v.strike).toFixed(2)} vol` : "";
@@ -128,9 +136,10 @@ export function choiceLabel(value: unknown): string {
 
 /** What a trade pays on, for a table's cell: a note's coupon per annum, or a swap's strike in vol points. */
 export function couponOrStrike(
-  summary: { coupon_rate?: number | null; strike?: number | null } | null | undefined,
+  summary: { coupon_rate?: number | null; strike?: number | null; level?: number | null } | null | undefined,
 ): string {
   if (typeof summary?.coupon_rate === "number") return `${(100 * summary.coupon_rate).toFixed(2)} %`;
+  if (typeof summary?.level === "number") return `strike ${(100 * summary.level).toFixed(0)} %`;
   if (typeof summary?.strike === "number") return `${(100 * summary.strike).toFixed(2)} vol`;
   return "—";
 }

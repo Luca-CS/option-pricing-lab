@@ -648,7 +648,8 @@ class Desk:
                         "seconds": (r.get("seconds") or {}).get("total"),
                     }
                 )
-        return clean({"available": self.lake.has("prices_eod"), "runs": runs, "presets": list(PRESETS)})
+        singles = [n for n in PRESETS if len(preset(n).underlyings) == 1]  # a replay follows one name's closes
+        return clean({"available": self.lake.has("prices_eod"), "runs": runs, "presets": singles})
 
     def replay_get(self, run_id: str) -> dict:
         stem, _, key = run_id.partition("/")

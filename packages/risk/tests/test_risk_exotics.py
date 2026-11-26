@@ -51,3 +51,17 @@ def test_a_lizard_phoenix_goes_through_the_eod_run_and_the_cascade(lake, tmp_pat
     day = P.explain_day(lake, [trade], A, B, store, SETTINGS)
     assert sum(v[0] for v in day["steps"].values()) == pytest.approx(day["total"], abs=1e-9)
 
+
+@pytest.mark.parametrize("name", ["accumulator", "funded_decumulator"])
+def test_an_accumulator_goes_through_the_eod_run_and_the_cascade(lake, tmp_path, name):
+    """An event a day: the closes the cascade's time step crosses are the frozen spot, its spot step the real ones."""
+    store = risk_store(tmp_path)
+    strike = dt.date(2020, 2, 3)
+    sheet = struck_sheet(preset(name, **{"general.maturity_months": 3, "general.underlying": "SPX"}), strike)
+    trade = Trade.from_term_sheet("ACC", sheet, 1.0, strike, strike)
+    e = P.eod(lake, [trade], A, store, SETTINGS)
+    (pos,) = e["positions"]
+    assert np.isfinite(pos["value"]) and pos["greeks"]["delta|SPX|"][0] != 0
+    day = P.explain_day(lake, [trade], A, B, store, SETTINGS)
+    assert sum(v[0] for v in day["steps"].values()) == pytest.approx(day["total"], abs=1e-9)
+    assert abs(day["groups"][0]["reconciliation_gap"]) < 0.01

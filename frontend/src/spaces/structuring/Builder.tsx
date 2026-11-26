@@ -29,7 +29,12 @@ type Draft = { key: string; sheet: Sheet };
 type Options = Schemas["PricingOptions"];
 
 // the API's masks, in a desk's words where shorter (the API's label otherwise)
-const SHAPE: Record<string, string> = { autocall: "Autocallable", bullet: "To maturity", variance: "Variance swap" };
+const SHAPE: Record<string, string> = {
+  autocall: "Autocallable",
+  bullet: "To maturity",
+  variance: "Variance swap",
+  accumulator: "Accumulator",
+};
 
 const DRAFT = "optlab-builder-draft";
 const OPTIONS = "optlab-pricing-options";

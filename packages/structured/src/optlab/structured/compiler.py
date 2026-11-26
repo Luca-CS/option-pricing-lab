@@ -144,6 +144,77 @@ def _redemption_lines(downside: str, observation, names, strike, o) -> list[str]
 CORRIDOR_UP = 1e9  # no ceiling: a level of the spot no path reaches
 
 
+def _accumulator_lines(sheet: TermSheet, strike: dt.date, cal) -> tuple[list[str], dt.date]:
+    """An accumulator (or decumulator): every business day after the strike the investor buys (sells) one unit at the
+    strike, `gearing` units beyond it (below the strike for an accumulator, above for a decumulator), until the first
+    close at or beyond the knock-out (not checked during the guaranteed period). The units of a period settle at its end:
+
+        outright (swap)   accumulate: unit x units x (perf - K) / K      decumulate: unit x units x (K - perf)
+        funded (note)     accumulate: unit x (units x perf / K + G days - units), the shares bought and the cash not spent
+                          decumulate: unit x (units x K + (G days - units) x perf), the cash received and the shares kept
+
+    with unit = N / (G n), n the days of the life, so that N is the most bought (sold) at the strike, every day geared:
+    a funded note returns N when it buys nothing. A knock-out settles its period, then the rest at once (a funded note
+    returns its budget, or its shares), and ends the product. The last flow is the redemption; a swap pays the notional
+    there too, which its wrapper takes back. Interest on the cash a funded note has not spent is not counted."""
+    g = sheet.get
+    name = sheet.underlyings[0]
+    conv, lag = g("general.convention"), g("general.pay_lag")
+    acc, funded = g("accumulator.direction") == "accumulate", g("wrapper.format") == "note"
+    periods = schedule(strike, g("general.maturity_months"), g("accumulator.settlement_months"), conv, lag, cal)
+    maturity = periods[-1][0]
+    days = cal.business_days(cal.add_business_days(strike, 1), maturity)
+    guarantee = g("accumulator.guarantee_months")
+    guard = cal.adjust(add_months(strike, guarantee), conv) if guarantee else None
+    n = len(days)
+    lines = [
+        f"underlying {name}",
+        f"param N = {number(g('general.notional'))}",
+        f"param K = {number(g('accumulator.strike'))}",
+        f"param KO = {number(g('accumulator.knock_out'))}",
+        f"param G = {number(g('accumulator.gearing'))}",
+        f"param unit = {number(g('general.notional') / (g('accumulator.gearing') * n))}",
+        "",
+        f"event {strike}",
+        f"  S0 = {name}",
+        "  units = 0",
+        "  out = 0",
+        "end",
+    ]
+    geared, knocked = ("perf < K", "perf >= KO") if acc else ("perf > K", "perf <= KO")
+    add = f"units = units + 1 + (G - 1) * ({geared})"
+    if acc:
+        flow = "unit * (units * perf / K + G * {d} - units)" if funded else "unit * units * (perf - K) / K"
+        rest = "unit * G * {r}"
+    else:
+        flow = "unit * (units * K + (G * {d} - units) * perf)" if funded else "unit * units * (K - perf)"
+        rest = "unit * G * {r} * perf"
+    i = 0
+    for p, (o, pay) in enumerate(periods):
+        period_days = [d for d in days[i:] if d <= o]
+        i += len(period_days)
+        remaining = n - i
+        for d in period_days:
+            body = ["perf = " + f"{name} / S0", "if out == 0 then"]
+            if guard is not None and d <= guard:
+                body.append(f"  {add}")
+            else:
+                body += [f"  if {knocked} then", "    out = 1", "  else", f"    {add}", "  end"]
+            body.append("end")
+            if d == o:
+                amount = flow.format(d=len(period_days))
+                if p == len(periods) - 1:
+                    body.append(f"pay {amount}{'' if funded else ' + N'} as redemption")
+                else:
+                    body += [f"pay {amount} as upside", "units = 0", "if out == 1 then"]
+                    body.append(f"  pay {rest.format(r=remaining) if funded else 'N'} as redemption")
+                    body += ["  terminate", "end"]
+                lines += ["", f"event {d} pay {pay}", *("  " + b for b in body), "end"]
+            else:
+                lines += ["", f"event {d}", *("  " + b for b in body), "end"]
+    return lines, maturity
+
+
 def _variance_lines(sheet: TermSheet, strike: dt.date, maturity: dt.date, pay: dt.date) -> tuple[list[str], str]:
     """A variance or volatility swap, plain or in a corridor: its script lines and the solved parameter. The notional
     N is a vega notional: a var swap pays N (sigma^2 - K_var) / (2 K) per vol point, K the strike entered (so that a
@@ -206,6 +277,11 @@ def compile_sheet(sheet: TermSheet, valuation, calendar=None) -> CompiledProduct
     cal = calendars.calendar(calendar or sheet.get("general.calendar"))
     strike = sheet.get("general.strike_date") or valuation
     g = sheet.get
+    if sheet.mask.name == "accumulator":
+        lines, maturity = _accumulator_lines(sheet, strike, cal)
+        script = "\n".join(lines) + "\n"
+        program = validate(parse(script))
+        return CompiledProduct(sheet, script, program, valuation, strike, maturity, None, 0.0, cal)
     if sheet.mask.name == "variance":
         maturity = cal.adjust(add_months(strike, g("general.maturity_months")), g("general.convention"))
         lines, param = _variance_lines(sheet, strike, maturity, cal.add_business_days(maturity, g("general.pay_lag")))

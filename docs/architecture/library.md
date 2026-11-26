@@ -56,13 +56,18 @@ Three layers.
   bit for bit.
 
 **Builder.**
-- `schema.py` describes a term sheet: sections, fields with `visible_if`, the `autocall`, `bullet` and `variance`
-  masks (a mask may restrict choices, hide fields and set its own defaults), and `describe()` for a front end.
+- `schema.py` describes a term sheet: sections, fields with `visible_if`, the `autocall`, `bullet`, `variance` and
+  `accumulator` masks (a mask may restrict choices, hide fields and set its own defaults), and `describe()` for a front end.
   `compiler.py` turns a term sheet into a script; `presets.py` holds the presets.
 - **Autocall mechanisms**, fields of the `autocall` section: an asynchronous call (a worst-of locks each name the
   first time it closes at or above its trigger on a call date, and calls once every name is locked), and a lizard (on
   one call date, an early redemption at par plus a bonus when no close breached the lizard barrier since the strike;
   priced like a daily barrier, its digital overhedge moved by the minimum spread).
+- **Accumulators and decumulators** (the `accumulator` mask): an event per business day buys (sells) one unit at the
+  strike, `gearing` units beyond it, until the first close at or beyond the knock-out (none in the guaranteed
+  period); each period settles at its end, outright as a swap (the units' value against the strike) or fully funded as
+  a note (the shares bought and the cash not spent, or the cash received and the shares kept). A knock-out settles its
+  period, the rest at once, and ends the product.
 - **Variance and volatility swaps** (`varswap.py`), plain or in a corridor: the swap pays its vega notional times
   (sigma^2 - K^2) / 2K (capped) or (sigma - K). The quote solves the fair strike (in variance for a var swap) on the
   base's paths and shows it in vol, beside the log-contract replication on the smile (model-free, continuous

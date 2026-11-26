@@ -353,6 +353,22 @@ SECTIONS = {
                 ),
             ),
         ),
+        # Accumulators and decumulators (compiler._accumulator_lines): N is the most the investor buys or sells at the
+        # strike over the life, every day geared.
+        Section(
+            "accumulator",
+            "Accumulator",
+            (
+                Field("direction", "choice", "accumulate", "The investor", choices=("accumulate", "decumulate")),
+                Field("strike", "number", 0.9, "Strike", "of initial", minimum=0.01, maximum=LEVEL_MAX),
+                Field(
+                    "knock_out", "number", 1.05, "Knock-out, every close", "of initial", minimum=0.01, maximum=LEVEL_MAX
+                ),
+                Field("gearing", "number", 2.0, "Gearing beyond the strike", "", minimum=1.0, maximum=5.0),
+                Field("settlement_months", "int", 1, "Settlement every", "months", minimum=1),
+                Field("guarantee_months", "int", 0, "Guaranteed period, no knock-out", "months", minimum=0),
+            ),
+        ),
         # Empty takes the default of the groups and the size (defaults.py); a value overrides it, with its sign.
         Section(
             "costs",
@@ -462,6 +478,20 @@ MASKS = {
         ("general", "wrapper", "coupon", "upside", "downside", "costs"),
         {"coupon.type": ("none", "fixed", "conditional"), "wrapper.solve": ("coupon", "upfront")},
         ("costs.delta_max_autocall",),
+    ),
+    "accumulator": Mask(
+        "accumulator",
+        "Accumulators and decumulators",
+        ("general", "wrapper", "accumulator", "costs"),
+        {"general.basket": ("single",), "wrapper.solve": ("upfront",)},
+        ("wrapper.funding", "costs.min_spread", "costs.delta_max_autocall"),
+        {
+            "wrapper.format": "swap",
+            "wrapper.solve": "upfront",
+            "wrapper.margin": 0.01,
+            "general.calendar": "nyse",
+            "general.maturity_months": 12,
+        },
     ),
     "variance": Mask(
         "variance",
@@ -615,8 +645,24 @@ class TermSheet:
             raise TermSheetError("only a variance or volatility swap solves its strike: use 'coupon' or 'upfront'")
         if self.get("wrapper.solve") == "coupon" and self.get("coupon.type", "none") == "none":
             raise TermSheetError("there is no coupon to solve for: use wrapper.solve = 'upfront'")
+        if self.mask.name == "accumulator":
+            k, ko = self.get("accumulator.strike"), self.get("accumulator.knock_out")
+            if self.get("accumulator.direction") == "accumulate" and ko <= k:
+                raise TermSheetError("an accumulator's knock-out must be above its strike")
+            if self.get("accumulator.direction") == "decumulate" and ko >= k:
+                raise TermSheetError("a decumulator's knock-out must be below its strike")
+            if m % self.get("accumulator.settlement_months"):
+                raise TermSheetError(
+                    f"the maturity ({m} months) must be a multiple of the settlement ({self.get('accumulator.settlement_months')} months)"
+                )
+            if self.get("accumulator.guarantee_months") >= m:
+                raise TermSheetError("the guaranteed period must end before the maturity")
         if self.get("variance.corridor") == "range" and self.get("variance.lower") >= self.get("variance.upper"):
             raise TermSheetError("the corridor's floor must be below its ceiling")
+        self._check_product(m)
+
+    def _check_product(self, m: int):
+        """An autocall's own rules: its first call and its lizard on a call date."""
         if self.mask.name == "autocall":
             n_calls = m // self.get("autocall.frequency_months")
             if self.get("autocall.first_call") > n_calls:
@@ -639,8 +685,10 @@ class TermSheet:
         for path, v in changes.items():
             s, name = _split(path)
             values.setdefault(s, {})[name] = v
-        for s in values:
-            values[s].pop("gearing", None)
+        for s in values:  # computed fields (the downside's gearing) are computed again
+            for f in SECTIONS[s].fields if s in SECTIONS else ():
+                if f.derived:
+                    values[s].pop(f.name, None)
         new = TermSheet(self.mask.name, values, strict=False)
         for path in changes:
             if not new.visible(path):

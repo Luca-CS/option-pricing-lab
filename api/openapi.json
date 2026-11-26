@@ -13358,7 +13358,8 @@
             "enum": [
               "autocall",
               "bullet",
-              "variance"
+              "variance",
+              "accumulator"
             ],
             "title": "Type",
             "default": "autocall"
@@ -13880,6 +13881,42 @@
             ],
             "title": "Corridor",
             "description": "a swap's corridor: none, down, up or range"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction",
+            "description": "an accumulator's: accumulate or decumulate"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level",
+            "description": "an accumulator's strike, a fraction of the initial level"
+          },
+          "knock_out": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Knock Out",
+            "description": "an accumulator's knock-out, a fraction of the initial level"
           }
         },
         "additionalProperties": true,
