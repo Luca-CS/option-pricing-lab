@@ -39,6 +39,31 @@ PRESETS = {
             "downside": {"type": "pdi", "strike": 1.0, "barrier": 0.6, "observation": "european"},
         },
     ),
+    "lizard_phoenix": (
+        "autocall",
+        {
+            "general": {"maturity_months": 24},
+            "autocall": {
+                "frequency_months": 3,
+                "trigger": 1.0,
+                "lizard": True,
+                "lizard_months": 12,
+                "lizard_barrier": 0.75,
+                "lizard_coupon": 0.05,
+            },
+            "coupon": {"type": "conditional", "frequency_months": 3, "barrier": 0.7, "memory": True},
+            "downside": {"type": "pdi", "strike": 1.0, "barrier": 0.6, "observation": "european"},
+        },
+    ),
+    "asynchronous_autocall": (
+        "autocall",
+        {
+            "general": {"maturity_months": 24, "basket": "worst_of", "underlyings": ("SPX", "NDX")},
+            "autocall": {"frequency_months": 3, "trigger": 1.0, "mechanism": "asynchronous"},
+            "coupon": {"type": "snowball"},
+            "downside": {"type": "pdi", "strike": 1.0, "barrier": 0.6, "observation": "european"},
+        },
+    ),
     "airbag": (
         "bullet",
         {

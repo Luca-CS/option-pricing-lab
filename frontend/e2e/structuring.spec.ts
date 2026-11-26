@@ -54,6 +54,21 @@ test("a corridor variance swap is quoted on its fair strike and booked at it", a
   await expect(page.getByText(/^Booked as /)).toBeVisible();
 });
 
+test("a lizard Phoenix is quoted with its lizard barrier overhedged as a daily barrier", async ({ page }) => {
+  test.setTimeout(240_000);
+  await signInAs(page, "structurer");
+  await page.goto("/structuring/builder?preset=lizard_phoenix");
+  await expect(page.getByRole("textbox", { name: "Lizard barrier, every close" })).toHaveValue("75");
+  await page.getByText("Quick", { exact: true }).click();
+  const go = page.getByRole("button", { name: "Quote", exact: true });
+  await expect(go).toBeEnabled();
+  await go.click();
+  await expect(page.getByText(/Coupon solved for a note price of/)).toBeVisible({ timeout: 180_000 });
+  await expect(page.getByText(/lizard 75 % at 12M/).first()).toBeVisible();
+  await expect(page.getByText("Lizard barrier observed daily").first()).toBeVisible();
+  await accessible(page);
+});
+
 test("a field out of its bounds is refused under the field, and the quote waits", async ({ page }) => {
   await signInAs(page, "structurer");
   await page.goto("/structuring/builder?preset=phoenix");

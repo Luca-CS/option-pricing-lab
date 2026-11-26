@@ -1,13 +1,13 @@
 {
  "meta": {
-  "recorded": "2026-11-26T05:03:17+00:00",
-  "commit": "8e3eae306d9595307caa37ce3c34ccbfbe7d82ff",
+  "recorded": "2026-11-26T05:09:46+00:00",
+  "commit": "57ae28d34b44a2b6038b8da3f2daa983a74e2f1f",
   "platform": "Windows-11-10.0.26200-SP0",
   "machine": "AMD64",
   "python": "3.14.7",
   "numpy": "2.5.4",
   "scipy": "1.18.1",
-  "seconds": 16.95,
+  "seconds": 18.72,
   "times": {}
  },
  "values": {
@@ -117,6 +117,35 @@
    "control": {
     "value": 98.0283015652651,
     "se": 0.075204658564836
+   }
+  },
+  "lizard_phoenix": {
+   "coupon_rate": 0.033875969499954646,
+   "coupon_rate_se": 0.0016133978593806603,
+   "upfront": null,
+   "target": 98.0,
+   "margin": 2.0,
+   "result": {
+    "value": 98.0,
+    "se": 0.07312931824563167
+   },
+   "model": "lv",
+   "method": "monte_carlo",
+   "termination": [
+    0.0,
+    0.6625,
+    0.12085,
+    0.0553,
+    0.0691,
+    0.0075,
+    0.00575,
+    0.0049,
+    0.0
+   ],
+   "expected_life": 0.5127709589041097,
+   "control": {
+    "value": 98.22152299921035,
+    "se": 0.06845517155825322
    }
   },
   "airbag": {

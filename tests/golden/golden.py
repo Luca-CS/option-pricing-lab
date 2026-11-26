@@ -346,11 +346,11 @@ def _quote_numbers(q) -> dict:
 
 def presets_simulated() -> dict:
     from optlab.core import engines
-    from optlab.structured import PRESETS, preset, quote
+    from optlab.structured import preset, quote
 
     engines.set_default("numpy")
     ctx = _simulated_context()
-    return {name: _quote_numbers(quote(preset(name), ctx, n_paths=20_000, batch=10_000)) for name in PRESETS}
+    return {name: _quote_numbers(quote(preset(name), ctx, n_paths=20_000, batch=10_000)) for name in _single_presets()}
 
 
 def _desk_numbers(q) -> dict:
@@ -531,21 +531,21 @@ def _spx_context():
 
 def presets_spx_numpy() -> dict:
     from optlab.core import engines
-    from optlab.structured import PRESETS, preset, quote
+    from optlab.structured import preset, quote
 
     engines.set_default("numpy")
     ctx = _spx_context()
-    return {name: _quote_numbers(quote(preset(name), ctx, n_paths=20_000, batch=10_000)) for name in PRESETS}
+    return {name: _quote_numbers(quote(preset(name), ctx, n_paths=20_000, batch=10_000)) for name in _single_presets()}
 
 
 def presets_spx_gpu() -> dict:
     from optlab.core import engines
-    from optlab.structured import PRESETS, preset, quote
+    from optlab.structured import preset, quote
 
     engines.set_default("gpu")
     try:
         ctx = _spx_context()
-        return {name: _quote_numbers(quote(preset(name), ctx, n_paths=100_000, batch=25_000)) for name in PRESETS}
+        return {name: _quote_numbers(quote(preset(name), ctx, n_paths=100_000, batch=25_000)) for name in _single_presets()}
     finally:
         engines.set_default("numpy")
 
@@ -834,6 +834,13 @@ def diff_recalibrating(a, b, path: str = "", se=None, worst=None) -> list[str]:
         worst["rel"] = max(worst.get("rel", 0.0), rel)
         return [] if rel <= FIT_RTOL else [f"{path}: {a!r} -> {b!r} (rel {rel:.2e}, at most {FIT_RTOL:g})"]
     return [] if a == b else [f"{path}: {a!r} -> {b!r}"]
+
+
+def _single_presets() -> list:
+    """The presets on one name: these groups quote them on one name's market (a worst-of preset needs a basket's)."""
+    from optlab.structured import PRESETS, preset
+
+    return [name for name in PRESETS if len(preset(name).underlyings) == 1]
 
 
 def main(argv=None) -> int:

@@ -29,7 +29,7 @@ import numpy as np
 
 from optlab.core.market import Market
 from optlab.core.models import LocalVolModel
-from optlab.structured.digitals import KINDS
+from optlab.structured.digitals import DAILY, KINDS
 from optlab.structured.multiasset import BasketContext
 from optlab.structured.pricer import StructuredResult, history_times, price_many
 from optlab.structured.replication import replication_result
@@ -632,12 +632,12 @@ def _digital_lines(digital_all, digital_run, x, base_pairs, at_base, inputs, lin
                 "width": g.width(inputs.min_spread, inputs.delta_max),
                 "side": digital_run.sides[digital_run._key(g)],
                 "alone": digital_run.alone[digital_run._key(g)],
-                "shift": g.kind == "daily",
+                "shift": g.kind in DAILY,
             }
             for g in ds
         ]
         widths_seen = sorted({round(c["width"], 6) for c in detail})
-        what = "moved by" if kind == "daily" else "width"
+        what = "moved by" if kind in DAILY else "width"
         note = f"{len(ds)} date{'s' if len(ds) > 1 else ''}, {what} " + (
             f"{100 * widths_seen[0]:.2f} pt"
             if len(widths_seen) == 1
