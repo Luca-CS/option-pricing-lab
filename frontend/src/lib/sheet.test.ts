@@ -85,3 +85,15 @@ describe("what a trade pays on", () => {
     expect(couponOrStrike(null)).toBe("—");
   });
 });
+
+describe("an autocall's mechanisms in its line", () => {
+  it("says when it calls name by name, and its lizard", () => {
+    const sheet = {
+      type: "autocall",
+      general: { maturity_months: 24, basket: "worst_of", underlyings: ["SPX", "NDX"] },
+      autocall: { mechanism: "asynchronous", lizard: true, lizard_barrier: 0.75, lizard_months: 12 },
+      coupon: { type: "snowball" },
+    };
+    expect(describeSheet(sheet)).toContain("asynchronous call · lizard 75 % at 12M");
+  });
+});

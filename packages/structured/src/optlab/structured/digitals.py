@@ -31,7 +31,9 @@ KINDS = {
     "barrier": "Digital overhedge: final barrier",
     "upside": "Digital overhedge: upside",
     "daily": "Barrier observed daily",
+    "lizard": "Lizard barrier observed daily",
 }
+DAILY = ("daily", "lizard")  # barriers read on every close: moved by the minimum spread, not a call spread
 DELTA_FIELD = {
     "coupon": "delta_max_coupon",
     "autocall": "delta_max_autocall",
@@ -50,12 +52,12 @@ class Digital:
 
     def width(self, min_spread: float, delta_max: dict) -> float:
         """In points of performance (fractions). A `delta_max` is a ratio: 1.0 is 1 % of notional per 1 % of spot."""
-        if self.kind == "daily":
+        if self.kind in DAILY:
             return float(min_spread)
         return max(float(min_spread), abs(self.jump) / float(delta_max[self.kind]))
 
     def ramp(self, side: str, min_spread: float, delta_max: dict) -> Ramp:
-        return Ramp(side, self.width(min_spread, delta_max) / self.level, self.kind == "daily")
+        return Ramp(side, self.width(min_spread, delta_max) / self.level, self.kind in DAILY)
 
 
 def _value(node, params: dict) -> float | None:
@@ -108,6 +110,8 @@ def _classify(cond, body, params: dict, sheet) -> tuple | None:
         return "autocall", _value(cond.right, params), _call_amount(body, params) or cpn
     if "call_strike" in names:
         return "upside", _value(cond.right, params), params.get("digital", 0.0)
+    if "lizard_barrier" in names and _has_window(cond.left):  # read on every close, in performance (x S0 or not)
+        return "lizard", params["lizard_barrier"], 0.0
     return None
 
 

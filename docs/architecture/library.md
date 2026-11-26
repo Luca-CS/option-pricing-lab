@@ -59,6 +59,10 @@ Three layers.
 - `schema.py` describes a term sheet: sections, fields with `visible_if`, the `autocall`, `bullet` and `variance`
   masks (a mask may restrict choices, hide fields and set its own defaults), and `describe()` for a front end.
   `compiler.py` turns a term sheet into a script; `presets.py` holds the presets.
+- **Autocall mechanisms**, fields of the `autocall` section: an asynchronous call (a worst-of locks each name the
+  first time it closes at or above its trigger on a call date, and calls once every name is locked), and a lizard (on
+  one call date, an early redemption at par plus a bonus when no close breached the lizard barrier since the strike;
+  priced like a daily barrier, its digital overhedge moved by the minimum spread).
 - **Variance and volatility swaps** (`varswap.py`), plain or in a corridor: the swap pays its vega notional times
   (sigma^2 - K^2) / 2K (capped) or (sigma - K). The quote solves the fair strike (in variance for a var swap) on the
   base's paths and shows it in vol, beside the log-contract replication on the smile (model-free, continuous

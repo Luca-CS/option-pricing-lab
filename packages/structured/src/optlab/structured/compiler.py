@@ -73,6 +73,9 @@ def _params(sheet: TermSheet, coupon: str, upside: str, downside: str, autocall:
         params["trigger"] = g("autocall.trigger")
         if g("autocall.step_down"):
             params["step_down"] = g("autocall.step_down")
+        if g("autocall.lizard"):
+            params["lizard_barrier"] = g("autocall.lizard_barrier")
+            params["lizard_coupon"] = g("autocall.lizard_coupon")
     if upside != "none":
         params["call_strike"] = g("upside.strike")
         if upside in ("call", "call_spread"):
@@ -174,6 +177,29 @@ def _variance_lines(sheet: TermSheet, strike: dt.date, maturity: dt.date, pay: d
     return lines, "kvar" if kind == "variance" else "kvol"
 
 
+def _call_lines(call: str, coupon: str, period: int, asynchronous: bool, names) -> list[str]:
+    """An autocall date: the worst name at or above its trigger, or (asynchronous) every name locked once it was."""
+    if asynchronous:
+        lines = [f"locked_{n} = max(locked_{n}, {n} / S0_{n} >= {call})" for n in names]
+        lines.append(f"if worst({', '.join(f'locked_{n}' for n in names)}) >= 1 then")
+    else:
+        lines = [f"if perf >= {call} then"]
+    if coupon == "snowball":
+        lines.append(f"  pay N * cpn * {period} as coupon")
+    return [*lines, "  pay N as redemption", "  terminate", "end"]
+
+
+def _lizard_lines(names, strike, o) -> list[str]:
+    """The lizard date: redeemed at par with the bonus if no close of any name breached the lizard barrier since the
+    strike (a path called on this date already pays nothing more)."""
+    if len(names) > 1:
+        lows = ", ".join(f"lowest({n}, {strike}, {o}) / S0_{n}" for n in names)
+        cond = f"worst({lows}) >= lizard_barrier"
+    else:
+        cond = f"lowest({names[0]}, {strike}, {o}) >= lizard_barrier * S0"
+    return [f"if {cond} then", "  pay N * lizard_coupon as coupon", "  pay N as redemption", "  terminate", "end"]
+
+
 def compile_sheet(sheet: TermSheet, valuation, calendar=None) -> CompiledProduct:
     """The script of a term sheet. `calendar` overrides the sheet's general.calendar."""
     valuation = as_date(valuation)
@@ -204,8 +230,12 @@ def compile_sheet(sheet: TermSheet, valuation, calendar=None) -> CompiledProduct
     lines += [f"param {k} = {number(v)}" for k, v in params.items()]
     lines += ["", f"event {strike}"]
     lines += [f"  S0_{n} = {n}" for n in names] if basket else [f"  S0 = {first}"]
+    asynchronous = autocall and basket and g("autocall.mechanism") == "asynchronous"
+    if asynchronous:
+        lines += [f"  locked_{n} = 0" for n in names]
     if memory:
         lines.append("  missed = 0")
+    lizard_date = add_months(strike, g("autocall.lizard_months")) if autocall and g("autocall.lizard") else None
     lines.append("end")
     perf_expr = f"worst({', '.join(f'{n} / S0_{n}' for n in names)})" if basket else f"{first} / S0"
     for o, role in obs.items():
@@ -215,10 +245,9 @@ def compile_sheet(sheet: TermSheet, valuation, calendar=None) -> CompiledProduct
         if role.get("coupon"):
             body += _coupon_lines(coupon, memory)
         if call is not None:
-            body.append(f"if perf >= {trigger(call)} then")
-            if coupon == "snowball":
-                body.append(f"  pay N * cpn * {role['period']} as coupon")
-            body += ["  pay N as redemption", "  terminate", "end"]
+            body += _call_lines(trigger(call), coupon, role["period"], asynchronous, names)
+            if lizard_date is not None and o == cal.adjust(lizard_date, g("general.convention")):
+                body += _lizard_lines(names, strike, o)
         if final:
             if coupon == "snowball":
                 j_final = n_periods - g("autocall.first_call")

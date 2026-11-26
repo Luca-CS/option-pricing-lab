@@ -145,6 +145,46 @@ SECTIONS = {
                 Field("trigger", "number", 1.0, "Autocall trigger", "of initial", minimum=0.0, maximum=LEVEL_MAX),
                 Field("step_down", "number", 0.0, "Step-down per call date", "of initial", minimum=0.0, maximum=1.0),
                 Field("first_call", "int", 1, "First call date (non-call periods + 1)", minimum=1),
+                Field(
+                    "mechanism",
+                    "choice",
+                    "standard",
+                    "Call condition",
+                    choices=("standard", "asynchronous"),
+                    visible_if=_v("general.basket", "worst_of"),
+                ),
+                Field(
+                    "lizard", "bool", False, "Lizard: early redemption with a bonus if no close breached its barrier"
+                ),
+                Field(
+                    "lizard_months",
+                    "int",
+                    12,
+                    "Lizard date",
+                    "months",
+                    minimum=1,
+                    visible_if=_v("autocall.lizard", True),
+                ),
+                Field(
+                    "lizard_barrier",
+                    "number",
+                    0.75,
+                    "Lizard barrier, every close",
+                    "of initial",
+                    minimum=0.0,
+                    maximum=LEVEL_MAX,
+                    visible_if=_v("autocall.lizard", True),
+                ),
+                Field(
+                    "lizard_coupon",
+                    "number",
+                    0.1,
+                    "Lizard bonus",
+                    "of notional",
+                    minimum=0.0,
+                    maximum=1.0,
+                    visible_if=_v("autocall.lizard", True),
+                ),
             ),
         ),
         Section(
@@ -583,6 +623,14 @@ class TermSheet:
                 raise TermSheetError(
                     f"first_call = {self.get('autocall.first_call')} is after the last observation ({n_calls})"
                 )
+            if self.get("autocall.lizard"):
+                freq, lizard = self.get("autocall.frequency_months"), self.get("autocall.lizard_months")
+                first = self.get("autocall.first_call") * freq
+                if lizard % freq or not first <= lizard < m:
+                    raise TermSheetError(
+                        f"autocall.lizard_months = {lizard} must be a call date: a multiple of {freq} months from "
+                        f"{first} to {m - freq}"
+                    )
 
     def replace(self, **changes) -> TermSheet:
         """Copy with dotted-path changes, e.g. replace(**{"coupon.rate": 0.1}). Fields that the changes hide are

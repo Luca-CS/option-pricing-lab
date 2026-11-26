@@ -109,6 +109,10 @@ export function describeSheet(sheet: Record<string, unknown> | null | undefined)
     const rate = typeof c.rate === "number" && !solving ? ` ${(100 * c.rate).toFixed(2)} %` : "";
     parts.push(`${c.type} coupon${rate}`);
   }
+  const a = (sheet.autocall ?? {}) as Record<string, unknown>;
+  if (a.mechanism === "asynchronous") parts.push("asynchronous call");
+  if (a.lizard === true && typeof a.lizard_barrier === "number")
+    parts.push(`lizard ${(100 * a.lizard_barrier).toFixed(0)} % at ${String(a.lizard_months ?? "?")}M`);
   if (d.type === "pdi" && typeof d.barrier === "number") {
     parts.push(`PDI ${(100 * d.barrier).toFixed(0)} % ${String(d.observation ?? "")}`.trim());
   }
