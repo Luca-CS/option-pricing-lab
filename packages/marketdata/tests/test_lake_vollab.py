@@ -104,3 +104,36 @@ def test_settings_change_the_run_id_and_the_defaults_are_complete(lake):
     assert a["maturities"] and set(a["fits"]) == {"svi"}
     assert {"targets", "mix", "seed"} <= set(DEFAULTS)
     assert isinstance(pd.Timestamp(DAY).date(), dt.date)
+
+
+def test_the_quotes_can_be_weighted_alike_or_kept_to_a_moneyness_window(lake):
+    cleaned = clean_day(lake, "SPX", DAY, "archive")
+    spread = fit_day(cleaned, ("svi",), SMALL)
+    equal = fit_day(cleaned, ("svi",), {**SMALL, "weights": "equal"})
+    # the same quotes; on a chain that lies on one smile, both weightings find it, and the run says which it used
+    assert equal["quotes_hash"] == spread["quotes_hash"] and equal["settings"]["weights"] == "equal"
+    np.testing.assert_allclose(
+        equal["fits"]["svi"]["params"]["params"], spread["fits"]["svi"]["params"]["params"], atol=1e-4
+    )
+    assert abs(equal["fits"]["svi"]["overall"]["rmse_bp"] - spread["fits"]["svi"]["overall"]["rmse_bp"]) < 1.0
+    window = fit_day(cleaned, ("svi",), {**SMALL, "moneyness": (0.9, 1.1)})
+    rows, wide = window["fits"]["svi"]["by_maturity"], spread["fits"]["svi"]["by_maturity"]
+    assert window["quotes_hash"] != spread["quotes_hash"]
+    assert all(r["n"] <= w["n"] for r, w in zip(rows, wide, strict=False)) and sum(r["n"] for r in rows) < sum(
+        w["n"] for w in wide
+    )
+    for curve in window["fits"]["svi"]["curves"]:  # the curves span the window only
+        assert 0.9 - 1e-9 <= min(curve["moneyness"]) and max(curve["moneyness"]) <= 1.1 + 1e-9
+    with pytest.raises(ValueError, match="no maturity keeps"):
+        fit_day(cleaned, ("svi",), {**SMALL, "moneyness": (0.999, 1.001)})
+
+
+def test_the_default_settings_keep_a_run_its_id(lake, run):
+    """A run fitted with the default weighting and no window has the id it had before these settings existed."""
+    from optlab.marketdata.vollab import run_id_of
+
+    cfg = {**DEFAULTS, **SMALL}
+    before = {k: v for k, v in cfg.items() if k not in ("weights", "moneyness")}
+    args = ("SPX", DAY, "archive", "svi", run["quotes_hash"])
+    assert run_id_of(*args, cfg) == run_id_of(*args, before)
+    assert run_id_of(*args, {**cfg, "weights": "equal"}) != run_id_of(*args, cfg)

@@ -374,11 +374,20 @@ class Desk:
         if path is None or not path.exists():
             return {"exotics": {}, "errors": [], "note": "no model-risk table stored with this snapshot"}
         cal = json.loads(path.read_text(encoding="utf-8"))
+        slv = cal.get("slv") or {}
+        params = {
+            "svi": cal.get("surface"),
+            "heston": cal.get("heston"),
+            "feller": cal.get("feller"),
+            "arbitrage": cal.get("arbitrage"),
+            "slv": {"mix": slv.get("mix"), "particles": slv.get("particles")} if slv else None,
+        }
         return clean(
             {
                 "exotics": cal.get("exotics", {}),
                 "errors": cal.get("errors", []),
                 "note": cal.get("meta", {}).get("note"),
+                "params": {k: v for k, v in params.items() if v is not None},
             }
         )
 
@@ -575,7 +584,15 @@ class Desk:
         models = tuple(m for m in (body.get("models") or MODELS) if m in MODELS)
         if not models:
             raise ApiError("choose at least one model", 422)
-        settings = {k: body[k] for k in ("n_particles", "n_paths", "mix", "seed") if k in body}
+        settings = {
+            k: body[k]
+            for k in ("n_particles", "n_paths", "mix", "seed", "weights", "max_rel_spread", "n_strikes_heston")
+            if body.get(k) is not None
+        }
+        if body.get("maturities"):
+            settings["targets"] = sorted(float(t) for t in body["maturities"])
+        if body.get("moneyness"):
+            settings["moneyness"] = [float(x) for x in body["moneyness"]]
         params = {"underlying": name, "day": day, "source": source, "models": list(models), "settings": settings}
         return self._submit("fit", params)
 

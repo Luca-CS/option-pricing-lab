@@ -9,7 +9,7 @@ obvious one)."""
 from __future__ import annotations
 
 import datetime as dt
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -239,6 +239,28 @@ class FitIn(Body):
     day: dt.date
     source: str | None = Field(None, max_length=32)
     models: list[Literal["ssvi", "svi", "heston"]] | None = Field(None, max_length=3)
+    maturities: list[Annotated[float, Field(gt=0.01, le=10.0)]] | None = Field(
+        None,
+        min_length=1,
+        max_length=12,
+        description="target maturities in years: the closest expiry to each is fitted",
+    )
+    weights: Literal["spread", "equal"] | None = Field(
+        None, description="spread: each quote by the inverse of its bid-ask in vol (the default); equal: alike"
+    )
+    moneyness: tuple[Annotated[float, Field(ge=0.2, le=3.0)], Annotated[float, Field(ge=0.2, le=3.0)]] | None = Field(
+        None, description="(lo, hi) of K/F: only the quotes inside are fitted"
+    )
+    max_rel_spread: float | None = Field(
+        None, gt=0.01, le=2.0, description="quotes wider than this, relative to mid, are dropped"
+    )
+    n_strikes_heston: int | None = Field(None, ge=6, le=80, description="strikes per maturity in Heston's fit")
+
+    @model_validator(mode="after")
+    def _window(self) -> FitIn:
+        if self.moneyness is not None and self.moneyness[0] >= self.moneyness[1]:
+            raise ValueError("moneyness: the low bound must be below the high one")
+        return self
 
 
 class ReplayIn(Body):
