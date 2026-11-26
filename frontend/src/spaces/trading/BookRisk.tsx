@@ -29,10 +29,10 @@ function GreeksView({ run, trade }: { run: Run; trade: string | null }) {
   );
   return (
     <div className={c.grid}>
-      <Panel title="The book's Greeks" hint="each a full revaluation; ± one SE" flush>
+      <Panel title="The book's Greeks" hint="desk side; each a full revaluation; ± one SE" flush>
         <GreeksTable rows={rows(book)} units={run.units} caption="Greeks of the book" />
       </Panel>
-      <Panel title="By trade" hint="delta per +1 % spot, vega per vol point, theta per business day" flush>
+      <Panel title="By trade" hint="desk side; delta per +1 % spot, vega per vol point, theta per business day" flush>
         <DataTable
           caption="Greeks by trade"
           head={["Trade", ...keys.filter((k) => ["delta", "vega", "theta"].includes(k)).map(greekLabel)]}

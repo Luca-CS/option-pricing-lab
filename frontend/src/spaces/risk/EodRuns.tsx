@@ -88,7 +88,7 @@ function Detail({ run }: { run: Eod }) {
             }))}
           />
         </Panel>
-        <Panel title="The book's Greeks" hint="each a full revaluation" flush>
+        <Panel title="The book's Greeks" hint="desk side; each a full revaluation" flush>
           {run.greeks ? (
             <GreeksTable rows={rows(run.greeks)} caption={`The Greeks of the book at ${run.day}`} />
           ) : (

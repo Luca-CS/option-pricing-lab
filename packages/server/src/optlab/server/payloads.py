@@ -374,12 +374,22 @@ class Reserves(Doc):
     lines: list[ReserveLine] = []
 
 
+class SideCheck(Doc):
+    """The quantity's sign against the side the sheet was priced for: a warning, not a refusal."""
+
+    priced_side: str = Field(..., description="the sheet's costs.side: sell or buy")
+    desk_side: str = Field(..., description="short or long, from the quantity's sign")
+    message: str
+
+
 class Trade(Doc):
     trade_id: str
     version: int
     book: str
     status: str = Field(..., description="live, called, matured, knocked_out, deleted, ...")
-    quantity: float
+    quantity: float = Field(..., description="signed: > 0 when the book holds the investor side")
+    desk_side: str = Field(..., description="short when the desk sold the product (a negative quantity), else long")
+    side_check: SideCheck | None = Field(None, description="set when the sign contradicts the sheet's costs.side")
     trade_date: str
     strike_date: str | None = None
     counterparty: str = ""

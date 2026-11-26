@@ -48,6 +48,25 @@ def test_a_trade_s_life(a, trader):
     assert all(e["user_id"] for e in (created, updated))
 
 
+def test_the_side_check_warns_when_the_sign_contradicts_the_priced_side(trader):
+    """A sheet priced as sold (costs.side sell) booked with a positive quantity is a warning, not a refusal: buying back
+    a sold note is legitimate."""
+    sold = _book(trader, quantity=-2.0)
+    assert sold["desk_side"] == "short" and sold["side_check"] is None
+    wrong = _book(trader, quantity=2.0)
+    assert wrong["desk_side"] == "long"
+    check = wrong["side_check"]
+    assert check["priced_side"] == "sell" and check["desk_side"] == "long" and "negative" in check["message"]
+    listed = {t["trade_id"]: t for t in trader.get("/api/v1/trading/trades").json()["items"]}
+    assert listed[wrong["trade_id"]]["side_check"] == check
+    fixed = trader.put(f"/api/v1/trading/trades/{wrong['trade_id']}", json={"quantity": -2.0}).json()
+    assert fixed["side_check"] is None and fixed["desk_side"] == "short"
+    sheet = preset_sheet(trader, "phoenix")
+    sheet["values"]["costs"] = {**sheet["values"].get("costs", {}), "side": "buy"}
+    r = trader.post("/api/v1/trading/trades", json={"sheet": sheet, "coupon_rate": 0.05, "quantity": -1.0})
+    assert r.status_code == 201 and r.json()["side_check"]["priced_side"] == "buy"
+
+
 def test_events_and_unknown_trades(trader):
     tid = _book(trader)["trade_id"]
     ev = trader.get(f"/api/v1/trading/trades/{tid}/events")

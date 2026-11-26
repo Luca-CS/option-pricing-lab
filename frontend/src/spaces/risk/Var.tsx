@@ -92,7 +92,7 @@ function HorizonView({ run, h }: { run: Run; h: Horizon }) {
         </Text>
       )}
       <div className={c.grid}>
-        <Panel title="The P&L over the window" hint={`${h.n} moves; the VaR and the ES as losses`}>
+        <Panel title="The P&L over the window" hint={`desk side; ${h.n} moves; the VaR and the ES as losses`}>
           <DistributionChart
             values={values}
             marks={[
@@ -126,7 +126,11 @@ function HorizonView({ run, h }: { run: Run; h: Horizon }) {
         </Panel>
       </div>
       <div className={c.grid}>
-        <Panel title="Contributions" hint="each trade's P&L on the VaR day, and its mean over the tail" flush>
+        <Panel
+          title="Contributions"
+          hint="desk side; each trade's P&L on the VaR day, and its mean over the tail"
+          flush
+        >
           <DataTable
             caption="What each trade contributes to the VaR and the ES"
             head={["Trade", "On the VaR day", "In the tail (ES)"]}

@@ -13474,6 +13474,33 @@
         "type": "object",
         "title": "SheetGeneral"
       },
+      "SideCheck": {
+        "properties": {
+          "priced_side": {
+            "type": "string",
+            "title": "Priced Side",
+            "description": "the sheet's costs.side: sell or buy"
+          },
+          "desk_side": {
+            "type": "string",
+            "title": "Desk Side",
+            "description": "short or long, from the quantity's sign"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "priced_side",
+          "desk_side",
+          "message"
+        ],
+        "title": "SideCheck",
+        "description": "The quantity's sign against the side the sheet was priced for: a warning, not a refusal."
+      },
       "Smile": {
         "properties": {
           "T": {
@@ -13915,7 +13942,24 @@
           },
           "quantity": {
             "type": "number",
-            "title": "Quantity"
+            "title": "Quantity",
+            "description": "signed: > 0 when the book holds the investor side"
+          },
+          "desk_side": {
+            "type": "string",
+            "title": "Desk Side",
+            "description": "short when the desk sold the product (a negative quantity), else long"
+          },
+          "side_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SideCheck"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "set when the sign contradicts the sheet's costs.side"
           },
           "trade_date": {
             "type": "string",
@@ -13979,6 +14023,7 @@
           "book",
           "status",
           "quantity",
+          "desk_side",
           "trade_date",
           "product"
         ],

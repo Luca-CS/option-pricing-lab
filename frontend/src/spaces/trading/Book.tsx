@@ -17,7 +17,7 @@ import { Kpi, KpiRow } from "../../ui/Kpi";
 import { Panel } from "../../ui/Panel";
 import { Empty, Failure, Loading } from "../../ui/States";
 import { Est, Num } from "../../ui/Value";
-import { commonClasses as c, DataTable, TradeLink } from "../common";
+import { commonClasses as c, DataTable, DeskSideBadge, TradeLink } from "../common";
 
 type Trade = Schemas["Trade"];
 type Position = Schemas["BookPosition"];
@@ -62,6 +62,12 @@ function columns(valued: boolean): GridColumn<Row>[] {
       accessorFn: (r) => r.summary?.barrier ?? null,
       cell: (x) => (x.getValue() === null ? "—" : formatPercent(x.getValue() as number, { digits: 0 })),
       meta: { numeric: true },
+    },
+    {
+      id: "side",
+      header: "Desk side",
+      accessorKey: "desk_side",
+      cell: (x) => <DeskSideBadge trade={x.row.original} />,
     },
     {
       id: "quantity",
