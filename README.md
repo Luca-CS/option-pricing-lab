@@ -85,6 +85,9 @@ data.
 
 ## Getting started
 
+The full guide, from a fresh machine to the desk in production: [docs/getting-started.md](docs/getting-started.md).
+The short version:
+
 ```bash
 uv sync --locked --all-extras                       # https://docs.astral.sh/uv/ ; builds the native engine (CUDA if found)
 uv run pytest -n 6 --dist loadfile                  # 954 tests; without the lake, a GPU or node, those parts skip

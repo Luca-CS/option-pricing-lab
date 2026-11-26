@@ -8,6 +8,7 @@ From the overview down. Each level says enough to decide whether to read the nex
   results.
 - [The public demo](https://luca-cs.github.io/option-pricing-lab/): the desk's front on a recorded session, with a
   guided story for the structurer, the trader and the quant.
+- [getting-started.md](getting-started.md): from a fresh machine to the desk in production, step by step.
 
 ## 2. Architecture
 

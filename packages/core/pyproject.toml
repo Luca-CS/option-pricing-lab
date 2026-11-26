@@ -1,6 +1,6 @@
 [project]
 name = "optlab-core"
-version = "2.0.0"
+version = "2.0.1"
 description = "optlab's core: closed forms, models, Monte Carlo, calibration (SSVI, SVI, Heston, SLV), the engine registry; numpy and scipy only"
 requires-python = ">=3.14"
 license = "MIT"
