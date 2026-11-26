@@ -17,6 +17,7 @@ def data(tmp_path, monkeypatch):
         "OPTLAB_PORT",
         "OPTLAB_LAN",
         "OPTLAB_LAN_NAMES",
+        "OPTLAB_LAN_DATA",
         "OPTLAB_CONTAINER",
         "OPTLAB_ENGINE",
     ):

@@ -67,10 +67,42 @@ class CleanDay:
     table: pd.DataFrame
     meta: dict
     origin: str = "observed"  # the quotes' origin in the lake: a synthetic chain says so on the vol lab's screens
+    spot_source: str = "the file's close"  # where the spot came from: the file, the lake's close, or put-call parity
 
     @property
     def maturities(self) -> np.ndarray:
         return np.array([s["T"] for s in self.slices])
+
+
+PARITY_MIN_DAYS = 3  # the shortest expiry the parity spot reads: a day or two carries next to no time value to read
+
+
+def parity_spot(rows: pd.DataFrame, day, discount) -> tuple[float, str] | None:
+    """(spot, how) implied by put-call parity, C - P = D (F - K), on the shortest expiry of at least three days quoted on
+    both sides at three strikes or more: F is the median of K + (C - P) / D at the five strikes where C and P are
+    closest, and the spot F D, the carry beyond the rate (dividends, repo) neglected over that expiry (0.03 % for a
+    week at a dividend yield of 1.5 %). None when no expiry allows it."""
+    from optlab.marketdata.chains import _year_fraction
+
+    q = as_clean_input(rows)
+    q = q[(q["bid"] > 0) & (q["ask"] >= q["bid"])].assign(mid=lambda f: 0.5 * (f["bid"] + f["ask"]))
+    t0 = snapshot_time(pd.Timestamp(day).date())
+    for expiry in sorted(q["expiry"].unique()):
+        T = _year_fraction(t0, expiry)
+        if T < PARITY_MIN_DAYS / 365:
+            continue
+        e = q[q["expiry"] == expiry]
+        calls = e[e["type"] == "call"].groupby("strike")["mid"].median()
+        puts = e[e["type"] == "put"].groupby("strike")["mid"].median()
+        both = pd.concat([calls.rename("c"), puts.rename("p")], axis=1, join="inner")
+        if len(both) < 3:
+            continue
+        D = float(discount(T))
+        near = both.assign(gap=lambda f: (f["c"] - f["p"]).abs()).nsmallest(5, "gap")
+        F = float(np.median(near.index.to_numpy() + (near["c"] - near["p"]).to_numpy() / D))
+        days = round(T * 365)
+        return F * D, f"put-call parity on the {expiry} expiry ({days} days; its dividends neglected)"
+    return None
 
 
 def clean_day(
@@ -82,26 +114,16 @@ def clean_day(
     max_rel_spread: float = 0.5,
     min_strikes: int = 8,
 ) -> CleanDay:
-    """The cleaned chain of a day, on the lake's discount curve. The spot defaults to the file's underlying close,
-    else the lake's close."""
+    """The cleaned chain of a day, on the lake's discount curve. The spot defaults to the file's underlying close, else
+    the lake's close, else the one put-call parity implies on the chain's shortest expiry (`parity_spot`)."""
     rows = chain_rows(lake, underlying, day, source)
     if rows.empty:
         raise KeyError(f"no quotes of {underlying} on {day}" + (f" from {source}" if source else ""))
     used = source or str(rows["source"].iloc[0])
     rows = rows[rows["source"] == used]
     day = pd.Timestamp(day).date()
-    if spot is None:
-        closes = pd.to_numeric(rows["underlying_close"], errors="coerce").dropna()
-        if len(closes):
-            spot = float(closes.iloc[0])
-        else:
-            px = lake.read(
-                "prices_eod", where=f"instrument = {sql_str(underlying)} AND obs_date = DATE '{day}'", columns="close"
-            )
-            if px.empty:
-                raise KeyError(f"no close of {underlying} on {day}: give the spot")
-            spot = float(px["close"].iloc[0])
     currency = _BY_ID[underlying].currency if underlying in _BY_ID else "USD"
+    spot, spot_source = _spot_of(lake, rows, underlying, day, currency, spot)
     market, slices, table, meta = clean_chain(
         as_clean_input(rows),
         snapshot_time(day),
@@ -111,7 +133,26 @@ def clean_day(
         min_strikes=min_strikes,
     )
     origin = str(rows["origin"].iloc[0]) if "origin" in rows else "observed"
-    return CleanDay(underlying, day, used, spot, market, slices, table, meta, origin)
+    return CleanDay(underlying, day, used, spot, market, slices, table, meta, origin, spot_source)
+
+
+def _spot_of(lake: Lake, rows: pd.DataFrame, underlying: str, day: dt.date, currency: str, spot):
+    """(spot, where it came from): given, the file's underlying close, the lake's close, or put-call parity."""
+    if spot is not None:
+        return float(spot), "given"
+    closes = pd.to_numeric(rows["underlying_close"], errors="coerce").dropna()
+    if len(closes):
+        return float(closes.iloc[0]), "the file's close"
+    if lake.has("prices_eod"):
+        px = lake.read(
+            "prices_eod", where=f"instrument = {sql_str(underlying)} AND obs_date = DATE '{day}'", columns="close"
+        )
+        if not px.empty:
+            return float(px["close"].iloc[0]), "the lake's close"
+    implied = parity_spot(rows, day, discount_function(lake, currency, day))
+    if implied is None:
+        raise KeyError(f"no close of {underlying} on {day}, and no expiry to read it from by put-call parity")
+    return implied
 
 
 def quote_days(lake: Lake, underlying: str, source: str | None = None) -> list:

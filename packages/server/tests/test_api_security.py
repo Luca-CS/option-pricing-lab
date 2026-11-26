@@ -69,6 +69,7 @@ def test_a_rebound_host_cannot_read(a, trader):
 def test_the_lan_profile_answers_on_its_names_only_and_keeps_the_origin_rule(tmp_path):
     names = "optlab.home.arpa,192.168.1.20"
     with api(tmp_path, lan=True, host="0.0.0.0", lan_names=names) as lan:
+        assert lan.state.desk.shared and lan.state.desk.private_data  # raw quotes and levels stay on the machine
         c = lan.client("trader")
         h = {"host": "192.168.1.20:8765"}
         assert c.get("/api/v1/trading/trades", headers=h).status_code == 200
@@ -445,3 +446,8 @@ def test_the_docs_page_is_off_unless_asked_and_pinned_when_on(tmp_path):
             f"'sha256-{digest}'" in csp and "unsafe-eval" not in csp and "script-src https://cdn.jsdelivr.net " in csp
         )
         assert r.text.count('integrity="sha384-') == 2 and "swagger-ui-dist@5." in r.text and "@5/" not in r.text
+
+
+def test_on_the_owner_s_lan_the_data_is_served_and_the_local_paths_still_are_not(tmp_path):
+    with api(tmp_path, lan=True, host="0.0.0.0", lan_names="192.168.1.20", lan_data=True) as lan:
+        assert lan.state.desk.shared and not lan.state.desk.private_data

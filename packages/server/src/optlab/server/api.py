@@ -118,7 +118,8 @@ class Desk:
         self.replays = ReplayRepository(self.db)
         self.lake = Lake(lake or self.settings.lake)
         self.names = NameMarkets(self.lake)
-        self.shared = False  # listening beyond this machine: raw quotes and levels stay private
+        self.shared = False  # listening beyond this machine: the machine's local paths stay out of the answers
+        self.private_data = False  # raw quotes and index levels refused (the LAN profile, unless its owner serves them)
         self.market_store = SnapshotRepository(self.db)
         self.calibration = Path(calibration) if calibration else self.settings.calibration
         self.ctx = PricingContext.from_calibration(self.calibration)
@@ -404,8 +405,12 @@ class Desk:
 
     # --- the data lake ---
     def _private(self, what: str) -> None:
-        if self.shared:
-            raise ApiError(f"{what} stay on the owner's machine: this desk is shared beyond it", 403)
+        if self.private_data:
+            raise ApiError(
+                f"{what} stay on the owner's machine: this desk is shared beyond it (OPTLAB_LAN_DATA serves them on "
+                "the owner's LAN)",
+                403,
+            )
 
     def data_overview(self) -> dict:
         from optlab.core.instruments import UNIVERSE
@@ -439,6 +444,7 @@ class Desk:
             {
                 "available": True,
                 "shared": self.shared,
+                "private_data": self.private_data,
                 "lake": None if self.shared else str(lake.root),
                 "coverage": cov.astype({"first": str, "last": str, "ingested": str}).to_dict("records"),
                 "instruments": [
@@ -571,6 +577,7 @@ class Desk:
                 "models": MODELS,
                 "defaults": DEFAULTS,
                 "shared": self.shared,
+                "private_data": self.private_data,
             }
         )
 

@@ -135,6 +135,7 @@ def quote_table(lake: Lake, name: str, day, source: str | None = None, targets=N
         "source": cleaned.source,
         "slices": out,
         "origin": cleaned.origin,
+        "spot_source": cleaned.spot_source,
     }
 
 
@@ -318,6 +319,7 @@ def run_fit(lake: Lake, name: str, day, source: str | None = None, models=MODELS
         source=cleaned.source,
         origin=cleaned.origin,
         spot_scale=cleaned.spot / float(cleaned.market.spot),
+        spot_source=cleaned.spot_source,
     )
     return result
 

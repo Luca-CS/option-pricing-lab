@@ -238,7 +238,10 @@ def create_app(settings: Settings | None = None, desk: Desk | None = None) -> Fa
             workers=settings.workers,
             run_jobs=settings.worker == "embedded",
         )
-    desk.shared = settings.lan  # raw quotes and index levels stay on this machine when the LAN profile is on
+    desk.shared = settings.lan  # local paths stay out of the answers when the LAN profile is on
+    desk.private_data = (
+        settings.lan and not settings.lan_data
+    )  # raw quotes and levels too, unless the owner serves them
     app = api_app(docs=settings.docs)
     app.state.optlab = State(settings, desk, Accounts(desk.db, settings), Audit(desk.db))
     if settings.frontend is not None:

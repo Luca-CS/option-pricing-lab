@@ -207,7 +207,8 @@ def worker(
     settings = _settings(engine=engine, workers=workers, database=store, job_concurrency=concurrency)
     to_files(settings, "worker", log)
     desk = Desk(settings=settings, engine=settings.engine, workers=settings.workers, run_jobs=False)
-    desk.shared = settings.lan  # the same rule as the api's for raw quotes and levels
+    desk.shared = settings.lan  # the same rules as the api's: local paths, raw quotes and levels
+    desk.private_data = settings.lan and not settings.lan_data
     w = Worker(desk, role="external", concurrency=settings.job_concurrency)
     deadline = time.monotonic() + wait_lease
     while not w.start():

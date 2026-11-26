@@ -221,6 +221,7 @@ the repository, each a deliberate choice of the machine's owner ([ADR-0002](adr/
    OPTLAB_LAN_NAMES=192.168.1.205       # the names and addresses the LAN opens it by, "a, b" for several
    OPTLAB_LAN_SNI=192.168.1.205         # the certificate for a client that sends no name (a browser opening an IP)
    OPTLAB_LAN_ADDRESS=0.0.0.0           # where Caddy listens in WSL
+   OPTLAB_LAN_DATA=true                 # the raw option quotes and index levels on the LAN too: the owner's own devices
    COMPOSE_PROFILES=lan
    ```
 
@@ -232,8 +233,11 @@ the repository, each a deliberate choice of the machine's owner ([ADR-0002](adr/
 3. each device that opens the desk trusts Caddy's root certificate once
    (`docker compose cp proxy:/data/caddy/pki/authorities/local/root.crt .`).
 
-Caddy's binary carries the file capability `cap_net_bind_service`, so the proxy alone keeps that one capability
-(every other is dropped, with no new privileges). Admin › System (`GET /api/v1/admin/network`) reads what still blocks
+Without `OPTLAB_LAN_DATA` the LAN gets every screen but the raw quotes of the vol lab and the levels of the vol
+indices (a 403 that says so); the API's answers never hold a local path either way. A job's events (Server-Sent
+Events) pass uncompressed and unbuffered, so its progress and its end reach the page as they happen. Caddy's binary
+carries the file capability `cap_net_bind_service`, so the proxy alone keeps that one capability (every other is
+dropped, with no new privileges). Admin › System (`GET /api/v1/admin/network`) reads what still blocks
 it on Windows. Never a router port forward, UPnP or a tunnel. Behind `netsh portproxy`, every LAN client reaches Caddy
 from the Windows host's address: the sign-in throttle by address and the audit log then see one address (the
 per-account lockout still holds).

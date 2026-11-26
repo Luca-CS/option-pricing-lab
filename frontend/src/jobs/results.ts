@@ -27,14 +27,17 @@ export type Envelope<K extends keyof JobResults> = {
 };
 
 /** The job, and its envelope once it is done (null before, or if it is of another kind). A job `followed` by its
- * events (the jobs tray) gets its end from them; another is asked again every two seconds until it ends. */
+ * events (the jobs tray) gets its end from them, and is asked again every 15 s besides; another is asked every two
+ * seconds until it ends. */
 export function useJobResult<K extends keyof JobResults>(kind: K, jobId: string | null | undefined, followed: boolean) {
   const job = useQuery({
     queryKey: ["job", jobId],
     queryFn: () => ok(api.GET("/api/v1/jobs/{job_id}", { params: { path: { job_id: jobId ?? "" } } })),
     enabled: Boolean(jobId),
+    // followed by its events, a running job is still asked every 15 s: a proxy that holds the events back never
+    // leaves the page on a job that ended long ago
     refetchInterval: (q) =>
-      q.state.data && ["queued", "running"].includes(q.state.data.state) && !followed ? 2000 : false,
+      q.state.data && ["queued", "running"].includes(q.state.data.state) ? (followed ? 15_000 : 2000) : false,
   });
   const j = job.data;
   const envelope = j && j.state === "done" && j.kind === kind && j.result ? (j.result as unknown as Envelope<K>) : null;

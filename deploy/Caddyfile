@@ -17,9 +17,19 @@
 
 {$OPTLAB_LAN_NAMES} {
 	tls internal
-	encode zstd gzip
-	# Host and X-Forwarded-For pass as they are; the api trusts the latter from 172.30.0.10 (this proxy) only
-	reverse_proxy api:8765
+	# Host and X-Forwarded-For pass as they are; the api trusts the latter from 172.30.0.10 (this proxy) only.
+	# A job's events (Server-Sent Events) pass as they come: compressed, they would wait in the encoder's buffer and a
+	# job's end would never reach the page
+	@events path /api/v1/jobs/*/events
+	handle @events {
+		reverse_proxy api:8765 {
+			flush_interval -1
+		}
+	}
+	handle {
+		encode zstd gzip
+		reverse_proxy api:8765
+	}
 	header {
 		-Server
 		Strict-Transport-Security "max-age=31536000"
