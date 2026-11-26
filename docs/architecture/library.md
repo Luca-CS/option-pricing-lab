@@ -33,9 +33,14 @@ A C++/CUDA engine behind a nanobind module ([ADR-0008](adr/0008-native-engine-na
 - **Path engine** (`paths.hpp`, `leverage.hpp`): one header for the CPU in double and the GPU in float. `plan()` turns a
   model or a basket into arrays (local variance and squared leverage as uniform rows per step), `run()` simulates a
   range of pairs.
-- **Reproducibility**: normals are Philox, a function of (seed, pair, rank of the normal), so prices depend on
-  (seed, n_paths) only, and the CPU and the GPU share their draws. GPU reductions use `atomicAdd`, so their last bits
+- **Reproducibility**: normals are Philox, a function of (seed, pair, stream, rank of the normal), so prices depend
+  on (seed, n_paths) only, and the CPU and the GPU share their draws. GPU reductions use `atomicAdd`, so their last bits
   may vary from run to run; paths do not.
+- **Two streams per pair**: stream 0 holds the spots (and Heston's variance residuals and the mixer's common normal,
+  interleaved per step); stream 1 holds the variance residuals of a simulation with an SLV name. An SLV name thus reads
+  the spot normals of local vol on the same seed, as NumPy's `spot_driven` does, and the SLV reserve is a difference on
+  common random numbers: on a 2-year Phoenix at 100,000 paths, the SE of the gap is 0.026 % of notional (NumPy 0.026;
+  0.048 with one stream), and 0.002 at a mix of 0 (NumPy 0.0016; 0.047 with one stream).
 - **Choosing an engine**: `engine=` on `price_many`, `optlab.core.engines.set_default`, or `$OPTLAB_ENGINE`. Outside
   the engine's cases (or without a GPU) the call falls back to NumPy and says why.
 
