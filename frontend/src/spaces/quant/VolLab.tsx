@@ -1,7 +1,9 @@
 // The vol lab (Quant › Vol lab): a day of real option quotes from the lake, the smile with its bid and ask, and SSVI,
 // SVI, Heston and SLV fitted to it: each model's error against the spread by maturity (RMSE in bp of vol, the share of
-// quotes it puts inside the spread). Every fit is stored as a run that can be fitted again to check it reproduces.
-import { Button, Checkbox, Group, Select, Text } from "@mantine/core";
+// quotes it puts inside the spread), and its fitted parameters. The fit's settings (which maturities, how quotes are
+// weighted, a moneyness window, the quality filter, Heston's strikes) are the quant's; only those changed are sent.
+// Every fit is stored as a run that can be fitted again to check it reproduces.
+import { Accordion, Button, Checkbox, Group, NumberInput, SegmentedControl, Select, Text } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, ok, type Schemas } from "../../api/client";
@@ -15,12 +17,43 @@ import { JobProgress } from "../../ui/Flow";
 import { Panel } from "../../ui/Panel";
 import { Empty, Failure, Loading } from "../../ui/States";
 import { commonClasses as c, DataTable } from "../common";
+import { FittedParams } from "./Params";
 
 const MODEL_LABEL: Record<string, string> = { svi: "SVI", ssvi: "SSVI", heston: "Heston", slv: "SLV" };
 type FitModel = NonNullable<Schemas["FitIn"]["models"]>[number];
 // the models the fit route takes (the type checks each against the document)
 const FITTABLE = ["ssvi", "svi", "heston"] satisfies FitModel[];
 const label = (m: string) => MODEL_LABEL[m] ?? m;
+const TARGETS = [1 / 12, 0.25, 0.5, 1, 2, 3, 5];
+
+/** A target maturity as a desk says it: 1m, 3m, 6m, 1y, 2y. */
+export function tenorLabel(t: number): string {
+  return t < 1 ? `${Math.round(t * 12)}m` : `${Number(t.toFixed(2))}y`;
+}
+
+type FitSettings = Pick<
+  Schemas["FitIn"],
+  "maturities" | "weights" | "moneyness" | "max_rel_spread" | "n_strikes_heston"
+>;
+
+/** The settings a fit sends: only those that differ from the lab's defaults, so a default fit keeps its run id. */
+export function fitSettings(s: {
+  targets: number[];
+  chosen: number[] | null;
+  weights: "spread" | "equal";
+  lo: number | string;
+  hi: number | string;
+  maxSpread: number | string;
+  hestonStrikes: number | string;
+}): FitSettings {
+  const out: FitSettings = {};
+  if (s.chosen && s.chosen.length !== s.targets.length) out.maturities = [...s.chosen].sort((a, b) => a - b);
+  if (s.weights !== "spread") out.weights = s.weights;
+  if (typeof s.lo === "number" && typeof s.hi === "number") out.moneyness = [s.lo / 100, s.hi / 100];
+  if (typeof s.maxSpread === "number") out.max_rel_spread = s.maxSpread / 100;
+  if (typeof s.hestonStrikes === "number") out.n_strikes_heston = s.hestonStrikes;
+  return out;
+}
 
 export default function VolLab() {
   const me = useMe().data;
@@ -35,6 +68,26 @@ export default function VolLab() {
   const shownDay = day ?? set?.days?.at(-1) ?? null;
   const [models, setModels] = useState<string[]>(["ssvi", "svi", "heston"]);
   const [T, setT] = useState<string | null>(null);
+  const defaults = (days.data?.defaults ?? {}) as Record<string, unknown>;
+  const targets = Array.isArray(defaults.targets) ? (defaults.targets as number[]) : TARGETS;
+  const [chosen, setChosen] = useState<string[] | null>(null);
+  const [weights, setWeights] = useState<"spread" | "equal">("spread");
+  const [lo, setLo] = useState<number | string>("");
+  const [hi, setHi] = useState<number | string>("");
+  const [maxSpread, setMaxSpread] = useState<number | string>("");
+  const [hestonStrikes, setHestonStrikes] = useState<number | string>("");
+  const picked = chosen ?? targets.map(String);
+  const windowBad = typeof lo === "number" && typeof hi === "number" && lo >= hi;
+  const settings = fitSettings({
+    targets,
+    chosen: chosen ? chosen.map(Number) : null,
+    weights,
+    lo,
+    hi,
+    maxSpread,
+    hestonStrikes,
+  });
+  const changed = Object.keys(settings).length;
   const quotes = useQuery({
     queryKey: ["quant", "vollab", "quotes", set?.underlying, shownDay, set?.source],
     queryFn: () =>
@@ -132,7 +185,7 @@ export default function VolLab() {
               ) : (
                 <Button
                   size="sm"
-                  disabled={!shownDay || models.length === 0}
+                  disabled={!shownDay || models.length === 0 || picked.length === 0 || windowBad}
                   loading={fit.start.isPending}
                   onClick={() =>
                     fit.start.mutate(() =>
@@ -143,6 +196,7 @@ export default function VolLab() {
                             day: shownDay ?? "",
                             source: set.source ?? null,
                             models: models as FitModel[],
+                            ...settings,
                           },
                         }),
                       ),
@@ -153,6 +207,91 @@ export default function VolLab() {
                 </Button>
               ))}
           </Group>
+          <Accordion variant="contained" chevronPosition="left">
+            <Accordion.Item value="settings">
+              <Accordion.Control>
+                Fit settings{" "}
+                <Text span size="xs" c="dimmed">
+                  {changed === 0 ? "the lab's defaults" : `${changed} changed`}
+                </Text>
+              </Accordion.Control>
+              <Accordion.Panel>
+                <Group gap="lg" align="flex-end" wrap="wrap">
+                  <Checkbox.Group label="Maturities" value={picked} onChange={setChosen}>
+                    <Group gap="sm" mt={6}>
+                      {targets.map((t) => (
+                        <Checkbox key={t} value={String(t)} label={tenorLabel(t)} size="xs" />
+                      ))}
+                    </Group>
+                  </Checkbox.Group>
+                  <div>
+                    <Text size="sm" fw={500} mb={6}>
+                      Weights
+                    </Text>
+                    <SegmentedControl
+                      size="xs"
+                      value={weights}
+                      onChange={(v) => setWeights(v as "spread" | "equal")}
+                      data={[
+                        { value: "spread", label: "By the spread" },
+                        { value: "equal", label: "Equal" },
+                      ]}
+                      aria-label="Weights"
+                    />
+                  </div>
+                  <NumberInput
+                    label="Moneyness from, % of F"
+                    size="sm"
+                    w={170}
+                    min={20}
+                    max={300}
+                    value={lo}
+                    onChange={setLo}
+                    placeholder="every quote"
+                  />
+                  <NumberInput
+                    label="to, % of F"
+                    size="sm"
+                    w={120}
+                    min={20}
+                    max={300}
+                    value={hi}
+                    onChange={setHi}
+                    placeholder="every quote"
+                    error={windowBad ? "above the low bound" : undefined}
+                  />
+                  <NumberInput
+                    label="Widest spread, % of mid"
+                    size="sm"
+                    w={180}
+                    min={2}
+                    max={200}
+                    value={maxSpread}
+                    onChange={setMaxSpread}
+                    placeholder={formatNumber(
+                      typeof defaults.max_rel_spread === "number" ? defaults.max_rel_spread * 100 : null,
+                      { digits: 0 },
+                    )}
+                  />
+                  <NumberInput
+                    label="Heston's strikes per maturity"
+                    size="sm"
+                    w={210}
+                    min={6}
+                    max={80}
+                    value={hestonStrikes}
+                    onChange={setHestonStrikes}
+                    placeholder={String(defaults.n_strikes_heston ?? "")}
+                  />
+                </Group>
+                <Text size="xs" c="dimmed" mt="sm">
+                  The closest expiry to each maturity is fitted. By the spread, a quote counts by the inverse of its
+                  bid-ask in vol; a window keeps the quotes between two strikes over the forward. A run keeps its
+                  settings, and fitting it again uses them.
+                </Text>
+              </Accordion.Panel>
+            </Accordion.Item>
+          </Accordion>
           {fit.failed && <Failure error={new Error(fit.failed)} title="The fit failed" />}
           {(set.quality ?? []).length > 0 && (
             <Text size="sm" c="dimmed">
@@ -255,6 +394,11 @@ export default function VolLab() {
                   ],
                 }))}
               />
+            </Panel>
+          )}
+          {result && Object.keys(result.fits ?? {}).length > 0 && (
+            <Panel title="The fitted parameters" hint="as fitted, with what they mean" flush>
+              <FittedParams fits={result.fits ?? {}} />
             </Panel>
           )}
         </>

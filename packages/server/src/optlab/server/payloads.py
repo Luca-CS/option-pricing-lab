@@ -934,6 +934,32 @@ class BasketQuotes(Doc):
     rows: list[BasketQuote] = []
 
 
+class SviSurfaceParams(Doc):
+    kind: str | None = None
+    maturities: list[float] = []
+    params: list[list[float]] = Field(
+        default=[], description="per maturity, raw SVI of the total variance: a, b, rho, m, sigma"
+    )
+
+
+class HestonFit(Doc):
+    v0: float
+    kappa: float
+    theta: float
+    xi: float
+    rho: float
+
+
+class CalibrationParams(Doc):
+    svi: SviSurfaceParams | None = None
+    heston: HestonFit | None = None
+    feller: float | None = Field(
+        default=None, description="2 kappa theta / xi^2: at least 1 keeps the variance positive"
+    )
+    arbitrage: dict[str, Any] | None = Field(default=None, description="the surface's butterfly and calendar checks")
+    slv: dict[str, Any] | None = Field(default=None, description="mix and particles of the leverage")
+
+
 class ModelRisk(Doc):
     """The calibration's exotics under each model (price ± SE), and its fit by maturity; `note` when there is none."""
 
@@ -944,6 +970,7 @@ class ModelRisk(Doc):
         default=[], description="by maturity: quotes, spread and each model's error, bp"
     )
     note: str | None = None
+    params: CalibrationParams | None = Field(default=None, description="the calibrated parameters of the market in use")
 
 
 class VolLabSet(Doc):

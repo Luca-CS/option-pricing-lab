@@ -59,12 +59,37 @@ test("the vol lab, the calibration and the engine say what they hold", async ({ 
     page.getByText("No option quotes in this lake").or(page.getByRole("button", { name: "Fit the models" })),
   ).toBeVisible();
   await accessible(page);
+  // the fit's settings are the quant's: open them, the defaults say so
+  const settings = page.getByRole("button", { name: /Fit settings/ });
+  if (await settings.isVisible()) {
+    await settings.click();
+    await expect(page.getByText("the lab's defaults")).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Moneyness from, % of F" })).toBeVisible();
+    await accessible(page);
+    // a fit with the quotes weighted alike, inside 80 to 120 % of the forward: its parameters, model by model
+    await page.getByText("Equal", { exact: true }).click();
+    await page.getByRole("textbox", { name: "Moneyness from, % of F" }).fill("80");
+    await page.getByRole("textbox", { name: "to, % of F" }).fill("120");
+    await expect(page.getByText("2 changed")).toBeVisible();
+    await page.getByRole("button", { name: "Fit the models" }).click();
+    await expect(page.getByRole("heading", { name: "The fitted parameters" })).toBeVisible({ timeout: 120_000 });
+    await expect(page.getByRole("table", { name: "SVI's parameters by maturity" })).toBeVisible();
+    await page.getByRole("radiogroup", { name: "Model" }).getByText("Heston", { exact: true }).click();
+    await expect(page.getByRole("table", { name: "Heston's parameters" })).toContainText("long-run vol");
+    await accessible(page);
+  }
   await page.goto("/quant/calibration");
   await expect(
     page
       .getByText("No model-risk table for this market")
       .or(page.getByRole("heading", { name: /exotics under each model/ })),
   ).toBeVisible();
+  // the calibrated parameters of the market in use, when it has a model-risk table
+  if (await page.getByRole("heading", { name: /exotics under each model/ }).isVisible()) {
+    await expect(page.getByRole("table", { name: "Heston's parameters" })).toContainText("long-run vol");
+    await expect(page.getByRole("table", { name: "The surface's SVI parameters" })).toBeVisible();
+    await expect(page.getByText(/Feller 2κθ/)).toBeVisible();
+  }
   await accessible(page);
   await page.goto("/quant/engine");
   await expect(page.getByText("In use", { exact: true })).toBeVisible();

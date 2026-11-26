@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { modelSpread } from "./Calibration";
 import { interpolate, strikeMoneyness, tenorYears } from "./Market";
 import { cashPaid } from "./Replay";
+import { fitSettings, tenorLabel } from "./VolLab";
 
 describe("the quant screens' readings", () => {
   it("read a risk grid's tenor and strike", () => {
@@ -31,5 +32,28 @@ describe("the quant screens' readings", () => {
       { date: "2021-01-04", payment: "2021-01-11", amount: 100 },
     ];
     expect(cashPaid(["2020-04-08", "2020-04-09", "2021-01-11"], events)).toEqual([0, 1.14, 101.14]);
+  });
+
+  it("send a fit only the settings the quant changed", () => {
+    const targets = [1 / 12, 0.25, 0.5, 1, 2];
+    const base = {
+      targets,
+      chosen: null,
+      weights: "spread" as const,
+      lo: "",
+      hi: "",
+      maxSpread: "",
+      hestonStrikes: "",
+    };
+    expect(fitSettings(base)).toEqual({});
+    expect(fitSettings({ ...base, chosen: [...targets] })).toEqual({});
+    expect(fitSettings({ ...base, chosen: [1, 0.25], weights: "equal", lo: 80, hi: 120, maxSpread: 30 })).toEqual({
+      maturities: [0.25, 1],
+      weights: "equal",
+      moneyness: [0.8, 1.2],
+      max_rel_spread: 0.3,
+    });
+    expect(fitSettings({ ...base, lo: 80 })).toEqual({}); // half a window is no window
+    expect([1 / 12, 0.5, 1, 2.5].map(tenorLabel)).toEqual(["1m", "6m", "1y", "2.5y"]);
   });
 });
