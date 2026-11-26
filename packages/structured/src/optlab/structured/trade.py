@@ -74,6 +74,29 @@ class Trade:
     def term_sheet(self) -> TermSheet | None:
         return TermSheet.from_dict(self.product["term_sheet"]) if self.product["kind"] == "term_sheet" else None
 
+    @property
+    def desk_side(self) -> str:
+        """`short` when the desk sold the product (a negative quantity: the book holds the issuer's side), else `long`."""
+        return "short" if self.quantity < 0 else "long"
+
+    def side_check(self) -> dict | None:
+        """A warning when the quantity's sign contradicts the sheet's `costs.side`: a note priced as sold but booked
+        long, or the reverse. Not a refusal, since buying back a sold note is legitimate."""
+        sheet = self.term_sheet()
+        if sheet is None or not self.quantity:
+            return None
+        priced = sheet.get("costs.side")
+        expected = {"sell": "short", "buy": "long"}.get(priced)
+        if expected is None or expected == self.desk_side:
+            return None
+        verb = "sold" if priced == "sell" else "bought"
+        return {
+            "priced_side": priced,
+            "desk_side": self.desk_side,
+            "message": f"priced as {verb} by the desk, but booked desk {self.desk_side} (quantity {self.quantity:+g}): "
+            f"a {verb} note has a {'negative' if priced == 'sell' else 'positive'} quantity",
+        }
+
     def to_position(self, fixings: dict | None = None):
         from optlab.structured.portfolio import Position
 

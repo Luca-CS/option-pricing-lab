@@ -63,7 +63,7 @@ function DayDetail({ day, order }: { day: Day; order: string[] }) {
           label={`The P&L of ${day.to} explained step by step`}
         />
       </Panel>
-      <Panel title="Against the Greeks' prediction" hint="currency" flush>
+      <Panel title="Against the Greeks' prediction" hint="currency, desk side" flush>
         <DataTable
           caption={`Steps of ${day.to} against the prediction of the Greeks`}
           head={["Step", "Revalued ± SE", "Predicted", "Unexplained"]}
@@ -175,7 +175,7 @@ export default function Pnl() {
             )}
           </KpiRow>
           {tradeId && (
-            <Panel title={`${tradeId} over the period, step by step`} hint="currency">
+            <Panel title={`${tradeId} over the period, step by step`} hint="currency, desk side">
               {trade ? (
                 <WaterfallChart
                   start={{ label: "start", value: 0 }}
@@ -193,7 +193,7 @@ export default function Pnl() {
             </Panel>
           )}
           <div className={c.grid}>
-            <Panel title="Cumulated, and day by day" hint="currency">
+            <Panel title="Cumulated, and day by day" hint="currency, desk side">
               <SeriesChart
                 x={p.days ?? []}
                 series={[
@@ -243,7 +243,7 @@ export default function Pnl() {
               }))}
             />
           </Panel>
-          <Panel title="By trade" hint="over the period" flush>
+          <Panel title="By trade" hint="desk side, over the period" flush>
             <DataTable
               caption="The period's P&L by trade"
               head={["Trade", "P&L", ...order.map(stepLabel)]}

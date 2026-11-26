@@ -238,6 +238,8 @@ def trade_json(trade) -> dict:
             "book": trade.book,
             "status": trade.status,
             "quantity": trade.quantity,
+            "desk_side": trade.desk_side,
+            "side_check": trade.side_check(),
             "trade_date": trade.trade_date,
             "strike_date": trade.strike_date,
             "counterparty": trade.counterparty,

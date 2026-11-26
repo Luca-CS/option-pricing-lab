@@ -290,7 +290,7 @@ export default function Stress() {
           </Group>
         </Stack>
       </Modal>
-      <Panel title="The book under the library" hint="each scenario a full revaluation on the base's seed">
+      <Panel title="The book under the library" hint="desk side; each scenario a full revaluation on the base's seed">
         <RunBar
           operation="run_scenarios"
           label="Run the library on the book"

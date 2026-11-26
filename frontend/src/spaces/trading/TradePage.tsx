@@ -1,7 +1,7 @@
 // A trade (Trading › a trade): what it is, its sheet as booked, its value at today's market, the reserve it froze and
 // what is left, its events (paid, missed, to come), its versions and the quote it came from. A trader edits it (each
 // edit a new version), deletes it (with an undo) or quotes a copy.
-import { Anchor, Badge, Button, Group, Modal, NumberInput, Select, Stack, TextInput } from "@mantine/core";
+import { Anchor, Badge, Button, Group, Modal, Select, Stack, TextInput } from "@mantine/core";
 import { modals } from "@mantine/modals";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -13,12 +13,13 @@ import { can, useMe } from "../../auth/session";
 import { useScreenJob } from "../../jobs/useScreenJob";
 import { type Estimate, formatDate, formatNumber, formatPercent } from "../../lib/format";
 import { choiceLabel, describeSheet, display, suffix } from "../../lib/sheet";
+import { type DeskSide, sideOf, signedQuantity } from "../../lib/side";
 import { JobProgress, Timeline, type TimelineEvent } from "../../ui/Flow";
 import { Kpi, KpiRow } from "../../ui/Kpi";
 import { Panel } from "../../ui/Panel";
 import { Failure, Loading } from "../../ui/States";
 import { Est, Num } from "../../ui/Value";
-import { commonClasses as c, DataTable, QuoteLink } from "../common";
+import { commonClasses as c, DataTable, DeskSideBadge, QuoteLink, SideCheckAlert, SideSize } from "../common";
 
 type Detail = Schemas["TradeDetail"];
 
@@ -37,7 +38,8 @@ const PAST: Record<string, TimelineEvent["kind"]> = {
 
 function EditDialog({ detail, opened, onClose }: { detail: Detail; opened: boolean; onClose: () => void }) {
   const t = detail.trade;
-  const [quantity, setQuantity] = useState<number | string>(t.quantity);
+  const [side, setSide] = useState<DeskSide>(sideOf(t.quantity).side);
+  const [size, setSize] = useState<number | string>(sideOf(t.quantity).size);
   const [counterparty, setCounterparty] = useState(t.counterparty ?? "");
   const [book, setBook] = useState(t.book);
   const [status, setStatus] = useState(t.status);
@@ -45,7 +47,7 @@ function EditDialog({ detail, opened, onClose }: { detail: Detail; opened: boole
   const save = useMutation({
     mutationFn: () => {
       const body: Schemas["TradeUpdate"] = {
-        quantity: Number(quantity),
+        quantity: signedQuantity(side, Number(size)),
         counterparty,
         book,
         status: status as Schemas["TradeUpdate"]["status"],
@@ -60,7 +62,7 @@ function EditDialog({ detail, opened, onClose }: { detail: Detail; opened: boole
   return (
     <Modal opened={opened} onClose={onClose} title={`Edit ${t.trade_id}`}>
       <Stack gap="sm">
-        <NumberInput label="Quantity" value={quantity} onChange={setQuantity} decimalScale={4} />
+        <SideSize side={side} onSide={setSide} size={size} onSize={setSize} />
         <TextInput label="Counterparty" value={counterparty} onChange={(e) => setCounterparty(e.currentTarget.value)} />
         <TextInput label="Book" value={book} onChange={(e) => setBook(e.currentTarget.value)} />
         <Select
@@ -75,7 +77,7 @@ function EditDialog({ detail, opened, onClose }: { detail: Detail; opened: boole
           <Button variant="default" onClick={onClose}>
             Cancel
           </Button>
-          <Button loading={save.isPending} onClick={() => save.mutate()}>
+          <Button loading={save.isPending} onClick={() => save.mutate()} disabled={!(Number(size) > 0)}>
             Save a new version
           </Button>
         </Group>
@@ -203,10 +205,16 @@ export default function TradePage() {
             )}
           </Group>
           {job.failed && <Failure error={new Error(job.failed)} title="The valuation failed" />}
+          <SideCheckAlert check={t.side_check} />
           <KpiRow label="The trade">
             <Kpi
               label="Quantity"
-              sub={`notional ${formatNumber((sheet?.general as { notional?: number } | undefined)?.notional)}`}
+              sub={
+                <>
+                  <DeskSideBadge trade={t} /> notional{" "}
+                  {formatNumber((sheet?.general as { notional?: number } | undefined)?.notional)}
+                </>
+              }
             >
               <Num value={t.quantity} digits={2} sign />
             </Kpi>

@@ -1,10 +1,11 @@
 // What the screens of every space share: the placeholder of a screen still to come, small tables, and the link of a
 // trade or a quote with the places it opens in (the bridges of docs/ux.md §3).
-import { Anchor } from "@mantine/core";
+import { Alert, Anchor, Badge, NumberInput, SegmentedControl, Stack, Text, Tooltip } from "@mantine/core";
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router";
 import { SpacePage } from "../app/Shell";
 import { ENTITY_PAGES, spaceOf } from "../app/spaces";
+import type { DeskSide } from "../lib/side";
 import { EntityLink } from "../ui/Markers";
 import { Empty } from "../ui/States";
 import classes from "./common.module.css";
@@ -103,3 +104,70 @@ export function DataTable({
 }
 
 export { classes as commonClasses };
+
+/** The desk's side and a positive size: what a booking or an edit asks, instead of a signed quantity. */
+export function SideSize({
+  side,
+  onSide,
+  size,
+  onSize,
+  unit = "notionals",
+}: {
+  side: DeskSide;
+  onSide: (side: DeskSide) => void;
+  size: number | string;
+  onSize: (size: number | string) => void;
+  unit?: string;
+}) {
+  return (
+    <Stack gap={4}>
+      <Text size="sm" fw={500} component="span" id="desk-side-label">
+        The desk
+      </Text>
+      <SegmentedControl
+        aria-labelledby="desk-side-label"
+        value={side}
+        onChange={(v) => onSide(v as DeskSide)}
+        data={[
+          { value: "sold", label: "Sold" },
+          { value: "bought", label: "Bought" },
+        ]}
+      />
+      <NumberInput
+        label="Size"
+        description={`in ${unit}; the side gives the sign (sold: the book holds the issuer's side)`}
+        value={size}
+        onChange={onSize}
+        min={0}
+        step={0.5}
+        decimalScale={4}
+        allowNegative={false}
+      />
+    </Stack>
+  );
+}
+
+/** "desk short" or "desk long", with the server's warning when the sign contradicts the side the sheet was priced for. */
+export function DeskSideBadge({ trade }: { trade: { desk_side: string; side_check?: { message: string } | null } }) {
+  const badge = (
+    <Badge
+      component="span"
+      variant="light"
+      color={trade.side_check ? "amber" : trade.desk_side === "short" ? "accent" : "gray"}
+    >
+      desk {trade.desk_side}
+      {trade.side_check ? " ⚠" : ""}
+    </Badge>
+  );
+  return trade.side_check ? <Tooltip label={trade.side_check.message}>{badge}</Tooltip> : badge;
+}
+
+/** The server's side check as an alert on a trade's page. */
+export function SideCheckAlert({ check }: { check?: { message: string } | null }) {
+  if (!check) return null;
+  return (
+    <Alert color="amber" title="The side contradicts the price">
+      This trade was {check.message}. Buying back a sold note is legitimate; otherwise edit its side.
+    </Alert>
+  );
+}

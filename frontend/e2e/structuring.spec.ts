@@ -27,10 +27,21 @@ test("the structurer builds a Phoenix, solves its coupon, and books it into the 
   await accessible(page);
   await page.getByRole("button", { name: "Book it" }).click();
   const dialog = page.getByRole("dialog", { name: "Book this quote" });
+  // the side defaults to the one the sheet was priced for (sold), the size is positive
+  const sold = dialog.getByRole("radio", { name: "Sold" });
+  await expect(sold).toBeChecked();
+  await dialog.getByText("Bought", { exact: true }).click();
+  await expect(dialog.getByText(/will carry a side warning/)).toBeVisible();
+  await dialog.getByText("Sold", { exact: true }).click();
+  await expect(dialog.getByText(/will carry a side warning/)).toHaveCount(0);
+  await dialog.getByRole("textbox", { name: "Size" }).fill("10");
   await dialog.getByRole("textbox", { name: "Counterparty" }).fill("E2E bank");
   await dialog.getByRole("button", { name: "Book", exact: true }).click();
   await expect(page).toHaveURL(/\/trading\/trades\/[\w-]+$/);
   await expect(page.getByText(/^Booked as /)).toBeVisible();
+  await expect(page.getByText("desk short").first()).toBeVisible();
+  await expect(page.getByText(/−10.00/).first()).toBeVisible();
+  await expect(page.getByText("The side contradicts the price")).toHaveCount(0);
 });
 
 test("a corridor variance swap is quoted on its fair strike and booked at it", async ({ page }) => {
