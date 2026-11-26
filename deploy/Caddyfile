@@ -6,6 +6,8 @@
 {
 	admin off
 	auto_https disable_redirects
+	# a browser opening https://<LAN IP>:8443 sends no SNI (TLS has none for an address): the certificate of this name
+	default_sni {$OPTLAB_LAN_SNI}
 	http_port 8080
 	https_port 8443
 	servers {
