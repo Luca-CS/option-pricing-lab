@@ -227,6 +227,12 @@ class Resolved:
         }
 
 
+# The products whose exposure to an input the table cannot assume: a variance swap's investor is long vol where a note's
+# is short, an accumulator's sign depends on where the strike and the knock-out sit. Their overs keep the table's size
+# and take the sign against the desk, measured on the product as for groups that disagree.
+MEASURED_SIGNS = ("variance", "accumulator")
+
+
 def resolve(table: dict | None, sheet: TermSheet) -> Resolved:
     """What a sheet's costs are: the defaults of its groups and tier, with what the sheet overrides."""
     groups_table = merged(table)
@@ -262,6 +268,8 @@ def resolve(table: dict | None, sheet: TermSheet) -> Resolved:
         values = {g: t[f.name] for g, t in by_group.items() if f.name in t}
         override = sheet.get(f"costs.{f.name}")
         default, conflict = _prudent(f.name, values) if values and complete else (None, None)
+        if sheet.mask.name in MEASURED_SIGNS and f.name in BUMPS and default and conflict is None:
+            conflict = (-abs(default), abs(default))
         missing = override is None and default is None
         params[f.name] = {
             "value": override if override is not None else default,

@@ -592,7 +592,11 @@ def _bump_lines(single, x, base_pairs, at_base, inputs, values, line):
         note = ""
         if key in inputs.candidates:
             a, b = inputs.candidates[key]
-            note = f"the groups disagree ({a:+.4f}, {b:+.4f}): the one against the desk on this product"
+            note = (
+                f"its sign measured on this product ({a:+.4f}, {b:+.4f}): the one against the desk"
+                if a == -b
+                else f"the groups disagree ({a:+.4f}, {b:+.4f}): the one against the desk on this product"
+            )
         out.append(
             line(
                 key,

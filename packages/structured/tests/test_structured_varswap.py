@@ -167,3 +167,19 @@ def test_a_var_swap_quote_with_the_desk_costs_keeps_its_lines_on_the_strike():
     keys = {line.key for line in q.desk.lines}
     assert "vol" in keys and not any(k.startswith("digital") for k in keys)  # an overvol, no digital to overhedge
     assert q.strike["value"] > 0.05
+
+
+def test_the_overs_of_a_variance_swap_take_their_sign_against_the_desk():
+    """The table's overs assume a client short vol; a variance swap's client is long it. Their signs are measured on the
+    product: the desk selling variance adds vol, every over then costs the client."""
+    from optlab.structured.defaults import resolve
+
+    sheet = preset("variance_swap", **{"general.maturity_months": 6})
+    inputs = resolve(None, sheet).inputs()
+    assert {"vol", "skew"} <= set(inputs.candidates)
+    q = quote(sheet, CTX, n_paths=8_000, costs=inputs)
+    assert q.desk is not None
+    lines = {line.key: line for line in q.desk.lines}
+    assert lines["vol"].cost > 0 and "measured on this product" in lines["vol"].note
+    assert sum(line.cost for line in q.desk.lines if line.kind == "bump") > 0
+
