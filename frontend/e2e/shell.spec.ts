@@ -18,7 +18,7 @@ test("each role lands on its home and sees its own space first; Admin is an admi
   await page.context().clearCookies();
   await signInAs(page, "structurer");
   await expect(page).toHaveURL(/\/structuring$/);
-  await expect(page.getByRole("link", { name: "Phoenix" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Phoenix/ })).toBeVisible();
 });
 
 test("the palette finds a trade and opens its page", async ({ page }) => {
