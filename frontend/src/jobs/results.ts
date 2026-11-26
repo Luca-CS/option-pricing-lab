@@ -13,6 +13,7 @@ export type JobResults = {
   scenarios: Schemas["ScenarioRun"];
   var: Schemas["VarRun"];
   eod: Schemas["EodResult"];
+  pnl_detail: Schemas["PnlDetail"];
   script: Schemas["ScriptPrice"];
   replay: Schemas["Replay"];
   fit: Schemas["VolFit"];

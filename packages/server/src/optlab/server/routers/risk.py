@@ -11,7 +11,7 @@ from optlab.server.payloads import PnlHistory, RiskRunPage, ScenarioLibrary, Sto
 from optlab.server.present import estimates
 from optlab.server.report import risk_report
 from optlab.server.routers._common import ACCEPTED, Id, audited, desk, page, report, submit
-from optlab.server.schemas import EodIn, GreeksIn, LadderIn, ScenarioRunIn, ScenariosIn, VarIn, body
+from optlab.server.schemas import EodIn, GreeksIn, LadderIn, PnlDetailIn, ScenarioRunIn, ScenariosIn, VarIn, body
 from optlab.server.web import access, current_user
 
 router = APIRouter(prefix="/risk", tags=["risk"])
@@ -80,6 +80,18 @@ def pnl(
     """The cumulated explained P&L of the EOD runs between two dates."""
     return estimates(
         _risk(request).pnl(start.isoformat() if start else None, end.isoformat() if end else None), risk=True
+    )
+
+
+@router.post("/pnl/detail", **access("trader", "risk"), status_code=202, responses=ACCEPTED)
+def pnl_detail(d: PnlDetailIn, request: Request):
+    """A day of the explained P&L opened: the spot, vol and skew steps under each spot-vol rule, and under one rule the vol
+    move node by node (or tenor by tenor), each a full revaluation, with the delta buckets (job `pnl_detail`)."""
+    return submit(
+        request,
+        "pnl_detail",
+        lambda: _risk(request).pnl_detail(body(d)),
+        detail={"from": d.from_.isoformat(), "to": d.to.isoformat(), "rule": d.rule, "detail": d.detail},
     )
 
 

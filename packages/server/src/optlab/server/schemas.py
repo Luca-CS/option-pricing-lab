@@ -162,6 +162,9 @@ class Bumps(Body):
     corr: float = Field(0.01, gt=0, le=0.5)
     skew: float = Field(0.01, gt=0, le=0.5)
     roll_days: int = Field(1, ge=1, le=30)
+    vol_shift: float = Field(
+        0.0, ge=0, le=2.0, description="s of the shifted vega, in vol: 0 moves the wings in proportion"
+    )
 
 
 class GreeksIn(Body):
@@ -210,6 +213,26 @@ class EodIn(Body):
     greeks: bool = True
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True, allow_inf_nan=False)
+
+
+class PnlDetailIn(Body):
+    """A day of the explained P&L opened: from the close of `from` to that of `to`."""
+
+    from_: dt.date = Field(..., alias="from")
+    to: dt.date
+    rule: Literal["sticky_moneyness", "sticky_strike", "realistic"] = Field(
+        "sticky_moneyness", description="the spot-vol rule of the spot step the node cascade starts from"
+    )
+    detail: Literal["node", "tenor"] = Field("node", description="the vol move node by node, or tenor by tenor")
+    options: RiskOptions = Field(default_factory=lambda: RiskOptions.model_validate({}))
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def _order(self) -> PnlDetailIn:
+        if self.to <= self.from_:
+            raise ValueError("`to` comes after `from`")
+        return self
 
 
 # --- quant -------------------------------------------------------------------------------------------------------------

@@ -4033,6 +4033,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/PnlRun"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PnlDetail"
                     }
                   ],
                   "title": "Response 200 Get Run"
@@ -4611,6 +4614,100 @@
         "security": [
           {
             "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/risk/pnl/detail": {
+      "post": {
+        "tags": [
+          "risk"
+        ],
+        "summary": "Pnl Detail",
+        "description": "A day of the explained P&L opened: the spot, vol and skew steps under each spot-vol rule, and under one rule the vol\nmove node by node (or tenor by tenor), each a full revaluation, with the delta buckets (job `pnl_detail`).",
+        "operationId": "pnl_detail",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PnlDetailIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "a job computes it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobAccepted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "invalid input: the fields at fault in `errors`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "a role or the CSRF header is missing",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "any other error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-roles": [
+          "risk",
+          "trader"
+        ],
+        "security": [
+          {
+            "session": [],
+            "csrf": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "the same key from the same user gives back the job it first created (another request under it is refused, 422); without one, the same request still queued or running is given back",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+            }
           }
         ]
       }
@@ -6987,6 +7084,14 @@
             "minimum": 1.0,
             "title": "Roll Days",
             "default": 1
+          },
+          "vol_shift": {
+            "type": "number",
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Vol Shift",
+            "description": "s of the shifted vega, in vol: 0 moves the wings in proportion",
+            "default": 0.0
           }
         },
         "additionalProperties": false,
@@ -10172,6 +10277,210 @@
         "title": "PnlDay",
         "description": "One day of the explained P&L: the cascade of full revaluations, each step's [value, se], the Greeks' prediction\nof each step and what they leave unexplained."
       },
+      "PnlDetail": {
+        "properties": {
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "pnl_detail"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "from": {
+            "type": "string",
+            "title": "From"
+          },
+          "to": {
+            "type": "string",
+            "title": "To"
+          },
+          "rule": {
+            "type": "string",
+            "title": "Rule"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "rules": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PnlRuleSteps"
+            },
+            "type": "object",
+            "title": "Rules",
+            "description": "by rule: the same total, split differently",
+            "default": {}
+          },
+          "unavailable": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Unavailable",
+            "description": "a rule left out, and why",
+            "default": {}
+          },
+          "names": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PnlNameDetail"
+            },
+            "type": "object",
+            "title": "Names",
+            "default": {}
+          },
+          "residual": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Estimate"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "the part of the move the grid does not hold"
+          },
+          "vol_total": {
+            "type": "number",
+            "title": "Vol Total",
+            "description": "vol + skew under the rule: the nodes and the residual add up to it"
+          },
+          "check": {
+            "type": "number",
+            "title": "Check",
+            "description": "vol_total less the nodes and the residual: zero but for rounding"
+          },
+          "grid": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Grid",
+            "default": {}
+          },
+          "n_paths": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Paths",
+            "description": "paths of each revaluation"
+          },
+          "pnl_run": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pnl Run"
+          },
+          "revaluations": {
+            "type": "integer",
+            "title": "Revaluations",
+            "default": 0
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "from",
+          "to",
+          "rule",
+          "detail",
+          "vol_total",
+          "check"
+        ],
+        "title": "PnlDetail",
+        "description": "A day of the explained P&L opened (job `pnl_detail`): the vol and skew steps node by node under one rule."
+      },
+      "PnlDetailIn": {
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date",
+            "title": "From"
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "title": "To"
+          },
+          "rule": {
+            "type": "string",
+            "enum": [
+              "sticky_moneyness",
+              "sticky_strike",
+              "realistic"
+            ],
+            "title": "Rule",
+            "description": "the spot-vol rule of the spot step the node cascade starts from",
+            "default": "sticky_moneyness"
+          },
+          "detail": {
+            "type": "string",
+            "enum": [
+              "node",
+              "tenor"
+            ],
+            "title": "Detail",
+            "description": "the vol move node by node, or tenor by tenor",
+            "default": "node"
+          },
+          "options": {
+            "$ref": "#/components/schemas/RiskOptions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "from",
+          "to"
+        ],
+        "title": "PnlDetailIn",
+        "description": "A day of the explained P&L opened: from the close of `from` to that of `to`."
+      },
       "PnlHistory": {
         "properties": {
           "from": {
@@ -10306,6 +10615,159 @@
         "type": "object",
         "title": "PnlHistory",
         "description": "The explained P&L cumulated from the EOD runs over a period (`note` says why it is empty)."
+      },
+      "PnlNameDetail": {
+        "properties": {
+          "level": {
+            "items": {
+              "$ref": "#/components/schemas/Estimate"
+            },
+            "type": "array",
+            "title": "Level",
+            "description": "per tenor: its at-the-money move on every strike",
+            "default": []
+          },
+          "shape": {
+            "items": {},
+            "type": "array",
+            "title": "Shape",
+            "description": "per tenor: its nodes beyond the level (± SE by tenor)",
+            "default": []
+          },
+          "by_tenor": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "By Tenor",
+            "description": "level + shape: which maturity made or lost",
+            "default": []
+          },
+          "predicted_level": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Predicted Level",
+            "description": "vega per tenor x the at-the-money move",
+            "default": []
+          },
+          "moves": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Moves",
+            "description": "the implied vol move at each node (strikes, tenors)",
+            "default": []
+          },
+          "deltas": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Deltas",
+            "description": "each node's forward call delta after the spot step",
+            "default": []
+          },
+          "nodes": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "$ref": "#/components/schemas/Estimate"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nodes",
+            "description": "node by node (strikes, tenors), ± SE"
+          },
+          "buckets": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Buckets",
+            "description": "the nodes by delta bucket (buckets, tenors)"
+          },
+          "skipped": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Skipped",
+            "description": "tenors whose tent the book does not reach: zero, exactly",
+            "default": []
+          },
+          "groups": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Groups",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "PnlNameDetail",
+        "description": "One name's vol move, opened: arrays by tenor, or (strikes, tenors) on the risk grid."
+      },
+      "PnlRuleSteps": {
+        "properties": {
+          "steps": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Estimate"
+            },
+            "type": "object",
+            "title": "Steps",
+            "description": "spot, vol, skew: each a full revaluation, ± SE",
+            "default": {}
+          },
+          "predicted": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Predicted",
+            "description": "the rule's delta and gamma, vega per tenor, skew vega",
+            "default": {}
+          },
+          "unexplained": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Unexplained",
+            "default": {}
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "PnlRuleSteps",
+        "description": "The spot, vol and skew steps of a day under one spot-vol rule, and what the Greeks of that rule predicted."
       },
       "PnlRun": {
         "properties": {
@@ -12164,7 +12626,7 @@
           "kind": {
             "type": "string",
             "title": "Kind",
-            "description": "risk, ladder, scenarios, var, eod, pnl"
+            "description": "risk, ladder, scenarios, var, eod, pnl, pnl_detail"
           },
           "day": {
             "type": "string",
@@ -16246,6 +16708,9 @@
     },
     "eod": {
       "$ref": "#/components/schemas/EodResult"
+    },
+    "pnl_detail": {
+      "$ref": "#/components/schemas/PnlDetail"
     },
     "var": {
       "$ref": "#/components/schemas/VarRun"

@@ -8,7 +8,9 @@ Desk cash conventions, in the payment currency, from the desk's side (the positi
 - vega: per +1 implied vol point, central; per +1 % of the vols (vega_relative); per tenor and per node of the grid
   (one-sided tents, `grid`), net (signed sum), gross (sum of the absolute nodes) and weighted (sum_T vega_T sqrt(1 y / T),
   also revalued directly as one shock, vega_weighted_direct); volga = change of vega per point, vanna = change of delta per
-  point; skew vega per +1 point of the 90-110 % rotation at one year;
+  point; skew vega per +1 point of the 90-110 % rotation at one year; shifted vega (vega_shifted): the at-the-money vol of
+  every tenor up one point, each strike by (sigma + s) / (sigma_ATM + s) points, an absolute move at the money and a
+  relative one in the wings (s = 0, the default `vol_shift`; a large s is the parallel vega), central;
 - theta: one business day of roll, market frozen; split into carry (the spot not drifting to its forward), events (cash of the
   day less its value the day before) and decay (the rest: time value, discounting, and what the day's fixings settle);
 - rho (rate: discount and forward), rho_discount, rho_forward, epsilon (dividend yield), repo: per +1 bp, central at
@@ -44,6 +46,7 @@ UNITS = {
     "vega": "currency per +1 implied vol point",
     "vega_relative": "currency per +1 % of every implied vol",
     "vega_weighted": "currency per +1 vol point x sqrt(1 y / T)",
+    "vega_shifted": "currency per +1 at-the-money vol point, the wings in proportion (sigma + s) / (sigma_ATM + s)",
     "volga": "currency per +1 vol point, per +1 vol point",
     "vanna": "currency per +1 % spot, per +1 vol point",
     "skew_vega": "currency per +1 vol point of the 90-110 % skew at one year",
@@ -66,6 +69,7 @@ class Bumps:
     corr: float = 0.01
     skew: float = 0.01
     roll_days: int = 1
+    vol_shift: float = 0.0  # s of the shifted vega, in vol (0.2 = 20 points)
 
     @classmethod
     def from_dict(cls, d: dict | None) -> Bumps:
@@ -136,6 +140,7 @@ def plan(
     for n in names:
         _plan_spot(S, M, n, b, o, env)
         _plan_vol(S, M, n, b, o, kxt, tenor_name)
+        _plan_shifted(S, M, n, b, (ctx.vols[n] if basket else ctx.surface))
         _plan_carry(S, M, n, b, o, env)
     _plan_totals(M, names, tenor_name)
     _plan_rates(S, M, cur, b, o)
@@ -219,6 +224,28 @@ def _plan_vol(S: dict, M: list, n: str, b: Bumps, o: GreekOptions, kxt: bool, te
     M.append(_one_sided(f"vega_weighted_direct|{n}|", f"w|{n}", unit_v))
 
 
+def shifted_move(surface, h: float, shift: float = 0.0) -> VolMove:
+    """The shifted vega's move of size h: sigma'(k, T) = sigma + h (sigma + s) / (sigma_ATM(T) + s), as relative and
+    absolute rows of the grid (a strike row of tents adds up to one, so each tenor moves by exactly that). A flat vol moves
+    in parallel."""
+    if np.isscalar(surface):
+        return VolMove(h)
+    atm = grid.node_vols(surface)[grid.STRIKES.index(1.0)]
+    rel, ab = {}, {}
+    for j, sigma in enumerate(atm):
+        for i in range(len(grid.STRIKES)):
+            rel[(i, j)] = h / (float(sigma) + shift)
+            if shift:
+                ab[(i, j)] = h * shift / (float(sigma) + shift)
+    return VolMove(nodes=ab, relative_nodes=rel)
+
+
+def _plan_shifted(S: dict, M: list, n: str, b: Bumps, surface) -> None:
+    S[f"vs+|{n}"] = Shock(vol={n: shifted_move(surface, b.vol, b.vol_shift)})
+    S[f"vs-|{n}"] = Shock(vol={n: shifted_move(surface, -b.vol, b.vol_shift)})
+    M.append(_central(f"vega_shifted|{n}|", f"vs+|{n}", f"vs-|{n}", 0.01 / b.vol))
+
+
 def _plan_carry(S: dict, M: list, n: str, b: Bumps, o: GreekOptions, env: RiskEnv) -> None:
     """Dividends and repo of a name (by tenor with `curves`), and its quanto correlation and FX vega."""
     unit_v = 0.01 / b.vol
@@ -255,6 +282,7 @@ def _plan_totals(M: list, names: list, tenor_name: dict) -> None:
         "skew_vega",
         "vega_net",
         "vega_weighted",
+        "vega_shifted",
         "epsilon",
     ):
         parts = [m for m in M if m.name.split("|")[0] == g and m.name.split("|")[1] in names]
@@ -440,6 +468,11 @@ def compute(
                 "warnings": run.warnings,
                 "names": names,
                 "smoothing_bias": None if run.smoothing_bias is None else run.smoothing_bias[2:],
+                # each node's forward call delta, to read the grid in delta (`grid.node_deltas`)
+                "node_deltas": {
+                    n: grid.node_deltas(ctx.vols[n] if isinstance(ctx, BasketContext) else ctx.surface).tolist()
+                    for n in names
+                },
             }
         )
     book = {k: [v, float(np.sqrt(book_var[k]))] for k, v in book_v.items()}
