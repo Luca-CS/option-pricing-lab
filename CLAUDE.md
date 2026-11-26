@@ -131,7 +131,9 @@ package's internals in `docs/architecture/library.md`, the decisions in `docs/ar
 - **`optlab.native`** drives the path engine (`paths.hpp`: one header for the CPU in double and the GPU in
   float; `leverage.hpp`: the SLV particle method): `plan()` turns a model or a `Basket` into arrays (local variance and
   squared leverage as uniform rows per step), `run()` simulates a range of pairs. Normals are Philox, a function of
-  (seed, pair, rank of the normal), so prices depend on (seed, n_paths) only and the CPU and GPU share their draws.
+  (seed, pair, stream, rank of the normal), so prices depend on (seed, n_paths) only and the CPU and GPU share their
+  draws. Stream 0 holds the spots, stream 1 (`kAuxStream`) a model's extra normals (today SLV's variance residuals), so
+  a model of provision keeps the base's spot normals: a model that draws more per step goes on stream 1.
   `engine=` (numpy, cpu, gpu, auto) on `price_many`, `optlab.core.engines.set_default`, or `$OPTLAB_ENGINE` picks the source
   (the registry finds this module through the entry point group `optlab.engines`); the
   default is numpy, so the library's numbers and its bit-for-bit tests are unchanged; `structured/engine.py` falls

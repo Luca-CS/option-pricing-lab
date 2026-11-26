@@ -111,6 +111,30 @@ def test_cpu_and_gpu_agree_on_the_same_draws(model):
     assert abs(diff.mean()) < 4 * diff.std(ddof=1) / np.sqrt(h) + 1e-5 * price
 
 
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_slv_reads_the_spot_normals_of_local_vol_on_a_seed(backend):
+    """SLV draws its variance residuals from a stream of its own, so on one seed its spots follow local vol's normals (as
+    in NumPy with `spot_driven`) and the SLV provision is a difference on common random numbers: the correlation of the
+    log spots of local vol and SLV is NumPy's, what the stochastic variance leaves of it. Measured with one stream: the
+    SE of an SLV gap at mix 0 was 30 times NumPy's (0.047 against 0.0016 % of notional, a 2-year Phoenix)."""
+    from dataclasses import replace
+
+    T = 2.0
+    lv, slv = CTX.model("lv", T), CTX.model("slv", T)
+    eng = {
+        name: np.log(native.simulate(m, CTX.market, [0.25, T], 40_000, seed=13, backend=backend))
+        for name, m in (("lv", lv), ("slv", slv))
+    }
+    ref = {
+        "lv": np.log(simulate(lv, CTX.market, [0.25, T], 40_000, rng=13)),
+        "slv": np.log(simulate(replace(slv, spot_driven=True), CTX.market, [0.25, T], 40_000, rng=13)),
+    }
+    for j in range(2):  # measured: 0.928 and 0.877 on the engine, 0.924 and 0.877 in NumPy
+        got = np.corrcoef(eng["lv"][:, j], eng["slv"][:, j])[0, 1]
+        want = np.corrcoef(ref["lv"][:, j], ref["slv"][:, j])[0, 1]
+        assert got > 0.85 and abs(got - want) < 0.02, (j, got, want)
+
+
 @needs_engine
 def test_a_price_depends_on_the_seed_and_the_number_of_paths_only(monkeypatch):
     product = compile_sheet(preset("phoenix"), CTX.valuation)

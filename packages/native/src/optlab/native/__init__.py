@@ -5,8 +5,9 @@ Every model of the library is covered: Black-Scholes, Dupire local vol, Heston a
 to eight correlated names with an optional local correlation. Local variances and leverages are read from tables on
 uniform grids of x (as the opt-in fast models of `structured.fastmodels`), so prices differ from the NumPy ones by
 that interpolation (about 1e-4 relative on the local variance) and by their draws: the engine's normals come from
-Philox, a function of (seed, pair, step), so a price depends on (seed, number of paths) only, not on the batches, the
-threads or the device. The CPU and the GPU use the same normals; their prices agree within a fraction of a standard
+Philox, a function of (seed, pair, stream, rank), so a price depends on (seed, number of paths) only, not on the
+batches, the threads or the device. The spots read stream 0 and SLV's variance residuals stream 1, so SLV and local vol
+share their spot normals on a seed (the SLV reserve is a difference on common random numbers). The CPU and the GPU use the same normals; their prices agree within a fraction of a standard
 error (cuda/tests/test_paths.cpp, tests/test_native.py).
 
 `backend`: "cpu", "gpu" or "auto" (the GPU when there is one). This module is the `Engine` of `optlab.core.engines`,
