@@ -5,9 +5,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 
-from optlab.server.payloads import InstrumentMark, Roll, Trade, documented
+from optlab.server.payloads import InstrumentMark, ListedChain, Roll, Trade, documented
 from optlab.server.routers._common import Id, audited, desk
 from optlab.server.schemas import HedgeIn, MarkIn, body
 from optlab.server.web import Problem, access
@@ -45,6 +45,17 @@ def mark_instrument(m: MarkIn, request: Request):
     return _checked(lambda: _hedges(request).mark(body(m)))()
 
 
+@router.get("/hedges/listed", **access(), responses=documented(ListedChain))
+def listed_options(
+    request: Request,
+    name: str = Query("SPX", pattern=r"^[A-Z0-9._-]{1,16}$"),
+    day: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    expiry: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+):
+    """The listed European options of a name on the day's chain (two-sided quotes), with their delta on the desk surface."""
+    return _checked(lambda: _hedges(request).chain(name, day, expiry))()
+
+
 @router.post("/trades/{trade_id}/promote", **access("trader"), responses=documented(Trade, "the trade, now live"))
 def promote_trade(trade_id: Id, request: Request):
     """A simulated trade booked: live, a new version."""
@@ -60,6 +71,15 @@ def discard_trade(trade_id: Id, request: Request):
     d = desk(request)
     return audited(
         request, "discard_trade", trade_id, _checked(lambda: d.hedges.discard(trade_id)), before=d.trade(trade_id)
+    )
+
+
+@router.post("/trades/{trade_id}/settle", **access("trader"), responses=documented(Trade, "the trade, matured"))
+def settle_trade(trade_id: Id, request: Request):
+    """An expired vanilla or future settled in cash against the lake's close at its expiry."""
+    d = desk(request)
+    return audited(
+        request, "settle_trade", trade_id, _checked(lambda: d.hedges.settle(trade_id)), before=d.trade(trade_id)
     )
 
 

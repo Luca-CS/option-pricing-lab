@@ -90,7 +90,11 @@ Every error is `application/problem+json` (RFC 9457), never a stack trace:
 - A hedge is a trade with `product.kind = "instrument"` (`POST /trading/hedges`, ADR-0025): `instrument` is
   `{type, fields}`, `fill` the cash paid per unit at the fill and `fees` those of the whole trade. Its status may be
   `simulated` (a what-if, `promote` books it, `discard` removes it); Greeks, scenarios, VaR and the book's valuation take
-  the what-ifs with `options.include_simulated`, the EOD never does.
+  the what-ifs with `options.include_simulated`, the EOD never does. A listed vanilla is filled at the day's chain
+  (`GET /trading/hedges/listed`: the ask when the desk buys, the bid when it sells), an OTC one at the surface's mid
+  plus or minus the cost table's vol spread, unless the request gives its premium. An expired vanilla or future leaves
+  the valued book and is settled against the lake's close (`POST /trading/trades/{trade_id}/settle`); the trade keeps
+  the amount, never the index level.
 - Every job result is one envelope:
 
   ```json

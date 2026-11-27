@@ -17,6 +17,10 @@ The quantity is signed, positive when the desk is long:
   the government curve. Its value moves with the bank's spread curve: the hedge of the funding of issued notes.
 - `dividend_swap`: currency per index point, receiving the dividends of a calendar year against a strike, paid after it.
 - `dividend_future`: lots of a listed dividend future on the same year, undiscounted.
+- `vanilla`: a European call or put, listed (lots of the exchange's contract, filled at the chain's bid or ask) or OTC
+  (any strike and expiry, one unit per index point, filled at the surface's mid plus or minus the cost table's vol
+  spread). Not linear: it is a payoff script (`vanilla_script`, its strike and size in the model's scale), simulated with
+  the notes of its group or replicated on the smile in a group of Europeans.
 
 Dividends are read from the market's forward: what it carries between two dates, ln(S / (F D)), is dividends (the market
 holds dividends and repo together), and the forward dividend points over [a, b] are the integral of F(t) dc(t).
@@ -39,7 +43,7 @@ from optlab.structured.dates import add_months, as_date, year_fraction
 from optlab.structured.hedges import contracts
 
 LINEAR_TYPES = ("future", "cash", "irs", "deposit", "funding_swap", "dividend_swap", "dividend_future")
-TYPES = LINEAR_TYPES
+TYPES = (*LINEAR_TYPES, "vanilla")
 CURRENCIES = ("USD", "EUR", "JPY", "GBP")
 BANK = "BANQUE-FICTIVE"
 MAX_YEARS = 50.0
@@ -260,6 +264,7 @@ class Instrument:
 
     type: str = ""
     fields: tuple = ()
+    linear: bool = True  # valued in closed form; False: a payoff script, simulated or replicated
 
     @property
     def underlying(self) -> str | None:
@@ -670,6 +675,78 @@ class DividendFutureContract(Instrument):
         return self.multiplier * (self.points(v) - self.price)
 
 
+# The payoff as a coupon and the notional as the redemption, which the swap format nets: a leg discounted on the
+# government curve, never on the issuer's.
+_VANILLA = (
+    "underlying {name}\nparam N = 1\nparam K = 100\nevent {expiry} pay {expiry}\n"
+    "  pay N * max({payoff}, 0) as coupon\n  pay N as redemption\nend\n"
+)
+VANILLA_SCRIPT = {
+    "call": _VANILLA.replace("{payoff}", "{name} - K"),
+    "put": _VANILLA.replace("{payoff}", "K - {name}"),
+}
+
+
+@dataclass(frozen=True)
+class Vanilla(Instrument):
+    name: str
+    expiry: dt.date
+    strike: float  # real level
+    kind: str  # call or put
+    price: float = 0.0  # premium per index point, real: the fill
+    multiplier: float | None = None  # listed: the contract's; OTC: 1 (one unit per index point)
+    listed: bool = False
+    type = "vanilla"
+    linear = False
+
+    def __post_init__(self):
+        object.__setattr__(self, "name", _name(self.name))
+        object.__setattr__(self, "expiry", _date(self.expiry, "expiry"))
+        object.__setattr__(self, "strike", _positive(self.strike, "the strike"))
+        if self.kind not in ("call", "put"):
+            raise HedgeError("a vanilla is a call or a put")
+        object.__setattr__(self, "price", _finite(self.price, "the premium"))
+        if self.price < 0:
+            raise HedgeError("the premium per index point is not negative")
+        default = contracts.listed_option(self.name).multiplier if self.listed else 1.0
+        object.__setattr__(self, "multiplier", _positive(self.multiplier or default, "the multiplier"))
+        object.__setattr__(self, "listed", bool(self.listed))
+
+    @property
+    def currency(self) -> str:
+        from optlab.core.instruments import instrument
+
+        return instrument(self.name).currency
+
+    @property
+    def maturity(self) -> dt.date:
+        return self.expiry
+
+    @property
+    def label(self) -> str:
+        where = "listed" if self.listed else "OTC"
+        return f"{self.name} {self.expiry:%d%b%y} {self.strike:g} {self.kind} ({where})"
+
+    def script(self) -> str:
+        """The payoff as a script with its size N and strike K as parameters (`params` gives them on a scale)."""
+        return VANILLA_SCRIPT[self.kind].format(name=self.name, expiry=self.expiry.isoformat())
+
+    def params(self, scale: float) -> dict:
+        """N and K in the model's scale: K is the strike over the scale, N the multiplier times the scale, so one unit
+        pays multiplier x (S - K) in real points."""
+        assert self.multiplier is not None  # noqa: S101 (narrows the type for pyright: set in __post_init__)
+        return {"N": self.multiplier * scale, "K": self.strike / scale}
+
+    def value(self, v: Valuation) -> float:
+        raise HedgeError("a vanilla is priced on the surface (a script), not in closed form")
+
+    def fair(self, v: Valuation) -> float:
+        raise HedgeError("a vanilla's fair premium comes from the surface (its mark)")
+
+    def dates(self) -> list[tuple[dt.date, str]]:
+        return [(self.expiry, "expiry")]
+
+
 CLASSES: dict = {
     "future": Future,
     "cash": Cash,
@@ -678,6 +755,7 @@ CLASSES: dict = {
     "funding_swap": FundingSwap,
     "dividend_swap": DividendSwap,
     "dividend_future": DividendFutureContract,
+    "vanilla": Vanilla,
 }
 
 

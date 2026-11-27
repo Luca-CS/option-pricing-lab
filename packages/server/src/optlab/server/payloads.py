@@ -417,6 +417,31 @@ class MarkUnit(Doc):
     half_spread: float = Field(..., description="currency per unit: what entering or leaving one unit costs")
 
 
+class ListedRow(Doc):
+    """A listed European option of the day's chain, as quoted."""
+
+    expiry: str
+    strike: float = Field(..., description="real level")
+    kind: str
+    bid: float = Field(..., description="premium per index point")
+    ask: float
+    mid: float
+    delta: float | None = Field(None, description="forward call delta on the desk surface (its bucket)")
+    multiplier: float
+
+
+class ListedChain(Doc):
+    """The listed universe of a name on a day: the lake's chain, two-sided quotes only, with its origin."""
+
+    name: str
+    day: str
+    origin: str
+    source: str
+    multiplier: float
+    expiries: list[str]
+    rows: list[ListedRow]
+
+
 class InstrumentMark(Doc):
     """An instrument at the market in use."""
 
@@ -540,6 +565,7 @@ class HedgeRows(Doc):
     irs_bp: float
     deposit_bp: float
     dividend_pct: float
+    otc_vol_points: float
     swap_spread_bp: dict[str, float]
 
 

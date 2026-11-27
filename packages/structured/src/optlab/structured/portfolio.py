@@ -27,6 +27,7 @@ from optlab.structured.context import PricingContext
 from optlab.structured.engine import Evaluation
 from optlab.structured.greeks import ShiftedSurface, _recalibrated_slv
 from optlab.structured.hedges import Instrument, LinearEnv
+from optlab.structured.hedges.instruments import Vanilla
 from optlab.structured.multiasset import BasketContext
 from optlab.structured.policy import RULES, PricingDecision, decide
 from optlab.structured.pricer import basket_history, check_fixing_scale
@@ -162,8 +163,9 @@ class Book:
         names = [p.name for p in positions]
         if len(set(names)) != len(names):
             raise ValueError("position names must be unique")
-        self.simulated = [p for p in positions if not isinstance(p.product, Instrument)]
-        self.linear_positions = [p for p in positions if isinstance(p.product, Instrument)]
+        lin = [isinstance(p.product, Instrument) and p.product.linear for p in positions]
+        self.simulated = [p for p, x in zip(positions, lin) if not x]
+        self.linear_positions = [p for p, x in zip(positions, lin) if x]
         self.positions = self.simulated + self.linear_positions
         self.linear = linear or LinearEnv()
 
@@ -226,9 +228,17 @@ class Book:
             res.position_pairs = res.position_pairs + [np.full(len(res.pairs), v) for v in values]
         return res
 
+    def _scripted(self, pos: Position) -> Position:
+        """A vanilla as the script of its payoff, its strike and size in the model's scale (`linear.scales`)."""
+        inst = pos.product
+        if not isinstance(inst, Vanilla):
+            return pos
+        scale = float(self.linear.scales.get(inst.underlying, 1.0))
+        return Position(pos.name, inst.script(), pos.quantity, inst.params(scale), pos.fixings, "swap")
+
     def _prepare(self, ctx):
         items = []
-        for pos in self.simulated:
+        for pos in map(self._scripted, self.simulated):
             program, fmt, cal = pos.compiled(ctx.valuation)
             clock = Clock(ctx.valuation, cal)
             timeline = build_timeline(program, clock)

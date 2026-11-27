@@ -36,6 +36,22 @@ INDEX_FUTURES = {
     "RUT": IndexFuture("RUT", "RTY", 50.0, "USD", 0.1),
     "SX5E": IndexFuture("SX5E", "FESX", 10.0, "EUR", 1.0),
 }
+
+
+@dataclass(frozen=True)
+class ListedOption:
+    underlying: str
+    code: str
+    multiplier: float  # currency per index point
+    currency: str
+
+
+LISTED_OPTIONS = {
+    "SPX": ListedOption("SPX", "SPX", 100.0, "USD"),
+    "NDX": ListedOption("NDX", "NDX", 100.0, "USD"),
+    "RUT": ListedOption("RUT", "RUT", 100.0, "USD"),
+    "SX5E": ListedOption("SX5E", "OESX", 10.0, "EUR"),
+}
 DIVIDEND_FUTURES = {
     "SPX": DividendFuture("SPX", "SDA", 250.0, "USD", 0.01),
     "SX5E": DividendFuture("SX5E", "FEXD", 100.0, "EUR", 0.1),
@@ -67,6 +83,13 @@ def index_future(name: str) -> IndexFuture:
         return INDEX_FUTURES[name]
     except KeyError:
         raise KeyError(f"no listed index future on {name}: {', '.join(INDEX_FUTURES)} have one") from None
+
+
+def listed_option(name: str) -> ListedOption:
+    try:
+        return LISTED_OPTIONS[name]
+    except KeyError:
+        raise KeyError(f"no listed European option on {name}: {', '.join(LISTED_OPTIONS)} have one") from None
 
 
 def dividend_future(name: str) -> DividendFuture:

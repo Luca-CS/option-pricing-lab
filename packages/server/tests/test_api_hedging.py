@@ -111,3 +111,32 @@ def test_the_book_takes_its_hedges_without_moving_its_notes(a, trader):
     mine = next(p for p in after["positions"] if p["name"] == hedge["trade_id"])
     mark = trader.post("/api/v1/trading/hedges/marks", json={"instrument": _irs(trader), "quantity": 1e6}).json()
     assert mine["value"]["value"] == pytest.approx(mark["value"], rel=1e-9) and mine["value"]["se"] == 0.0
+
+
+def test_a_vanilla_is_marked_on_the_desk_surface_and_a_listed_one_needs_the_chain(trader):
+    v = _valuation(trader)
+    otc = {"type": "vanilla", "name": "SPX", "expiry": (v + dt.timedelta(days=365)).isoformat(), "strike": 5700.0}
+    put = trader.post("/api/v1/trading/hedges/marks", json={"instrument": {**otc, "kind": "put"}, "quantity": 2})
+    assert put.status_code == 200, put.text
+    m = put.json()
+    assert m["unit"]["value"] > 0 and m["unit"]["fair"] == m["unit"]["value"]  # OTC: one unit per index point
+    assert m["unit"]["half_spread"] > 0 and m["origin"].startswith("model") and m["value"] == 2 * m["unit"]["value"]
+    call = trader.post("/api/v1/trading/hedges/marks", json={"instrument": {**otc, "kind": "call"}}).json()
+    assert call["unit"]["value"] > m["unit"]["value"]  # 5700 is below the forward (6000 x the carry)
+    listed = {**otc, "kind": "put", "listed": True}
+    r = trader.post("/api/v1/trading/hedges", json={"instrument": listed, "quantity": 1})
+    assert r.status_code == 422 and "not in the day's chain" in r.json()["detail"]
+    priced = trader.post("/api/v1/trading/hedges", json={"instrument": {**listed, "price": 120.0}, "quantity": -1})
+    assert priced.status_code == 201 and priced.json()["product"]["fill"] == 120.0 * 100
+    assert trader.get("/api/v1/trading/hedges/listed", params={"name": "SPX"}).status_code == 404  # an empty lake
+
+
+def test_an_otc_vanilla_is_filled_at_the_mid_plus_or_minus_the_vol_spread(trader):
+    v = _valuation(trader)
+    otc = {"type": "vanilla", "name": "SPX", "expiry": (v + dt.timedelta(days=200)).isoformat(), "strike": 6000.0}
+    otc["kind"] = "call"
+    m = trader.post("/api/v1/trading/hedges/marks", json={"instrument": otc}).json()["unit"]
+    bought = trader.post("/api/v1/trading/hedges", json={"instrument": otc, "quantity": 5}).json()
+    sold = trader.post("/api/v1/trading/hedges", json={"instrument": otc, "quantity": -5}).json()
+    assert bought["product"]["instrument"]["price"] == pytest.approx(m["fair"] + m["half_spread"], rel=1e-9)
+    assert sold["product"]["instrument"]["price"] == pytest.approx(m["fair"] - m["half_spread"], rel=1e-9)

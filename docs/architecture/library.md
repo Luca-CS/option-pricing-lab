@@ -104,8 +104,11 @@ Three layers.
   flows to come (a future: the variation margin, multiplier × (F(T) − price)); dividends are what the forward carries.
   A `Book` holds them after its simulated positions (`Book.linear`: their `LinearEnv`), adds their exact values to
   every result and never simulates them; `home()` names the group an instrument joins (its name's, or its currency's
-  reference index for a rates instrument). `contracts.py` holds the listed contracts (multipliers, quarterly
-  expiries), `costs.py` their half-spreads in the cost table.
+  reference index for a rates instrument). A `vanilla` (European call or put, listed or OTC) is not linear: the book
+  turns it into a payoff script (its strike and size in the model's scale, a leg discounted on the government curve),
+  simulated with the notes of its group or replicated on the smile when its group holds Europeans only.
+  `contracts.py` holds the listed contracts (multipliers, quarterly expiries), `costs.py` their half-spreads in the
+  cost table.
 
 ## 4. Market data (`optlab.marketdata`)
 

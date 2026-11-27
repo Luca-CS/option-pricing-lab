@@ -7,7 +7,8 @@ leave. The starting values are round assumptions, labelled as such on the screen
 - interest rate swaps: half a basis point on the fixed rate, over the government curve plus a swap spread per currency
   (the swap curve's proxy, 0 bp to start);
 - deposits and funding swaps: two basis points on the rate;
-- dividend swaps and futures: 1 % of the year's dividend points.
+- dividend swaps and futures: 1 % of the year's dividend points;
+- OTC vanillas: half a vol point on the surface's mid (a listed vanilla takes the chain's bid and ask instead).
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ STARTING = {
     "irs_bp": 0.5,
     "deposit_bp": 2.0,
     "dividend_pct": 1.0,
+    "otc_vol_points": 0.5,
     "swap_spread_bp": {c: 0.0 for c in CURRENCIES},
 }
 FIELDS = (
@@ -42,6 +44,7 @@ FIELDS = (
     ("irs_bp", "Interest rate swaps, half-spread", "bp on the rate", 0.0, 50.0),
     ("deposit_bp", "Deposits and funding swaps, half-spread", "bp on the rate", 0.0, 100.0),
     ("dividend_pct", "Dividend swaps and futures, half-spread", "% of the year's points", 0.0, 20.0),
+    ("otc_vol_points", "OTC vanillas, half-spread", "vol points", 0.0, 10.0),
 )
 SWAP_SPREAD = ("swap_spread_bp", "Swap spread over the government curve", "bp", -200.0, 200.0)
 
@@ -112,4 +115,4 @@ def half_spread(inst: Instrument, v: Valuation, rows: dict) -> float:
     if isinstance(inst, DividendFutureContract):
         spec = dividend_future(inst.name)
         return r["dividend_pct"] * 0.01 * abs(inst.points(v)) * float(inst.multiplier or spec.multiplier)
-    raise ValueError(f"no cost row for a {inst.type}")
+    raise ValueError(f"no closed-form cost of a {inst.type}: a vanilla's comes from the surface or the chain")

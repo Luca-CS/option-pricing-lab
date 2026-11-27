@@ -177,3 +177,37 @@ def test_a_book_values_its_instruments_exactly_beside_its_notes():
     assert g["delta"]["positions_se"][1] < 1e-9 and abs(g["vega"]["positions"][1]) < 1e-9  # exact, up to rounding
     only = Book([Position("fut", fut, 2.0)], env).price(ctx)
     assert only.method == "closed_form" and only.value == pytest.approx(want, rel=1e-12)
+
+
+def test_a_vanilla_is_replicated_alone_and_simulated_with_a_note_within_4_se():
+    """A vanilla-only book is replicated on the smile (Black on a flat surface); beside a Phoenix it rides on the shared
+    simulation, and the two agree within 4 SE. Call minus put is the forward less the strike, discounted."""
+    from _risk_refs import VALUATION, VOL, flat_ctx
+    from _risk_refs import Q as Q_FLAT
+    from _risk_refs import R as R_FLAT
+
+    from optlab.core.blackscholes import bs_price
+    from optlab.structured.hedges import LinearEnv
+    from optlab.structured.portfolio import Book, Position
+    from optlab.structured.presets import preset
+
+    ctx, scale = flat_ctx(), 60.0
+    env = LinearEnv(scales={"SPX": scale})
+    expiry = dt.date(2027, 10, 27)
+    T = (expiry - VALUATION).days / 365
+    call = parse({"type": "vanilla", "name": "SPX", "expiry": expiry, "strike": 6300.0, "kind": "call", "listed": True})
+    put = parse({"type": "vanilla", "name": "SPX", "expiry": expiry, "strike": 6300.0, "kind": "put", "listed": True})
+    alone = Book([Position("c", call, 1.0), Position("p", put, 1.0)], env).price(ctx)
+    assert alone.method == "replication"
+    want = 100.0 * scale * bs_price(100.0, 6300.0 / scale, T, R_FLAT, Q_FLAT, VOL)
+    assert alone.positions[0].value == pytest.approx(want, rel=1e-4)
+    F, D = float(ctx.market.F(T)), float(ctx.market.D(T))
+    parity = alone.positions[0].value - alone.positions[1].value
+    assert parity == pytest.approx(100.0 * scale * (F - 6300.0 / scale) * D, rel=1e-4)
+    note = Position("phx", preset("phoenix", **{"general.strike_date": VALUATION, "coupon.rate": 0.05}), -1.0)
+    mixed = Book([note, Position("c", call, 1.0)], env).price(ctx, model="lv", n_paths=40_000, seed=9)
+    assert mixed.method == "monte_carlo"
+    got = next(p for p in mixed.positions if p.name == "c")
+    assert abs(got.value - alone.positions[0].value) < 4 * got.stderr
+    with pytest.raises(HedgeError, match="priced on the surface"):
+        call.value(Valuation(FLAT, TODAY))
