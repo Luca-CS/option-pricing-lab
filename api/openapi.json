@@ -2956,6 +2956,123 @@
         ]
       }
     },
+    "/api/v1/trading/hedges/listed": {
+      "get": {
+        "tags": [
+          "trading"
+        ],
+        "summary": "Listed Options",
+        "description": "The listed European options of a name on the day's chain (two-sided quotes), with their delta on the desk surface.",
+        "operationId": "listed_options",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z0-9._-]{1,16}$",
+              "default": "SPX",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "day",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Day"
+            }
+          },
+          {
+            "name": "expiry",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expiry"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the answer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListedChain"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "invalid input: the fields at fault in `errors`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "a role or the CSRF header is missing",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "any other error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-roles": [
+          "viewer"
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
     "/api/v1/trading/trades/{trade_id}/promote": {
       "post": {
         "tags": [
@@ -3069,6 +3186,91 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "invalid input: the fields at fault in `errors`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "a role or the CSRF header is missing",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "any other error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-roles": [
+          "trader"
+        ],
+        "security": [
+          {
+            "session": [],
+            "csrf": []
+          }
+        ]
+      }
+    },
+    "/api/v1/trading/trades/{trade_id}/settle": {
+      "post": {
+        "tags": [
+          "trading"
+        ],
+        "summary": "Settle Trade",
+        "description": "An expired vanilla or future settled in cash against the lake's close at its expiry.",
+        "operationId": "settle_trade",
+        "parameters": [
+          {
+            "name": "trade_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$",
+              "description": "a stored id (trade, quote, run, job), never a file path",
+              "title": "Trade Id"
+            },
+            "description": "a stored id (trade, quote, run, job), never a file path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the trade, matured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Trade"
+                }
               }
             }
           },
@@ -9110,6 +9312,10 @@
             "type": "number",
             "title": "Dividend Pct"
           },
+          "otc_vol_points": {
+            "type": "number",
+            "title": "Otc Vol Points"
+          },
           "swap_spread_bp": {
             "additionalProperties": {
               "type": "number"
@@ -9126,6 +9332,7 @@
           "irs_bp",
           "deposit_bp",
           "dividend_pct",
+          "otc_vol_points",
           "swap_spread_bp"
         ],
         "title": "HedgeRows",
@@ -10072,6 +10279,116 @@
           "available"
         ],
         "title": "LakeQuality"
+      },
+      "ListedChain": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "day": {
+            "type": "string",
+            "title": "Day"
+          },
+          "origin": {
+            "type": "string",
+            "title": "Origin"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "multiplier": {
+            "type": "number",
+            "title": "Multiplier"
+          },
+          "expiries": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Expiries"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ListedRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name",
+          "day",
+          "origin",
+          "source",
+          "multiplier",
+          "expiries",
+          "rows"
+        ],
+        "title": "ListedChain",
+        "description": "The listed universe of a name on a day: the lake's chain, two-sided quotes only, with its origin."
+      },
+      "ListedRow": {
+        "properties": {
+          "expiry": {
+            "type": "string",
+            "title": "Expiry"
+          },
+          "strike": {
+            "type": "number",
+            "title": "Strike",
+            "description": "real level"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "bid": {
+            "type": "number",
+            "title": "Bid",
+            "description": "premium per index point"
+          },
+          "ask": {
+            "type": "number",
+            "title": "Ask"
+          },
+          "mid": {
+            "type": "number",
+            "title": "Mid"
+          },
+          "delta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta",
+            "description": "forward call delta on the desk surface (its bucket)"
+          },
+          "multiplier": {
+            "type": "number",
+            "title": "Multiplier"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "expiry",
+          "strike",
+          "kind",
+          "bid",
+          "ask",
+          "mid",
+          "multiplier"
+        ],
+        "title": "ListedRow",
+        "description": "A listed European option of the day's chain, as quoted."
       },
       "LoginIn": {
         "properties": {

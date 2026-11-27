@@ -1266,6 +1266,8 @@ class Desk:
                 continue
             inst = t.instrument()
             if inst is not None:
+                if inst.maturity < ctx.valuation:  # expired: it awaits its settlement (`settle`), no longer valued
+                    continue
                 singles.setdefault(home(inst), []).append(t.to_position())
                 continue
             sheet = t.term_sheet()

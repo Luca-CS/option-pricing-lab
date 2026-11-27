@@ -251,3 +251,48 @@ def test_data_screen_shows_the_latest_basket_spreads_as_synthetic(tmp_path):
         assert got["day"] == "2026-10-30" and len(got["rows"]) == 1 and got["rows"][0]["origin"] == "synthetic"
     finally:
         desk.close()
+
+
+def test_the_listed_universe_is_the_day_s_chain_and_stays_private_on_a_shared_desk(desk):
+    got = desk.hedges.chain("SPX", str(DAY))
+    assert got["multiplier"] == 100.0 and got["expiries"] == sorted({r["expiry"] for r in got["rows"]})
+    assert got["rows"] and all(r["ask"] >= r["bid"] > 0 for r in got["rows"]) and got["origin"] == "observed"
+    one = got["rows"][len(got["rows"]) // 2]
+    from optlab.structured.hedges import parse
+
+    inst = parse(
+        {
+            "type": "vanilla",
+            "name": "SPX",
+            "expiry": one["expiry"],
+            "strike": one["strike"],
+            "kind": one["kind"],
+            "listed": True,
+        }
+    )
+    assert desk.hedges.listed_quote(inst, str(DAY)) == (one["bid"], one["ask"])
+    desk.shared = desk.private_data = True
+    try:
+        with pytest.raises(ApiError) as exc:
+            desk.hedges.chain("SPX", str(DAY))
+        assert exc.value.status == 403
+    finally:
+        desk.shared = desk.private_data = False
+
+
+def test_an_expired_vanilla_is_settled_against_the_lake_s_close(desk):
+    from optlab.marketdata.pit import real_close
+
+    expiry = dt.date(2020, 6, 19)
+    level, _ = real_close(desk.lake, "SPX", expiry)
+    inst = {"type": "vanilla", "name": "SPX", "expiry": expiry.isoformat(), "strike": level * 0.95, "kind": "call"}
+    t = desk.hedges.create({"instrument": {**inst, "price": 10.0}, "quantity": -3, "trade_date": "2020-01-02"})
+    done = desk.hedges.settle(t["trade_id"])
+    assert done["status"] == "matured" and done["product"]["settlement"]["unit"] == pytest.approx(0.05 * level)
+    assert done["product"]["settlement"]["amount"] == pytest.approx(-3 * 0.05 * level)
+    assert "level" not in done["product"]["settlement"]  # the index level stays out of the store
+    later = {**inst, "expiry": (desk.ctx.valuation + dt.timedelta(days=30)).isoformat(), "price": 10.0}
+    live = desk.hedges.create({"instrument": later, "quantity": 1})
+    with pytest.raises(ApiError) as exc:
+        desk.hedges.settle(live["trade_id"])
+    assert exc.value.status == 409
