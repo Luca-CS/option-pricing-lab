@@ -100,6 +100,17 @@ def deals():
         # a variance swap sold to a fund (vega notional per vol point), and an accumulator sold outright
         Deal("DEMO-05", "variance_swap", ("SPX",), "2021-01-04", 12, 50e3, "Demo fund D"),
         Deal("DEMO-06", "accumulator", ("SPX",), "2021-03-15", 6, 2e6, "Demo family office E"),
+        # an issuer-callable Phoenix: its first call is in July 2021, after the demo's date (Trading › Calls)
+        Deal(
+            "DEMO-07",
+            "callable_phoenix",
+            ("SPX",),
+            "2021-01-15",
+            24,
+            3e6,
+            "Demo bank F",
+            {"issuer_call.first_call_months": 6},
+        ),
     )
 
 
