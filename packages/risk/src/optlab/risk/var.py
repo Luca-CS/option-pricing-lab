@@ -56,7 +56,8 @@ def _at(row, key: str) -> float:
 
 def group_names(group) -> list[str]:
     items = group.book._prepare(group.ctx)
-    used = sorted({n for it in items for n in it["underlyings"]})
+    here = set(group.ctx.names) if isinstance(group.ctx, BasketContext) else {group.ctx.underlying}
+    used = sorted({n for it in items for n in it["underlyings"]} | (group.book.linear_names() & here))
     return [n for n in group.ctx.names if n in used] if isinstance(group.ctx, BasketContext) else used
 
 

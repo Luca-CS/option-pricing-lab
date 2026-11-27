@@ -211,9 +211,20 @@ def book_json(res, trades=None) -> dict:
     )
 
 
+def _instrument_summary(inst) -> dict:
+    return {
+        "type": inst.type,
+        "underlyings": [inst.underlying] if inst.underlying else [],
+        "label": inst.label,
+        "currency": inst.currency,
+        "maturity": None if inst.maturity == dt.date.max else inst.maturity,
+    }
+
+
 def trade_json(trade) -> dict:
     sheet = trade.term_sheet()
-    summary = None
+    inst = trade.instrument()
+    summary = _instrument_summary(inst) if inst is not None else None
     if sheet is not None:
         summary = {
             "type": sheet.mask.name,

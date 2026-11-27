@@ -25,7 +25,7 @@ from optlab.server.api import Desk
 from optlab.server.audit import Audit
 from optlab.server.logs import attach_server_logs
 from optlab.server.payloads import describe_results
-from optlab.server.routers import admin, market, quant, risk, structuring, system, trading
+from optlab.server.routers import admin, hedging, market, quant, risk, structuring, system, trading
 from optlab.server.security import COOKIE, CSRF_HEADER, Accounts
 from optlab.server.settings import Settings
 from optlab.server.web import Guard, State, install_problems
@@ -70,7 +70,7 @@ def operations(app: FastAPI) -> list[dict[str, Any]]:
     return out
 
 
-ROUTERS = (system, structuring, trading, market, risk, quant, admin)
+ROUTERS = (system, structuring, trading, hedging, market, risk, quant, admin)
 
 
 @asynccontextmanager

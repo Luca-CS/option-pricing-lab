@@ -26,8 +26,9 @@ from optlab.structured.compiler import compile_sheet
 from optlab.structured.context import PricingContext
 from optlab.structured.engine import Evaluation
 from optlab.structured.greeks import ShiftedSurface, _recalibrated_slv
+from optlab.structured.hedges import Instrument, LinearEnv
 from optlab.structured.multiasset import BasketContext
-from optlab.structured.policy import RULES, decide
+from optlab.structured.policy import RULES, PricingDecision, decide
 from optlab.structured.pricer import basket_history, check_fixing_scale
 from optlab.structured.profile import ProductProfile, profile
 from optlab.structured.replication import replication_result
@@ -38,6 +39,7 @@ from optlab.structured.script.validate import validate
 from optlab.structured.units import BOOK_UNITS
 
 CLASS_ORDER = ("european", "path_dependent", "callable")
+LINEAR = "linear"  # the class of a linear hedging instrument: closed forms, never simulated
 
 
 def merged_history(items, ctx, market=None) -> dict:
@@ -59,8 +61,9 @@ def merged_history(items, ctx, market=None) -> dict:
 
 @dataclass
 class Position:
-    """`quantity` units of a product (a term sheet, a script or a Quote), signed: positive when the book holds
-    the investor side. One unit pays the script's flows on its notional N."""
+    """`quantity` units of a product (a term sheet, a script, a Quote or a linear hedging instrument), signed: positive
+    when the book holds the investor side (an instrument: when the desk is long). One unit pays the script's flows on its
+    notional N; an instrument's unit is its own (a lot, a unit, one of notional)."""
 
     name: str
     product: Any  # a TermSheet, a script, a Program or a Quote
@@ -137,18 +140,95 @@ class BookResult:
         return "\n".join(lines)
 
 
+def _linear_market(ctx, market, inst, factor):
+    """The market an instrument is valued on, and its spot factor: its name's market in a basket (the first name's for a
+    rates instrument), else the single name's (`market` overrides the context's)."""
+    name = inst.underlying
+    if isinstance(ctx, BasketContext):
+        m = ctx.markets[name] if name in ctx.markets else ctx.markets[ctx.names[0]]
+    else:
+        m = market or ctx.market
+    f = factor.get(name, 1.0) if isinstance(factor, dict) else factor
+    return m, float(f)
+
+
 class Book:
-    def __init__(self, positions: list[Position]):
+    """Positions on one context. The simulated ones (term sheets, scripts, quotes) come first, in their order, then the
+    linear instruments, valued in closed form on the context's market (`linear`: their scales and curves)."""
+
+    def __init__(self, positions: list[Position], linear: LinearEnv | None = None):
         if not positions:
             raise ValueError("the book is empty")
         names = [p.name for p in positions]
         if len(set(names)) != len(names):
             raise ValueError("position names must be unique")
-        self.positions = positions
+        self.simulated = [p for p in positions if not isinstance(p.product, Instrument)]
+        self.linear_positions = [p for p in positions if isinstance(p.product, Instrument)]
+        self.positions = self.simulated + self.linear_positions
+        self.linear = linear or LinearEnv()
+
+    def linear_names(self) -> set:
+        """The underlyings the linear instruments hedge (rates instruments have none)."""
+        return {p.product.underlying for p in self.linear_positions if p.product.underlying}
+
+    def linear_values(
+        self, ctx, market=None, factor: float | dict = 1.0, valuation=None, since=None, funding_move=None
+    ):
+        """Each linear position's value (currency): on `market` (a single name's) or the basket's market of its name, the
+        spot scaled by `factor` (a float, or {name: factor}), at `valuation` (the context's by default)."""
+        out = []
+        for pos in self.linear_positions:
+            inst = pos.product
+            m, f = _linear_market(ctx, market, inst, factor)
+            if f != 1.0:
+                m = m.scaled(m.spot * f)
+            v = self.linear.valuation(inst, m, valuation or ctx.valuation, since, funding_move)
+            out.append(float(pos.quantity) * inst.value(v))
+        return out
+
+    def _linear_only(self, ctx, market, factor, seed: int, t0: float) -> BookResult:
+        values = self.linear_values(ctx, market, factor)
+        rows = [
+            PositionResult(p.name, float(p.quantity), v / p.quantity if p.quantity else 0.0, 0.0, v, 0.0, LINEAR)
+            for p, v in zip(self.linear_positions, values)
+        ]
+        d = self.linear_decision(seed)
+        return BookResult(
+            rows,
+            float(sum(values)),
+            0.0,
+            d.method,
+            d.model,
+            d.reason,
+            0,
+            time.perf_counter() - t0,
+            snapshot_id=getattr(ctx, "snapshot_id", None),
+        )
+
+    @staticmethod
+    def linear_decision(seed: int = DEFAULT_SEED) -> PricingDecision:
+        reason = "linear instruments: closed forms on the market, never simulated"
+        return PricingDecision(LINEAR, "closed_form", "none", None, reason, 0, None, seed)
+
+    def _with_linear(self, res: BookResult, ctx, market, factor) -> BookResult:
+        """A simulated result with the linear positions added: their values are exact, so the errors do not move."""
+        if not self.linear_positions:
+            return res
+        values = self.linear_values(ctx, market, factor)
+        for pos, v in zip(self.linear_positions, values):
+            q = float(pos.quantity)
+            res.positions.append(PositionResult(pos.name, q, v / q if q else 0.0, 0.0, v, 0.0, LINEAR))
+        extra = float(sum(values))
+        res.value += extra
+        if res.pairs is not None:
+            res.pairs = res.pairs + extra
+            assert res.position_pairs is not None  # noqa: S101 (narrows the type for pyright: pairs come with their positions')
+            res.position_pairs = res.position_pairs + [np.full(len(res.pairs), v) for v in values]
+        return res
 
     def _prepare(self, ctx):
         items = []
-        for pos in self.positions:
+        for pos in self.simulated:
             program, fmt, cal = pos.compiled(ctx.valuation)
             clock = Clock(ctx.valuation, cal)
             timeline = build_timeline(program, clock)
@@ -247,6 +327,9 @@ class Book:
         market = market or ctx.market
         surface = surface or getattr(ctx, "surface", None)
         items = self._prepare(ctx)
+        if not items:  # linear instruments only: closed forms, one per spot factor
+            got = [self._linear_only(ctx, market, f, seed, t0) for f in (spot_factors or [1.0])]
+            return got if spot_factors is not None else got[0]
         d = self.decision(ctx, items, model)
         rule = "basket" if len(d_names := {n for it in items for n in it["underlyings"]}) > 1 else d.product_class
         reason = RULES[rule].reason.split(":")[0] if not d.forced else d.reason
@@ -276,7 +359,7 @@ class Book:
                         it["pos"].name, it["pos"].quantity, r.price, 0.0, v, 0.0, it["profile"].product_class
                     )
                 )
-            return BookResult(
+            replicated = BookResult(
                 results,
                 float(sum(values)),
                 0.0,
@@ -288,6 +371,7 @@ class Book:
                 warnings,
                 snapshot_id=getattr(ctx, "snapshot_id", None),
             )
+            return self._with_linear(replicated, ctx, market, 1.0)
         horizon = max(it["profile"].horizon for it in items)
         times = np.unique(np.concatenate([it["timeline"].sim_times for it in items]))
         if basket:
@@ -322,22 +406,21 @@ class Book:
                 unit_se = 100 * se / abs(q * N) if q else 0.0
                 results.append(PositionResult(it["pos"].name, q, unit, unit_se, v, se, it["profile"].product_class))
             res = MCResult(float(book.mean()), float(book.std(ddof=1) / np.sqrt(len(book))), n_paths)
-            out.append(
-                BookResult(
-                    results,
-                    res.price,
-                    res.stderr,
-                    "monte_carlo",
-                    d.model,
-                    reason,
-                    n_paths,
-                    time.perf_counter() - t0,
-                    warnings,
-                    book,
-                    pos_pairs,
-                    getattr(ctx, "snapshot_id", None),
-                )
+            simulated = BookResult(
+                results,
+                res.price,
+                res.stderr,
+                "monte_carlo",
+                d.model,
+                reason,
+                n_paths,
+                time.perf_counter() - t0,
+                warnings,
+                book,
+                pos_pairs,
+                getattr(ctx, "snapshot_id", None),
             )
+            out.append(self._with_linear(simulated, ctx, market, factors[k]))
         return out if spot_factors is not None else out[0]
 
     @staticmethod
@@ -371,7 +454,7 @@ class Book:
         if isinstance(ctx, BasketContext):
             return self._basket_greeks(ctx, model, n_paths, seed, batch, smoothing, h_spot, h_vol, workers)
         items = self._prepare(ctx)
-        d = self.decision(ctx, items, model)
+        d = self.decision(ctx, items, model) if items else self.linear_decision(seed)
         eps = 0.0 if d.method == "replication" else smoothing
         S0 = ctx.market.spot
         kw: dict[str, Any] = dict(
@@ -387,7 +470,7 @@ class Book:
         out = {"method": d.method, "model": d.model, "smoothing": eps, "units": dict(BOOK_UNITS)}
 
         bump = _bump
-        if d.method == "replication":
+        if d.method in ("replication", "closed_form"):
             up = self.price(market=ctx.market.scaled(S0 * (1 + h_spot)), **kw)
             down = self.price(market=ctx.market.scaled(S0 * (1 - h_spot)), **kw)
         else:  # sticky moneyness: the bumped paths are the base paths times the factor, one simulation
@@ -416,8 +499,9 @@ class Book:
     def _basket_greeks(self, ctx, model, n_paths, seed, batch, smoothing, h_spot, h_vol, workers=None) -> dict:
         """Delta and vega per underlying name (each name bumped alone, the others fixed), on common paths."""
         items = self._prepare(ctx)
-        d = self.decision(ctx, items, model)
-        names = [n for n in ctx.names if any(n in it["underlyings"] for it in items)]
+        d = self.decision(ctx, items, model) if items else self.linear_decision(seed)
+        hedged = self.linear_names()
+        names = [n for n in ctx.names if n in hedged or any(n in it["underlyings"] for it in items)]
         fixing = {n: ctx.markets[n].spot for n in names}
         kw: dict[str, Any] = dict(
             model=model,

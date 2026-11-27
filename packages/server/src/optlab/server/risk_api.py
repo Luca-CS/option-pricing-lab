@@ -35,12 +35,13 @@ class RiskApi:
         self.store = RiskRepository(desk.db)
 
     # --- the book as risk groups ---
-    def groups(self, frozen: Frozen | None = None) -> list:
-        """The book's groups on the market of a job (`frozen`), or on the desk as it is now."""
+    def groups(self, frozen: Frozen | None = None, include_simulated: bool = False) -> list:
+        """The book's groups on the market of a job (`frozen`), or on the desk as it is now; with the what-ifs when
+        `include_simulated` (never for the EOD)."""
         desk = self.desk
         frozen = frozen or desk.freeze_book()
         ctx = desk.context_of(frozen)
-        groups = desk.book_groups(ctx, desk._trades_of(frozen), frozen)
+        groups = desk.book_groups(ctx, desk._trades_of(frozen), frozen, include_simulated)
         return [RiskGroup(label, book, gctx, seed) for label, book, gctx, _, seed, _ in groups]
 
     def _settings(self, opts: dict, smoothing: float = 0.0) -> RiskSettings:
@@ -90,9 +91,9 @@ class RiskApi:
         self._settings(opts, smoothing)  # a bad model is refused now
         return self.desk._submit(kind, body, self.desk.freeze_book())
 
-    def _start(self, f: Frozen, label: str):
+    def _start(self, f: Frozen, label: str, opts: dict | None = None):
         progress.step(f"{label}: the book's groups")
-        groups = self.groups(f)
+        groups = self.groups(f, bool((opts or {}).get("include_simulated")))
         return groups, self.desk.context_of(f)
 
     def _done(self, payload: dict, ctx, settings, method: dict) -> dict:
@@ -116,7 +117,7 @@ class RiskApi:
         settings = self._settings(opts, smoothing=float(opts.get("smoothing", 0.005)))
         bumps = Bumps.from_dict(body.get("bumps"))
         options = GreekOptions.from_dict(opts)
-        groups, ctx = self._start(f, "Greeks")
+        groups, ctx = self._start(f, "Greeks", opts)
         t0 = time.perf_counter()
         betas = self._betas(groups, ctx.valuation) if options.realistic else {}
         env = env_with_betas(None, betas)
@@ -159,7 +160,7 @@ class RiskApi:
         opts = body.get("options") or {}
         settings = self._settings(opts, smoothing=float(opts.get("smoothing", 0.005)))
         lo = LadderOptions.from_dict(body.get("ladder"))
-        groups, ctx = self._start(f, "ladder")
+        groups, ctx = self._start(f, "ladder", opts)
         t0 = time.perf_counter()
         betas = self._betas(groups, ctx.valuation) if "realistic" in lo.rules else {}
         rules = lo.rules if betas or "realistic" not in lo.rules else tuple(r for r in lo.rules if r != "realistic")
@@ -207,7 +208,7 @@ class RiskApi:
         settings = self._settings(opts)
         got = body["set"]
         chosen = [sc.Scenario.from_dict(d) for d in got["scenarios"]]
-        groups, ctx = self._start(f, "scenarios")
+        groups, ctx = self._start(f, "scenarios", opts)
         t0 = time.perf_counter()
         betas = self._betas(groups, ctx.valuation)
         usable = [s for s in chosen if s.shock.rule != "realistic" or betas]
@@ -241,7 +242,7 @@ class RiskApi:
         opts = body.get("options") or {}
         settings = self._settings(opts)
         workers, days = int(body["workers"]), int(body.get("days", 500))
-        groups, ctx = self._start(f, "VaR")
+        groups, ctx = self._start(f, "VaR", opts)
         t0 = time.perf_counter()
         progress.step("VaR: Greeks for the Taylor check", 1, 3)
         rep = compute(
@@ -369,7 +370,12 @@ class RiskApi:
         trades = self.desk._trades_of(f)
         start, end = body["from"], body["to"]
         progress.step(f"EOD runs from {start} to {end}")
-        out = backfill(self.desk.lake, trades, start, end, self.store, settings, greeks=bool(body.get("greeks", True)))
+        from optlab.risk.shocks import RiskEnv
+        from optlab.structured.hedges import costs as hedge_costs
+
+        env = RiskEnv(swap_spreads=hedge_costs.swap_spreads(self.desk.hedges.rows(f.costs)))
+        greeks = bool(body.get("greeks", True))
+        out = backfill(self.desk.lake, trades, start, end, self.store, settings, greeks=greeks, env=env)
         market = {"snapshot_id": None, "origin": "lake (point in time, each day)", "as_of": end}
         method = {"name": "eod_backfill", "from": start, "to": end, "n_paths": settings.n_paths}
         return envelope(market, method, clean({"runs": out, "from": start, "to": end}))

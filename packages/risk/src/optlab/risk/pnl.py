@@ -16,6 +16,8 @@ Cascade from d-1 to d, on d-1's seeds and in d-1's model scale (spot 100 at d-1)
     dividends  d's forward (dividends, repo, quanto drift);
     corr       d's correlations (worst-ofs);
     fx         the value of a group paying in another currency in the reporting one (none in a one-currency book).
+Hedging instruments (ADR-0025) ride in the groups of their names, valued in closed form at each step; the issuer's
+funding curve of d replaces d-1's at the rates step. A simulated trade (a what-if) is never in these runs.
 The steps add up to the value of d plus the cash, less the value of d-1: the total P&L, to the cent. New trades (their value
 less the client price on the day they are dealt), events (cash, calls, knock-ins) and the release of reserves are separate
 lines. The prediction by the Greeks of d-1 (theta, delta and gamma, vega per tenor with vanna and volga, skew vega, rho and
@@ -44,6 +46,8 @@ from optlab.risk.shocks import RiskEnv, context_currency
 from optlab.risk.store import RiskStorage, code_version, run_key
 from optlab.risk.surfaces import TentBumpedSurface
 from optlab.structured.calendars import CALENDARS
+from optlab.structured.hedges import LinearEnv, SpreadCurve
+from optlab.structured.hedges.instruments import BANK, home
 from optlab.structured.multiasset import BasketContext
 from optlab.structured.portfolio import Book
 from optlab.structured.reserves import remaining
@@ -63,14 +67,20 @@ def group_seed(label: str) -> int:
 def _maturity(trade) -> dt.date:
     from optlab.structured.compiler import compile_sheet
 
+    inst = trade.instrument()
+    if inst is not None:
+        return inst.maturity
     return compile_sheet(trade.term_sheet(), trade.strike_date).maturity
 
 
 def alive(trades, day) -> list:
-    """Trades dealt on or before `day` whose last payment is not before it (term sheets only)."""
+    """Trades dealt on or before `day` whose last payment is not before it: term sheets and instruments, never a
+    simulated (what-if), cancelled or closed one."""
     out = []
     for t in trades:
-        if t.term_sheet() is None or t.trade_date > day or t.status == "cancelled":
+        if t.term_sheet() is None and t.instrument() is None:
+            continue
+        if t.trade_date > day or t.status in ("cancelled", "simulated", "closed"):
             continue
         if _maturity(t) + dt.timedelta(days=10) < day:
             continue
@@ -83,6 +93,8 @@ def real_fixings(lake, trade, day) -> dict:
     from optlab.marketdata.replay import filled_fixings
 
     sheet = trade.term_sheet()
+    if sheet is None:  # an instrument: no fixing
+        return {}
     levels, _ = filled_fixings(lake, sheet.underlyings, trade.strike_date, day, sheet.get("general.calendar"))
     return levels
 
@@ -97,7 +109,19 @@ class BookDay:
     provenance: dict = field(default_factory=dict)
 
 
-def book_at(lake, trades, day, layer: str | None = "reconstructed") -> BookDay:
+def _linear_env(lake, day, scales: dict, swap_spreads: dict | None) -> LinearEnv:
+    """The instruments' environment of a date: the names' scales, the issuer's funding curve of the lake at that date (a
+    flat 0 bp assumption without one), the swap spreads."""
+    from optlab.marketdata.hedges import funding_curve
+
+    try:
+        curve = funding_curve(lake, day)
+    except KeyError:
+        curve = SpreadCurve.flat(0.0, BANK, "assumption")
+    return LinearEnv(dict(scales), {BANK: curve}, dict(swap_spreads or {}))
+
+
+def book_at(lake, trades, day, layer: str | None = "reconstructed", swap_spreads: dict | None = None) -> BookDay:
     """The book of a date on the lake's market of that date."""
     from optlab.marketdata.pit import basket_at, context_at
 
@@ -105,6 +129,10 @@ def book_at(lake, trades, day, layer: str | None = "reconstructed") -> BookDay:
     live = alive(trades, day)
     singles, baskets = {}, {}
     for t in live:
+        inst = t.instrument()
+        if inst is not None:
+            singles.setdefault(home(inst), []).append(t)
+            continue
         sheet = t.term_sheet()
         pay = sheet.payment_currency
         if len(sheet.underlyings) > 1:
@@ -116,6 +144,10 @@ def book_at(lake, trades, day, layer: str | None = "reconstructed") -> BookDay:
     def positions(ts, scale_of):
         out = []
         for t in ts:
+            if t.instrument() is not None:
+                fixings[t.trade_id] = {}
+                out.append(t.to_position())
+                continue
             real = real_fixings(lake, t, day)
             fixings[t.trade_id] = real
             out.append(t.to_position({n: {d: v / scale_of[n] for d, v in lv.items()} for n, lv in real.items()}))
@@ -126,7 +158,10 @@ def book_at(lake, trades, day, layer: str | None = "reconstructed") -> BookDay:
         scales[name] = snap.spot_scale
         prov[name] = snap.provenance
         label = name if pay in (None, ctx.payment_currency) else f"{name} ({pay})"
-        groups.append(RiskGroup(label, Book(positions(ts, {name: snap.spot_scale})), ctx, group_seed(label)))
+        book = Book(positions(ts, {name: snap.spot_scale}))
+        if book.linear_positions:
+            book.linear = _linear_env(lake, day, {name: snap.spot_scale}, swap_spreads)
+        groups.append(RiskGroup(label, book, ctx, group_seed(label)))
     for pay, ts in sorted(baskets.items(), key=lambda x: str(x[0])):
         names = sorted({n for t in ts for n in t.term_sheet().underlyings}, key=lambda n: (n != "SPX", n))
         ctx, snaps, meta = basket_at(lake, names, day, layer=layer, payment=pay)
@@ -178,7 +213,7 @@ def eod(
         got = store.find_run(key)
         if got is not None:
             return {**got["payload"], "run_id": got["run_id"], "reused": True}
-    bd = book_at(lake, trades, day, layer)
+    bd = book_at(lake, trades, day, layer, env.swap_spreads if env else None)
     positions, groups = [], []
     report = None
     if greeks and bd.groups:
@@ -262,6 +297,7 @@ def backfill(
     greeks: bool = True,
     explain: bool = True,
     log=None,
+    env: RiskEnv | None = None,
 ) -> list:
     """EOD runs over every business day of [start, end], then the cascade of each pair of days; existing identical runs are
     reused."""
@@ -270,7 +306,7 @@ def backfill(
     steps = len(days) + (max(len(days) - 1, 0) if explain else 0)
     for k, d in enumerate(days):
         with progress.part(k, steps):  # each day one part: its simulations tick inside it
-            r = eod(lake, trades, d, store, settings, layer, greeks)
+            r = eod(lake, trades, d, store, settings, layer, greeks, env=env)
         out.append(
             {"day": d.isoformat(), "run_id": r.get("run_id"), "reused": r.get("reused", False), "value": r["value"]}
         )
@@ -280,7 +316,7 @@ def backfill(
     if explain:
         for k, (a, b) in enumerate(zip(days, days[1:])):
             with progress.part(len(days) + k, steps):
-                p = explain_day(lake, trades, a, b, store, settings, layer)
+                p = explain_day(lake, trades, a, b, store, settings, layer, env=env)
             if log:
                 log(f"P&L {a} -> {b}: {'reused' if p.get('reused') else 'computed'} total {p['total']:.2f}")
             progress.tick(len(days) + k + 1, steps, "days")
@@ -308,7 +344,7 @@ def _rolled_positions(book: Book, fixings_real: dict, scale: dict, a: dt.date, b
                 elif key in real.get(n, {}):
                     fix[n][key] = real[n][key] / scale[n]
         out.append(dataclasses.replace(pos, fixings=fix))
-    return Book(out)
+    return Book(out, book.linear)
 
 
 def _rates_market(ma, mb_in_a, spot):
@@ -480,6 +516,7 @@ def explain_day(
     settings: RiskSettings | None = None,
     layer: str = "reconstructed",
     reuse: bool = True,
+    env: RiskEnv | None = None,
 ) -> dict:
     """The explained P&L from the close of `a` to the close of `b` (stored as a "pnl" run)."""
     from optlab.structured.dates import year_fraction
@@ -489,8 +526,8 @@ def explain_day(
     a, b = as_day(a), as_day(b)
     settings = settings or RiskSettings(smoothing=0.0)
     code = code_version()
-    ea = eod(lake, trades, a, store, settings, layer)
-    eb = eod(lake, trades, b, store, settings, layer)
+    ea = eod(lake, trades, a, store, settings, layer, env=env)
+    eb = eod(lake, trades, b, store, settings, layer, env=env)
     key = run_key(
         kind="pnl",
         a=ea.get("run_id") or a.isoformat(),
@@ -503,7 +540,8 @@ def explain_day(
         got = store.find_run(key)
         if got is not None:
             return {**got["payload"], "run_id": got["run_id"], "reused": True}
-    bda, bdb = book_at(lake, trades, a, layer), book_at(lake, trades, b, layer)
+    spreads = env.swap_spreads if env else None
+    bda, bdb = book_at(lake, trades, a, layer, spreads), book_at(lake, trades, b, layer, spreads)
     since = -year_fraction(a, b)
     n_days = len(CALENDARS["nyse"].business_days(a + dt.timedelta(days=1), b))
     steps_book = {s: [0.0, 0.0] for s in STEPS}
@@ -523,8 +561,13 @@ def explain_day(
         base = run_group(ga, {}, None, settings, None, keep_pairs=True)
         values: dict[str, Any] = {"base": base.pairs}  # pairs per position (keep_pairs)
         cash = {}
+        funding_b = next((g.book.linear.funding for g in bdb.groups if g.label == ga.label), None)
         for step, sctx in contexts.items():
             book = _rolled_positions(ga.book, real_b, scale_a, a, b, frozen=(step == "time"))
+            if book.linear_positions and funding_b and STEPS.index(step) >= STEPS.index("rates"):
+                book.linear = dataclasses.replace(
+                    book.linear, funding=funding_b
+                )  # d's funding curve from the rates step
             r = run_group(
                 RiskGroup(ga.label, book, sctx, ga.seed), {}, None, settings, None, cash_since=since, keep_pairs=True
             )
@@ -559,7 +602,7 @@ def explain_day(
             ev = []
             try:
                 fx_b = {n: {d: v / scale_a[n] for d, v in lv.items()} for n, lv in real_b[p].items()}
-                ev = [e for e in lifecycle_events(t, fx_b, b) if a < e.date <= b]
+                ev = [] if t.instrument() is not None else [e for e in lifecycle_events(t, fx_b, b) if a < e.date <= b]
             except KeyError, ValueError:
                 pass
             per_trade[p].update(

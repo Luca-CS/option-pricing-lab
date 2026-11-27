@@ -16,7 +16,11 @@ Desk cash conventions, in the payment currency, from the desk's side (the positi
 - rho (rate: discount and forward), rho_discount, rho_forward, epsilon (dividend yield), repo: per +1 bp, central at
   `rate_bp` and scaled, in total and per tenor (one-sided);
 - correlation: per +1 point, every pair (central) and each pair (one-sided); cross gamma: change of the delta of one name for
-  +1 % of another; quanto: per +1 point of the name-FX correlation and of the FX vol.
+  +1 % of another; quanto: per +1 point of the name-FX correlation and of the FX vol;
+- funding: per +1 bp of the issuer's funding spread, central, in total (`funding|<entity>|`) and per tenor
+  (`funding_tenor|<entity>|<tenor>`, one-sided), for a group that holds notes or instruments on the bank's curve;
+- dividends by calendar year: per +1 % of that year's dividends (`dividend_year|<name>|<year>`, one-sided), from the
+  valuation's year to the group's last one (with `curves`).
 
 A Greek whose size is under twice its standard error is flagged as within the noise.
 """
@@ -35,6 +39,8 @@ from optlab.risk import grid
 from optlab.risk.curves import CurveMove
 from optlab.risk.engine import Measure, RiskSettings, run_group
 from optlab.risk.shocks import RiskEnv, Shock, VolMove, context_currency
+from optlab.structured.cashflows import Note
+from optlab.structured.hedges.instruments import BANK, Deposit, FundingSwap
 from optlab.structured.multiasset import BasketContext
 from optlab.structured.units import UNITS as STRUCTURED_UNITS
 
@@ -56,6 +62,8 @@ UNITS = {
     "corr": "currency per +1 correlation point",
     "cross_gamma": "currency per +1 % of the first name, per +1 % of the second (change of its cash delta)",
     "quanto": "currency per +1 correlation point (name-FX) or per +1 FX vol point",
+    "funding": "currency per +1 bp of the issuer's funding spread",
+    "dividend_year": "currency per +1 % of a calendar year's dividends",
     "stderr": STRUCTURED_UNITS["stderr"],
 }
 
@@ -71,6 +79,7 @@ class Bumps:
     skew: float = 0.01
     roll_days: int = 1
     vol_shift: float = 0.0  # s of the shifted vega, in vol (0.2 = 20 points)
+    dividend_year: float = 0.01  # relative move of one calendar year's dividends
 
     @classmethod
     def from_dict(cls, d: dict | None) -> Bumps:
@@ -126,8 +135,11 @@ def plan(
     env: RiskEnv | None = None,
     names=None,
     roll_spots: dict | None = None,
+    funding: bool = False,
+    years: tuple = (),
 ) -> tuple[dict, list]:
-    """(shocks, measures) of every Greek of one group's context. Measure names are "greek|name|bucket"."""
+    """(shocks, measures) of every Greek of one group's context. Measure names are "greek|name|bucket". `funding`: the
+    group holds what the issuer's funding spread moves; `years`: the calendar years of the dividend Greeks."""
     b = bumps or Bumps()
     o = options or GreekOptions()
     env = env or RiskEnv()
@@ -145,6 +157,13 @@ def plan(
         _plan_carry(S, M, n, b, o, env)
     _plan_totals(M, names, tenor_name)
     _plan_rates(S, M, cur, b, o)
+    if funding:
+        _plan_funding(S, M, b, o)
+    if years:
+        for n in names:
+            for y in years:
+                S[f"dy{y}|{n}"] = Shock(dividend_years={n: {int(y): b.dividend_year}})
+                M.append(_one_sided(f"dividend_year|{n}|{int(y)}", f"dy{y}|{n}", 0.01 / b.dividend_year))
     if basket and o.cross and len(names) > 1:
         _plan_correlation(S, M, names, b)
     if o.theta:
@@ -308,6 +327,17 @@ def _plan_rates(S: dict, M: list, cur: str, b: Bumps, o: GreekOptions) -> None:
             M.append(_one_sided(f"rho_tenor|{cur}|{label}", f"rt{j}", 1 / rb))
 
 
+def _plan_funding(S: dict, M: list, b: Bumps, o: GreekOptions, entity: str = BANK) -> None:
+    """The issuer's funding spread: in total, central, and by tenor with `curves` (one-sided)."""
+    rb = b.rate_bp
+    S["fund+"], S["fund-"] = Shock(funding={entity: CurveMove(rb)}), Shock(funding={entity: CurveMove(-rb)})
+    M.append(_central(f"funding|{entity}|", "fund+", "fund-", 1 / rb))
+    if o.curves:
+        for j, label in enumerate(grid.TENOR_LABELS):
+            S[f"ft{j}"] = Shock(funding={entity: CurveMove(tenors={j: rb})})
+            M.append(_one_sided(f"funding_tenor|{entity}|{label}", f"ft{j}", 1 / rb))
+
+
 def _plan_correlation(S: dict, M: list, names: list, b: Bumps) -> None:
     """The correlation of a basket: parallel, by pair, and the cross gammas."""
     h = b.spot
@@ -325,6 +355,22 @@ def _plan_correlation(S: dict, M: list, names: list, b: Bumps) -> None:
             M.append(
                 _cross(f"cross_gamma|{a}~{bb}|", f"g++|{pair}", f"g+-|{pair}", f"g-+|{pair}", f"g--|{pair}", unit_s**2)
             )
+
+
+def _dividend_years(ctx, items, book, most: int = 10) -> tuple:
+    """The calendar years from the valuation's to the group's last observation or maturity, at most `most` of them."""
+    import datetime as dt
+
+    horizon = max([it["profile"].horizon for it in items] or [0.0])
+    last = ctx.valuation + dt.timedelta(days=round(365 * horizon))
+    for p in book.linear_positions:
+        m = p.product.maturity
+        if m != dt.date.max:
+            last = max(last, m)
+    if not items and not any(p.product.type in ("dividend_swap", "dividend_future") for p in book.linear_positions):
+        return ()
+    first = ctx.valuation.year
+    return tuple(range(first, min(last.year, first + most - 1) + 1))
 
 
 def _forward_drift(ctx, names, days: int) -> dict:
@@ -387,10 +433,15 @@ def compute(
     for g_i, g in enumerate(groups):
         ctx = g.ctx
         items = g.book._prepare(ctx)
-        used = sorted({n for it in items for n in it["underlyings"]})
+        here = set(ctx.names) if isinstance(ctx, BasketContext) else {ctx.underlying}
+        used = sorted({n for it in items for n in it["underlyings"]} | (g.book.linear_names() & here))
         names = [n for n in ctx.names if n in used] if isinstance(ctx, BasketContext) else used
         roll_spots = _forward_drift(ctx, names, bumps.roll_days) if options.theta else None
-        shocks, measures = plan(ctx, bumps, options, env, names, roll_spots)
+        funding = any(isinstance(it["fmt"], Note) for it in items) or any(
+            isinstance(p.product, (Deposit, FundingSwap)) for p in g.book.linear_positions
+        )
+        years = _dividend_years(ctx, items, g.book) if options.curves else ()
+        shocks, measures = plan(ctx, bumps, options, env, names, roll_spots, funding, years)
         with progress.part(g_i, len(groups)):  # each group one part of the run's progress
             run = run_group(g, shocks, measures, settings, env)
         spots = {n: float((ctx.markets[n] if isinstance(ctx, BasketContext) else ctx.market).spot) for n in names}

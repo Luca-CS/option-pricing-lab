@@ -2794,6 +2794,421 @@
         ]
       }
     },
+    "/api/v1/trading/hedges": {
+      "post": {
+        "tags": [
+          "trading"
+        ],
+        "summary": "Create Hedge",
+        "description": "Book an instrument as a trade, live or simulated (a what-if), tagged `hedge`.",
+        "operationId": "create_hedge",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HedgeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "the hedge booked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Trade"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "invalid input: the fields at fault in `errors`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "a role or the CSRF header is missing",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "any other error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-roles": [
+          "trader"
+        ],
+        "security": [
+          {
+            "session": [],
+            "csrf": []
+          }
+        ]
+      }
+    },
+    "/api/v1/trading/hedges/marks": {
+      "post": {
+        "tags": [
+          "trading"
+        ],
+        "summary": "Mark Instrument",
+        "description": "An instrument at the market in use: its value and fair level per unit, its half-spread, for a size.",
+        "operationId": "mark_instrument",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "the answer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstrumentMark"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "invalid input: the fields at fault in `errors`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "a role or the CSRF header is missing",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "any other error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-roles": [
+          "viewer"
+        ],
+        "security": [
+          {
+            "session": [],
+            "csrf": []
+          }
+        ]
+      }
+    },
+    "/api/v1/trading/trades/{trade_id}/promote": {
+      "post": {
+        "tags": [
+          "trading"
+        ],
+        "summary": "Promote Trade",
+        "description": "A simulated trade booked: live, a new version.",
+        "operationId": "promote_trade",
+        "parameters": [
+          {
+            "name": "trade_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$",
+              "description": "a stored id (trade, quote, run, job), never a file path",
+              "title": "Trade Id"
+            },
+            "description": "a stored id (trade, quote, run, job), never a file path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the trade, now live",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Trade"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "invalid input: the fields at fault in `errors`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "a role or the CSRF header is missing",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "any other error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-roles": [
+          "trader"
+        ],
+        "security": [
+          {
+            "session": [],
+            "csrf": []
+          }
+        ]
+      }
+    },
+    "/api/v1/trading/trades/{trade_id}/discard": {
+      "post": {
+        "tags": [
+          "trading"
+        ],
+        "summary": "Discard Trade",
+        "description": "A simulated trade removed (a soft delete).",
+        "operationId": "discard_trade",
+        "parameters": [
+          {
+            "name": "trade_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$",
+              "description": "a stored id (trade, quote, run, job), never a file path",
+              "title": "Trade Id"
+            },
+            "description": "a stored id (trade, quote, run, job), never a file path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "invalid input: the fields at fault in `errors`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "a role or the CSRF header is missing",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "any other error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-roles": [
+          "trader"
+        ],
+        "security": [
+          {
+            "session": [],
+            "csrf": []
+          }
+        ]
+      }
+    },
+    "/api/v1/trading/trades/{trade_id}/roll": {
+      "post": {
+        "tags": [
+          "trading"
+        ],
+        "summary": "Roll Trade",
+        "description": "A live future closed at its level and the same size opened on the next quarterly expiry, in one audited call.",
+        "operationId": "roll_trade",
+        "parameters": [
+          {
+            "name": "trade_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$",
+              "description": "a stored id (trade, quote, run, job), never a file path",
+              "title": "Trade Id"
+            },
+            "description": "a stored id (trade, quote, run, job), never a file path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the closed and opened trades",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Roll"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "invalid input: the fields at fault in `errors`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "a role or the CSRF header is missing",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "any other error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-roles": [
+          "trader"
+        ],
+        "security": [
+          {
+            "session": [],
+            "csrf": []
+          }
+        ]
+      }
+    },
     "/api/v1/market/context": {
       "get": {
         "tags": [
@@ -6979,6 +7394,12 @@
             "type": "boolean",
             "title": "Mix Band",
             "default": false
+          },
+          "include_simulated": {
+            "type": "boolean",
+            "title": "Include Simulated",
+            "description": "the simulated what-ifs too",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -7198,6 +7619,26 @@
             "type": "object",
             "title": "Groups"
           },
+          "hedges": {
+            "$ref": "#/components/schemas/HedgeRows"
+          },
+          "hedges_starting": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Hedges Starting",
+            "description": "the hedging rows still at their starting value (assumptions)",
+            "default": []
+          },
+          "hedge_fields": {
+            "items": {
+              "$ref": "#/components/schemas/CostField"
+            },
+            "type": "array",
+            "title": "Hedge Fields",
+            "default": []
+          },
           "starting": {
             "additionalProperties": {
               "$ref": "#/components/schemas/CostGroup"
@@ -7249,7 +7690,8 @@
         "additionalProperties": true,
         "type": "object",
         "required": [
-          "groups"
+          "groups",
+          "hedges"
         ],
         "title": "CostDefaults",
         "description": "The desk's cost table by group of underlyings and size band, its versions and the starting values."
@@ -7261,6 +7703,20 @@
             "type": "object",
             "title": "Groups",
             "description": "group of underlyings -> size bands -> lines (structured/defaults)"
+          },
+          "hedges": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object",
+                "maxProperties": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hedges",
+            "description": "the hedging rows (structured/hedges/costs); omitted: the last version's"
           }
         },
         "additionalProperties": false,
@@ -8531,6 +8987,150 @@
         "type": "object",
         "title": "Health"
       },
+      "HedgeIn": {
+        "properties": {
+          "instrument": {
+            "additionalProperties": true,
+            "type": "object",
+            "maxProperties": 16,
+            "title": "Instrument",
+            "description": "{type, its fields}: future, cash, irs, deposit, funding_swap, ..."
+          },
+          "quantity": {
+            "type": "number",
+            "maximum": 1000000000000.0,
+            "minimum": -1000000000000.0,
+            "title": "Quantity",
+            "description": "signed: > 0 when the desk is long; lots, units or notional"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "live",
+              "simulated"
+            ],
+            "title": "Status",
+            "default": "live"
+          },
+          "fill": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000000000000.0,
+                "minimum": -1000000000000.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fill",
+            "description": "cash paid per unit at the fill (negative: received); by type when omitted"
+          },
+          "fees": {
+            "type": "number",
+            "maximum": 1000000000000.0,
+            "minimum": 0.0,
+            "title": "Fees",
+            "description": "currency, the whole trade",
+            "default": 0.0
+          },
+          "trade_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[\\w-]{1,64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trade Id"
+          },
+          "trade_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trade Date"
+          },
+          "book": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Book",
+            "default": "default"
+          },
+          "counterparty": {
+            "type": "string",
+            "maxLength": 128,
+            "title": "Counterparty",
+            "default": ""
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Tags"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "instrument",
+          "quantity"
+        ],
+        "title": "HedgeIn",
+        "description": "An instrument booked as a trade (structured/hedges): live, or simulated (a what-if)."
+      },
+      "HedgeRows": {
+        "properties": {
+          "future_ticks": {
+            "type": "number",
+            "title": "Future Ticks"
+          },
+          "cash_bp": {
+            "type": "number",
+            "title": "Cash Bp"
+          },
+          "irs_bp": {
+            "type": "number",
+            "title": "Irs Bp"
+          },
+          "deposit_bp": {
+            "type": "number",
+            "title": "Deposit Bp"
+          },
+          "dividend_pct": {
+            "type": "number",
+            "title": "Dividend Pct"
+          },
+          "swap_spread_bp": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Swap Spread Bp"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "future_ticks",
+          "cash_bp",
+          "irs_bp",
+          "deposit_bp",
+          "dividend_pct",
+          "swap_spread_bp"
+        ],
+        "title": "HedgeRows",
+        "description": "The hedging instruments' half-spreads and the swap spread per currency (structured/hedges/costs.py)."
+      },
       "HestonFit": {
         "properties": {
           "v0": {
@@ -8655,6 +9255,91 @@
           "currency"
         ],
         "title": "Instrument"
+      },
+      "InstrumentMark": {
+        "properties": {
+          "instrument": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Instrument"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "home": {
+            "type": "string",
+            "title": "Home",
+            "description": "the name whose market values it"
+          },
+          "valuation": {
+            "type": "string",
+            "title": "Valuation"
+          },
+          "unit": {
+            "$ref": "#/components/schemas/MarkUnit"
+          },
+          "quantity": {
+            "type": "number",
+            "title": "Quantity"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "cost": {
+            "type": "number",
+            "title": "Cost",
+            "description": "|quantity| x the half-spread"
+          },
+          "fill": {
+            "type": "number",
+            "title": "Fill",
+            "description": "the cash per unit a booking takes when none is given"
+          },
+          "origin": {
+            "type": "string",
+            "title": "Origin"
+          },
+          "funding_origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Funding Origin"
+          },
+          "swap_spread": {
+            "type": "number",
+            "title": "Swap Spread",
+            "description": "fraction over the government curve"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "instrument",
+          "label",
+          "currency",
+          "home",
+          "valuation",
+          "unit",
+          "quantity",
+          "value",
+          "cost",
+          "fill",
+          "origin",
+          "swap_spread"
+        ],
+        "title": "InstrumentMark",
+        "description": "An instrument at the market in use."
       },
       "Job": {
         "properties": {
@@ -9422,6 +10107,56 @@
         },
         "type": "object",
         "title": "LogoutIn"
+      },
+      "MarkIn": {
+        "properties": {
+          "instrument": {
+            "additionalProperties": true,
+            "type": "object",
+            "maxProperties": 16,
+            "title": "Instrument"
+          },
+          "quantity": {
+            "type": "number",
+            "maximum": 1000000000000.0,
+            "minimum": -1000000000000.0,
+            "title": "Quantity",
+            "default": 1.0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "instrument"
+        ],
+        "title": "MarkIn"
+      },
+      "MarkUnit": {
+        "properties": {
+          "value": {
+            "type": "number",
+            "title": "Value",
+            "description": "currency per unit, the flows to come"
+          },
+          "fair": {
+            "type": "number",
+            "title": "Fair",
+            "description": "the fair level: a future's or a dividend's points, a swap's or deposit's rate"
+          },
+          "half_spread": {
+            "type": "number",
+            "title": "Half Spread",
+            "description": "currency per unit: what entering or leaving one unit costs"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "value",
+          "fair",
+          "half_spread"
+        ],
+        "title": "MarkUnit"
       },
       "MarketContext": {
         "properties": {
@@ -12446,6 +13181,12 @@
             "title": "Theta",
             "description": "Greeks: the roll of one day",
             "default": true
+          },
+          "include_simulated": {
+            "type": "boolean",
+            "title": "Include Simulated",
+            "description": "Greeks, ladder, scenarios and VaR: the simulated what-ifs too (never the EOD)",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -12725,6 +13466,24 @@
           "items"
         ],
         "title": "RiskRunPage"
+      },
+      "Roll": {
+        "properties": {
+          "closed": {
+            "$ref": "#/components/schemas/Trade"
+          },
+          "opened": {
+            "$ref": "#/components/schemas/Trade"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "closed",
+          "opened"
+        ],
+        "title": "Roll",
+        "description": "A future rolled: the closed trade and the one opened on the next expiry."
       },
       "SavedQuote": {
         "properties": {
@@ -13938,7 +14697,7 @@
           "status": {
             "type": "string",
             "title": "Status",
-            "description": "live, called, matured, knocked_out, deleted, ..."
+            "description": "live, simulated, called, matured, closed, cancelled"
           },
           "quantity": {
             "type": "number",
@@ -14436,6 +15195,42 @@
             ],
             "title": "Knock Out",
             "description": "an accumulator's knock-out, a fraction of the initial level"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label",
+            "description": "an instrument's name on the blotter"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency",
+            "description": "an instrument's payment currency"
+          },
+          "maturity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maturity",
+            "description": "an instrument's expiry or maturity"
           }
         },
         "additionalProperties": true,
@@ -14493,7 +15288,8 @@
                   "live",
                   "called",
                   "matured",
-                  "cancelled"
+                  "cancelled",
+                  "closed"
                 ]
               },
               {

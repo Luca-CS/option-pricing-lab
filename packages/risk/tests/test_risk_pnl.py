@@ -118,3 +118,35 @@ def test_on_a_quiet_day_the_greeks_explain_most_of_the_pnl(lake, tmp_path):
     print("quiet day: total", total, "predicted", out["predicted_total"], "explained share", share)
     assert np.isfinite(share)
     assert share > 0.9  # measured: 99 % on 04/11/2026 (reports/risk.md)
+
+
+@pytest.mark.lake
+def test_hedges_ride_in_the_eod_and_the_cascade_and_a_what_if_never_does(lake, tmp_path):
+    """A sold BRC hedged by a future, a deposit and a dividend swap: the EOD values them, the cascade still adds up to
+    the cent and ends on the next EOD, and a simulated trade stays out of both."""
+    from optlab.structured.hedges import parse
+    from optlab.structured.hedges.contracts import third_friday
+
+    store = risk_store(tmp_path)
+    a, b = dt.date(2026, 11, 3), dt.date(2026, 11, 4)
+    fut = parse({"type": "future", "name": "SPX", "expiry": third_friday(2026, 12), "price": 6800.0})
+    dep = parse({"type": "deposit", "ccy": "USD", "start": "2026-10-01", "end": "2027-10-01", "rate": 0.045})
+    div = parse({"type": "dividend_swap", "name": "SPX", "year": 2027, "strike": 75.0})
+    trades = [
+        brc_2026(),
+        Trade.from_instrument("H-FUT", fut, -1.0, a, tags=("hedge",)),
+        Trade.from_instrument("H-DEP", dep, 1e5, a, fill=1.0),
+        Trade.from_instrument("H-DIV", div, 10.0, a),
+        Trade.from_instrument("H-WHATIF", fut, 5.0, a, status="simulated"),
+    ]
+    first = P.eod(lake, trades, a, store, SETTINGS, greeks=False)
+    ids = {p["trade_id"] for p in first["positions"]}
+    assert ids == {"BRC-2026", "H-FUT", "H-DEP", "H-DIV"}  # the what-if is not in the official EOD
+    hedge = next(p for p in first["positions"] if p["trade_id"] == "H-FUT")
+    assert hedge["value_se"] == 0.0
+    out = P.explain_day(lake, trades, a, b, store, SETTINGS)
+    assert sum(v[0] for v in out["steps"].values()) == pytest.approx(out["total"], abs=1e-9)
+    assert abs(out["groups"][0]["reconciliation_gap"]) < 0.01
+    fut_steps = out["trades"]["H-FUT"]["steps"]
+    assert fut_steps["vol"] == 0.0 and fut_steps["skew"] == 0.0  # a future has no vega
+    assert abs(fut_steps["spot"]) > 0  # a short future moves with the index

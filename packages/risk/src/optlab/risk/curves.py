@@ -67,27 +67,40 @@ class CurveMove:
         return cls(float(d.get("parallel", 0.0)), {int(j): float(v) for j, v in (d.get("tenors") or {}).items()})
 
 
-def _pillars(market: Market) -> np.ndarray:
+def _pillars(market: Market, extra=()) -> np.ndarray:
     base = np.asarray(market.to_dict()["pillars"], dtype=float)
     top = max(float(base.max()), grid.TENORS[-1]) + 1.0
     dense = np.arange(1, int(np.ceil(top * 12)) + 1) / 12.0
-    return np.unique(np.concatenate([base, np.asarray(grid.TENORS), dense]))
+    return np.unique(np.concatenate([base, np.asarray(grid.TENORS), dense, np.asarray(extra, dtype=float)]))
 
 
 def bumped_market(
-    market: Market, discount: CurveMove | None = None, carry: CurveMove | None = None, dividend_relative: float = 0.0
+    market: Market,
+    discount: CurveMove | None = None,
+    carry: CurveMove | None = None,
+    dividend_relative: float = 0.0,
+    dividend_windows: tuple = (),
 ) -> Market:
     """The market with the discount rate moved by `discount` and the forward's carry by `carry` (both in bp), and the
-    dividends scaled by (1 + dividend_relative) as `structured.costs.forward_bumped` does (steps and season kept)."""
-    if not discount and not carry and not dividend_relative:
+    dividends scaled by (1 + dividend_relative) as `structured.costs.forward_bumped` does (steps and season kept).
+    `dividend_windows` ((a, b, relative), ...) scales only what the forward carries over [a, b] (years from the
+    valuation): a calendar year's dividends, the forward after b moved by the same factor."""
+    if not discount and not carry and not dividend_relative and not dividend_windows:
         return market
-    T = _pillars(market)
+    edges = [x for a, b, _ in dividend_windows for x in (a, b) if x > 0]
+    T = _pillars(market, edges)
     D, F = np.asarray(market.D(T), dtype=float), np.asarray(market.F(T), dtype=float)
     if discount:
         D = D * np.exp(-discount.rate(T) * T)
-    if dividend_relative:
+    if dividend_relative or dividend_windows:
         carried = np.log(market.spot / (np.asarray(market.F(T)) * np.asarray(market.D(T))))
         F = F * np.exp(-dividend_relative * carried)
+        for a, b, rel in dividend_windows:
+            c = lambda x: np.log(market.spot / (np.asarray(market.F(x)) * np.asarray(market.D(x))))  # noqa: E731
+            lo, hi = max(a, 0.0), max(b, 0.0)
+            c_lo = c(lo) if lo > 0 else 0.0
+            inside = c(np.clip(T, lo, hi)) - c_lo
+            F = F * np.exp(-rel * np.where(T > lo, inside, 0.0))
     if carry:
         F = F * np.exp(carry.rate(T) * T)
     return Market(market.spot, T, D, F)

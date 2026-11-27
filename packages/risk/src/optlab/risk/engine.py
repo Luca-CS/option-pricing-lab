@@ -16,6 +16,11 @@ are kept only until every shock they read is valued.
 A product already struck keeps its fixings; a product struck today keeps today's spot as its initial fixing. The roll moves
 the valuation date by business days with the market frozen in remaining maturity, adds the frozen spot as the fixing of every
 day it crosses, and counts what is paid on those days as cash: value + cash is what the desk holds after the roll.
+
+Linear instruments (`structured.hedges`, ADR-0025) ride beside the simulated positions of their group: each shock's moved
+market values them in closed form (SE 0), after the simulated ones in every list of positions. A group of instruments only
+runs no simulation. The issuer's funding spread (`Shock.funding`) moves the present values of notes (issuer-discounted) and
+the instruments on the bank's curve, on the same simulation.
 """
 
 from __future__ import annotations
@@ -38,6 +43,7 @@ from optlab.risk.shocks import (
     apply,
     context_currency,
     discount_move,
+    funding_move,
     fx_factor,
     name_moves,
     shocked_market,
@@ -45,10 +51,11 @@ from optlab.risk.shocks import (
     simulation_part,
 )
 from optlab.structured import engine as batch_engine
-from optlab.structured.cashflows import FundedSwap, Swap
+from optlab.structured.cashflows import FundedSwap, Note, Swap
 from optlab.structured.context import PricingContext
 from optlab.structured.dates import year_fraction
 from optlab.structured.engine import Evaluation
+from optlab.structured.hedges.instruments import BANK
 from optlab.structured.multiasset import BasketContext
 from optlab.structured.policy import PricingDecision
 from optlab.structured.portfolio import Book, merged_history
@@ -143,7 +150,7 @@ def rolled_book(book: Book, items, old: dt.date, new: dt.date, spot0) -> Book:
             for d in days:
                 fix[n].setdefault(d, float(level))
         out.append(dataclasses.replace(pos, fixings=fix))
-    return Book(out)
+    return Book(out + book.linear_positions, book.linear)
 
 
 @dataclass
@@ -331,6 +338,33 @@ class _Group:
     slv_cache: dict = field(default_factory=dict)
 
     @property
+    def n_linear(self) -> int:
+        return len(self.group.book.linear_positions)
+
+    def linear_values(self, shock_name: str, n_pairs: int | None = None) -> list:
+        """The linear positions' values under a shock, exact: on its moved market (spot, forwards, discounts, the roll),
+        its funding move, in the reporting currency (FX); as constant pairs when `n_pairs` is given."""
+        book = self.group.book
+        if not book.linear_positions:
+            return []
+        ctx, s = self.group.ctx, self.shocks[shock_name]
+        full = apply(ctx, s, self.env)
+        since = ctx.valuation if s.roll_days else None
+        if since is None and self.cash_since is not None:
+            since = ctx.valuation - dt.timedelta(days=round(-self.cash_since * 365))
+
+        def move(entity: str):
+            m = funding_move(s, entity)
+            return None if m is None else m.rate
+
+        values = book.linear_values(full, None, 1.0, full.valuation, since, move)
+        out = []
+        for pos, v in zip(book.linear_positions, values):
+            x = v * fx_factor(s, pos.product.currency, self.env.currency)
+            out.append(x if n_pairs is None else np.full(n_pairs, x))
+        return out
+
+    @property
     def basket(self) -> bool:
         return isinstance(self.group.ctx, BasketContext)
 
@@ -365,6 +399,16 @@ def run_group(
         if missing:
             raise KeyError(f"measure {m.name} reads unknown shock(s) {', '.join(sorted(missing))}")
     g = _group(group, shocks, measures, settings, env, cash_since, keep_pairs)
+    if not g.base_items:  # instruments only: closed forms, no simulation
+        for k in ["base", *[k for k in shocks if k != "base"]]:
+            vals = g.linear_values(k)
+            if k == "base" and keep_pairs:
+                g.run.pairs = list(vals)
+            if k == "base" or shocks[k].roll_days:
+                g.run.cash[k] = [{} for _ in vals]
+            g.results.finish(k, vals)
+        g.run.seconds = time.perf_counter() - t_start
+        return g.run
     buckets: OrderedDict = OrderedDict()
     for k, s in shocks.items():
         buckets.setdefault(sim_key(group.ctx, s, env), []).append(k)
@@ -385,18 +429,21 @@ def _group(group: RiskGroup, shocks, measures, settings, env, cash_since, keep_p
     basket = isinstance(ctx, BasketContext)
     cur = context_currency(ctx)
     base_items = book._prepare(ctx)
-    d = book.decision(ctx, base_items, settings.model)
-    used = sorted({n for it in base_items for n in it["underlyings"]})
+    d = book.decision(ctx, base_items, settings.model) if base_items else book.linear_decision(group.seed)
+    here = set(ctx.names) if basket else {ctx.underlying}
+    used = sorted({n for it in base_items for n in it["underlyings"]} | (book.linear_names() & here))
     names = [n for n in ctx.names if n in used] if basket else used
     spot0 = {n: float(ctx.markets[n].spot) for n in names} if isinstance(ctx, BasketContext) else float(ctx.market.spot)
     notionals = [float({**it["program"].param_values, **it["pos"].params}.get("N", 1.0)) for it in base_items]
     quantities = [float(it["pos"].quantity) for it in base_items]
+    notionals += [1.0 for _ in book.linear_positions]
+    quantities += [float(p.quantity) for p in book.linear_positions]
     run = GroupRun(
         group.label,
         d.method,
         d.model,
         cur,
-        [it["pos"].name for it in base_items],
+        [it["pos"].name for it in base_items] + [p.name for p in book.linear_positions],
         quantities,
         notionals,
         settings.n_paths if d.method != "replication" else 0,
@@ -447,11 +494,13 @@ def _replicate(g: _Group, members: list, items: list, since, fx: dict) -> None:
     for m in members:
         full = apply(g.group.ctx, g.shocks[m], g.env)
         assert not isinstance(full, BasketContext)  # noqa: S101 (narrows the type for pyright: replication prices one name)
+        fund = funding_move(g.shocks[m], BANK)
         vals = []
         for it, q in zip(items, g.quantities):
             tl = it["timeline"]
             T_obs = it["profile"].observation_times[-1] if it["profile"].observation_times else tl.horizon
-            fmt = RiskFormat(it["fmt"], None, since) if since is not None else it["fmt"]
+            pv = bumped_market(full.market, fund) if fund and isinstance(it["fmt"], Note) else None
+            fmt = RiskFormat(it["fmt"], pv, since) if since is not None or pv is not None else it["fmt"]
             r = replication_result(
                 it["program"],
                 tl,
@@ -469,6 +518,10 @@ def _replicate(g: _Group, members: list, items: list, since, fx: dict) -> None:
                 g.run.cash.setdefault(m, []).append(
                     _expected_cash(it["fmt"], r.expected_flows, r.redemption_probabilities, N, 1.0, q * fx[m])
                 )
+        linear = g.linear_values(m)
+        vals += linear
+        if m == "base" or g.shocks[m].roll_days:
+            g.run.cash.setdefault(m, []).extend({} for _ in linear)
         if m == "base" and g.keep_pairs:
             g.run.pairs = list(vals)
         g.results.finish(m, vals)
@@ -484,7 +537,12 @@ def _moved_markets(g: _Group, members: list, sim_ctx):
     moved_markets = {
         m: {
             n: shocked_market(
-                base_markets[n], surfaces[n], name_moves(g.shocks[m], n, g.cur, g.env), None, with_spot=False
+                base_markets[n],
+                surfaces[n],
+                name_moves(g.shocks[m], n, g.cur, g.env),
+                None,
+                with_spot=False,
+                valuation=ctx.valuation,
             )
             for n in names
         }
@@ -508,6 +566,8 @@ def _evaluations(g: _Group, members, items, since, market, times, moved_markets,
         s = g.shocks[m]
         disc = discount_move(s, g.cur)
         pv_market = bumped_market(market, disc) if disc else None
+        fund = funding_move(s, BANK)
+        pv_note = bumped_market(pv_market or market, fund) if fund else pv_market
         factor = {}
         for n in g.names:
             moved, on = moved_markets[m][n], sim_markets[n]
@@ -516,7 +576,8 @@ def _evaluations(g: _Group, members, items, since, market, times, moved_markets,
         if not g.basket:
             factor = factor[g.names[0]]
         for it, N in zip(items, g.notionals):
-            fmt = it["fmt"] if pv_market is None and since is None else RiskFormat(it["fmt"], pv_market, since)
+            pv = pv_note if isinstance(it["fmt"], Note) else pv_market
+            fmt = it["fmt"] if pv is None and since is None else RiskFormat(it["fmt"], pv, since)
             evaluations.append(
                 Evaluation(it["program"], it["timeline"], it["pos"].params, fmt, N, g.smooth, True, factor)
             )
@@ -569,7 +630,8 @@ def _simulate(g: _Group, members: list, sim_ctx, items: list, since, fx: dict) -
         bias = [run.values["base"][i] - float(np.mean(exact[i])) for i in range(n_pos)]
         diffs = [base_pairs[i] - exact[i] for i in range(n_pos)]
         tot = np.sum(diffs, axis=0)
-        run.smoothing_bias = (bias, [_stat(x)[1] for x in diffs], float(tot.mean()), _stat(tot)[1])
+        zeros = [0.0] * g.n_linear  # the instruments are exact: smoothing does not touch them
+        run.smoothing_bias = (bias + zeros, [_stat(x)[1] for x in diffs] + zeros, float(tot.mean()), _stat(tot)[1])
 
 
 def _collect(g: _Group, totals, layout: list, items: list, fx: dict):
@@ -583,13 +645,14 @@ def _collect(g: _Group, totals, layout: list, items: list, fx: dict):
         if m == "base@exact":
             exact = per
             continue
+        per += g.linear_values(m, len(per[0]))
         if m == "base" and g.keep_pairs:
             g.run.pairs = per
         if m == "base" or g.shocks[m].roll_days:
             g.run.cash[m] = [
                 _expected_cash(it["fmt"], t.flows, t.redemption, N, g.settings.n_paths, q * mult)
                 for it, t, N, q in zip(items, chunk, g.notionals, g.quantities)
-            ]
+            ] + [{} for _ in range(g.n_linear)]
         g.results.finish(m, per)
     return exact
 
