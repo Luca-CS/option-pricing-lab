@@ -1530,6 +1530,51 @@ class JobRowPage(Next):
 # The `result` of a job's envelope by its kind. A job route answers 202 and the result comes later on GET /jobs/{id},
 # whose `result.result` is open in the document: these schemas are added to the document's components (and listed
 # under `x-job-results`) so the front types a finished job by its kind.
+class CallRow(Doc):
+    """A live issuer callable's next call: its dates, its price per unit of notional, the calls left."""
+
+    trade_id: str
+    quantity: float
+    underlyings: list[str]
+    call_date: str
+    pay_date: str
+    notice_date: str
+    call_price: float
+    notional: float
+    calls_left: int
+
+
+class CallList(Doc):
+    valuation: str
+    calls: list[CallRow]
+
+
+class CallBranch(Doc):
+    """The note priced one way: its value in % of notional, its SE, its delta (currency per 1 % of the spot)."""
+
+    value: float
+    se: float | None = None
+    delta: float
+
+
+class CallReviewRow(Doc):
+    trade_id: str
+    call_date: str | None = None
+    pay_date: str | None = None
+    going_on: CallBranch | None = None
+    called: CallBranch | None = None
+    gap: Estimate | None = None
+    decision: str | None = None  # call, keep or close
+    note: str
+
+
+class CallReview(Doc):
+    """Each note going on and called at its next date, on the market in use, and what the issuer should do."""
+
+    valuation: str
+    reviews: list[CallReviewRow]
+
+
 JOB_RESULTS: dict[str, type[BaseModel]] = {
     "quote": QuoteResult,
     "value": TradeValuation,
@@ -1545,6 +1590,7 @@ JOB_RESULTS: dict[str, type[BaseModel]] = {
     "fit": VolFit,
     "reproduce": VolFitReproduction,
     "hedge": HedgeRun,
+    "call_review": CallReview,
 }
 
 

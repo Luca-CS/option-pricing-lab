@@ -3646,6 +3646,255 @@
         ]
       }
     },
+    "/api/v1/trading/calls": {
+      "get": {
+        "tags": [
+          "trading"
+        ],
+        "summary": "Calls",
+        "description": "The next call date of each live issuer callable, with its notice date and call price, the soonest first.",
+        "operationId": "calls",
+        "responses": {
+          "200": {
+            "description": "the answer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "a role or the CSRF header is missing",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "any other error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-roles": [
+          "viewer"
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/api/v1/trading/calls/reviews": {
+      "post": {
+        "tags": [
+          "trading"
+        ],
+        "summary": "Review Calls",
+        "description": "A job `call_review`: each note priced going on and called at its next date, on the same random numbers.",
+        "operationId": "review_calls",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallReviewIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "a job computes it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobAccepted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "invalid input: the fields at fault in `errors`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "a role or the CSRF header is missing",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "any other error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-roles": [
+          "risk",
+          "trader"
+        ],
+        "security": [
+          {
+            "session": [],
+            "csrf": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "the same key from the same user gives back the job it first created (another request under it is refused, 422); without one, the same request still queued or running is given back",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/trading/trades/{trade_id}/call": {
+      "post": {
+        "tags": [
+          "trading"
+        ],
+        "summary": "Call Trade",
+        "description": "The issuer's call of a note at its next call date: status called, the amount kept on the trade (audited).",
+        "operationId": "call_trade",
+        "parameters": [
+          {
+            "name": "trade_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$",
+              "description": "a stored id (trade, quote, run, job), never a file path",
+              "title": "Trade Id"
+            },
+            "description": "a stored id (trade, quote, run, job), never a file path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "the trade, called",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Trade"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "invalid input: the fields at fault in `errors`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "a role or the CSRF header is missing",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "any other error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-roles": [
+          "trader"
+        ],
+        "security": [
+          {
+            "session": [],
+            "csrf": []
+          }
+        ]
+      }
+    },
     "/api/v1/market/context": {
       "get": {
         "tags": [
@@ -8042,6 +8291,132 @@
         "additionalProperties": true,
         "type": "object",
         "title": "CalibrationParams"
+      },
+      "CallIn": {
+        "properties": {
+          "call_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Call Date",
+            "description": "the next call date, as a check"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CallIn"
+      },
+      "CallList": {
+        "properties": {
+          "valuation": {
+            "type": "string",
+            "title": "Valuation"
+          },
+          "calls": {
+            "items": {
+              "$ref": "#/components/schemas/CallRow"
+            },
+            "type": "array",
+            "title": "Calls"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "valuation",
+          "calls"
+        ],
+        "title": "CallList"
+      },
+      "CallReviewIn": {
+        "properties": {
+          "trade_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trade Ids",
+            "description": "the notes to review (none: every live one)"
+          },
+          "options": {
+            "$ref": "#/components/schemas/PricingOptions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CallReviewIn"
+      },
+      "CallRow": {
+        "properties": {
+          "trade_id": {
+            "type": "string",
+            "title": "Trade Id"
+          },
+          "quantity": {
+            "type": "number",
+            "title": "Quantity"
+          },
+          "underlyings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Underlyings"
+          },
+          "call_date": {
+            "type": "string",
+            "title": "Call Date"
+          },
+          "pay_date": {
+            "type": "string",
+            "title": "Pay Date"
+          },
+          "notice_date": {
+            "type": "string",
+            "title": "Notice Date"
+          },
+          "call_price": {
+            "type": "number",
+            "title": "Call Price"
+          },
+          "notional": {
+            "type": "number",
+            "title": "Notional"
+          },
+          "calls_left": {
+            "type": "integer",
+            "title": "Calls Left"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "trade_id",
+          "quantity",
+          "underlyings",
+          "call_date",
+          "pay_date",
+          "notice_date",
+          "call_price",
+          "notional",
+          "calls_left"
+        ],
+        "title": "CallRow",
+        "description": "A live issuer callable's next call: its dates, its price per unit of notional, the calls left."
       },
       "CancelOut": {
         "properties": {
@@ -18025,6 +18400,149 @@
         "title": "BookValuation",
         "type": "object"
       },
+      "CallBranch": {
+        "additionalProperties": true,
+        "description": "The note priced one way: its value in % of notional, its SE, its delta (currency per 1 % of the spot).",
+        "properties": {
+          "value": {
+            "title": "Value",
+            "type": "number"
+          },
+          "se": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Se"
+          },
+          "delta": {
+            "title": "Delta",
+            "type": "number"
+          }
+        },
+        "required": [
+          "value",
+          "delta"
+        ],
+        "title": "CallBranch",
+        "type": "object"
+      },
+      "CallReview": {
+        "additionalProperties": true,
+        "description": "Each note going on and called at its next date, on the market in use, and what the issuer should do.",
+        "properties": {
+          "valuation": {
+            "title": "Valuation",
+            "type": "string"
+          },
+          "reviews": {
+            "items": {
+              "$ref": "#/components/schemas/CallReviewRow"
+            },
+            "title": "Reviews",
+            "type": "array"
+          }
+        },
+        "required": [
+          "valuation",
+          "reviews"
+        ],
+        "title": "CallReview",
+        "type": "object"
+      },
+      "CallReviewRow": {
+        "additionalProperties": true,
+        "properties": {
+          "trade_id": {
+            "title": "Trade Id",
+            "type": "string"
+          },
+          "call_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Call Date"
+          },
+          "pay_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Pay Date"
+          },
+          "going_on": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CallBranch"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "called": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CallBranch"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "gap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Estimate"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Decision"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trade_id",
+          "note"
+        ],
+        "title": "CallReviewRow",
+        "type": "object"
+      },
       "EodDay": {
         "additionalProperties": true,
         "properties": {
@@ -18977,6 +19495,9 @@
     },
     "hedge": {
       "$ref": "#/components/schemas/HedgeRun"
+    },
+    "call_review": {
+      "$ref": "#/components/schemas/CallReview"
     }
   }
 }

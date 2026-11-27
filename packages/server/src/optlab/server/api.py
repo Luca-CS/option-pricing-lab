@@ -108,6 +108,7 @@ class Desk:
         `settings` (`Settings.load()` when not given), from which every other path comes. `run_jobs`: run the queue's
         jobs in this process (the embedded worker, `max_jobs` at a time) unless another worker already serves this
         database; False for an api that leaves them to `optlab worker`."""
+        from optlab.server.calls_api import CallsApi
         from optlab.server.hedges_api import HedgesApi
         from optlab.server.risk_api import RiskApi
 
@@ -138,6 +139,7 @@ class Desk:
         self.started = dt.datetime.now(dt.UTC)
         self.risk = RiskApi(self)
         self.hedges = HedgesApi(self)
+        self.calls = CallsApi(self)
         self.worker: Any = None
         self._lease_wait: threading.Event | None = None  # set: stop waiting for another worker's lease
         self._worker_lock = threading.Lock()

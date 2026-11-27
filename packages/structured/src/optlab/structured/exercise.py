@@ -382,3 +382,37 @@ def dual_bound(
         "outer": n_outer,
         "inner": n_inner,
     }
+
+
+# --- a call decided: for the call manager ---
+
+
+def at_call(program, event: int, exercise: bool):
+    """The program with the issuer's call of event `event` decided: left out (`exercise` False: the product goes on,
+    its later calls still the policy's) or exercised (the amount paid as the redemption, the product ended)."""
+    import dataclasses as dc
+
+    from optlab.structured.script.nodes import If, IssuerCall, Pay, Terminate
+
+    def body(stmts):
+        out = []
+        for s in stmts:
+            if isinstance(s, IssuerCall):
+                if exercise:
+                    out += [Pay(s.expr, "redemption", s.line, s.col), Terminate(s.line, s.col)]
+            elif isinstance(s, If):
+                out.append(dc.replace(s, body=body(s.body), orelse=body(s.orelse)))
+            else:
+                out.append(s)
+        return tuple(out)
+
+    events = list(program.events)
+    events[event] = dc.replace(events[event], body=body(events[event].body))
+    return dc.replace(program, events=tuple(events))
+
+
+def next_calls(program, timeline) -> list[int]:
+    """The events with an issuer's call still to come (observation after the valuation date), in order."""
+    from optlab.structured.script.nodes import _calls
+
+    return [k for k, ev in enumerate(program.events) if timeline.event_times[k] > 0 and _calls(ev.body)]

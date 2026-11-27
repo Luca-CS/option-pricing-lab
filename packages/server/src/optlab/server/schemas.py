@@ -147,6 +147,15 @@ class ProposalIn(Body):
     indexes: list[int] | None = Field(None, max_length=200, description="the proposal's rows to book (none: all)")
 
 
+class CallReviewIn(Body):
+    trade_ids: list[str] | None = Field(None, max_length=200, description="the notes to review (none: every live one)")
+    options: PricingOptions = Field(default_factory=lambda: PricingOptions.model_validate({}))
+
+
+class CallIn(Body):
+    call_date: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$", description="the next call date, as a check")
+
+
 class MarkIn(Body):
     instrument: dict[str, Any] = Field(..., max_length=16)
     quantity: float = Field(1.0, ge=-1e12, le=1e12)
