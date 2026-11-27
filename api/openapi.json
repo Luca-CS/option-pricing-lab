@@ -3,7 +3,7 @@
   "info": {
     "title": "optlab",
     "summary": "Option pricing, structured products and risk: the desk's API (ADR-0005).",
-    "version": "2.2.1"
+    "version": "2.3.0"
   },
   "paths": {
     "/api/v1/health": {
