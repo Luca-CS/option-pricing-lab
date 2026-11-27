@@ -92,6 +92,11 @@ export const STORIES: Story[] = [
         body: "The optimizer's proposal: the trades that bring delta and vega per tenor within their tolerance at the least bid/ask cost, with the spot × vol grid and the VaR before and after.",
         to: "/trading/hedging?view=optimizer&hedgeJob={hedge}",
       },
+      {
+        title: "The issuer's calls",
+        body: "The callable Phoenix's next call date, and the review: the note priced going on and called on the same random numbers, and what the issuer should do.",
+        to: "/trading/calls?callJob={call}",
+      },
     ],
   },
   {

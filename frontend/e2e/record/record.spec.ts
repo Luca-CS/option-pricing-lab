@@ -24,6 +24,7 @@ const SCREENS = [
   "/trading",
   "/trading/book",
   "/trading/hedging",
+  "/trading/calls",
   "/trading/risk",
   "/trading/pnl",
   "/trading/lifecycle",
@@ -241,6 +242,9 @@ async function structurerAndTrader(page: Page, browser: Browser, admin: Admin, b
     var_days: 250,
   });
   await done(traderApi.ctx, hedgeJob, 120);
+  // the issuer's calls: the review of the demo's callable, run by the trader too
+  const callJob = await submit(traderApi, "/api/v1/trading/calls/reviews", { options: { precision: "quick" } });
+  await done(traderApi.ctx, callJob, 60);
   await traderApi.ctx.dispose();
 
   // the structurer: a Phoenix quoted in the builder, its page, its model risk, the quotes
@@ -312,6 +316,7 @@ async function structurerAndTrader(page: Page, browser: Browser, admin: Admin, b
     pnl_day: worst,
     var: varId,
     hedge: hedgeJob,
+    call: callJob,
   };
   const r = t.rec.refs;
   for (const to of [
@@ -323,6 +328,8 @@ async function structurerAndTrader(page: Page, browser: Browser, admin: Admin, b
     "/trading/hedging",
     "/trading/hedging?view=ticket",
     `/trading/hedging?view=optimizer&hedgeJob=${e(hedgeJob)}`,
+    "/trading/calls",
+    `/trading/calls?callJob=${e(callJob)}`,
   ]) {
     await visit(traderPage, t, to);
   }

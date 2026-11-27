@@ -84,7 +84,7 @@ describe("the stories", () => {
   it("each have steps, and every reference a step names is one the recorder writes", () => {
     const written = {
       structurer: ["preset", "quote", "trade"],
-      trader: ["greeks", "name", "node", "strike", "tenor", "pnl_from", "pnl_to", "pnl_day", "var", "hedge"],
+      trader: ["greeks", "name", "node", "strike", "tenor", "pnl_from", "pnl_to", "pnl_day", "var", "hedge", "call"],
       quant: ["replay"],
     };
     for (const story of STORIES) {
