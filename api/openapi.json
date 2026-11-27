@@ -15698,7 +15698,8 @@
               "autocall",
               "bullet",
               "variance",
-              "accumulator"
+              "accumulator",
+              "callable"
             ],
             "title": "Type",
             "default": "autocall"
