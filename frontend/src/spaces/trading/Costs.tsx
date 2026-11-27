@@ -1,6 +1,7 @@
 // The pricing policy (Trading › Pricing policy): the desk's cost table by group of underlyings and size band, as the
-// quotes read it. A trader edits it and saves a new version; a value still at its starting value is in italics, so
-// what the desk has decided shows apart from what it was given.
+// quotes read it, and the hedging instruments' half-spreads and swap spreads beside it. A trader edits it and saves a
+// new version; a value still at its starting value is in italics (an assumption), so what the desk has decided shows
+// apart from what it was given.
 import { Badge, Button, Group, Tabs, Text, TextInput } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -16,6 +17,83 @@ import { commonClasses as c } from "../common";
 import classes from "./Costs.module.css";
 
 type Groups = Record<string, Schemas["CostGroup"]>;
+type HedgeRows = Schemas["HedgeRows"];
+
+function HedgeTable({
+  rows,
+  fields,
+  starting,
+  editable,
+  onChange,
+}: {
+  rows: HedgeRows;
+  fields: Schemas["CostField"][];
+  starting: string[];
+  editable: boolean;
+  onChange: (key: string, value: number, currency?: string) => void;
+}) {
+  const plain = fields.filter((f) => f.name !== "swap_spread_bp");
+  const spread = fields.find((f) => f.name === "swap_spread_bp");
+  const cell = (key: string, value: number, label: string, currency?: string) => {
+    const atStart = starting.includes(currency ? `${key}.${currency}` : key);
+    return editable ? (
+      <TextInput
+        size="xs"
+        aria-label={label}
+        defaultValue={String(value)}
+        onBlur={(e) => {
+          const x = Number(e.currentTarget.value);
+          if (Number.isFinite(x)) onChange(key, x, currency);
+        }}
+        classNames={{ input: atStart ? classes.starting : classes.decided }}
+      />
+    ) : (
+      <span className={atStart ? classes.starting : undefined}>{formatNumber(value, { digits: 2 })}</span>
+    );
+  };
+  return (
+    <Panel
+      title="Hedging instruments"
+      hint="half-spreads per unit, and the swap curve's proxy; italics: an assumption"
+      flush
+    >
+      <div className={classes.frame}>
+        <table className={classes.table}>
+          <caption className="visually-hidden">The hedging instruments' costs</caption>
+          <thead>
+            <tr>
+              <th scope="col">Line</th>
+              <th scope="col" className={classes.num}>
+                Value
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {plain.map((f) => (
+              <tr key={f.name}>
+                <th scope="row">
+                  {f.label} <span className={c.faint}>{f.unit}</span>
+                </th>
+                <td className={classes.num}>
+                  {cell(f.name, Number((rows as Record<string, unknown>)[f.name]), f.label)}
+                </td>
+              </tr>
+            ))}
+            {spread &&
+              Object.entries(rows.swap_spread_bp).map(([ccy, v]) => (
+                <tr key={ccy}>
+                  <th scope="row">
+                    {spread.label}, {ccy} <span className={c.faint}>{spread.unit}</span>
+                  </th>
+                  <td className={classes.num}>{cell("swap_spread_bp", v, `${spread.label}, ${ccy}`, ccy)}</td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
+  );
+}
 
 export default function Costs() {
   const me = useMe().data;
@@ -26,11 +104,20 @@ export default function Costs() {
     queryFn: () => ok(api.GET("/api/v1/trading/cost-defaults")),
   });
   const [groups, setGroups] = useState<Groups | null>(null);
+  const [hedges, setHedges] = useState<HedgeRows | null>(null);
   useEffect(() => {
-    if (table.data) setGroups(structuredClone(table.data.groups));
+    if (table.data) {
+      setGroups(structuredClone(table.data.groups));
+      setHedges(structuredClone(table.data.hedges));
+    }
   }, [table.data]);
   const save = useMutation({
-    mutationFn: () => ok(api.PUT("/api/v1/trading/cost-defaults", { body: { groups: groups ?? {} } })),
+    mutationFn: () =>
+      ok(
+        api.PUT("/api/v1/trading/cost-defaults", {
+          body: { groups: groups ?? {}, ...(hedges ? { hedges: hedges as Record<string, unknown> } : {}) },
+        }),
+      ),
     onSuccess: () => {
       void queries.invalidateQueries({ queryKey: ["trading", "costs"] });
       notifications.show({ color: "accent", title: "Cost table saved", message: "New quotes read this version." });
@@ -38,7 +125,19 @@ export default function Costs() {
   });
   const fields = table.data?.fields ?? [];
   const starting = table.data?.starting ?? {};
-  const changed = Boolean(groups && table.data && JSON.stringify(groups) !== JSON.stringify(table.data.groups));
+  const changed = Boolean(
+    table.data &&
+      ((groups && JSON.stringify(groups) !== JSON.stringify(table.data.groups)) ||
+        (hedges && JSON.stringify(hedges) !== JSON.stringify(table.data.hedges))),
+  );
+  const setHedge = (key: string, value: number, currency?: string) =>
+    setHedges((prev) => {
+      if (!prev) return prev;
+      const next = structuredClone(prev) as HedgeRows & Record<string, unknown>;
+      if (currency) next.swap_spread_bp = { ...next.swap_spread_bp, [currency]: value };
+      else next[key] = value;
+      return next;
+    });
   const setCell = (g: string, i: number, field: string, value: unknown) =>
     setGroups((prev) => {
       if (!prev?.[g]) return prev;
@@ -65,7 +164,12 @@ export default function Costs() {
               size="xs"
               variant="default"
               disabled={!changed}
-              onClick={() => table.data && setGroups(structuredClone(table.data.groups))}
+              onClick={() => {
+                if (table.data) {
+                  setGroups(structuredClone(table.data.groups));
+                  setHedges(structuredClone(table.data.hedges));
+                }
+              }}
             >
               Discard
             </Button>
@@ -141,6 +245,15 @@ export default function Costs() {
             </Tabs.Panel>
           ))}
         </Tabs>
+      )}
+      {hedges && table.data && (
+        <HedgeTable
+          rows={hedges}
+          fields={table.data.hedge_fields ?? []}
+          starting={table.data.hedges_starting ?? []}
+          editable={editable}
+          onChange={setHedge}
+        />
       )}
     </SpacePage>
   );

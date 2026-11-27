@@ -95,6 +95,11 @@ Every error is `application/problem+json` (RFC 9457), never a stack trace:
   plus or minus the cost table's vol spread, unless the request gives its premium. An expired vanilla or future leaves
   the valued book and is settled against the lake's close (`POST /trading/trades/{trade_id}/settle`); the trade keeps
   the amount, never the index level.
+  `GET /trading/hedges/types` describes each instrument type (its fields, kinds, units, defaults and the field the
+  fair level fills), so a ticket holds no rule of its own. The optimizer is the job `hedge`
+  (`POST /trading/hedges/optimizations`): targets on Greek keys, a universe of candidates, and back a proposal, its
+  cost, each target before and after with its SE, the spot x vol grid and the VaR before and after;
+  `POST /trading/hedges/proposals` books a proposal as what-ifs.
 - Every job result is one envelope:
 
   ```json

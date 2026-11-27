@@ -793,3 +793,101 @@ def parse(d: object) -> Instrument:
         return cls(**{k: v for k, v in d.items() if k != "type"})
     except (TypeError, KeyError) as exc:
         raise HedgeError(f"a {kind}: {exc}") from exc
+
+
+# --- the instruments as a form: what a ticket asks, type by type (the front builds its form from this) ---
+TYPE_LABELS = {
+    "future": "Index future",
+    "cash": "Cash or ETF",
+    "irs": "Interest rate swap",
+    "deposit": "Deposit or loan",
+    "funding_swap": "Funding swap",
+    "dividend_swap": "Dividend swap",
+    "dividend_future": "Dividend future",
+    "vanilla": "Vanilla option",
+}
+SIZES = {
+    "future": "lots",
+    "cash": "units of the index",
+    "irs": "notional, receiving the fixed rate",
+    "deposit": "notional, lending (negative: borrowing)",
+    "funding_swap": "notional, receiving the fixed rate",
+    "dividend_swap": "currency per index point, receiving the dividends",
+    "dividend_future": "lots",
+    "vanilla": "lots (listed) or units per index point (OTC)",
+}
+FAIR_FIELD = {  # the field a fair trade sets to the mark's fair level
+    "future": "price",
+    "cash": "price",
+    "irs": "rate",
+    "deposit": "rate",
+    "funding_swap": "rate",
+    "dividend_swap": "strike",
+    "dividend_future": "price",
+    "vanilla": "price",
+}
+FIELD_LABELS = {
+    "name": ("Underlying", "", "name"),
+    "ccy": ("Currency", "", "currency"),
+    "expiry": ("Expiry", "", "date"),
+    "start": ("Start", "", "date"),
+    "end": ("End", "", "date"),
+    "payment": ("Payment", "", "date"),
+    "price": ("Price", "real points", "number"),
+    "strike": ("Strike", "real points", "number"),
+    "rate": ("Fixed rate", "fraction", "number"),
+    "current_rate": ("Current floating rate", "fraction", "number"),
+    "multiplier": ("Multiplier", "currency per point", "number"),
+    "fixed_months": ("Fixed leg every", "months", "int"),
+    "float_months": ("Floating leg every", "months", "int"),
+    "entity": ("Issuer", "", "text"),
+    "year": ("Calendar year", "", "int"),
+    "realised": ("Dividends already paid", "real points", "number"),
+    "kind": ("Call or put", "", "choice"),
+    "listed": ("Listed", "", "bool"),
+}
+
+
+def describe() -> list[dict]:
+    """Every type's fields in order, with their label, unit, kind, default, choices and whether a booking needs them."""
+    from optlab.core.instruments import enabled_names
+
+    choices = {
+        "future": {"name": list(contracts.INDEX_FUTURES)},
+        "dividend_future": {"name": list(contracts.DIVIDEND_FUTURES)},
+        "vanilla": {"name": list(contracts.LISTED_OPTIONS), "kind": ["call", "put"]},
+    }
+    out = []
+    for kind in TYPES:
+        cls = CLASSES[kind]
+        rows = []
+        for f in dataclasses.fields(cls):
+            label, unit, what = FIELD_LABELS.get(f.name, (f.name, "", "text"))
+            options = choices.get(kind, {}).get(f.name)
+            if options is None and what == "name":
+                options = list(enabled_names())
+            if options is None and what == "currency":
+                options = list(CURRENCIES)
+            default = None if f.default is dataclasses.MISSING else f.default
+            rows.append(
+                {
+                    "name": f.name,
+                    "label": label,
+                    "unit": unit,
+                    "kind": "choice" if options else what,
+                    "choices": options,
+                    "required": f.default is dataclasses.MISSING,
+                    "default": default.isoformat() if isinstance(default, dt.date) else default,
+                }
+            )
+        out.append(
+            {
+                "type": kind,
+                "label": TYPE_LABELS[kind],
+                "size": SIZES[kind],
+                "linear": cls.linear,
+                "fair_field": FAIR_FIELD[kind],
+                "fields": rows,
+            }
+        )
+    return out

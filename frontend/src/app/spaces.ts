@@ -49,6 +49,7 @@ export const SPACES: Space[] = [
     screens: [
       { path: "/trading", label: "Home" },
       { path: "/trading/book", label: "Book" },
+      { path: "/trading/hedging", label: "Hedging" },
       { path: "/trading/risk", label: "Book risk" },
       { path: "/trading/pnl", label: "P&L explained" },
       { path: "/trading/lifecycle", label: "Lifecycle" },

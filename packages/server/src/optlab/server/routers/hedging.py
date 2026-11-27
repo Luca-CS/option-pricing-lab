@@ -7,7 +7,15 @@ from collections.abc import Callable
 
 from fastapi import APIRouter, Query, Request
 
-from optlab.server.payloads import BookedProposal, InstrumentMark, ListedChain, Roll, Trade, documented
+from optlab.server.payloads import (
+    BookedProposal,
+    InstrumentMark,
+    InstrumentTypes,
+    ListedChain,
+    Roll,
+    Trade,
+    documented,
+)
 from optlab.server.routers._common import ACCEPTED, Id, audited, desk, submit
 from optlab.server.schemas import HedgeIn, HedgeOptimizeIn, MarkIn, ProposalIn, body
 from optlab.server.web import Problem, access
@@ -37,6 +45,14 @@ def create_hedge(h: HedgeIn, request: Request):
     """Book an instrument as a trade, live or simulated (a what-if), tagged `hedge`."""
     hedges = _hedges(request)
     return audited(request, "create_trade", h.trade_id, _checked(lambda: hedges.create(body(h))))
+
+
+@router.get("/hedges/types", **access(), responses=documented(InstrumentTypes))
+def hedge_types():
+    """What a ticket asks for each instrument type: its fields, units, choices and defaults."""
+    from optlab.structured.hedges.instruments import describe
+
+    return {"types": describe()}
 
 
 @router.post("/hedges/marks", **access(), responses=documented(InstrumentMark))

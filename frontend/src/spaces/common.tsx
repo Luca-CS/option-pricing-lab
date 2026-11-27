@@ -1,6 +1,6 @@
 // What the screens of every space share: the placeholder of a screen still to come, small tables, and the link of a
 // trade or a quote with the places it opens in (the bridges of docs/ux.md §3).
-import { Alert, Anchor, Badge, NumberInput, SegmentedControl, Stack, Text, Tooltip } from "@mantine/core";
+import { Alert, Anchor, Badge, Checkbox, NumberInput, SegmentedControl, Stack, Text, Tooltip } from "@mantine/core";
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router";
 import { SpacePage } from "../app/Shell";
@@ -160,6 +160,18 @@ export function DeskSideBadge({ trade }: { trade: { desk_side: string; side_chec
     </Badge>
   );
   return trade.side_check ? <Tooltip label={trade.side_check.message}>{badge}</Tooltip> : badge;
+}
+
+/** Whether a run takes the book's what-ifs (simulated trades): the server never puts them in the EOD. */
+export function WhatIfSwitch({ checked, onChange }: { checked: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <Checkbox
+      size="xs"
+      label="Include the what-ifs"
+      checked={checked}
+      onChange={(e) => onChange(e.currentTarget.checked)}
+    />
+  );
 }
 
 /** The server's side check as an alert on a trade's page. */

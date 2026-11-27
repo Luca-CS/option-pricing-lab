@@ -23,6 +23,7 @@ const SCREENS = [
   "/structuring/compare",
   "/trading",
   "/trading/book",
+  "/trading/hedging",
   "/trading/risk",
   "/trading/pnl",
   "/trading/lifecycle",
@@ -205,14 +206,14 @@ test("record the demo's three sessions", async ({ page, browser, baseURL }) => {
     });
     expect([200, 201, 409]).toContain(r.status());
   }
-  if (ONLY.has("structurer") || ONLY.has("trader")) await structurerAndTrader(page, browser, admin);
+  if (ONLY.has("structurer") || ONLY.has("trader")) await structurerAndTrader(page, browser, admin, base);
   if (ONLY.has("quant")) await quant(browser, e);
   await admin.ctx.dispose();
 });
 
 type Admin = { ctx: APIRequestContext; csrf: string };
 
-async function structurerAndTrader(page: Page, browser: Browser, admin: Admin): Promise<void> {
+async function structurerAndTrader(page: Page, browser: Browser, admin: Admin, base: string): Promise<void> {
   const e = encodeURIComponent;
   // what the trader's story reads, computed first (three weeks of EOD runs and a VaR, the book's Greeks)
   const greeksJob = await submit(admin, "/api/v1/risk/greeks", { options: { precision: "quick" } });
@@ -230,6 +231,17 @@ async function structurerAndTrader(page: Page, browser: Browser, admin: Admin): 
     options: { precision: "quick" },
   });
   const varRun = await done(admin.ctx, varJob);
+  // the optimizer on the book's delta and vega per tenor (OTC vanillas and futures), with its grid and VaR control,
+  // run by the trader: a job is read by its owner only, and the trader's page follows it
+  const traderApi = await api(base, "trader", secretOf("trader"));
+  const hedgeJob = await submit(traderApi, "/api/v1/trading/hedges/optimizations", {
+    options: { precision: "quick" },
+    families: ["delta", "vega_tenor"],
+    universe: { rates: false, dividends: false, funding: false },
+    var_days: 250,
+  });
+  await done(traderApi.ctx, hedgeJob, 120);
+  await traderApi.ctx.dispose();
 
   // the structurer: a Phoenix quoted in the builder, its page, its model risk, the quotes
   const s = await begin(page, "structurer");
@@ -299,6 +311,7 @@ async function structurerAndTrader(page: Page, browser: Browser, admin: Admin): 
     pnl_to: "2020-03-20",
     pnl_day: worst,
     var: varId,
+    hedge: hedgeJob,
   };
   const r = t.rec.refs;
   for (const to of [
@@ -307,6 +320,9 @@ async function structurerAndTrader(page: Page, browser: Browser, admin: Admin): 
     `/quant/market/${e(name)}?strike=${e(strike)}&tenor=${e(tenor)}`,
     `/trading/pnl?from=2020-03-02&to=2020-03-20&day=${worst}`,
     `/risk/var/${e(varId)}`,
+    "/trading/hedging",
+    "/trading/hedging?view=ticket",
+    `/trading/hedging?view=optimizer&hedgeJob=${e(hedgeJob)}`,
   ]) {
     await visit(traderPage, t, to);
   }

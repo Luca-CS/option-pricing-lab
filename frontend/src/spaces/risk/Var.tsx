@@ -16,7 +16,7 @@ import { COVERAGE, OriginBadge } from "../../ui/Markers";
 import { Panel } from "../../ui/Panel";
 import { Empty, Failure, Loading } from "../../ui/States";
 import { Est, Num } from "../../ui/Value";
-import { commonClasses as c, DataTable, TradeLink } from "../common";
+import { commonClasses as c, DataTable, TradeLink, WhatIfSwitch } from "../common";
 import { RunBar } from "../runs";
 
 type Run = Schemas["VarRun"];
@@ -218,6 +218,7 @@ export default function Var() {
   const stored = useStoredRun("var", job.envelope?.result, id ?? params.get("run"));
   const [days, setDays] = useState<number | string>("");
   const [stressed, setStressed] = useState(true);
+  const [simulated, setSimulated] = useState(false);
   const [tenDay, setTenDay] = useState(true);
   const run = stored.run;
   const shown = HORIZONS.filter((x) => run?.[x.key]);
@@ -239,7 +240,7 @@ export default function Var() {
           ok(
             api.POST("/api/v1/risk/var", {
               body: {
-                options: { precision },
+                options: { precision, include_simulated: simulated },
                 stressed,
                 ten_day: tenDay,
                 ...(typeof days === "number" ? { days } : {}),
@@ -248,6 +249,7 @@ export default function Var() {
           )
         }
       >
+        <WhatIfSwitch checked={simulated} onChange={setSimulated} />
         <NumberInput
           size="xs"
           w={120}

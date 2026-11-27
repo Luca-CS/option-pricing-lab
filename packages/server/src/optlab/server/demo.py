@@ -165,13 +165,14 @@ def build(
     from optlab.server.api import Desk
     from optlab.server.audit import Audit
     from optlab.server.security import Accounts
-    from optlab.server.tools.showcase import seed
+    from optlab.server.tools.showcase import seed, seed_hedges
 
     desk = Desk(settings=settings, run_jobs=False)
     try:
         added = seed(
             desk, Lake(settings.lake), dt.date.fromisoformat(END), deals(), n_paths=n_paths, log=log, look_back=()
         )
+        added += seed_hedges(desk, log)
         sid = desk.ctx.snapshot_id
         generated = password is None
         password = password or secrets.token_urlsafe(15)

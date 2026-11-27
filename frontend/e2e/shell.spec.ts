@@ -27,6 +27,8 @@ test("the palette finds a trade and opens its page", async ({ page }) => {
   await expect(page).toHaveURL(/\/admin$/);
   await page.keyboard.press("Control+K");
   await page.getByPlaceholder(/A trade, a quote/).fill("DEMO-03");
+  // the trades load with the palette: Enter picks the first action once the trade is listed
+  await expect(page.getByRole("button", { name: /^DEMO-03/ })).toBeVisible();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/trading\/trades\/DEMO-03$/);
   await expect(page.getByRole("heading", { name: "Trade DEMO-03" })).toBeVisible();

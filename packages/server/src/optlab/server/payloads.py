@@ -417,6 +417,31 @@ class MarkUnit(Doc):
     half_spread: float = Field(..., description="currency per unit: what entering or leaving one unit costs")
 
 
+class InstrumentField(Doc):
+    name: str
+    label: str
+    unit: str = ""
+    kind: str = Field(..., description="choice, date, number, int, bool or text")
+    choices: list[Any] | None = None
+    required: bool
+    default: Any = None
+
+
+class InstrumentType(Doc):
+    type: str
+    label: str
+    size: str = Field(..., description="what a unit of the quantity is")
+    linear: bool
+    fair_field: str = Field(..., description="the field a fair trade sets to the mark's fair level")
+    fields: list[InstrumentField]
+
+
+class InstrumentTypes(Doc):
+    """What a hedging ticket asks, type by type (structured/hedges/instruments.describe)."""
+
+    types: list[InstrumentType]
+
+
 class ListedRow(Doc):
     """A listed European option of the day's chain, as quoted."""
 

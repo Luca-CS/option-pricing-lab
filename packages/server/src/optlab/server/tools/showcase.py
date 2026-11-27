@@ -214,6 +214,62 @@ def seed(desk: Desk, lake: Lake, day, deals=DEALS, n_paths: int = 20_000, log=sa
     return added
 
 
+HEDGE_TAG = "showcase-hedge"
+
+
+def seed_hedges(desk: Desk, log=say, book: str = "showcase") -> list:
+    """A few hedges on the market in use, each at its fair level (ADR-0025): a long index future, a receiver swap, a
+    dividend swap on next year, and a protective put left as a what-if to promote. Once per store."""
+    import datetime as dt
+
+    from optlab.structured.hedges.contracts import quarterly_expiries
+    from optlab.structured.hedges.instruments import FAIR_FIELD
+
+    if any(HEDGE_TAG in t.tags for t in desk.repo.trades()):
+        log("hedges: already in the store")
+        return []
+    v = desk.ctx.valuation
+    scale = desk.hedges.scale("SPX", desk.ctx)
+    if not scale:
+        log("hedges: no real level of SPX on the market in use, none seeded")
+        return []
+    spot = scale * float(desk.ctx.market.spot)
+    specs = (
+        ({"type": "future", "name": "SPX", "expiry": quarterly_expiries(v, 1)[0].isoformat(), "price": 1.0}, 5, "live"),
+        (
+            {
+                "type": "irs",
+                "ccy": "USD",
+                "start": v.isoformat(),
+                "end": (v + dt.timedelta(days=5 * 365)).isoformat(),
+                "rate": 0.0,
+            },
+            2e6,
+            "live",
+        ),
+        ({"type": "dividend_swap", "name": "SPX", "year": v.year + 1, "strike": 0.0}, 20.0, "live"),
+        (
+            {
+                "type": "vanilla",
+                "name": "SPX",
+                "expiry": (v + dt.timedelta(days=91)).isoformat(),
+                "strike": round(0.95 * spot),
+                "kind": "put",
+            },
+            300.0,
+            "simulated",
+        ),
+    )
+    added = []
+    for inst, q, status in specs:
+        if inst["type"] != "vanilla":  # at its fair level; a vanilla takes the surface's mid and spread when booked
+            inst = {**inst, FAIR_FIELD[inst["type"]]: desk.hedges.mark({"instrument": inst})["unit"]["fair"]}
+        t = desk.hedges.create({"instrument": inst, "quantity": q, "status": status, "book": book, "tags": [HEDGE_TAG]})
+        added.append(t["trade_id"])
+        log(f"{t['trade_id']}: {t['summary']['label']}, {q:g}, {status}")
+    return added
+
+
 def default_store() -> Path:
     return Settings.load().data / "showcase" / "optlab.sqlite"
 
@@ -228,6 +284,7 @@ def main(store: str | Path | None = None, day: str | None = None, n_paths: int =
     desk = Desk(Path(store or default_store()), settings=settings, run_jobs=False)
     try:
         seed(desk, lake, when, n_paths=n_paths, log=log)
+        seed_hedges(desk, log)
         sid = desk.ctx.snapshot_id
         for t in desk.repo.trades():
             events = desk.trade_events(t.trade_id)

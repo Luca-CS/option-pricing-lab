@@ -15,7 +15,7 @@ import { Panel } from "../../ui/Panel";
 import { type Cell, GreeksTable, NodeHeatmap, shortUnit } from "../../ui/Risk";
 import { Empty, Failure, Loading } from "../../ui/States";
 import { Est } from "../../ui/Value";
-import { commonClasses as c, DataTable, TradeLink } from "../common";
+import { commonClasses as c, DataTable, TradeLink, WhatIfSwitch } from "../common";
 import { RunBar } from "../runs";
 import { ScenariosView } from "../scenarios";
 
@@ -221,6 +221,8 @@ export default function BookRisk() {
   const view = params.get("view") ?? "greeks";
   const trade = params.get("trade");
   const greeksJob = useScreenJob("risk", "Greeks of the book", "job");
+  const [simulated, setSimulated] = useState(false);
+  const whatIfs = <WhatIfSwitch checked={simulated} onChange={setSimulated} />;
   const ladderJob = useScreenJob("ladder", "Ladder of the book", "ladderJob");
   const scenarioJob = useScreenJob("scenarios", "Scenarios on the book", "scenarioJob");
   const greeks = useStoredRun("risk", greeksJob.envelope?.result, params.get("run"));
@@ -256,8 +258,12 @@ export default function BookRisk() {
             label="Run the Greeks"
             run={greeks.run}
             job={greeksJob}
-            submit={(p) => ok(api.POST("/api/v1/risk/greeks", { body: { options: { precision: p } } }))}
-          />
+            submit={(p) =>
+              ok(api.POST("/api/v1/risk/greeks", { body: { options: { precision: p, include_simulated: simulated } } }))
+            }
+          >
+            {whatIfs}
+          </RunBar>
           {greeks.pending && <Loading />}
           {greeks.none && !greeks.run && (
             <Empty title="No Greeks run on this book yet">Run them: a minute or so at the quick precision.</Empty>
@@ -270,8 +276,12 @@ export default function BookRisk() {
             label="Run the Greeks"
             run={greeks.run}
             job={greeksJob}
-            submit={(p) => ok(api.POST("/api/v1/risk/greeks", { body: { options: { precision: p } } }))}
-          />
+            submit={(p) =>
+              ok(api.POST("/api/v1/risk/greeks", { body: { options: { precision: p, include_simulated: simulated } } }))
+            }
+          >
+            {whatIfs}
+          </RunBar>
           {greeks.pending && <Loading />}
           {greeks.run && <VegaView run={greeks.run} />}
         </Tabs.Panel>
@@ -281,8 +291,12 @@ export default function BookRisk() {
             label="Run the ladder"
             run={ladder.run}
             job={ladderJob}
-            submit={(p) => ok(api.POST("/api/v1/risk/ladder", { body: { options: { precision: p } } }))}
-          />
+            submit={(p) =>
+              ok(api.POST("/api/v1/risk/ladder", { body: { options: { precision: p, include_simulated: simulated } } }))
+            }
+          >
+            {whatIfs}
+          </RunBar>
           {ladder.pending && <Loading />}
           {ladder.none && !ladder.run && (
             <Empty title="No ladder yet">The ladder revalues the book along a spot shift under three vol rules.</Empty>
@@ -295,8 +309,16 @@ export default function BookRisk() {
             label="Run the scenarios"
             run={scenarios.run}
             job={scenarioJob}
-            submit={(p) => ok(api.POST("/api/v1/risk/scenarios/runs", { body: { options: { precision: p } } }))}
-          />
+            submit={(p) =>
+              ok(
+                api.POST("/api/v1/risk/scenarios/runs", {
+                  body: { options: { precision: p, include_simulated: simulated } },
+                }),
+              )
+            }
+          >
+            {whatIfs}
+          </RunBar>
           {scenarios.pending && <Loading />}
           {scenarios.none && !scenarios.run && (
             <Empty title="No scenario run yet">

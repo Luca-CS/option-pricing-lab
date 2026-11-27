@@ -50,7 +50,7 @@ export const STORIES: Story[] = [
     profile: "trader",
     label: "Trader",
     pitch:
-      "Runs the book: its Greeks down to a node of the surface, its P&L explained day by day, the VaR and its day.",
+      "Runs the book: its Greeks down to a node of the surface, its P&L explained day by day, the VaR and its day, and its hedges.",
     steps: [
       {
         title: "The book at a glance",
@@ -81,6 +81,16 @@ export const STORIES: Story[] = [
         title: "The VaR and its day",
         body: "Historical VaR by full revaluation: its distribution, the VaR day factor by factor, and each trade's share.",
         to: "/risk/var/{var}",
+      },
+      {
+        title: "The hedges are trades",
+        body: "A future, a swap and a dividend swap in the same book as the notes, valued exactly beside them, and a put left as a what-if to promote.",
+        to: "/trading/hedging",
+      },
+      {
+        title: "Hedge the book",
+        body: "The optimizer's proposal: the trades that bring delta and vega per tenor within their tolerance at the least bid/ask cost, with the spot × vol grid and the VaR before and after.",
+        to: "/trading/hedging?view=optimizer&hedgeJob={hedge}",
       },
     ],
   },
