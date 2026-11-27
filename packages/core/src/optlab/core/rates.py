@@ -69,8 +69,8 @@ class HullWhite1F:
         PT, PS = float(market.D(T)), float(market.D(S))
         h = np.log(PS / (PT * K)) / sp + sp / 2
         if kind == "call":
-            return PS * norm.cdf(h) - K * PT * norm.cdf(h - sp)
-        return K * PT * norm.cdf(-h + sp) - PS * norm.cdf(-h)
+            return float(PS * norm.cdf(h) - K * PT * norm.cdf(h - sp))
+        return float(K * PT * norm.cdf(-h + sp) - PS * norm.cdf(-h))
 
     def step_factor(self, h: float, rho: float) -> np.ndarray:
         """The lower Cholesky factor of Cov(dW^S, eps_x, eps_Y) over a step h, rho the equity-rate correlation."""
