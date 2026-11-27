@@ -37,7 +37,7 @@ refuses what a role may not do: a button a role cannot use is not shown.
 | Space | For | Screens |
 |---|---|---|
 | Structuring | structurer, sales | Home · Builder · Compare · Quotes, and a quote's page |
-| Trading | trader | Home · Book, and a trade's page · Hedging (blotter, ticket, listed chain, optimizer) · Book risk (Greeks, vega K×T, ladder, scenarios) · P&L explained · Lifecycle · Pricing policy |
+| Trading | trader | Home · Book, and a trade's page · Hedging (blotter, ticket, listed chain, optimizer) · Calls (the issuer's calls to come, the review) · Book risk (Greeks, vega K×T, ladder, scenarios) · P&L explained · Lifecycle · Pricing policy |
 | Risk | risk manager (control) | Home · VaR, and a run's page · Stress (signed library) · Backtest · EOD runs |
 | Quant | quant, validation | Home · Market explorer, and a name's page · Calibration and model risk · Vol lab · Replay lab · Script lab · Engine |
 | Admin | admin | Home · Users · Jobs · Schedules (the data pipelines) · Audit · System |
@@ -52,6 +52,12 @@ desk's side and a size. A listed vanilla is picked from the day's chain. The opt
 chosen Greeks within their tolerances at the least bid/ask cost, shows the spot × vol grid and the VaR before and after,
 and books the proposal in one call. The Book, Book risk, Stress and VaR screens take the what-ifs only when their
 "Include the what-ifs" box is ticked; the EOD never does.
+
+**Trading › Calls.** The issuer's calls on the desk's notes (ADR-0026): the next call date of each live issuer callable,
+its notice date and call price, the soonest notice first. The review is a job: each note priced going on (its later calls
+on the policy) and called at its next date, on the same random numbers, with each branch's delta. The issuer calls when
+the note is worth more going on; inside two standard errors the screen says it is close. The call itself is the
+trader's: confirmed, audited, the trade then called with its amount.
 
 ## 3. Bridges
 
