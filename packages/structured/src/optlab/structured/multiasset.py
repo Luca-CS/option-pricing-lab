@@ -24,7 +24,7 @@ from optlab.core.market import Market
 from optlab.core.models import BlackScholesModel, Leverage, LocalVolModel, Model, SLVModel, time_grid
 
 if TYPE_CHECKING:
-    from optlab.structured.localcorr import LocalCorrelation, StochasticMix
+    from optlab.structured.localcorr import LambdaShift, LocalCorrelation, StochasticMix
 
 
 def correlation_root(corr) -> np.ndarray:
@@ -59,7 +59,7 @@ class Basket:
     markets: dict  # name → Market (spot and forward curve)
     corr: np.ndarray
     vol_corr: str = "same"  # how the residuals of the variances correlate: "same" as the spots, or "independent"
-    mixer: LocalCorrelation | StochasticMix | None = None  # a correlation that moves with the state (localcorr.py)
+    mixer: LocalCorrelation | StochasticMix | LambdaShift | None = None  # a correlation that moves with the state
 
     def __post_init__(self):
         if self.vol_corr not in ("same", "independent"):
@@ -98,7 +98,10 @@ def simulate_basket(
     spot_driven = any(getattr(m, "spot_driven", False) for m in models) or mixer is not None
     residual = rng.spawn(1)[0] if spot_driven else rng
     same = basket.vol_corr == "same" and any(hp is not None for hp in hps)
-    if mixer is not None:
+    from optlab.structured.localcorr import LambdaShift
+
+    shift = isinstance(mixer, LambdaShift)  # the lambda shift: the base's draws, and its own from the residual stream
+    if mixer is not None and not shift:
         from optlab.structured.localcorr import aligned_factors
 
         root_low, market_sign, turn = aligned_factors(basket.corr, basket.root, mixer.w0)
@@ -114,6 +117,11 @@ def simulate_basket(
         raw = normals((k, half))
         if mixer is None:
             z = basket.root @ raw
+        elif isinstance(mixer, LambdaShift):
+            xi = normals(half, residual)
+            eta = normals((k, half), residual) if mixer.lower else None
+            lam = mixer.lam(t0, np.log(np.mean(np.exp(x), axis=0)))
+            z = mixer.mix(basket.root @ raw, lam, xi, eta)
         else:  # at w0 the factors line up with the constant matrix's draws: common random numbers with it where the weight has not moved
             market, fresh = market_sign * raw[-1], normals(half, residual)  # pyright: ignore[reportPossiblyUnboundVariable] (bound with the mixer, above)
             common = np.cos(turn) * market + np.sin(turn) * fresh  # pyright: ignore[reportPossiblyUnboundVariable] (bound with the mixer, above)
@@ -221,6 +229,7 @@ class BasketContext:
     payment_currency: str | None = (
         None  # the currency its markets pay in; None when they were not built with FX in mind
     )
+    corr_shape: dict | None = None  # the correlation skew's shape (lambda shift): lam_dn, s_dn, lam_up, s_up, origin
 
     def __post_init__(self):
         self.names = tuple(self.names)
@@ -262,6 +271,7 @@ class BasketContext:
             self.contexts,
             self.correlation_cache,
             self.payment_currency,
+            self.corr_shape,
         )
 
     def with_bumps(self, vol: float = 0.0, skew: float = 0.0, corr: float = 0.0) -> BasketContext:
@@ -281,6 +291,7 @@ class BasketContext:
             self.contexts,
             self.correlation_cache,
             self.payment_currency,
+            self.corr_shape,
         )
 
     @property
@@ -315,11 +326,30 @@ class BasketContext:
         from optlab.structured.localcorr import calibrate
 
         names = tuple(names or self.names)
+        if self.corr_shape:  # the shape measured on the lake's closes: a lambda shift anchored at the base's matrix
+            return self._lambda_shift(names, T)
         idx = [self.names.index(n) for n in names]
         key = (names, self.valuation, np.asarray(self.corr)[np.ix_(idx, idx)].tobytes(), T)
         if key not in self.correlation_cache:
             self.correlation_cache[key] = calibrate(self, names, T)
         return self.correlation_cache[key]
+
+    def _lambda_shift(self, names, T: float) -> dict:
+        from optlab.structured.localcorr import LambdaShift, basket_sigma
+
+        p = self.corr_shape or {}
+        mixer = LambdaShift(
+            basket_sigma(self, names, T),
+            float(p["lam_dn"]),
+            float(p.get("s_dn", 0.6)),
+            float(p.get("lam_up", 0.0)),
+            float(p.get("s_up", 1.0)),
+        )
+        note = (
+            f"lambda shift towards 1 in a fall (cap {mixer.lam_dn:.2f}, scale {mixer.s_dn:.2f} sd) and towards 0 in a "
+            f"rise (cap {mixer.lam_up:.2f}), from the conditional realised correlation of the closes"
+        )
+        return {"mixer": mixer, "lines": [], "rmse": None, "origin": p.get("origin", "derived"), "note": note}
 
     def model(
         self,
