@@ -162,6 +162,7 @@ class Shock:
     rule_spot: dict | None = None  # the part of the spot move the vol rule applies to (None: all of it)
     funding: dict = field(default_factory=dict)  # {entity: CurveMove} on the issuer's funding spread
     dividend_years: dict = field(default_factory=dict)  # {name: {calendar year: relative move of that year's flows}}
+    corr_lambda: float = 0.0  # a parallel lambda shift of every basket's matrix: towards 1 (> 0) or towards 0 (< 0)
 
     def __post_init__(self):
         if self.rule not in RULES:
@@ -208,6 +209,7 @@ class Shock:
             rule_spot,
             funding=_merge(self.funding, o.funding, add),
             dividend_years=_merge(self.dividend_years, o.dividend_years, lambda a, b: _merge(a, b, mult)),
+            corr_lambda=self.corr_lambda + o.corr_lambda,
         )
 
     def to_dict(self) -> dict:
@@ -228,6 +230,7 @@ class Shock:
             "fx_vol": dict(self.fx_vol),
             "roll_days": self.roll_days,
             "rule_spot": None if self.rule_spot is None else dict(self.rule_spot),
+            "corr_lambda": self.corr_lambda,
         }
         return {k: v for k, v in d.items() if v or k == "rule"}
 
@@ -340,7 +343,7 @@ def moved_corr(corr, shock: Shock, names) -> np.ndarray:
 
     c = np.array(corr, dtype=float)
     if not shock.corr and not shock.corr_pairs:
-        return c
+        return _lambda_shifted(c, shock.corr_lambda)
     n = len(names)
     move = np.full((n, n), shock.corr)
     for key, v in shock.corr_pairs.items():
@@ -354,9 +357,20 @@ def moved_corr(corr, shock: Shock, names) -> np.ndarray:
     np.fill_diagonal(c, 1.0)
     try:
         np.linalg.cholesky(c)
-        return c
     except np.linalg.LinAlgError:
-        return nearest_correlation(c)
+        c = nearest_correlation(c)
+    return _lambda_shifted(c, shock.corr_lambda)
+
+
+def _lambda_shifted(c: np.ndarray, ell: float) -> np.ndarray:
+    """C + ell (U - C) for ell > 0, (1 + ell) C off the diagonal for ell < 0: a convex combination of correlation
+    matrices, valid at any size, with no repair (the lambda shift of structured.localcorr, made parallel)."""
+    if not ell:
+        return c
+    ell = float(np.clip(ell, -1.0, 1.0))
+    out = c + ell * (1.0 - c) if ell > 0 else (1.0 + ell) * c
+    np.fill_diagonal(out, 1.0)
+    return out
 
 
 def _quanto_forward(market, surface, drift: float):
@@ -437,6 +451,7 @@ def apply(ctx, shock: Shock, env: RiskEnv | None = None):
             ctx.contexts,
             ctx.correlation_cache,
             ctx.payment_currency,
+            ctx.corr_shape,
         )
     else:
         mv = name_moves(shock, ctx.underlying, cur, env)
@@ -460,8 +475,12 @@ def sim_key(ctx, shock: Shock, env: RiskEnv | None = None):
         mv = name_moves(shock, n, cur, env)
         parts.append((n, round(mv.strike_shift, 12), mv.vol.key()))
     corr = ()
-    if isinstance(ctx, BasketContext) and (shock.corr or shock.corr_pairs):
-        corr = (round(shock.corr, 12), tuple(sorted((k, round(v, 12)) for k, v in shock.corr_pairs.items())))
+    if isinstance(ctx, BasketContext) and (shock.corr or shock.corr_pairs or shock.corr_lambda):
+        corr = (
+            round(shock.corr, 12),
+            tuple(sorted((k, round(v, 12)) for k, v in shock.corr_pairs.items())),
+            round(shock.corr_lambda, 12),
+        )
     return (tuple(parts), corr, int(shock.roll_days))
 
 
@@ -479,6 +498,7 @@ def simulation_part(ctx, shock: Shock, env: RiskEnv | None = None):
             ctx.contexts,
             ctx.correlation_cache,
             ctx.payment_currency,
+            ctx.corr_shape,
         )
     else:
         mv = name_moves(shock, ctx.underlying, cur, env)

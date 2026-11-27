@@ -60,6 +60,7 @@ UNITS = {
     "theta": "currency per business day (roll, market frozen)",
     "rho": "currency per +1 bp",
     "corr": "currency per +1 correlation point",
+    "corr_lambda": "currency per +0.01 of a parallel lambda shift (every pair towards 1 by 1 % of its room)",
     "cross_gamma": "currency per +1 % of the first name, per +1 % of the second (change of its cash delta)",
     "quanto": "currency per +1 correlation point (name-FX) or per +1 FX vol point",
     "funding": "currency per +1 bp of the issuer's funding spread",
@@ -344,6 +345,8 @@ def _plan_correlation(S: dict, M: list, names: list, b: Bumps) -> None:
     unit_s = 0.01 / h
     S["c+"], S["c-"] = Shock(corr=b.corr), Shock(corr=-b.corr)
     M.append(_central("corr|*|", "c+", "c-", 0.01 / b.corr))
+    S["l+"], S["l-"] = Shock(corr_lambda=0.02), Shock(corr_lambda=-0.02)  # the lambda-vega: per +0.01 of lambda
+    M.append(_central("corr_lambda|*|", "l+", "l-", 0.01 / 0.02))
     for a_i, a in enumerate(names):
         for bb in names[a_i + 1 :]:
             pair = f"{a}|{bb}"
