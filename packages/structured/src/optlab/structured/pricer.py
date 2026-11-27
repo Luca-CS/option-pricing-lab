@@ -77,6 +77,7 @@ def price_many(
     ramps: list | None = None,
     policy=None,
     dual: bool | dict = False,
+    share_policy: bool = False,
     **sim_kwargs,
 ) -> list[StructuredResult]:
     """Price one script for several parameter sets on the same paths (common random numbers). `fixings` gives the
@@ -86,7 +87,8 @@ def price_many(
     the product keeping its initial fixing); `smoothings` gives each parameter set its own smoothing; `ramps` its digitals read as call
     spreads ({(event index, line): Ramp}, see digitals.py). A script with the issuer's call is priced under `policy`
     (exercise.Policy, e.g. a result's own, to keep it for a bump), else under one fitted on a pilot batch; `dual`
-    (True, or {"n_outer", "n_inner"}) adds the dual lower bound of its value, timings["issuer_call"]["dual"].
+    (True, or {"n_outer", "n_inner"}) adds the dual lower bound of its value, timings["issuer_call"]["dual"];
+    `share_policy` fits one policy on the first parameter set and prices every set under it.
     `control_forwards` uses S(t) / F(t) - 1 at the script's observation dates as control variates (exact mean
     zero in every model): the coefficients are fitted on the same paths, per parameter set, so the corrected price
     stays affine in the coupon; the variance ratio is reported in `timings`."""
@@ -142,6 +144,7 @@ def price_many(
         history,
         evaluations,
         workers,
+        share_policy,
         **sim_kwargs,
     )
     t_sim, t_eval = timings["simulation"], timings["evaluation"]
@@ -272,6 +275,8 @@ def _dual_bounds(
             **opts,
             **grid,
         )
+        for key in ("lower", "lower_se", "gap", "gap_se"):  # also in % of notional, as the price is
+            bound[f"{key}_pct"] = 100 * bound[key] / res.notional
         res.timings = {**res.timings, "issuer_call": {**res.timings.get("issuer_call", {}), "dual": bound}}
 
 

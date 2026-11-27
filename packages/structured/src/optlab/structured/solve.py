@@ -35,6 +35,24 @@ def combine(r0: StructuredResult, r1: StructuredResult, x: float) -> StructuredR
     )
 
 
+def solve_with_policy(run, cpn: str, target: float, x0: float, tol: float = 1e-5, max_iter: int = 6):
+    """The coupon of an issuer-callable product: the issuer's policy depends on the coupon, so the price is affine in
+    it only under one policy. From x0: fit the policy at x and price coupons 0 and 1 under it (`run(param_sets,
+    share_policy=True)`, the first set's policy shared), solve the affine coupon, and start again at it until it moves
+    by less than `tol` (per period). Returns x, its standard error, the result at x under the last policy, and the
+    coupons of each pass."""
+    x, passes = float(x0), []
+    for _ in range(max_iter):
+        _, r0, r1 = run([{cpn: x}, {cpn: 0.0}, {cpn: 1.0}], share_policy=True)
+        new, se = solve_affine(r0, r1, target)
+        passes.append(new)
+        done = abs(new - x) < tol
+        x = new
+        if done:
+            break
+    return x, se, combine(r0, r1, x), passes
+
+
 def solve_affine(r0: StructuredResult, r1: StructuredResult, target: float) -> tuple[float, float]:
     """x such that the price (in %) is the target, and its standard error by the delta method."""
     slope = r1.price - r0.price

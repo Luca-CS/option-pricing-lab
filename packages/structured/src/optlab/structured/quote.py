@@ -27,7 +27,7 @@ from optlab.structured.schema import TermSheet, solves
 from optlab.structured.script.nodes import Param, Program
 from optlab.structured.script.printer import to_text
 from optlab.structured.script.timeline import Clock, build_timeline
-from optlab.structured.solve import combine, solve_affine
+from optlab.structured.solve import combine, solve_affine, solve_with_policy
 
 
 @dataclass
@@ -254,7 +254,7 @@ def _pricer(
     if history:
         check_fixing_scale(history, ctx.market.spot, names[0])
 
-    def run(param_sets):
+    def run(param_sets, **extra):
         if method == "replication":
             assert not isinstance(ctx, BasketContext)  # noqa: S101 (narrows the type for pyright: replication prices one name)
             T_obs = prof.observation_times[-1] if prof.observation_times else timeline.horizon
@@ -283,6 +283,7 @@ def _pricer(
             calendar=product.calendar,
             workers=workers,
             control_forwards=control_forwards,
+            **extra,
         )
 
     return run
@@ -405,6 +406,13 @@ def quote(
             result = base.at(None)
             upfront = desk.final_price if fmt.name == "note" else desk.final_price + margin
             params = {}
+    elif solves(sheet) and prof.product_class == "issuer_callable":
+        target = 100 - margin if fmt.name == "note" else -margin
+        start = sheet.get("coupon.rate") * product.coupon_scale
+        x, x_se, result, passes = solve_with_policy(run, cpn, target, start)
+        result.timings = {**result.timings, "solve_passes": passes}
+        rate, rate_se = product.coupon_rate(x), x_se / product.coupon_scale
+        params = {cpn: x}
     elif solves(sheet):
         target = 100 - margin if fmt.name == "note" else -margin
         r0, r1 = run([{cpn: 0.0}, {cpn: 1.0}])

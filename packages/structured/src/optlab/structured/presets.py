@@ -136,6 +136,42 @@ PRESETS = {
             },
         },
     ),
+    "callable_reverse_convertible": (
+        "callable",
+        {
+            "general": {"maturity_months": 24},
+            "issuer_call": {"first_call_months": 6, "notice_days": 5},
+            "coupon": {"type": "fixed", "frequency_months": 3},
+            "downside": {"type": "pdi", "strike": 1.0, "barrier": 1.0, "observation": "european"},
+        },
+    ),
+    "callable_barrier_reverse_convertible": (
+        "callable",
+        {
+            "general": {"maturity_months": 24},
+            "issuer_call": {"first_call_months": 6, "notice_days": 5},
+            "coupon": {"type": "fixed", "frequency_months": 3},
+            "downside": {"type": "pdi", "strike": 1.0, "barrier": 0.7, "observation": "daily"},
+        },
+    ),
+    "callable_phoenix": (
+        "callable",
+        {
+            "general": {"maturity_months": 36},
+            "issuer_call": {"first_call_months": 12, "notice_days": 5},
+            "coupon": {"type": "conditional", "frequency_months": 3, "barrier": 0.7, "memory": True},
+            "downside": {"type": "pdi", "strike": 1.0, "barrier": 0.6, "observation": "european"},
+        },
+    ),
+    "callable_fixed_coupon_note": (
+        "callable",
+        {
+            "general": {"maturity_months": 60},
+            "issuer_call": {"first_call_months": 12, "notice_days": 5},
+            "coupon": {"type": "fixed", "frequency_months": 12},
+            "downside": {"type": "none"},
+        },
+    ),
     "capital_protected": (
         "bullet",
         {

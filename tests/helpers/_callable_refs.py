@@ -95,3 +95,73 @@ def callable_note(
                 V = np.minimum(V, price)
             V = V + amount
     return float(np.interp(np.log(at), x, V))
+
+
+def callable_layers(
+    T,
+    dates,
+    coupon,
+    barrier,
+    calls,
+    final,
+    memory=False,
+    ki=None,
+    daily=None,
+    r=0.04,
+    q=0.01,
+    vol=0.2,
+    local_vol=None,
+    spread=0.0,
+    s0=100.0,
+    n_x=1201,
+    width=7.0,
+    steps_per_year=400,
+    rannacher=4,
+):
+    """A callable Phoenix or BRC on layers of the same grid: the count of missed coupons (memory) and the knock-in flag.
+
+    `dates` are the coupon dates (T the last), a coupon of `coupon` (per period) paid when the performance is at or
+    above `barrier` (with memory: `coupon` times one plus the missed ones, the count reset); `calls` {t: price} on
+    some of them, decided after the coupon; `final(perf, knocked)` the redemption at T. `ki` with `daily` (the times
+    of every close) switches the flag on at a close below `ki`. Returns the investor value at the initial fixing."""
+    local_vol = local_vol or (lambda t, S: vol)
+    sd = max(vol, 0.05) * np.sqrt(T)
+    x = np.linspace(-width * sd, width * sd, n_x)
+    dx = x[1] - x[0]
+    perf = np.exp(x)
+    n_m = len(dates) if memory else 1
+    n_k = 2 if ki is not None else 1
+    above = perf >= barrier
+
+    def pay_and_move(V, t):
+        """Just before a coupon date: the coupon, the memory's move, then the issuer's call on what follows."""
+        if t in calls:
+            V = np.minimum(V, calls[t])
+        out = np.empty_like(V)
+        for m in range(n_m):
+            paid = coupon * (1 + m) if memory else coupon
+            nxt = min(m + 1, n_m - 1)
+            out[m] = np.where(above[None, :], paid + V[0 if memory else m], V[nxt if memory else m])
+        return out
+
+    V = np.empty((n_m, n_k, n_x))
+    for k in range(n_k):
+        V[:, k, :] = final(perf, bool(k))[None, :]
+    V = pay_and_move(V, T)  # the last coupon, with the redemption: no call at maturity
+    knock_times = sorted(t for t in (daily or ()) if 0 < t <= T) if ki is not None else []
+    marks = sorted({0.0, *[t for t in dates if t < T], *knock_times, T})
+    for i in range(len(marks) - 1, 0, -1):
+        t0, t1 = marks[i - 1], marks[i]
+        if ki is not None and t1 in knock_times:  # arriving at a close below the barrier switches the flag on
+            V[:, 0, :] = np.where(perf[None, :] < ki, V[:, 1, :], V[:, 0, :])
+        n = max(int(np.ceil((t1 - t0) * steps_per_year)), 1)
+        times = np.linspace(t0, t1, n + 1)
+        fresh = t1 in dates or t1 == T
+        for j in range(n, 0, -1):
+            theta = 1.0 if fresh and n - j < rannacher else 0.5
+            for m in range(n_m):
+                for k in range(n_k):
+                    V[m, k] = _step(V[m, k], x, dx, times[j - 1], times[j], theta, r, q, spread, local_vol, s0)
+        if t0 in dates and t0 > 0:
+            V = pay_and_move(V, t0)
+    return float(np.interp(0.0, x, V[0, 0]))
