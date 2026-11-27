@@ -39,7 +39,7 @@ from optlab.structured.script.timeline import Clock, build_timeline
 from optlab.structured.script.validate import validate
 from optlab.structured.units import BOOK_UNITS
 
-CLASS_ORDER = ("european", "path_dependent", "callable")
+CLASS_ORDER = ("european", "path_dependent", "callable", "issuer_callable")
 LINEAR = "linear"  # the class of a linear hedging instrument: closed forms, never simulated
 
 
