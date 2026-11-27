@@ -8,9 +8,10 @@ surface (replication), whose delta joins the delta hedge. Every trade pays its h
 
 A step's hedged P&L is the trade's P&L plus the hedges', explained into
     delta      what the spot move does to the trade and the hedges together, at the deltas of the day before;
-    gamma      the trade's and the option's gamma terms;
-    vega       the trade's and the option's vega terms on the at-the-money move;
-    time       the trade's time value (the option's is in the slippage);
+    gamma      the trade's gamma term;
+    vega       the trade's vega term on the at-the-money move;
+    time       the trade's time value;
+    option     the vega hedge's own P&L beyond its delta (its gamma, vega and time, revalued);
     carry      the cash hedge's funding and dividends;
     costs      the half-spreads paid;
     slippage   the rest: the hedge between rebalances, and the higher orders.
@@ -85,6 +86,11 @@ class Hedger:
         """The option's value, delta (per +1 %), gamma and vega (per point) per unit, by replication on the day."""
         if self.option is None or isinstance(ctx, BasketContext):
             return {"value": 0.0, "delta": 0.0, "gamma": 0.0, "vega": 0.0, "iv": 0.0}
+        if self.option.expiry <= day:  # expired between two steps: its intrinsic value on the day's spot, settled
+            s = scale * float(ctx.market.spot)
+            k = self.option.strike
+            payoff = max(s - k, 0.0) if self.option.kind == "call" else max(k - s, 0.0)
+            return {"value": payoff, "delta": 0.0, "gamma": 0.0, "vega": 0.0, "iv": 0.0}
         env = LinearEnv({self.names[0]: scale})
         book = Book([Position("opt", self.option, 1.0)], env)
         h = 0.01
@@ -145,11 +151,12 @@ class Hedger:
                     self.future[n] = Future(n, nxt, 1.0)
                     out["costs"] += 2 * self._cost(n, old, levels[n])  # close and reopen
                     levels[n] = self._level(n, ctx, scales[n], day)
-        # the vega hedge first: its delta joins the delta hedge
-        if self.cfg.vega and not isinstance(ctx, BasketContext) and self.k % self.cfg.vega_every == 0:
+        # the vega hedge first: its delta joins the delta hedge. An option near its expiry is rolled on any day.
+        near = self.option is not None and (self.option.expiry - day).days <= ROLL_DAYS
+        if self.cfg.vega and not isinstance(ctx, BasketContext) and (near or self.k % self.cfg.vega_every == 0):
             n = self.names[0]
             vega = sum(float((greeks.get(x) or {}).get("vega", 0.0)) for x in self.names)
-            if self.option is None or (self.option.expiry - day).days <= ROLL_DAYS:
+            if self.option is None or near:
                 expiry = day + dt.timedelta(days=round(365 * self.cfg.vega_tenor))
                 strike = scales[n] * float(ctx.market.F(self.cfg.vega_tenor))
                 if self.option is not None:  # unwind the old option at its value, paying its spread
@@ -185,14 +192,15 @@ def hedged_explain(row: dict, prev: dict, hedge: dict, prev_hedge: dict, names) 
     """A step's hedged P&L split: the trade's explain with the hedges' deltas, gammas and vegas, the carry, the costs."""
     ex = dict(row.get("explain") or {})
     out = {"delta": 0.0, "gamma": ex.get("gamma", 0.0), "vega": ex.get("vega", 0.0), "time": ex.get("time", 0.0)}
+    out["option"] = hedge.get("option_pnl", 0.0)
     for n in names:
         ret = row["spot"][n] / prev["spot"][n] - 1.0
         trade_delta = float((prev.get("greeks", {}).get(n) or {}).get("delta", 0.0))
         out["delta"] += (trade_delta + prev_hedge["hedge_delta"].get(n, 0.0)) * ret / 0.01
         if n == names[0] and prev_hedge.get("option_q"):
-            q, o = prev_hedge["option_q"], prev_hedge["option"]
-            out["delta"] += q * o["delta"] * ret / 0.01
-            out["gamma"] += 0.5 * q * o["gamma"] * (ret / 0.01) ** 2
+            option_delta = prev_hedge["option_q"] * prev_hedge["option"]["delta"] * ret / 0.01
+            out["delta"] += option_delta
+            out["option"] -= option_delta  # what the option made beyond its delta
     out["reserve"] = ex.get("reserve", 0.0)
     out["carry"] = hedge["carry"]
     out["costs"] = -hedge["costs"]
