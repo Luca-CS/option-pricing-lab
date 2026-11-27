@@ -232,3 +232,142 @@ def pilot_seed(seed) -> np.random.SeedSequence:
     if isinstance(seed, np.random.SeedSequence):
         return np.random.SeedSequence(seed.entropy, spawn_key=(*seed.spawn_key, PILOT_KEY))
     return np.random.SeedSequence(seed, spawn_key=(PILOT_KEY,))
+
+
+# --- the dual bound (Andersen-Broadie): a lower bound of the note's value, on quick runs ---
+
+DUAL_KEY = PILOT_KEY + 1  # the outer paths' seed, apart from the pilot's and the pricing batches'
+
+
+def _continued(model, market, times, col: int, start: np.ndarray, n_inner: int, rng, dt_max, dt_min) -> np.ndarray:
+    """Paths after times[col] (after t = 0 when col is -1), n_inner antithetic continuations of each outer path from
+    its spot there, on the simulator's own grid (log-Euler in the log-forward, a model without a variance process)."""
+    from optlab.core.models import BlackScholesModel, time_grid
+
+    times = np.asarray(times, dtype=float)
+    if isinstance(model, BlackScholesModel):
+        dt_max, dt_min = np.inf, None  # constant volatility: the step is exact, as in simulate
+    grid = time_grid(times, dt_max, dt_min)
+    obs = np.searchsorted(grid, times)
+    t_start = times[col] if col >= 0 else 0.0
+    x0 = np.log(start / market.F(t_start)) if col >= 0 else np.zeros(len(start))
+    x = np.repeat(x0, n_inner)
+    half = len(x) // 2
+    out = np.empty((len(x), len(times) - col - 1))
+    j = col + 1
+    for i in range((obs[col] if col >= 0 else 0) + 1, len(grid)):
+        t0, dt = grid[i - 1], grid[i] - grid[i - 1]
+        z = rng.standard_normal(half)
+        z = np.concatenate([z, -z]).reshape(2, -1).T.ravel()  # pairs side by side, inside each outer path's block
+        av = model.inst_var(t0, x, None)
+        x = x - 0.5 * av * dt + np.sqrt(av * dt) * z
+        while j < len(obs) and obs[j] == i:
+            out[:, j - col - 1] = x
+            j += 1
+    return market.F(times[col + 1 :])[None, :] * np.exp(out)
+
+
+def _event_pvs(ex: Exercise, discount, n: int) -> np.ndarray:
+    """(events, paths): the value at 0 of each event's flows, the uncalled run's."""
+    rows = []
+    for ev in ex.events:
+        if ev.t_pay is None or ev.t_pay <= 0:
+            rows.append(np.zeros(n))
+            continue
+        total = sum((np.broadcast_to(f, (n,)) for f in (*ev.pre.values(), *ev.post.values())), np.zeros(n))
+        rows.append(discount(ev.t_pay) * total)
+    return np.array(rows)
+
+
+def dual_bound(
+    model,
+    market,
+    name,
+    timeline,
+    program,
+    params,
+    spot0,
+    history,
+    policy: Policy,
+    discount,
+    price0: float,
+    price_se: float,
+    seed,
+    n_outer: int = 1_000,
+    n_inner: int = 200,
+    dt_max=1 / 252,
+    dt_min=1 / 2000,
+) -> dict:
+    """Andersen-Broadie for the issuer, who minimises: the note's value is at least E[min_j (G_j - M_j)], G_j the
+    note's flows if called at call date j (never: the last candidate), M the martingale of the policy's own value,
+    its conditional expectations from `n_inner` continuations of each of `n_outer` outer paths branched at each call
+    date. `price0` is the policy's value (the pricing run's), E_0 of the first step. A single name, a model without a
+    variance process; the gap to the policy's price is what the policy may leave to the issuer."""
+    from optlab.core.models import simulate
+    from optlab.structured.scenario import Scenario
+    from optlab.structured.script.evaluator import Evaluator
+
+    root = pilot_seed(seed)
+    outer_seed, inner_seed = np.random.SeedSequence(root.entropy, spawn_key=(*root.spawn_key[:-1], DUAL_KEY)).spawn(2)
+    times = np.asarray(timeline.sim_times, dtype=float)
+    outer_paths = simulate(
+        model, market, times, n_outer, np.random.default_rng(outer_seed), dt_max, False, dt_min=dt_min
+    )
+    rng = np.random.default_rng(inner_seed)
+
+    def evaluate(paths):
+        out = Evaluator(program, timeline, params, 0.0, True).run(Scenario(name, times, paths, spot0, history))
+        return out
+
+    outer = evaluate(outer_paths)
+    ex: Exercise = outer.exercise
+    pv = _event_pvs(ex, discount, n_outer)
+    decisions = policy.decisions(outer)
+    calls = sorted(ex.calls)
+    G, H = [], []
+    for k in calls:
+        call = ex.calls[k]
+        t_obs = float(timeline.event_times[k])
+        reach = call.mask * call.alive
+        d = discount(call.t_pay) if call.t_pay > 0 else 1.0
+        before = pv[:k].sum(axis=0)
+        ev = ex.events[k]
+        pre = discount(ev.t_pay) * sum((np.broadcast_to(f, (n_outer,)) for f in ev.pre.values()), np.zeros(n_outer))
+        G.append(np.where(reach > 0, before + pre + d * reach * call.amount, np.inf))
+        # H_k: not called at k nor before, the policy afterwards, from the paths' history up to the call
+        col = int(np.searchsorted(times, t_obs, side="right")) - 1
+        start = outer_paths[:, col] if col >= 0 else np.full(n_outer, market.spot)
+        tail = _continued(model, market, times, col, start, n_inner, rng, dt_max, dt_min)
+        paths = np.concatenate([np.repeat(outer_paths[:, : col + 1], n_inner, axis=0), tail], axis=1)
+        inner = evaluate(paths)
+        forced = policy.decisions(inner)
+        for j in forced:
+            if j <= k:
+                forced[j] = np.zeros(inner.n_paths)
+        flows = survival_and_flows(inner, forced)
+        value = sum(
+            (discount(t) * np.broadcast_to(f, (inner.n_paths,)) for (t, _tag), f in flows.flows.items() if t > 0),
+            np.zeros(inner.n_paths),
+        )
+        H.append(value.reshape(n_outer, n_inner).mean(axis=1))
+    M = np.zeros(n_outer)
+    best = np.full(n_outer, np.inf)
+    previous = np.full(n_outer, price0)
+    for k, g, h in zip(calls, G, H):
+        called = decisions[k] * (ex.calls[k].mask * ex.calls[k].alive > 0)
+        level = np.where(called > 0, g, h)
+        M = M + level - previous
+        best = np.minimum(best, g - M)
+        previous = h
+    best = np.minimum(best, previous - M)  # never called: the rest of the flows, whose expectation is the last H
+    # the bound moves one for one with price0, its gap to it does not: the gap's error is the bound's own, the
+    # bound's level adds the price's
+    gap, gap_se = price0 - float(best.mean()), float(best.std(ddof=1) / np.sqrt(n_outer))
+    return {
+        "lower": price0 - gap,
+        "lower_se": float(np.hypot(price_se, gap_se)),
+        "gap": gap,
+        "gap_se": gap_se,
+        "outer": n_outer,
+        "inner": n_inner,
+    }

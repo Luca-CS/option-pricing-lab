@@ -316,7 +316,7 @@ def _run_native(backend, model, market, name, times, n_paths, seed, spot0, histo
     }
 
 
-def _discount(fmt, market):
+def discount_of(fmt, market):
     """The note's discount factor as its format applies it (a risk format's own market first)."""
     m = getattr(fmt, "market", None) or market
     own: Any = getattr(fmt, "discount", None)
@@ -348,7 +348,7 @@ def with_policies(model, market, name, times, n_paths, seed, spot0, history, eva
         flows = Evaluator(base.program, base.timeline, base.params, 0.0, base.check_redemption).run(
             _scaled(scenario, base.spot_factor)
         )
-        policy = exercise.fit(flows, _discount(base.fmt, market))
+        policy = exercise.fit(flows, discount_of(base.fmt, market))
         for i in members:
             out[i] = dataclasses.replace(evaluations[i], policy=policy)
     return out, {"pilot_paths": n_pilot, "policies": len(groups), "seconds": time.perf_counter() - t0}

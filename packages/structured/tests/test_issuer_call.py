@@ -261,3 +261,29 @@ def test_the_same_seed_gives_the_same_price():
     a = price(callable_rc(), bs(), FLAT, n_paths=20_000, seed=21)
     b = price(callable_rc(), bs(), FLAT, n_paths=20_000, seed=21)
     assert a.value.price == b.value.price
+
+
+def test_the_dual_bound_and_the_policy_bracket_the_pde():
+    """Andersen-Broadie from continuations branched at each call date: a lower bound under the PDE, the policy's
+    value above it, and a gap of under 10 bp between them."""
+    ref = callable_note(
+        lambda p: np.minimum(p, 1.0),
+        2.0,
+        [(t, 0.03) for t in (0.5, 1.0, 1.5, 2.0)],
+        [(0.5, 1.0), (1.0, 1.0), (1.5, 1.0)],
+        r=R,
+        q=Q,
+        vol=VOL,
+    )
+    res = price(callable_rc(), bs(), FLAT, n_paths=N_PATHS, seed=11, dual={"n_outer": 1_000, "n_inner": 200})
+    bound = res.timings["issuer_call"]["dual"]
+    assert bound["lower"] < ref + 4 * bound["lower_se"]
+    assert -4 * bound["gap_se"] < bound["gap"] < 0.001
+    check(res, ref, "callable RC with its dual bound")
+
+
+def test_the_dual_bound_says_when_it_does_not_apply():
+    spx = PricingContext.from_calibration(SPX_CALIBRATION)
+    res = price(callable_rc(), spx.model("heston"), FLAT, n_paths=20_000, seed=3, dual=True)
+    assert "dual" not in res.timings["issuer_call"]
+    assert any("no dual bound for a model with a variance process" in w for w in res.warnings)
