@@ -705,16 +705,14 @@ def desk_price(
     if target is None or not product.program.has_issuer_call:
         return _desk_price(*args)
     x = float(anchor if anchor is not None else 0.0)
-    passes = []
-    for _ in range(MAX_CALL_PASSES):
+    desk, base, new, se = _desk_price(*args, anchor=x)
+    passes = [new]
+    while new is not None and abs(new - x) >= 1e-5 * coupon_scale and len(passes) < MAX_CALL_PASSES:
+        x = new
         desk, base, new, se = _desk_price(*args, anchor=x)
         passes.append(new)
-        done = new is None or abs(new - x) < 1e-5 * coupon_scale
-        x = new if new is not None else x
-        if done:
-            break
     desk.call_passes = passes
-    return desk, base, x, se
+    return desk, base, new, se
 
 
 MAX_CALL_PASSES = 6

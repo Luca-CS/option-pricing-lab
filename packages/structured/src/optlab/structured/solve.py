@@ -41,16 +41,16 @@ def solve_with_policy(run, cpn: str, target: float, x0: float, tol: float = 1e-5
     share_policy=True)`, the first set's policy shared), solve the affine coupon, and start again at it until it moves
     by less than `tol` (per period). Returns x, its standard error, the result at x under the last policy, and the
     coupons of each pass."""
-    x, passes = float(x0), []
-    for _ in range(max_iter):
+    x = float(x0)
+    _, r0, r1 = run([{cpn: x}, {cpn: 0.0}, {cpn: 1.0}], share_policy=True)
+    new, se = solve_affine(r0, r1, target)
+    passes = [new]
+    while abs(new - x) >= tol and len(passes) < max_iter:
+        x = new
         _, r0, r1 = run([{cpn: x}, {cpn: 0.0}, {cpn: 1.0}], share_policy=True)
         new, se = solve_affine(r0, r1, target)
         passes.append(new)
-        done = abs(new - x) < tol
-        x = new
-        if done:
-            break
-    return x, se, combine(r0, r1, x), passes
+    return new, se, combine(r0, r1, new), passes
 
 
 def solve_affine(r0: StructuredResult, r1: StructuredResult, target: float) -> tuple[float, float]:

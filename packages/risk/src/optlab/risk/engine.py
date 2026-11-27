@@ -30,6 +30,7 @@ import datetime as dt
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 
@@ -602,6 +603,7 @@ def _simulate(g: _Group, members: list, sim_ctx, items: list, since, fx: dict) -
     hist = history if g.basket else history.get(names[0], {})
     market = sim_ctx.market
     evaluations, layout = _evaluations(g, members, items, since, market, times, moved_markets, sim_markets)
+    extra: dict[str, Any] = {"eval_threads": settings.eval_threads} if settings.eval_threads else {}
     totals, timings = batch_engine.run(
         model,
         market,
@@ -616,7 +618,7 @@ def _simulate(g: _Group, members: list, sim_ctx, items: list, since, fx: dict) -
         settings.workers,
         engine=settings.engine,
         threads=settings.engine_threads,
-        **({"eval_threads": settings.eval_threads} if settings.eval_threads else {}),
+        **extra,
     )
     run = g.run
     run.simulations += 1

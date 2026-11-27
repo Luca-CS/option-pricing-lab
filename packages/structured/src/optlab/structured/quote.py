@@ -410,6 +410,7 @@ def quote(
     elif solves(sheet) and prof.product_class == "issuer_callable":
         target = 100 - margin if fmt.name == "note" else -margin
         start = sheet.get("coupon.rate") * product.coupon_scale
+        assert cpn is not None  # noqa: S101 (narrows the type for pyright: a sheet that solves has its coupon parameter)
         x, x_se, result, passes = solve_with_policy(run, cpn, target, start)
         result.timings = {**result.timings, "solve_passes": passes}
         rate, rate_se = product.coupon_rate(x), x_se / product.coupon_scale
