@@ -147,7 +147,7 @@ class DeskPrice:
         return next(x for x in self.lines if x.key == key)
 
     def to_dict(self) -> dict:
-        return {
+        out = {
             "side": self.side,
             "base_price": self.base_price,
             "base_se": self.base_se,
@@ -158,7 +158,6 @@ class DeskPrice:
             "seconds": self.seconds,
             "passes": self.passes,
             "digital_passes": self.digital_passes,
-            "call_passes": self.call_passes,
             "lines": [
                 {
                     "key": x.key,
@@ -180,6 +179,9 @@ class DeskPrice:
                 for x in self.lines
             ],
         }
+        if self.call_passes:  # an issuer callable: its coupon each time its policies were refitted
+            out["call_passes"] = self.call_passes
+        return out
 
     def table(self) -> str:
         rows = [f"{'base':<38} {self.base_price:10.4f} +/- {self.base_se:.4f} %"]

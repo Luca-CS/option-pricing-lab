@@ -80,7 +80,7 @@ def survival_and_flows(out, decisions: dict):
         called = call.mask * decisions[k] if call is not None else 0.0
         kept = surv * (1.0 - called)
         t = ev.t_pay
-        for tag in set(ev.pre) | set(ev.post):
+        for tag in sorted(set(ev.pre) | set(ev.post)):  # sorted: a set of strings has no fixed order across processes
             f = surv * ev.pre.get(tag, 0.0) + kept * ev.post.get(tag, 0.0)
             flows[(t, tag)] = flows.get((t, tag), 0.0) + f
         w = surv * ev.red_pre + kept * ev.red_post
