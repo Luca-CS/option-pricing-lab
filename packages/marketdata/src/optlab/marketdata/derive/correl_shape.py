@@ -69,11 +69,11 @@ def correlation_shape(lake: Lake, names, day, n_boot: int = 200, seed: int = 202
     if len(names) < 2:
         raise ValueError("a correlation shape needs two names or more")
     closes = _closes(lake, names, day)
-    logp = np.log(closes)
+    logp = pd.DataFrame(np.log(closes.to_numpy(dtype=float)), index=closes.index, columns=closes.columns)
     daily = logp.diff()
-    vol = np.sqrt((daily**2).ewm(alpha=EWMA, adjust=False).mean()).shift(1) * np.sqrt(HORIZON)
+    vol = ((daily**2).ewm(alpha=EWMA, adjust=False).mean() ** 0.5).shift(1) * np.sqrt(HORIZON)
     ret = (logp.shift(-HORIZON) - logp) / vol  # the window after the state's date, standardised ex ante
-    basket = np.log(np.exp(logp - logp.iloc[0]).mean(axis=1))
+    basket = pd.Series(np.log(np.exp((logp - logp.iloc[0]).to_numpy()).mean(axis=1)), index=logp.index)
     bvol = basket.diff().rolling(VOL_WINDOW).std() * np.sqrt(STATE)
     state = (basket - basket.shift(STATE)) / bvol
     frame = pd.concat([ret.add_prefix("r_"), state.rename("u")], axis=1).dropna()
