@@ -28,3 +28,4 @@ compete, the safer one wins and the record says so.
 | [0023](0023-calibrations-compact-in-repo.md) | The calibrations stay in the repository, in compact JSON |
 | [0024](0024-front-end-stack.md) | The front's stack (Vite, React, Mantine, TanStack), and how it keeps the strict CSP |
 | [0025](0025-hedges-are-trades.md) | Hedges are trades: instruments in the same table and book, linear ones in closed form |
+| [0026](0026-issuer-calls-by-lsm.md) | Issuer calls in the payoff language: a policy fitted by regression on a pilot, applied out of sample, a dual bound |
