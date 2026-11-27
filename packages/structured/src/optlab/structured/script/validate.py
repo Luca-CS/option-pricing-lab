@@ -14,6 +14,7 @@ from optlab.structured.script.nodes import (
     Call,
     DateLit,
     If,
+    IssuerCall,
     Name,
     Num,
     Pay,
@@ -62,6 +63,11 @@ class _Checker:
             self.params.add(prm.name)
         if not p.events:
             raise ScriptError("the script has no event", 1)
+        seen: set[str] = set()
+        for s in p.states:
+            if s in seen:
+                raise ScriptError(f"state {s!r} declared twice", 1)
+            seen.add(s)
         mode = type(p.events[0].when)
         defined: set[str] = set()
         previous = None
@@ -79,6 +85,7 @@ class _Checker:
                 raise ScriptError("the payment date is before the observation date", ev.line, ev.col)
             self.event = ev
             self.mode = mode
+            self.calls = 0
             defined = self.block(ev.body, defined)
             previous = ev
 
@@ -99,6 +106,8 @@ class _Checker:
                 if s.tag not in TAGS:
                     raise ScriptError(f"unknown flow tag {s.tag!r}, expected one of {', '.join(TAGS)}", s.line, s.col)
                 self.expr(s.expr, defined)
+            elif isinstance(s, IssuerCall):
+                self.issuer_call(s, defined)
             elif isinstance(s, If):
                 self.expr(s.cond, defined)
                 # a variable is defined after the if only if both branches define it
@@ -106,6 +115,19 @@ class _Checker:
             elif not isinstance(s, Terminate):
                 raise ScriptError(f"unexpected statement {s!r}", getattr(s, "line", 0))
         return defined
+
+    def issuer_call(self, s: IssuerCall, defined: set):
+        if self.event.pay is None:
+            raise ScriptError(
+                "'call pay' in an event without a payment date (write 'event DATE pay DATE')", s.line, s.col
+            )
+        self.calls += 1
+        if self.calls > 1:
+            raise ScriptError("one call per event: the issuer redeems at most once on a date", s.line, s.col)
+        self.expr(s.expr, defined)
+        for name in self.program.states:  # the state the issuer decides on must be known at the call
+            if name not in defined and name not in self.params and name not in self.underlyings:
+                raise ScriptError(f"state {name!r} is not assigned before this call", s.line, s.col)
 
     def expr(self, e, defined: set):
         if isinstance(e, Num):

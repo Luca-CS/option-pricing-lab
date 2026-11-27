@@ -78,7 +78,7 @@ class Quote:
         cpn = self.coupon_rate * self.product.coupon_scale
         p = self.product.program
         params = tuple(Param(x.name, cpn, x.line) if x.name == self.product.coupon_param else x for x in p.params)
-        return to_text(Program(p.underlyings, params, p.events))
+        return to_text(Program(p.underlyings, params, p.events, p.states))
 
     def table(self) -> str:
         from optlab.structured.report import quote_table

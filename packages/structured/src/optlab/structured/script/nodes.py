@@ -123,6 +123,16 @@ class Terminate(Node):
     col: int = field(default=0, compare=False)
 
 
+@dataclass(frozen=True)
+class IssuerCall(Node):
+    """`call pay <amount>`: the issuer may redeem here, paying the amount as the redemption, and the product ends.
+    Whether it does is the exercise policy's decision (exercise.py), not the script's."""
+
+    expr: Node
+    line: int = field(default=0, compare=False)
+    col: int = field(default=0, compare=False)
+
+
 # --- program ---
 
 
@@ -155,6 +165,7 @@ class Program(Node):
     underlyings: tuple
     params: tuple
     events: tuple
+    states: tuple = ()  # `state a, b`: what the issuer's call is decided on (the spots when empty)
 
     @property
     def param_values(self) -> dict:
@@ -163,6 +174,19 @@ class Program(Node):
     @property
     def underlying_names(self) -> tuple:
         return tuple(u.name for u in self.underlyings)
+
+    @property
+    def has_issuer_call(self) -> bool:
+        return any(_calls(ev.body) for ev in self.events)
+
+
+def _calls(body) -> bool:
+    for s in body:
+        if isinstance(s, IssuerCall):
+            return True
+        if isinstance(s, If) and (_calls(s.body) or _calls(s.orelse)):
+            return True
+    return False
 
 
 TAGS = ("coupon", "upside", "redemption")

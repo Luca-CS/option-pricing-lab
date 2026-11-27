@@ -8,17 +8,35 @@ Undefined values are errors, not silent branches: a comparison with NaN (log of 
 `and`/`or` short-circuit on a certain operand, and a NaN condition or a non-finite payment on a path that the
 current mask reaches (and that has not terminated) raises a ScriptError with the line. Values that are masked out
 may be NaN.
+
+A script with the issuer's call (`call pay`) runs as if the issuer never called, and keeps the record an exercise
+policy needs (`BatchFlows.exercise`, see exercise.py): each event's flows before and after its call, and at each call
+its mask, the alive mass, the amount and the declared state.
 """
 
 from __future__ import annotations
 
 import functools
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 
 from optlab.structured.script.lexer import ScriptError
-from optlab.structured.script.nodes import Assign, Binary, Call, If, Name, Num, Pay, Program, Terminate, Unary, Window
+from optlab.structured.script.nodes import (
+    Assign,
+    Binary,
+    Call,
+    If,
+    IssuerCall,
+    Name,
+    Num,
+    Pay,
+    Program,
+    Terminate,
+    Unary,
+    Window,
+)
 from optlab.structured.script.timeline import Timeline
 
 FUNCS = {"min": np.minimum, "max": np.maximum, "abs": np.abs, "exp": np.exp, "log": np.log, "sqrt": np.sqrt}
@@ -37,6 +55,7 @@ class BatchFlows:
     terminated: list = field(default_factory=list)
     alive: np.ndarray | float = 1.0
     warnings: list = field(default_factory=list)
+    exercise: Any = None  # the record of the issuer's calls (exercise.Exercise), for a script that has one
 
 
 @dataclass(frozen=True)
@@ -110,20 +129,31 @@ class Evaluator:
         self.check_redemption = check_redemption
         self.ramps = ramps or {}  # (event index, line of the comparison) -> Ramp
         self.smooth = self.eps != 0 or any(not r.shift for r in self.ramps.values())
+        self.callable = program.has_issuer_call
 
     def run(self, scenario) -> BatchFlows:
         self.scenario = scenario
         self.vars: dict = {}
         out = BatchFlows(scenario.n_paths, alive=np.ones(scenario.n_paths))
         self.out = out
+        if self.callable:
+            from optlab.structured.exercise import Exercise
+
+            out.exercise = Exercise([], {}, [], 1.0)
         with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
             for k, ev in enumerate(self.program.events):
                 self.t_obs = float(self.timeline.event_times[k])
                 self.t_pay = self.timeline.pay_times[k]
                 self.k = k
                 before = out.alive
+                if self.callable:
+                    self._event_start()
                 self.block(ev.body, 1.0)
                 out.terminated.append(before - out.alive)
+                if self.callable:
+                    out.exercise.events.append(self.event_flows)
+            if self.callable:
+                out.exercise.alive_end = out.alive
         if self.check_redemption:
             total = sum(out.redemption_weights.values(), np.zeros(scenario.n_paths))
             tol = 1e-12 if not self.smooth else 1e-9
@@ -156,11 +186,16 @@ class Evaluator:
                 e = self.expr(s.expr)
                 self._check_defined(~np.isfinite(e) & (w != 0), s.line, f"the amount paid as {s.tag} is not finite")
                 key = (self.t_pay, s.tag)
-                self.out.flows[key] = self.out.flows.get(key, 0.0) + np.where(w != 0, w * e, 0.0)
+                paid = np.where(w != 0, w * e, 0.0)
+                self.out.flows[key] = self.out.flows.get(key, 0.0) + paid
                 if s.tag == "redemption":
                     self.out.redemption_weights[self.t_pay] = self.out.redemption_weights.get(self.t_pay, 0.0) + w
+                if self.callable:
+                    self._record_pay(s.tag, paid, w)
             elif isinstance(s, Terminate):
                 self.out.alive = self.out.alive * (1.0 - m)
+            elif isinstance(s, IssuerCall):
+                self._record_call(s, m)
             elif isinstance(s, If):
                 c = self.expr(s.cond)
                 undefined = np.isnan(c)
@@ -175,6 +210,42 @@ class Evaluator:
                 self.block(s.body, m * c)
                 if s.orelse:
                     self.block(s.orelse, m * (1.0 - c))
+
+    # --- the issuer's call: what a policy needs, the run itself unchanged ---
+    def _event_start(self):
+        from optlab.structured.exercise import EventFlows
+
+        self.out.exercise.alive_before.append(self.out.alive)
+        self.event_flows = EventFlows(self.t_pay)
+        self.after_call = False
+
+    def _record_pay(self, tag: str, paid, w):
+        ev = self.event_flows
+        flows = ev.post if self.after_call else ev.pre
+        flows[tag] = flows.get(tag, 0.0) + paid
+        if tag == "redemption":
+            if self.after_call:
+                ev.red_post = ev.red_post + w
+            else:
+                ev.red_pre = ev.red_pre + w
+
+    def _record_call(self, s: IssuerCall, m):
+        from optlab.structured.exercise import CallRecord
+
+        n = self.scenario.n_paths
+        amount = self.expr(s.expr)
+        w = m * self.out.alive
+        self._check_defined(~np.isfinite(amount) & (w != 0), s.line, "the call amount is not finite")
+        names = self.program.states or self.program.underlying_names
+        state = np.stack([np.broadcast_to(np.asarray(self.expr(Name(x)), dtype=float), (n,)) for x in names], axis=1)
+
+        def full(v):
+            return np.broadcast_to(np.asarray(v, dtype=float), (n,))
+
+        self.out.exercise.calls[self.k] = CallRecord(
+            self.k, self.t_pay, full(m), full(self.out.alive), full(amount), state
+        )
+        self.after_call = True
 
     def _check_defined(self, bad, line: int, what: str):
         bad = np.broadcast_to(bad, (self.scenario.n_paths,))

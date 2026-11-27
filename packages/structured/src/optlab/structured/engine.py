@@ -19,6 +19,7 @@ it from a file with the usual `if __name__ == "__main__":` guard (not from code 
 from __future__ import annotations
 
 import atexit
+import dataclasses
 import multiprocessing as mp
 import os
 import time
@@ -30,6 +31,7 @@ import numpy as np
 
 from optlab.core import engines, progress
 from optlab.core.models import simulate
+from optlab.structured import exercise
 from optlab.structured.cashflows import pair_averages
 from optlab.structured.multiasset import Basket, BasketScenario, simulate_basket
 from optlab.structured.scenario import Scenario, batch_sizes
@@ -52,6 +54,7 @@ class Evaluation:
     spot_factor: float | np.ndarray | dict = 1.0  # one factor or one per simulated date; {name: factor} for a basket
     controls: tuple = ()  # (name, time, forward): S(t) / F(t) - 1 has mean zero, a control variate
     ramps: dict | None = None  # (event index, line) -> Ramp: digitals read as call spreads
+    policy: Any = None  # the issuer's call (exercise.Policy): fitted on a pilot by run() when the script has one
 
 
 @dataclass
@@ -64,6 +67,7 @@ class Totals:
     redemption: dict = field(default_factory=dict)
     warnings: list = field(default_factory=list)
     controls: list = field(default_factory=list)
+    policy: Any = None  # the issuer's call policy the evaluation used
 
     def add(self, summary):
         pairs, terminated, flows, red, warnings, controls = summary
@@ -125,6 +129,8 @@ def _controls(ev: Evaluation, scenario):
 def _summary(ev: Evaluation, scenario, market):
     scenario = _scaled(scenario, ev.spot_factor)
     out = Evaluator(ev.program, ev.timeline, ev.params, ev.smoothing, ev.check_redemption, ev.ramps).run(scenario)
+    if out.exercise is not None:
+        out = (ev.policy or exercise.NEVER).apply(out)
     pairs = pair_averages(ev.fmt.present_values(out, market, ev.notional))
     terminated = np.array([np.sum(d) for d in out.terminated])
     flows = {key: float(np.sum(f)) for key, f in out.flows.items()}
@@ -310,6 +316,44 @@ def _run_native(backend, model, market, name, times, n_paths, seed, spot0, histo
     }
 
 
+def discount_of(fmt, market):
+    """The note's discount factor as its format applies it (a risk format's own market first)."""
+    m = getattr(fmt, "market", None) or market
+    own: Any = getattr(fmt, "discount", None)
+    if own is not None:
+        return lambda t: float(own(m, t))
+    return lambda t: float(m.D(t))
+
+
+def with_policies(model, market, name, times, n_paths, seed, spot0, history, evaluations, sim_kwargs):
+    """Evaluations of a script with the issuer's call get a policy fitted on a pilot batch of its own seed (NumPy
+    paths, whatever the engine): one per program, parameters and format, fitted on its evaluation without a spot
+    factor or ramps and kept by the others (a spot bump keeps the base's policy). Returns the evaluations and what
+    the pilot cost, or None when no evaluation needed one."""
+    need = [i for i, ev in enumerate(evaluations) if ev.policy is None and ev.program.has_issuer_call]
+    if not need:
+        return evaluations, None
+    t0 = time.perf_counter()
+    n_pilot = exercise.pilot_paths(n_paths)
+    kwargs = {k: v for k, v in sim_kwargs.items() if k not in ("engine", "threads", "eval_threads")}
+    scenario = _scenario(model, market, name, times, n_pilot, exercise.pilot_seed(seed), spot0, history, kwargs)
+    groups: dict = {}
+    for i in need:
+        ev = evaluations[i]
+        groups.setdefault((id(ev.program), tuple(sorted(ev.params.items())), id(ev.fmt)), []).append(i)
+    out = list(evaluations)
+    for members in groups.values():
+        plain = [i for i in members if _no_change(evaluations[i].spot_factor) and not evaluations[i].ramps]
+        base = evaluations[(plain or members)[0]]
+        flows = Evaluator(base.program, base.timeline, base.params, 0.0, base.check_redemption).run(
+            _scaled(scenario, base.spot_factor)
+        )
+        policy = exercise.fit(flows, discount_of(base.fmt, market))
+        for i in members:
+            out[i] = dataclasses.replace(evaluations[i], policy=policy)
+    return out, {"pilot_paths": n_pilot, "policies": len(groups), "seconds": time.perf_counter() - t0}
+
+
 def run(
     model,
     market,
@@ -325,7 +369,35 @@ def run(
     **sim_kwargs,
 ):
     """Totals per evaluation and timings {"simulation", "evaluation", "wall", "workers", "engine"}. `engine` in
-    sim_kwargs picks the source of the paths (numpy, cpu, gpu, auto)."""
+    sim_kwargs picks the source of the paths (numpy, cpu, gpu, auto). A script with the issuer's call is first given
+    its exercise policy (`with_policies`, its cost in timings["issuer_call"])."""
+    evaluations, pilot = with_policies(
+        model, market, name, times, n_paths, seed, spot0, history, evaluations, sim_kwargs
+    )
+    totals, timings = _run(
+        model, market, name, times, n_paths, seed, batch, spot0, history, evaluations, workers, **sim_kwargs
+    )
+    if pilot is not None:
+        timings["issuer_call"] = pilot
+        for tot, ev in zip(totals, evaluations):
+            tot.policy = ev.policy
+    return totals, timings
+
+
+def _run(
+    model,
+    market,
+    name,
+    times,
+    n_paths: int,
+    seed,
+    batch,
+    spot0,
+    history,
+    evaluations: list,
+    workers: int | None = None,
+    **sim_kwargs,
+):
     backend, why = engines.choose(sim_kwargs.pop("engine", None), model)
     if backend != "numpy" and (not len(times) or not sim_kwargs.get("antithetic", True) or n_paths % 2):
         backend, why = "numpy", "no simulated date, or no antithetic pairs"

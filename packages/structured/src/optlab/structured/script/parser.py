@@ -1,10 +1,10 @@
 """Hand-written recursive-descent parser: script text → Program.
 
 Grammar (one statement per line, blocks closed by `end`):
-    program   := { underlying NAME | param NAME = [-]NUMBER } { event }
+    program   := { underlying NAME | param NAME = [-]NUMBER | state NAME {, NAME} } { event }
     event     := event WHEN [pay WHEN] NEWLINE { stmt } end
     WHEN      := DATE | t = NUMBER
-    stmt      := NAME = expr | pay expr as TAG | terminate
+    stmt      := NAME = expr | pay expr as TAG | terminate | call pay expr
                | if expr then NEWLINE { stmt } [else NEWLINE { stmt }] end
     expr      := and { or and } ;  and := not { and not } ;  not := not not | cmp
     cmp       := arith [ (< <= > >= ==) arith ] ;  arith := term { (+ -) term } ;  term := unary { (* /) unary }
@@ -12,6 +12,9 @@ Grammar (one statement per line, blocks closed by `end`):
     primary   := NUMBER | NAME | ( expr ) | FUNC ( expr {, expr} ) | WINDOW ( NAME , WHEN , WHEN [, n = INT] [, expr , expr] )
     FUNC      := min | max (2 args) | abs | exp | log | sqrt (1 arg) | worst | best (2 or more, e.g. worst-of baskets)
     WINDOW    := lowest | highest | variance (the realised variance; two more arguments: its corridor's bounds)
+
+`state` and `call` are words of the language only where they open a declaration (`state` then a name, at the top)
+or the issuer's call (`call pay`): elsewhere they are names like any other, so no script that used them changes.
 
 Depth is bounded: the parser, and every pass over the tree after it (validation, timeline, evaluation, printing), is
 recursive, so a script nested without limit (thousands of parentheses, or one sum of thousands of terms) would end in
@@ -33,6 +36,7 @@ from optlab.structured.script.nodes import (
     DateLit,
     Event,
     If,
+    IssuerCall,
     Name,
     Node,
     Num,
@@ -93,6 +97,10 @@ class Parser:
             raise self.error(f"expected {what or text or kind.lower()}, found {found}")
         return tok
 
+    def next_is(self, kind: str, text: str | None = None) -> bool:
+        nxt = self.tokens[min(self.i + 1, len(self.tokens) - 1)]
+        return nxt.kind == kind and (text is None or nxt.text == text)
+
     def skip_newlines(self):
         while self.accept("NEWLINE"):
             pass
@@ -104,10 +112,15 @@ class Parser:
 
     # --- program ---
     def program(self) -> Program:
-        underlyings, params, events = [], [], []
+        underlyings, params, events, states = [], [], [], []
         self.skip_newlines()
         while not self.check("EOF"):
-            if tok := self.accept("KEYWORD", "underlying"):
+            if self.check("NAME", "state") and self.next_is("NAME"):
+                self.i += 1
+                states.append(self.expect("NAME", what="state variable").text)
+                while self.accept("OP", ","):
+                    states.append(self.expect("NAME", what="state variable").text)
+            elif tok := self.accept("KEYWORD", "underlying"):
                 underlyings.append(Underlying(self.expect("NAME", what="underlying name").text, tok.line, tok.col))
             elif tok := self.accept("KEYWORD", "param"):
                 name = self.expect("NAME", what="parameter name").text
@@ -118,9 +131,9 @@ class Parser:
                 events.append(self.event())
                 continue
             else:
-                raise self.error(f"expected underlying, param or event, found {self.tok.text!r}")
+                raise self.error(f"expected underlying, param, state or event, found {self.tok.text!r}")
             self.end_of_line()
-        return Program(tuple(underlyings), tuple(params), tuple(events))
+        return Program(tuple(underlyings), tuple(params), tuple(events), tuple(states))
 
     def when(self):
         tok = self.tok
@@ -174,6 +187,11 @@ class Parser:
         if self.accept("KEYWORD", "terminate"):
             self.end_of_line()
             return Terminate(tok.line, tok.col)
+        if self.check("NAME", "call") and self.next_is("KEYWORD", "pay"):
+            self.i += 2
+            expr = self.expr()
+            self.end_of_line()
+            return IssuerCall(expr, tok.line, tok.col)
         if self.accept("NAME"):
             self.expect("OP", "=", "'=' (assignment)")
             expr = self.expr()

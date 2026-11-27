@@ -9,6 +9,7 @@ from optlab.structured.script.nodes import (
     DateLit,
     Event,
     If,
+    IssuerCall,
     Name,
     Num,
     Pay,
@@ -78,6 +79,8 @@ def statements(body, depth: int) -> list[str]:
             lines.append(f"{pad}pay {expr(s.expr)} as {s.tag}")
         elif isinstance(s, Terminate):
             lines.append(f"{pad}terminate")
+        elif isinstance(s, IssuerCall):
+            lines.append(f"{pad}call pay {expr(s.expr)}")
         elif isinstance(s, If):
             lines.append(f"{pad}if {expr(s.cond)} then")
             lines += statements(s.body, depth + 1)
@@ -98,6 +101,8 @@ def event(ev: Event) -> list[str]:
 def to_text(program: Program) -> str:
     lines = [f"underlying {u.name}" for u in program.underlyings]
     lines += [f"param {p.name} = {number(p.value)}" for p in program.params]
+    if program.states:
+        lines.append(f"state {', '.join(program.states)}")
     for ev in program.events:
         lines += ["", *event(ev)]
     return "\n".join(lines) + "\n"
