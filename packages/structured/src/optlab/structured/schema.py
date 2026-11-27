@@ -188,6 +188,32 @@ SECTIONS = {
             ),
         ),
         Section(
+            "issuer_call",
+            "Issuer's call",
+            (
+                Field("first_call_months", "int", 12, "Non-call period", "months", minimum=1),
+                Field(
+                    "frequency_months",
+                    "int",
+                    3,
+                    "Call frequency",
+                    "months",
+                    minimum=1,
+                    visible_if=_v("coupon.type", "snowball"),
+                ),
+                Field(
+                    "call_price",
+                    "number",
+                    1.0,
+                    "Call price (the period's coupon paid besides)",
+                    "of notional",
+                    minimum=0.0,
+                    maximum=LEVEL_MAX,
+                ),
+                Field("notice_days", "int", 5, "Notice", "business days", minimum=0, maximum=30),
+            ),
+        ),
+        Section(
             "coupon",
             "Coupon",
             (
@@ -472,6 +498,14 @@ MASKS = {
         ("general", "wrapper", "autocall", "coupon", "downside", "costs"),
         {"coupon.type": ("fixed", "conditional", "snowball"), "wrapper.solve": ("coupon", "upfront")},
     ),
+    "callable": Mask(
+        "callable",
+        "Issuer callable",
+        ("general", "wrapper", "issuer_call", "coupon", "downside", "costs"),
+        {"coupon.type": ("fixed", "conditional", "snowball"), "wrapper.solve": ("coupon", "upfront")},
+        ("costs.delta_max_autocall",),
+        {"general.maturity_months": 36},
+    ),
     "bullet": Mask(
         "bullet",
         "Bullet (non-callable)",
@@ -662,7 +696,21 @@ class TermSheet:
         self._check_product(m)
 
     def _check_product(self, m: int):
-        """An autocall's own rules: its first call and its lizard on a call date."""
+        """An autocall's own rules: its first call and its lizard on a call date; an issuer callable's call dates."""
+        if self.mask.name == "callable":
+            freq = (
+                self.get("issuer_call.frequency_months")
+                if self.get("coupon.type") == "snowball"
+                else self.get("coupon.frequency_months")
+            )
+            first = self.get("issuer_call.first_call_months")
+            if first % freq or first >= m:
+                raise TermSheetError(
+                    f"issuer_call.first_call_months = {first} must be a call date: a multiple of {freq} months "
+                    f"before the maturity ({m})"
+                )
+            if m % freq:
+                raise TermSheetError(f"the maturity ({m} months) must be a multiple of the call frequency ({freq})")
         if self.mask.name == "autocall":
             n_calls = m // self.get("autocall.frequency_months")
             if self.get("autocall.first_call") > n_calls:

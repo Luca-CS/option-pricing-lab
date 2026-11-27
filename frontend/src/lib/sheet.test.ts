@@ -71,6 +71,7 @@ describe("a sheet as a whole", () => {
 
   it("says in one line what it is", () => {
     expect(describeSheet(sheet)).toBe("24M · SPX · conditional coupon · PDI 60 % european");
+    expect(describeSheet({ ...sheet, issuer_call: { first_call_months: 12 } })).toContain("issuer callable from 12M");
     expect(describeSheet({ ...sheet, wrapper: { solve: "upfront" } })).toContain("conditional coupon 8.00 %");
     expect(
       describeSheet({ ...sheet, general: { basket: "worst_of", underlyings: ["SPX", "SX5E"], maturity_months: 12 } }),

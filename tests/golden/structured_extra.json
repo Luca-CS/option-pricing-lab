@@ -1,13 +1,13 @@
 {
  "meta": {
-  "recorded": "2026-11-26T01:38:34+00:00",
-  "commit": "9bc648bb0c87218966ad3f123e692cdc06a043b6",
+  "recorded": "2026-11-27T12:30:20+00:00",
+  "commit": "399ceb30e821feb0a6a56cd13f512c6fc581a5e5",
   "platform": "Windows-11-10.0.26200-SP0",
   "machine": "AMD64",
   "python": "3.14.7",
   "numpy": "2.5.4",
   "scipy": "1.18.1",
-  "seconds": 28.68,
+  "seconds": 30.63,
   "times": {}
  },
  "values": {
@@ -276,7 +276,8 @@
        "se": 0.06808737587477626
       }
      },
-     "digital_passes": 1
+     "digital_passes": 1,
+     "call_passes": []
     }
    },
    "phoenix": {
@@ -647,7 +648,8 @@
        "se": 0.0673598789741815
       }
      },
-     "digital_passes": 2
+     "digital_passes": 2,
+     "call_passes": []
     }
    }
   },

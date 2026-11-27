@@ -325,11 +325,12 @@ def discount_of(fmt, market):
     return lambda t: float(m.D(t))
 
 
-def with_policies(model, market, name, times, n_paths, seed, spot0, history, evaluations, sim_kwargs):
+def with_policies(model, market, name, times, n_paths, seed, spot0, history, evaluations, sim_kwargs, share=False):
     """Evaluations of a script with the issuer's call get a policy fitted on a pilot batch of its own seed (NumPy
     paths, whatever the engine): one per program, parameters and format, fitted on its evaluation without a spot
-    factor or ramps and kept by the others (a spot bump keeps the base's policy). Returns the evaluations and what
-    the pilot cost, or None when no evaluation needed one."""
+    factor or ramps and kept by the others (a spot bump keeps the base's policy). With `share`, the first
+    evaluation's policy is every evaluation's (a coupon solved under one policy stays affine). Returns the evaluations
+    and what the pilot cost, or None when no evaluation needed one."""
     need = [i for i, ev in enumerate(evaluations) if ev.policy is None and ev.program.has_issuer_call]
     if not need:
         return evaluations, None
@@ -340,7 +341,8 @@ def with_policies(model, market, name, times, n_paths, seed, spot0, history, eva
     groups: dict = {}
     for i in need:
         ev = evaluations[i]
-        groups.setdefault((id(ev.program), tuple(sorted(ev.params.items())), id(ev.fmt)), []).append(i)
+        key = (id(ev.program),) if share else (id(ev.program), tuple(sorted(ev.params.items())), id(ev.fmt))
+        groups.setdefault(key, []).append(i)
     out = list(evaluations)
     for members in groups.values():
         plain = [i for i in members if _no_change(evaluations[i].spot_factor) and not evaluations[i].ramps]
@@ -366,13 +368,14 @@ def run(
     history,
     evaluations: list,
     workers: int | None = None,
+    share_policy: bool = False,
     **sim_kwargs,
 ):
     """Totals per evaluation and timings {"simulation", "evaluation", "wall", "workers", "engine"}. `engine` in
     sim_kwargs picks the source of the paths (numpy, cpu, gpu, auto). A script with the issuer's call is first given
     its exercise policy (`with_policies`, its cost in timings["issuer_call"])."""
     evaluations, pilot = with_policies(
-        model, market, name, times, n_paths, seed, spot0, history, evaluations, sim_kwargs
+        model, market, name, times, n_paths, seed, spot0, history, evaluations, sim_kwargs, share_policy
     )
     totals, timings = _run(
         model, market, name, times, n_paths, seed, batch, spot0, history, evaluations, workers, **sim_kwargs

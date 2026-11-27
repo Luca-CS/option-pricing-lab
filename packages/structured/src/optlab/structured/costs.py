@@ -141,12 +141,13 @@ class DeskPrice:
     passes: int = 0  # solves until the provisions in force stopped changing
     model_results: dict = field(default_factory=dict, repr=False)  # model -> its StructuredResult at the coupon
     digital_passes: int = 0  # simulations until the widths of the digitals stopped moving
+    call_passes: list = field(default_factory=list)  # an issuer callable's coupon, each time its policies were refitted
 
     def line(self, key: str) -> CostLine:
         return next(x for x in self.lines if x.key == key)
 
     def to_dict(self) -> dict:
-        return {
+        out = {
             "side": self.side,
             "base_price": self.base_price,
             "base_se": self.base_se,
@@ -178,6 +179,9 @@ class DeskPrice:
                 for x in self.lines
             ],
         }
+        if self.call_passes:  # an issuer callable: its coupon each time its policies were refitted
+            out["call_passes"] = self.call_passes
+        return out
 
     def table(self) -> str:
         rows = [f"{'base':<38} {self.base_price:10.4f} +/- {self.base_se:.4f} %"]
@@ -196,7 +200,8 @@ class _Run:
         self.results = results
 
     def at(self, x: float | None) -> StructuredResult:
-        return self.results[0] if x is None else combine(self.results[0], self.results[1], x)
+        # the last two sets are coupons 0 and 1 (an issuer callable's first set is the coupon its policy is fitted at)
+        return self.results[0] if x is None else combine(self.results[-2], self.results[-1], x)
 
     def price(self, x: float | None) -> float:
         return self.at(x).price
@@ -217,6 +222,7 @@ class _Lines:
         self.product, self.ctx, self.fmt, self.decision, self.sets = product, ctx, fmt, decision, sets
         self.fixings, self.workers, self.fast = fixings, workers, fast
         self.program = product.program
+        self.share = self.program.has_issuer_call  # one issuer's policy per run, fitted on its first set
         self.clock = Clock(product.valuation, product.calendar)
         self.timeline = build_timeline(self.program, self.clock)
         self.T_obs = profile.observation_times[-1] if profile.observation_times else self.timeline.horizon
@@ -296,6 +302,7 @@ class _Lines:
             fixings=self.fixings,
             calendar=self.product.calendar,
             workers=self.workers,
+            share_policy=self.share,
             spot_factors=[f for _, f in expanded],
             initial_fixing=self.initial,
         )
@@ -318,6 +325,7 @@ class _Lines:
                 fixings=self.fixings,
                 calendar=self.product.calendar,
                 workers=self.workers,
+                share_policy=self.share,
                 initial_fixing=self.initial,
             )
         )
@@ -357,6 +365,7 @@ class _Lines:
                 fixings=self.fixings,
                 calendar=self.product.calendar,
                 workers=self.workers,
+                share_policy=self.share,
                 initial_fixing=self.initial,
             )
         )
@@ -409,6 +418,7 @@ class _Lines:
             fixings=self.fixings,
             calendar=self.product.calendar,
             workers=self.workers,
+            share_policy=self.share,
             initial_fixing=self.initial,
             ramps=[r for _, r in expanded],
         )
@@ -687,12 +697,49 @@ def desk_price(
     fixings=None,
     workers=None,
     fast=False,
+    anchor: float | None = None,
 ) -> tuple[DeskPrice, _Run, float | None, float | None]:
     """The lines of one product. With a `target`, the coupon is solved so that the client price is the target. Returns (the desk price,
-    the base run, the solved coupon parameter, its standard error)."""
+    the base run, the solved coupon parameter, its standard error). An issuer callable's lines each fit their policy at a coupon
+    (`anchor`, then the coupon solved), every line on its own policy (a model's, or the base's market bumped), until the coupon
+    moves by less than 0.1 bp a year."""
+    args = (product, ctx, fmt, decision, profile, inputs, target, coupon_param, coupon_scale, fixings, workers, fast)
+    if target is None or not product.program.has_issuer_call:
+        return _desk_price(*args)
+    x = float(anchor if anchor is not None else 0.0)
+    desk, base, new, se = _desk_price(*args, anchor=x)
+    passes = [new]
+    while new is not None and abs(new - x) >= 1e-5 * coupon_scale and len(passes) < MAX_CALL_PASSES:
+        x = new
+        desk, base, new, se = _desk_price(*args, anchor=x)
+        passes.append(new)
+    desk.call_passes = passes
+    return desk, base, new, se
+
+
+MAX_CALL_PASSES = 6
+
+
+def _desk_price(
+    product,
+    ctx,
+    fmt,
+    decision,
+    profile,
+    inputs: CostInputs,
+    target: float | None,
+    coupon_param: str | None,
+    coupon_scale: float,
+    fixings=None,
+    workers=None,
+    fast=False,
+    anchor: float | None = None,
+) -> tuple[DeskPrice, _Run, float | None, float | None]:
     t0 = time.perf_counter()
     solving = target is not None
     sets = [{coupon_param: 0.0}, {coupon_param: 1.0}] if solving else [{}]
+    if solving and anchor is not None:
+        sets = [{coupon_param: anchor}, *sets]
     lines = _Lines(product, ctx, fmt, decision, profile, sets, fixings, workers, fast)
     values, runs = _settled(inputs, lines, target, solving)
     base = runs.pop("base")

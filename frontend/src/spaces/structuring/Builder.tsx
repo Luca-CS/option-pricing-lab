@@ -34,6 +34,7 @@ const SHAPE: Record<string, string> = {
   bullet: "To maturity",
   variance: "Variance swap",
   accumulator: "Accumulator",
+  callable: "Issuer callable",
 };
 
 const DRAFT = "optlab-builder-draft";

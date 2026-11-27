@@ -1,13 +1,13 @@
 {
  "meta": {
-  "recorded": "2026-11-26T05:20:14+00:00",
-  "commit": "eaae879de6806b2c3b55c1deae9635dd394d74b5",
+  "recorded": "2026-11-27T12:37:42+00:00",
+  "commit": "399ceb30e821feb0a6a56cd13f512c6fc581a5e5",
   "platform": "Windows-11-10.0.26200-SP0",
   "machine": "AMD64",
   "python": "3.14.7",
   "numpy": "2.5.4",
   "scipy": "1.18.1",
-  "seconds": 24.06,
+  "seconds": 69.32,
   "times": {}
  },
  "values": {
@@ -1344,6 +1344,147 @@
    "control": {
     "value": 100.12164116446188,
     "se": 0.03249930134125358
+   }
+  },
+  "callable_reverse_convertible": {
+   "coupon_rate": 0.06935421711179902,
+   "coupon_rate_se": 0.0007157144863959794,
+   "upfront": null,
+   "target": 98.0,
+   "margin": 2.0,
+   "result": {
+    "value": 98.0,
+    "se": 0.08463510402102761
+   },
+   "model": "lv",
+   "method": "monte_carlo",
+   "termination": [
+    0.0,
+    0.0,
+    0.0,
+    0.2794,
+    0.0,
+    0.134,
+    0.0,
+    0.082,
+    0.0,
+    0.0866,
+    0.0,
+    0.0563,
+    0.0,
+    0.0479,
+    0.0
+   ],
+   "expected_life": 1.2276142465753426,
+   "control": {
+    "value": 98.13435700895648,
+    "se": 0.08446618632532368
+   }
+  },
+  "callable_barrier_reverse_convertible": {
+   "coupon_rate": 0.06237566241354886,
+   "coupon_rate_se": 0.0008090886047584265,
+   "upfront": null,
+   "target": 98.0,
+   "margin": 2.0,
+   "result": {
+    "value": 98.0,
+    "se": 0.08268604655274676
+   },
+   "model": "lv",
+   "method": "monte_carlo",
+   "termination": [
+    0.0,
+    0.0,
+    0.0,
+    0.30755,
+    0.0,
+    0.248,
+    0.0,
+    0.07715,
+    0.0,
+    0.08,
+    0.0,
+    0.04955,
+    0.0,
+    0.0427,
+    0.0
+   ],
+   "expected_life": 1.0560304109589043,
+   "control": {
+    "value": 98.00331339605789,
+    "se": 0.08450736469680507
+   }
+  },
+  "callable_phoenix": {
+   "coupon_rate": 0.05806245543783896,
+   "coupon_rate_se": 0.0007424898519252497,
+   "upfront": null,
+   "target": 98.0,
+   "margin": 2.0,
+   "result": {
+    "value": 98.00000000000004,
+    "se": 0.11633693040238188
+   },
+   "model": "lv",
+   "method": "monte_carlo",
+   "termination": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.29605,
+    0.0,
+    0.16175,
+    0.0,
+    0.1014,
+    0.0,
+    0.07125,
+    0.0,
+    0.04305,
+    0.0,
+    0.05115,
+    0.0,
+    0.059,
+    0.0,
+    0.03625,
+    0.0
+   ],
+   "expected_life": 1.7658109589041098,
+   "control": {
+    "value": 98.6879196211551,
+    "se": 0.10543120129684148
+   }
+  },
+  "callable_fixed_coupon_note": {
+   "coupon_rate": 0.03650310977450454,
+   "coupon_rate_se": 0.0,
+   "upfront": null,
+   "target": 98.0,
+   "margin": 2.0,
+   "result": {
+    "value": 97.99999999999999,
+    "se": 0.0
+   },
+   "model": "lv",
+   "method": "monte_carlo",
+   "termination": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "expected_life": 5.002739726027397,
+   "control": {
+    "value": 97.99999999999999,
+    "se": 1.421156531123291e-16
    }
   },
   "capital_protected": {

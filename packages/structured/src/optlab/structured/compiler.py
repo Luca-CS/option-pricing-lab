@@ -51,9 +51,25 @@ def _observations(sheet: TermSheet, strike: dt.date, cal):
         for j, (o, p) in enumerate(calls[first - 1 : -1]):
             obs.setdefault(o, {"pay": p})["call"] = j
             obs[o]["period"] = first + j
+    if sheet.mask.name == "callable":
+        _issuer_calls(sheet, strike, months, conv, lag, cal, obs)
     maturity = cal.adjust(add_months(strike, months), conv)
     obs.setdefault(maturity, {"pay": cal.add_business_days(maturity, lag)})["final"] = True
     return dict(sorted(obs.items())), maturity
+
+
+def _issuer_calls(sheet: TermSheet, strike, months: int, conv, lag: int, cal, obs: dict) -> None:
+    """The issuer's call dates (every coupon date from the non-call period, the snowball's own frequency), each with
+    its period, and its notice date `notice_days` business days before (the date the issuer decides on)."""
+    snowball = sheet.get("coupon.type") == "snowball"
+    freq = sheet.get("issuer_call.frequency_months" if snowball else "coupon.frequency_months")
+    first = sheet.get("issuer_call.first_call_months") // freq
+    notice = sheet.get("issuer_call.notice_days")
+    for j, (o, p) in enumerate(schedule(strike, months, freq, conv, lag, cal)[first - 1 : -1]):
+        obs.setdefault(o, {"pay": p})["issuer_call"] = j
+        obs[o]["period"] = first + j
+        if notice:
+            obs.setdefault(cal.add_business_days(o, -notice), {"pay": None})["notice"] = True
 
 
 def _params(sheet: TermSheet, coupon: str, upside: str, downside: str, autocall: bool) -> tuple[dict, float]:
@@ -64,7 +80,9 @@ def _params(sheet: TermSheet, coupon: str, upside: str, downside: str, autocall:
     if coupon in ("fixed", "conditional"):
         coupon_scale = g("coupon.frequency_months") / 12
     elif coupon == "snowball":
-        coupon_scale = g("autocall.frequency_months") / 12
+        coupon_scale = (
+            g("issuer_call.frequency_months" if sheet.mask.name == "callable" else "autocall.frequency_months") / 12
+        )
     if coupon != "none":
         params["cpn"] = g("coupon.rate") * coupon_scale
     if coupon == "conditional":
@@ -84,6 +102,8 @@ def _params(sheet: TermSheet, coupon: str, upside: str, downside: str, autocall:
             params["cap"] = g("upside.cap")
         if upside == "digital":
             params["digital"] = g("upside.digital_amount")
+    if sheet.mask.name == "callable":
+        params["call_price"] = g("issuer_call.call_price")
     if downside != "none":
         params["put_strike"] = g("downside.strike")
     if downside == "pdi":
@@ -260,6 +280,45 @@ def _call_lines(call: str, coupon: str, period: int, asynchronous: bool, names) 
     return [*lines, "  pay N as redemption", "  terminate", "end"]
 
 
+def _decision_lines(prefix: str, perf_expr: str, memory: bool, daily_ki: bool, names, strike, o) -> list[str]:
+    """What the issuer decides on, at its notice date or the call date itself: the performance, the missed coupons'
+    count (memory) and whether a daily knock-in barrier was breached so far."""
+    lines = [f"{prefix}perf = {perf_expr}"] if prefix else []
+    if daily_ki:
+        if len(names) > 1:
+            lows = ", ".join(f"lowest({n}, {strike}, {o}) / S0_{n}" for n in names)
+            lines.append(f"{prefix}breached = worst({lows}) < ki_barrier")
+        else:
+            lines.append(f"{prefix}breached = lowest({names[0]}, {strike}, {o}) < ki_barrier * S0")
+    return lines
+
+
+def _issuer_parts(role, o, prefix, perf_expr, memory, daily_ki, names, strike, coupon) -> tuple[list, list]:
+    """An event's lines for the issuer's call: what is decided on at a notice date (before the coupon), and at a call
+    date the call itself after the coupon (with no notice, the state is read there first)."""
+    before = _decision_lines(prefix, perf_expr, memory, daily_ki, names, strike, o) if role.get("notice") else []
+    after = []
+    if role.get("issuer_call") is not None:
+        if not prefix:
+            after += _decision_lines("", perf_expr, memory, daily_ki, names, strike, o)
+        amount = f"N * (call_price + cpn * {role['period']})" if coupon == "snowball" else "N * call_price"
+        after.append(f"call pay {amount}")
+    return before, after
+
+
+def _snowball_final(sheet: TermSheet, issuer: bool, n_periods, trigger) -> list[str]:
+    """A snowball's coupon at maturity: every period's, on an issuer callable; above the last trigger on an autocall."""
+    g = sheet.get
+    if issuer:
+        return [f"pay N * cpn * {g('general.maturity_months') // g('issuer_call.frequency_months')} as coupon"]
+    j_final = n_periods - g("autocall.first_call")
+    return [f"if perf >= {trigger(j_final)} then", f"  pay N * cpn * {n_periods} as coupon", "end"]
+
+
+def _issuer_call_states(prefix: str, memory: bool, daily_ki: bool) -> list[str]:
+    return [f"{prefix or ''}perf"] + (["missed"] if memory else []) + ([f"{prefix}breached"] if daily_ki else [])
+
+
 def _lizard_lines(names, strike, o) -> list[str]:
     """The lizard date: redeemed at par with the bonus if no close of any name breached the lizard barrier since the
     strike (a path called on this date already pays nothing more)."""
@@ -314,23 +373,31 @@ def compile_sheet(sheet: TermSheet, valuation, calendar=None) -> CompiledProduct
     lizard_date = add_months(strike, g("autocall.lizard_months")) if autocall and g("autocall.lizard") else None
     lines.append("end")
     perf_expr = f"worst({', '.join(f'{n} / S0_{n}' for n in names)})" if basket else f"{first} / S0"
+    issuer = sheet.mask.name == "callable"
+    daily_ki = issuer and downside == "pdi" and g("downside.observation") == "daily"
+    prefix = "notice_" if issuer and g("issuer_call.notice_days") else ""
+    if issuer:  # the declaration goes with the parameters, before the events
+        lines.insert(len(names) + len(params), f"state {', '.join(_issuer_call_states(prefix, memory, daily_ki))}")
     for o, role in obs.items():
-        final, call = role.get("final", False), role.get("call")
-        needs_perf = coupon == "conditional" and role.get("coupon") or call is not None or final
+        final, call, icall = role.get("final", False), role.get("call"), role.get("issuer_call")
+        needs_perf = coupon == "conditional" and role.get("coupon") or call is not None or final or icall is not None
         body = [f"perf = {perf_expr}"] if needs_perf else []
+        before, after = _issuer_parts(role, o, prefix, perf_expr, memory, daily_ki, names, strike, coupon)
+        body += before
         if role.get("coupon"):
             body += _coupon_lines(coupon, memory)
+        body += after
         if call is not None:
             body += _call_lines(trigger(call), coupon, role["period"], asynchronous, names)
             if lizard_date is not None and o == cal.adjust(lizard_date, g("general.convention")):
                 body += _lizard_lines(names, strike, o)
         if final:
             if coupon == "snowball":
-                j_final = n_periods - g("autocall.first_call")
-                body += [f"if perf >= {trigger(j_final)} then", f"  pay N * cpn * {n_periods} as coupon", "end"]
+                body += _snowball_final(sheet, issuer, n_periods, trigger)
             body += _upside_lines(upside)
             body += _redemption_lines(downside, g("downside.observation"), names, strike, o)
-        lines += ["", f"event {o} pay {role['pay']}", *("  " + b for b in body), "end"]
+        pays = f" pay {role['pay']}" if role["pay"] is not None else ""
+        lines += ["", f"event {o}{pays}", *("  " + b for b in body), "end"]
     script = "\n".join(lines) + "\n"
     program = validate(parse(script))
     return CompiledProduct(
