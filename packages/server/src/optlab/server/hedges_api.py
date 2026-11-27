@@ -17,6 +17,7 @@ from scipy.stats import norm
 from optlab.core.log import get_logger
 from optlab.server.api import ApiError
 from optlab.server.serialize import clean, trade_json
+from optlab.server.tasks import register
 from optlab.structured.hedges import HedgeError, Instrument, LinearEnv, SpreadCurve, Valuation, parse
 from optlab.structured.hedges import costs as hedge_costs
 from optlab.structured.hedges.contracts import listed_option, quarterly_expiries
@@ -292,6 +293,134 @@ class HedgesApi:
         self.desk.repo.delete_trade(trade_id)
         return {"ok": True, "trade_id": trade_id}
 
+    # --- the optimizer (job `hedge`) ---
+    def optimize(self, body: dict) -> dict:
+        """Submit the hedge optimizer on the book as it is (a job): the proposal comes back as simulated trades to book."""
+        return self.desk._submit("hedge", body, self.desk.freeze_book())
+
+    def candidates(self, groups: list, universe: dict, version: int | None = None) -> list:
+        """The hedging universe of the book's single-name groups, each candidate at its fair level with its half-spread:
+        futures on the next quarterly expiries, vanillas per expiry and delta bucket (listed from the day's chain when
+        asked and quoted, else OTC), and in the group of a currency's reference index its swaps, deposits and funding
+        swaps per tenor; dividend swaps per calendar year."""
+        from optlab.structured.multiasset import BasketContext
+
+        rows = self.rows(version)
+        u = {**UNIVERSE, **(universe or {})}
+        out: list = []
+        for g in groups:
+            if not isinstance(g.ctx, BasketContext):
+                _GroupUniverse(self, g, u, rows, version, out).build()
+        return out
+
+    def _vanilla_on(self, inst: Vanilla, ctx, env) -> tuple[float, float]:
+        """(value per lot, half-spread per lot) of a vanilla on a group's context: replication, the vol spread."""
+        from optlab.structured.greeks import ShiftedSurface
+        from optlab.structured.portfolio import Book, Position
+
+        book = Book([Position("v", inst, 1.0)], env)
+        unit = book.price(ctx).value
+        wider = book.price(ctx, surface=ShiftedSurface(ctx.surface, self.rows()["otc_vol_points"] / 100)).value
+        return unit, abs(wider - unit)
+
+    def _nearest_listed(self, name: str, expiry: dt.date, strike: float, kind: str):
+        """The listed option of the day's chain nearest an expiry and a strike, with its half-spread per lot."""
+        try:
+            chain = self.chain(name)
+        except ApiError:
+            return None
+        rows = [r for r in chain["rows"] if r["kind"] == kind]
+        if not rows:
+            return None
+        best = min(
+            rows, key=lambda r: (abs((dt.date.fromisoformat(r["expiry"]) - expiry).days), abs(r["strike"] - strike))
+        )
+        inst = Vanilla(name, dt.date.fromisoformat(best["expiry"]), best["strike"], kind, listed=True)
+        return inst, 0.5 * (best["ask"] - best["bid"]) * best["multiplier"]
+
+    def run_optimize(self, p: dict, f) -> dict:
+        from optlab.risk.hedge import FAMILIES, Target, optimise
+        from optlab.server.tasks import envelope
+
+        desk = self.desk
+        opts = p.get("options") or {}
+        settings = desk.risk._settings(opts, smoothing=float(opts.get("smoothing", 0.005)))
+        groups, ctx = desk.risk._start(f, "hedge", opts)
+        progress_step("hedge: the candidates")
+        cands = self.candidates(groups, p.get("universe") or {}, f.costs)
+        targets = None
+        if p.get("targets"):
+            targets = [Target(t["key"], float(t.get("value", 0.0)), float(t["tolerance"])) for t in p["targets"]]
+        shocks, warnings = self._var_shocks(groups, ctx.valuation, int(p.get("var_days", 250)))
+        progress_step("hedge: the book and the candidates in one risk run")
+        run = optimise(
+            groups,
+            cands,
+            targets,
+            tuple(p.get("families") or FAMILIES),
+            settings,
+            None,
+            None,
+            bool(p.get("grid", True)),
+            shocks,
+            float(p.get("relative", 0.1)),
+            float(p.get("floor", 1.0)),
+        )
+        out = run.to_dict()
+        out["candidates"] = len(cands)
+        out["warnings"] = sorted(set(out["warnings"]) | set(warnings))
+        method = {"name": "hedge_optimizer", "n_paths": settings.n_paths, "candidates": len(cands)}
+        return envelope(desk._market(ctx), method, clean(out))
+
+    def _var_shocks(self, groups, day, days: int) -> tuple[dict | None, list]:
+        """The history's 1-day moves of the book's factors, as shocks (None without the lake's history)."""
+        if days <= 0:
+            return None, []
+        from optlab.marketdata.days import shifted_day
+        from optlab.risk.shocks import context_currency
+        from optlab.risk.var import FACTORS, changes, factor_levels, group_names, shock_of
+
+        names = sorted({n for g in groups for n in group_names(g)})
+        currencies = sorted({context_currency(g.ctx) for g in groups})
+        try:
+            levels, _ = factor_levels(self.desk.lake, names, currencies, shifted_day(day, days + 15), day)
+        except (KeyError, ValueError) as exc:
+            return None, [f"no VaR control: the lake's history is missing ({exc})"]
+        moves = changes(levels, 1).iloc[-days:]
+        if moves.empty:
+            return None, ["no VaR control: no history before the valuation date"]
+        return {f"1d:{d}": shock_of(row, names, currencies[0], FACTORS) for d, row in moves.iterrows()}, []
+
+    def book_proposal(self, body: dict) -> dict:
+        """The proposal of a finished `hedge` job booked as trades, simulated or live, in one call: each at its fill (the
+        chain's or the surface's for a vanilla, its fair level for the others with its half-spread as fees)."""
+        desk = self.desk
+        job = desk.job(str(body["job_id"]))
+        if job.get("kind") != "hedge" or job.get("state") != "done":
+            raise ApiError("not a finished hedge job", 409)
+        rows = (job.get("result") or {}).get("proposal") or []
+        chosen = body.get("indexes")
+        picked = [r for r in rows if chosen is None or r["index"] in chosen]
+        if not picked:
+            raise ApiError("nothing to book in this proposal", 422)
+        status = str(body.get("status") or "simulated")
+        booked = []
+        for r in picked:
+            inst = r["instrument"]
+            fees = 0.0 if inst.get("type") == "vanilla" else float(r["cost"])
+            booked.append(
+                self.create(
+                    {
+                        "instrument": inst,
+                        "quantity": r["quantity"],
+                        "status": status,
+                        "fees": fees,
+                        "tags": ["hedge", f"proposal:{body['job_id']}"],
+                    }
+                )
+            )
+        return {"trades": booked, "status": status}
+
     def settle(self, trade_id: str) -> dict:
         """An expired vanilla or future settled in cash against the lake's close at its expiry: status matured, the
         amount per unit and in total kept on the trade (never the index level, personal-use data)."""
@@ -349,10 +478,138 @@ class HedgesApi:
         return {"closed": trade_json(closed), "opened": trade_json(desk.repo.save_trade(new))}
 
 
+class _GroupUniverse:
+    """The candidates of one single-name group, family by family (`HedgesApi.candidates`)."""
+
+    def __init__(self, api: HedgesApi, g, u: dict, rows: dict, version, out: list):
+        from optlab.risk.shocks import context_currency
+
+        self.api, self.g, self.u, self.rows, self.out = api, g, u, rows, out
+        self.ctx, self.name, self.cur = g.ctx, g.ctx.underlying, context_currency(g.ctx)
+        has = self.name in g.book.linear.scales
+        self.env = g.book.linear if has else api.linear_env([self.name], self.ctx, version)
+        self.scale = self.env.scales.get(self.name)
+        self.val = self.ctx.valuation
+        self.lots, self.notional = float(u["max_lots"]), float(u["max_notional"])
+
+    def build(self) -> None:
+        from optlab.structured.hedges.contracts import INDEX_FUTURES, LISTED_OPTIONS
+
+        reference = REFERENCE.get(self.cur) == self.name
+        if self.scale and self.u["futures"] and self.name in INDEX_FUTURES:
+            self.futures()
+        if self.scale and self.u["vanillas"] and self.name in LISTED_OPTIONS:
+            self.vanillas()
+        if self.u["rates"] and reference:
+            self.rates()
+        if self.u["funding"] and reference:
+            self.funding()
+        if self.scale and self.u["dividends"]:
+            self.dividends()
+
+    def v(self, inst) -> Valuation:
+        return self.env.valuation(inst, self.ctx.market, self.val)
+
+    def add(self, inst, integer: bool, limit: float, cost: float | None = None) -> None:
+        from optlab.risk.hedge import Candidate
+
+        c = hedge_costs.half_spread(inst, self.v(inst), self.rows) if cost is None else cost
+        self.out.append(Candidate(inst.label, inst, float(c), float(limit), integer, self.g.label))
+
+    def futures(self) -> None:
+        for exp in quarterly_expiries(self.val, int(self.u["expiries"])):
+            probe = Future(self.name, exp, 1.0)
+            self.add(Future(self.name, exp, probe.forward(self.v(probe))), True, self.lots)
+
+    def vanillas(self) -> None:
+        from optlab.risk.explain import DELTA_BUCKETS
+
+        assert self.scale is not None  # noqa: S101 (narrows the type for pyright: build() asks for a scale)
+        for T in self.u["tenors"]:
+            expiry = self.val + dt.timedelta(days=round(365 * float(T)))
+            forward = float(self.ctx.market.F(float(T)))
+            for d in DELTA_BUCKETS:
+                strike = round(self.scale * forward * float(np.exp(_strike_at_delta(self.ctx, float(T), float(d)))), 2)
+                kind = "put" if d > 0.5 else "call"
+                listed = self.api._nearest_listed(self.name, expiry, strike, kind) if self.u["listed"] else None
+                if listed is not None:
+                    self.add(listed[0], True, self.lots, listed[1])
+                    continue
+                inst = Vanilla(self.name, expiry, strike, kind, listed=False)
+                _, spread = self.api._vanilla_on(inst, self.ctx, self.env)
+                self.add(inst, False, self.notional / (self.scale * 100.0), spread)
+
+    def rates(self) -> None:
+        from optlab.structured.hedges.instruments import Irs
+
+        for years in (2, 5, 10):
+            probe = Irs(self.cur, self.val, _years_after(self.val, years), 0.0)
+            self.add(Irs(self.cur, self.val, probe.end, probe.fair(self.v(probe))), False, self.notional)
+
+    def funding(self) -> None:
+        from optlab.structured.hedges.instruments import FundingSwap
+
+        for years in (1, 2):
+            probe = Deposit(self.cur, self.val, _years_after(self.val, years), 0.0)
+            self.add(Deposit(self.cur, self.val, probe.end, probe.fair(self.v(probe))), False, self.notional)
+        for years in (3, 5):
+            probe = FundingSwap(self.cur, self.val, _years_after(self.val, years), 0.0)
+            self.add(FundingSwap(self.cur, self.val, probe.end, probe.fair(self.v(probe))), False, self.notional)
+
+    def dividends(self) -> None:
+        from optlab.structured.hedges.instruments import DividendSwap
+
+        assert self.scale is not None  # noqa: S101 (narrows the type for pyright: build() asks for a scale)
+        for y in range(self.val.year + 1, self.val.year + 4):
+            probe = DividendSwap(self.name, y, 0.0)
+            pts = probe.points(self.v(probe))
+            self.add(DividendSwap(self.name, y, round(pts, 4)), False, self.notional / (self.scale * 100.0))
+
+
+UNIVERSE = {
+    "futures": True,
+    "expiries": 2,
+    "vanillas": True,
+    "listed": False,
+    "tenors": (0.25, 0.5, 1.0),
+    "rates": True,
+    "dividends": True,
+    "funding": True,
+    "max_lots": 500.0,
+    "max_notional": 1e8,
+}
+
+
+def progress_step(label: str) -> None:
+    from optlab.core import progress
+
+    progress.step(label)
+
+
+def _years_after(d: dt.date, years: int) -> dt.date:
+    from optlab.structured.dates import add_months
+
+    return add_months(d, 12 * years)
+
+
+def _strike_at_delta(ctx, T: float, delta: float) -> float:
+    """ln(K / F) whose forward call delta on the surface is `delta`: a fixed point on the smile's vol at the strike."""
+    from scipy.stats import norm as _norm
+
+    vol = float(ctx.surface.iv(0.0, T))
+    k = 0.0
+    for _ in range(8):
+        k = 0.5 * vol * vol * T - vol * np.sqrt(T) * float(_norm.ppf(delta))
+        vol = float(ctx.surface.iv(k, T))
+    return k
+
+
 def _instrument(d) -> Instrument:
     if not isinstance(d, dict):
         raise HedgeError("the instrument is an object: {type, its fields}")
     return parse(d)
 
+
+register("hedge", lambda desk, p, f: desk.hedges.run_optimize(p, f))
 
 __all__ = ["HedgesApi", "REFERENCE", "Valuation", "default_fill", "home"]

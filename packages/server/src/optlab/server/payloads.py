@@ -442,6 +442,67 @@ class ListedChain(Doc):
     rows: list[ListedRow]
 
 
+class HedgeTargetRow(Doc):
+    key: str
+    target: float
+    tolerance: float
+    before: float
+    after: Estimate = Field(..., description="its se: the candidates' Monte Carlo error at the solved sizes")
+    missed: bool
+
+
+class HedgeProposalRow(Doc):
+    index: int
+    label: str
+    instrument: dict[str, Any]
+    quantity: float
+    unit_cost: float = Field(..., description="half-spread per unit, currency")
+    cost: float
+    limit: float
+    integer: bool
+    group: str
+
+
+class HedgeGrid(Doc):
+    spots: list[float]
+    vols: list[float]
+    before: list[list[float]]
+    after: list[list[float]]
+    rule: str
+
+
+class VarStats(Doc):
+    var: float
+    es: float
+
+
+class HedgeVar(Doc):
+    days: int
+    before: VarStats
+    after: VarStats
+
+
+class HedgeRun(Doc):
+    """The optimizer's proposal: the targets before and after, the trades, their cost, and the control."""
+
+    targets: list[HedgeTargetRow]
+    proposal: list[HedgeProposalRow]
+    cost: float
+    status: str
+    missed: list[str]
+    greeks: dict[str, Any] = {}
+    grid: HedgeGrid | None = None
+    var: HedgeVar | None = None
+    seconds: float = 0.0
+    warnings: list[str] = []
+    candidates: int = 0
+
+
+class BookedProposal(Doc):
+    trades: list[Trade]
+    status: str
+
+
 class InstrumentMark(Doc):
     """An instrument at the market in use."""
 
@@ -1440,6 +1501,7 @@ JOB_RESULTS: dict[str, type[BaseModel]] = {
     "replay": Replay,
     "fit": VolFit,
     "reproduce": VolFitReproduction,
+    "hedge": HedgeRun,
 }
 
 

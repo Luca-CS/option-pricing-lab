@@ -101,6 +101,52 @@ class HedgeIn(Body):
     tags: list[str] = Field(default_factory=list, max_length=20)
 
 
+class HedgeUniverse(Body):
+    """The candidates the optimizer may trade (bounded: at most a few dozen per name)."""
+
+    futures: bool = True
+    expiries: int = Field(2, ge=1, le=4, description="quarterly futures expiries")
+    vanillas: bool = True
+    listed: bool = Field(False, description="vanillas from the day's chain when it quotes them, else OTC")
+    tenors: list[float] = Field([0.25, 0.5, 1.0], min_length=1, max_length=6, description="vanillas' expiries, years")
+    rates: bool = True
+    dividends: bool = True
+    funding: bool = True
+    max_lots: float = Field(500.0, gt=0, le=1e6, description="listed instruments, lots")
+    max_notional: float = Field(1e8, gt=0, le=1e12, description="OTC instruments, currency")
+
+    @model_validator(mode="after")
+    def _tenors(self) -> HedgeUniverse:
+        if any(not 1 / 52 <= t <= 10 for t in self.tenors):
+            raise ValueError("a vanilla's tenor is between a week and ten years")
+        return self
+
+
+class HedgeTargetIn(Body):
+    key: str = Field(..., pattern=r"^[a-z_]+\|[\w*~.-]{1,32}\|[\w.@,-]{0,32}$", description='a Greek key, "delta|SPX|"')
+    value: float = Field(0.0, ge=-1e12, le=1e12)
+    tolerance: float = Field(..., gt=0, le=1e12)
+
+
+class HedgeOptimizeIn(Body):
+    options: RiskOptions = Field(default_factory=lambda: RiskOptions.model_validate({}))
+    targets: list[HedgeTargetIn] | None = Field(None, max_length=64, description="none: every key of `families` to 0")
+    families: list[Literal["delta", "gamma", "vega_tenor", "rho_tenor", "dividend_year", "funding_tenor"]] = Field(
+        default_factory=lambda: ["delta", "vega_tenor", "rho_tenor", "dividend_year", "funding_tenor"], max_length=6
+    )
+    relative: float = Field(0.1, ge=0.0, le=1.0, description="default tolerance: this share of each Greek's size")
+    floor: float = Field(1.0, ge=0.0, le=1e9, description="default tolerance at least, currency")
+    universe: HedgeUniverse = Field(default_factory=lambda: HedgeUniverse.model_validate({}))
+    grid: bool = True
+    var_days: int = Field(250, ge=0, le=500, description="the VaR control's 1-day moves (0: none)")
+
+
+class ProposalIn(Body):
+    job_id: str = Field(..., pattern=r"^[\w-]{1,64}$")
+    status: Literal["simulated", "live"] = "simulated"
+    indexes: list[int] | None = Field(None, max_length=200, description="the proposal's rows to book (none: all)")
+
+
 class MarkIn(Body):
     instrument: dict[str, Any] = Field(..., max_length=16)
     quantity: float = Field(1.0, ge=-1e12, le=1e12)

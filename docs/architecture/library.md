@@ -149,6 +149,11 @@ One block, with JSON-ready dataclasses in and out, reading `structured` and `mar
 - **The vol move opened** (`explain.py`): a day's spot, vol and skew steps under each spot-vol rule (the same total, split
   differently), and under one rule the vol move node by node or tenor by tenor, each step a full revaluation, read by
   maturity (level and shape) and by delta bucket; the nodes and a residual add up to the vol and skew steps exactly.
+- **The hedge optimizer** (`hedge.py`): candidates (futures, vanillas by expiry and delta bucket, swaps, dividend swaps,
+  deposits, funding swaps) priced as positions of one unit in the same risk run as the book, so their hedge ratios are
+  measured on the book's paths; then a mixed-integer linear program (HiGHS): the least half-spread cost such that each
+  target Greek is within its tolerance, listed lots as integers, a priced slack saying which targets the universe or
+  the limits cannot reach; the proposal checked under the spot × vol grid and the VaR's 1-day moves, before and after.
 - **Storage** (`store.py`): versioned records and runs keyed by what determines them.
 
 ## 6. The desk (`optlab.server`)

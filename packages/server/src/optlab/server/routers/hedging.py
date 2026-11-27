@@ -7,9 +7,9 @@ from collections.abc import Callable
 
 from fastapi import APIRouter, Query, Request
 
-from optlab.server.payloads import InstrumentMark, ListedChain, Roll, Trade, documented
-from optlab.server.routers._common import Id, audited, desk
-from optlab.server.schemas import HedgeIn, MarkIn, body
+from optlab.server.payloads import BookedProposal, InstrumentMark, ListedChain, Roll, Trade, documented
+from optlab.server.routers._common import ACCEPTED, Id, audited, desk, submit
+from optlab.server.schemas import HedgeIn, HedgeOptimizeIn, MarkIn, ProposalIn, body
 from optlab.server.web import Problem, access
 from optlab.structured.hedges import HedgeError
 
@@ -43,6 +43,22 @@ def create_hedge(h: HedgeIn, request: Request):
 def mark_instrument(m: MarkIn, request: Request):
     """An instrument at the market in use: its value and fair level per unit, its half-spread, for a size."""
     return _checked(lambda: _hedges(request).mark(body(m)))()
+
+
+@router.post("/hedges/optimizations", **access("trader", "risk"), status_code=202, responses=ACCEPTED)
+def optimize_hedges(o: HedgeOptimizeIn, request: Request):
+    """The hedge optimizer on the book (a job `hedge`): target Greeks at the least bid/ask cost, with the scenario grid
+    and the VaR before and after."""
+    return submit(request, "optimize_hedges", lambda: desk(request).hedges.optimize(body(o)))
+
+
+@router.post(
+    "/hedges/proposals", **access("trader"), status_code=201, responses=documented(BookedProposal, "the trades", 201)
+)
+def book_proposal(p: ProposalIn, request: Request):
+    """A finished optimizer's proposal booked as trades (simulated or live), in one audited call."""
+    hedges = _hedges(request)
+    return audited(request, "book_proposal", p.job_id, _checked(lambda: hedges.book_proposal(body(p))))
 
 
 @router.get("/hedges/listed", **access(), responses=documented(ListedChain))

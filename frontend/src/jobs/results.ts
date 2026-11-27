@@ -18,6 +18,7 @@ export type JobResults = {
   replay: Schemas["Replay"];
   fit: Schemas["VolFit"];
   reproduce: Schemas["VolFitReproduction"];
+  hedge: Schemas["HedgeRun"];
 };
 
 export type Envelope<K extends keyof JobResults> = {
