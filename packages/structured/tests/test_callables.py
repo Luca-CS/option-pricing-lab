@@ -9,6 +9,7 @@ from _structured_refs import FLAT, VOL, Q, R, flat_context
 
 from optlab.core import BlackScholesModel
 from optlab.structured.compiler import compile_sheet
+from optlab.structured.costs import CostInputs
 from optlab.structured.presets import preset
 from optlab.structured.pricer import price_many
 from optlab.structured.profile import profile
@@ -147,3 +148,23 @@ def test_the_coupon_is_solved_by_refitting_the_policy():
         calendar=product.calendar,
     )
     assert abs(at.price - 98.0) < 4 * at.stderr
+
+
+def test_the_desk_price_of_a_callable_refits_each_line_at_the_solved_coupon():
+    """Every line of the desk price fits its own policy at the coupon (the base's, SLV's, the overvol's), and the coupon
+    is solved again until it stops moving; the client price is then the target."""
+    ctx = flat_context()
+    q = quote(
+        preset("callable_phoenix"),
+        ctx,
+        model="lv",
+        control=None,
+        n_paths=20_000,
+        batch=10_000,
+        costs=CostInputs({"vol": 0.005}),
+    )
+    desk = q.desk
+    assert desk is not None and len(desk.call_passes) >= 2
+    assert abs(desk.call_passes[-1] - desk.call_passes[-2]) < 1e-5 * 0.25
+    assert abs(desk.final_price - 98.0) < 1e-6
+    assert any(line.key == "vol" for line in desk.lines)

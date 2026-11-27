@@ -393,8 +393,9 @@ def quote(
         )
     if costs is not None:
         aim = (100 - margin if fmt.name == "note" else -margin) if solves(sheet) else None
+        anchor = sheet.get("coupon.rate") * product.coupon_scale if prof.product_class == "issuer_callable" else None
         desk, base, x, x_se = desk_price(
-            product, ctx, fmt, decision, prof, costs, aim, cpn, product.coupon_scale, fixings, workers, fast
+            product, ctx, fmt, decision, prof, costs, aim, cpn, product.coupon_scale, fixings, workers, fast, anchor
         )
         if aim is not None:
             target = aim
