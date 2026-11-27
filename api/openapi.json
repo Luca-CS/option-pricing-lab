@@ -13178,6 +13178,16 @@
             "type": "object",
             "title": "Seconds",
             "default": {}
+          },
+          "hedged": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReplayHedged"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": true,
@@ -13313,6 +13323,45 @@
             "type": "object",
             "title": "Layer",
             "default": {}
+          },
+          "hedged_pnl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hedged Pnl",
+            "description": "the trade's P&L with the hedges'"
+          },
+          "hedged_explain": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hedged Explain"
+          },
+          "hedge": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hedge",
+            "description": "the hedges' P&L, costs, carry and deltas of the step"
           }
         },
         "additionalProperties": true,
@@ -13362,6 +13411,117 @@
           "kind"
         ],
         "title": "ReplayEvent"
+      },
+      "ReplayHedgeIn": {
+        "properties": {
+          "instrument": {
+            "type": "string",
+            "enum": [
+              "future",
+              "cash"
+            ],
+            "title": "Instrument",
+            "default": "future"
+          },
+          "delta_every": {
+            "type": "integer",
+            "maximum": 60.0,
+            "minimum": 1.0,
+            "title": "Delta Every",
+            "description": "business days between delta rebalances",
+            "default": 1
+          },
+          "threshold": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Threshold",
+            "description": "a residual under this share of the trade's delta waits",
+            "default": 0.0
+          },
+          "vega": {
+            "type": "boolean",
+            "title": "Vega",
+            "default": false
+          },
+          "vega_every": {
+            "type": "integer",
+            "maximum": 60.0,
+            "minimum": 1.0,
+            "title": "Vega Every",
+            "default": 5
+          },
+          "vega_tenor": {
+            "type": "number",
+            "maximum": 2.0,
+            "minimum": 0.019230769230769232,
+            "title": "Vega Tenor",
+            "description": "the at-the-money call's tenor, years",
+            "default": 0.25
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ReplayHedgeIn",
+        "description": "The desk's hedges along a replay (marketdata/hedged.py)."
+      },
+      "ReplayHedged": {
+        "properties": {
+          "steps": {
+            "type": "integer",
+            "title": "Steps"
+          },
+          "naked_total": {
+            "type": "number",
+            "title": "Naked Total"
+          },
+          "hedged_total": {
+            "type": "number",
+            "title": "Hedged Total"
+          },
+          "naked_std": {
+            "type": "number",
+            "title": "Naked Std"
+          },
+          "hedged_std": {
+            "type": "number",
+            "title": "Hedged Std"
+          },
+          "costs": {
+            "type": "number",
+            "title": "Costs"
+          },
+          "carry": {
+            "type": "number",
+            "title": "Carry"
+          },
+          "explain": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Explain",
+            "default": {}
+          },
+          "slippage": {
+            "type": "number",
+            "title": "Slippage"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "steps",
+          "naked_total",
+          "hedged_total",
+          "naked_std",
+          "hedged_std",
+          "costs",
+          "carry",
+          "slippage"
+        ],
+        "title": "ReplayHedged",
+        "description": "A hedged replay against the same life naked: totals, the spread of the daily P&L, what the hedges cost."
       },
       "ReplayIn": {
         "properties": {
@@ -13446,6 +13606,17 @@
             "minimum": -1000000000.0,
             "title": "Quantity",
             "default": 1.0
+          },
+          "hedge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReplayHedgeIn"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "the same life with the desk's hedges, against naked"
           }
         },
         "additionalProperties": false,

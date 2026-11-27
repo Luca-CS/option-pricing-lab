@@ -344,6 +344,17 @@ class FitIn(Body):
         return self
 
 
+class ReplayHedgeIn(Body):
+    """The desk's hedges along a replay (marketdata/hedged.py)."""
+
+    instrument: Literal["future", "cash"] = "future"
+    delta_every: int = Field(1, ge=1, le=60, description="business days between delta rebalances")
+    threshold: float = Field(0.0, ge=0.0, le=1.0, description="a residual under this share of the trade's delta waits")
+    vega: bool = False
+    vega_every: int = Field(5, ge=1, le=60)
+    vega_tenor: float = Field(0.25, ge=1 / 52, le=2.0, description="the at-the-money call's tenor, years")
+
+
 class ReplayIn(Body):
     preset: str = Field("barrier_reverse_convertible", max_length=64)
     underlying: str = Field("SPX", pattern=r"^[A-Z0-9._-]{1,16}$")
@@ -357,6 +368,7 @@ class ReplayIn(Body):
     greeks: bool = True
     costs: bool = True
     quantity: float = Field(1.0, ge=-1e9, le=1e9)
+    hedge: ReplayHedgeIn | None = Field(None, description="the same life with the desk's hedges, against naked")
 
 
 # --- auth and admin --------------------------------------------------------------------------------------------------

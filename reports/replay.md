@@ -70,6 +70,42 @@ was worth 95.67 ± 0.09 under SLV and 95.86 ± 0.09 under local vol. These runs 
 
 `results/replay_phx_desk.json` deals the same Phoenix at the desk's client price, with starting values for the bumps: sold at 3.24 % ± 0.18 p.a., against 5.06 % on the base alone, it holds a reserve of 1.076 per 100 of notional. The reserve falls linearly with the calendar and the 0.361 left is released on the call of 16/01/2024. The explained P&L has a line of +1.076 for it; P&L, value net of reserve and cash add up to 4e-15.
 
+## The same life, hedged
+
+The BRC above, sold (the desk's side) on 1,000,000 of notional, replayed with the desk's hedges (`replay(..., hedge=...)`,
+`optlab.marketdata.hedged`): delta held flat by the next quarterly ES future (rolled five days before expiry) or by cash
+funded at the government rate plus the bank's spread, rebalanced every day or every five; in one run the vega held flat
+every five days by a 3-month at-the-money call. Half-spreads from the cost table's starting values; 259 daily
+valuations at 20,000 paths. Per 100 of notional:
+
+| | Naked | Futures, daily | Futures, weekly | Cash, daily | Futures daily, vega weekly |
+|---|---|---|---|---|---|
+| Total P&L | -4.57 | +11.76 | +11.00 | +11.23 | -5.06 |
+| Spread of the daily P&L | 1.56 | 0.48 | 0.64 | 0.48 | 0.82 |
+| Delta | | 0.00 | -0.80 | 0.00 | 0.00 |
+| Gamma | | +11.65 | +11.65 | +11.65 | +11.65 |
+| Vega | | +8.21 | +8.21 | +8.21 | +8.21 |
+| Time | | -5.84 | -5.84 | -5.84 | -5.84 |
+| The vega hedge | | | | | -17.05 |
+| Carry | | | | -0.05 | |
+| Costs | | -0.04 | -0.02 | -0.07 | -2.09 |
+| Slippage | | -2.22 | -2.19 | -2.68 | +0.07 |
+
+What it says:
+
+- **The daily delta hedge removes the spot.** The spread of the daily P&L falls by a factor of 3.3, and what is left is
+  the note's own gamma, vega and time: the desk is long the investor's put, so a delta-hedged book earns its gamma and its
+  vega in a crash year (+11.65 and +8.21) and pays its time (-5.84). Rebalancing weekly leaves more spread (0.64) and
+  -0.80 of delta between rebalances, for half the spread paid.
+- **Cash or futures** give the same hedge to within its carry: funding at the government rate plus the spread, less the
+  dividends, cost 0.05 over the year, and cash's half-spread more than the futures'.
+- **The vega hedge does not pay here.** Selling at-the-money calls against the note's long vega also sells its long
+  gamma. In the 2020 rebound the calls lost 17.05, more than the note's vega made, and the weekly rebalancing paid 2.09
+  of vol spread. A barrier note's vega is not an at-the-money option's: its hedge is a matter of strikes and tenors (the
+  optimizer's vega per tenor and delta bucket), not of one call.
+- **The slippage** is the note's own residual of the table above (+2.68 for the investor), the higher orders between
+  revaluations; with the vega hedge it is the option's revaluation against its own Greeks, near zero by construction.
+
 ## What this does not show
 
 - **The surface in March 2020 is tested up to about 2 months only,** on real SPY chains, and is still about 3.5 points low at the money above a VIX of 60
@@ -78,4 +114,4 @@ was worth 95.67 ± 0.09 under SLV and 95.86 ± 0.09 under local vol. These runs 
 - **The coupons are biased high:** the reconstruction overstates puts between 70 % and 95 % by about 2 volatility points in 2022.
 - **Survivorship and period.** These products were picked for their stories. Two trades are a check of the machinery, not a backtest of a strategy.
 - **Issuer credit is at zero here.** The fictitious bank's curve exists (`derive/bank.py`) and plugs into `wrapper.issuer_spread`; these runs do not use it.
-- **No hedging.** The book is carried unhedged: the P&L is the product's, not a desk's.
+- **One hedged product.** The hedged replay shows one note's life with simple rules (a daily delta, a weekly vega); a book hedged by the optimizer through time is not replayed.

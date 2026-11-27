@@ -698,10 +698,15 @@ class Desk:
         sheet, strike, end, cfg, trade_id, costs = self._replay_inputs(
             p, self.repo.defaults(f.costs) if f.costs is not None else None
         )
-        progress.step(f"replay of {trade_id} ({cfg.model})")
+        hedge = None
+        if p.get("hedge"):
+            from optlab.marketdata.hedged import HedgeConfig
+
+            hedge = HedgeConfig(**p["hedge"], rows=self.hedges.rows(f.costs))
+        progress.step(f"replay of {trade_id} ({cfg.model}{', hedged' if hedge else ''})")
         trade, info = strike_trade(self.lake, trade_id, sheet, strike, float(p.get("quantity", 1.0)), cfg, costs=costs)
-        out = clean(result_json(replay(self.lake, trade, end, cfg, info)))
-        self.replays.save(f"replay-{trade_id}-{cfg.model}", out)
+        out = clean(result_json(replay(self.lake, trade, end, cfg, info, hedge)))
+        self.replays.save(f"replay-{trade_id}-{cfg.model}{'-hedged' if hedge else ''}", out)
         method = {"name": "replay", "model": cfg.model, "n_paths": cfg.n_paths, "every": cfg.reval_every}
         return envelope(market_of(None, self._closes_origin(), strike), method, out)
 

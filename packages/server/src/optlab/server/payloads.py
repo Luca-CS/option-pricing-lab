@@ -1323,6 +1323,9 @@ class ReplayDay(Doc):
     greeks: dict[str, dict[str, float]] = {}
     perf: dict[str, float] = Field(default={}, description="each name's close over its strike")
     layer: dict[str, str] = {}
+    hedged_pnl: float | None = Field(None, description="the trade's P&L with the hedges'")
+    hedged_explain: dict[str, float] | None = None
+    hedge: dict[str, Any] | None = Field(None, description="the hedges' P&L, costs, carry and deltas of the step")
 
 
 class ReplayEvent(Doc):
@@ -1330,6 +1333,20 @@ class ReplayEvent(Doc):
     kind: str
     amount: float | None = None
     payment: str | None = None
+
+
+class ReplayHedged(Doc):
+    """A hedged replay against the same life naked: totals, the spread of the daily P&L, what the hedges cost."""
+
+    steps: int
+    naked_total: float
+    hedged_total: float
+    naked_std: float
+    hedged_std: float
+    costs: float
+    carry: float
+    explain: dict[str, float] = {}
+    slippage: float
 
 
 class Replay(Doc):
@@ -1348,6 +1365,7 @@ class Replay(Doc):
     sheet: dict[str, Any] = {}
     provenance: dict[str, Any] = {}
     seconds: dict[str, Any] = {}
+    hedged: ReplayHedged | None = None
 
 
 class ScriptCheck(Doc):
