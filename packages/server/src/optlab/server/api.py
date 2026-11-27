@@ -119,6 +119,7 @@ class Desk:
         self.replays = ReplayRepository(self.db)
         self.lake = Lake(lake or self.settings.lake)
         self._rates_models: dict = {}  # (name, currency, date) -> the rates model's parameters, or None
+        self._shapes: dict = {}  # (names, date) -> the correlation skew's shape, or None
         self.names = NameMarkets(self.lake)
         self.shared = False  # listening beyond this machine: the machine's local paths stay out of the answers
         self.private_data = False  # raw quotes and index levels refused (the LAN profile, unless its owner serves them)
@@ -897,7 +898,9 @@ class Desk:
                     value, rho_source[key] = BASKET_DEFAULTS["corr"], "default"
                 corr[i, j] = corr[j, i] = rho[key] = value
         held = payment if payment and not unadjusted else None
-        return BasketContext(order, markets, vols, corr, day, contexts, self.names.correlations, held), {
+        shape = self.correlation_shape(order, day) if len(measured) == len(order) else None
+        bctx = BasketContext(order, markets, vols, corr, day, contexts, self.names.correlations, held, shape)
+        return bctx, {
             "kind": "basket",
             "names": shown,
             "corr": rho,
@@ -1086,6 +1089,20 @@ class Desk:
             costs=costs,
         )
         return q, basket
+
+    def correlation_shape(self, names, day) -> dict | None:
+        """The correlation skew's shape of these names on a day, from the lake's closes (cached); None when the lake
+        holds too little: the local correlation is then fitted on the pseudo-quotes."""
+        from optlab.marketdata.derive.correl_shape import correlation_shape
+
+        key = (tuple(sorted(names)), day)
+        if key not in self._shapes:
+            try:
+                self._shapes[key] = correlation_shape(self.lake, tuple(names), day)
+            except (KeyError, ValueError) as e:
+                LOG.info("no correlation shape for %s on %s: %s", ", ".join(names), day, e)
+                self._shapes[key] = None
+        return self._shapes[key]
 
     def rates_model(self, name: str, ctx: PricingContext) -> dict | None:
         """The stochastic rates model of a name on a market's date, from the lake (cached): Hull-White's volatility
