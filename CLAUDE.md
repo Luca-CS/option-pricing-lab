@@ -166,7 +166,14 @@ package's internals in `docs/architecture/library.md`, the decisions in `docs/ar
   non-finite payment on a live path raises `ScriptError` with its line. The issuer's call (`call pay`, `state`; `exercise.py`):
   the script runs uncalled and keeps a record, a policy fitted by regression on a pilot batch (its own seed) is applied out of
   sample and kept by the run's spot bumps; `dual=True` adds the Andersen-Broadie lower bound; the PDE reference is
-  `tests/helpers/_callable_refs.py`.
+  `tests/helpers/_callable_refs.py` (Black-Scholes or local vol, memory and knock-in layers, and Hull-White for a note on
+  rates). Stochastic rates (ADR-0027): `optlab.core.rates` (Hull-White beside the equity, an exact joint step, deflators;
+  `simulate_hybrid`), `core.rates_lv` (local vol recalibrated under the rates by particles); payments are deflated path by
+  path when a scenario carries `rates`, the provision `rates` is the gap to local vol, a note on the rates alone is priced
+  on the hybrid; its parameters come from `marketdata/derive/rates_model.py`. Local correlation is `localcorr.LambdaShift`
+  (Langnau's family anchored at the measured matrix, the base's paths bit for bit at zero), its shape from
+  `derive/correl_shape.py`; the risk engine's `Shock.corr_lambda` and `corr_lambda|*|`. The call manager is
+  `server/calls_api.py` (Trading › Calls, the job `call_review`).
 - **`optlab.server`** is the desk's API v1 (ADR-0005, ADR-0020; conventions in `docs/architecture/api.md`). `api.py`
   holds a `Desk` whose methods are the services (JSON-ready dicts in and out, levels as fractions); `app.py` builds the
   FastAPI application (`api_app()` the routes alone, `create_app(settings, desk)` with the desk, the accounts, the
