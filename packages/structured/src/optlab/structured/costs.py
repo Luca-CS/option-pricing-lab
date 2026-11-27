@@ -843,7 +843,11 @@ def _desk_price(
                 used=inputs.corr_skew,
                 default=inputs.defaults.get("corr_skew"),
                 overridden=inputs.defaults.get("corr_skew") not in (None, inputs.corr_skew),
-                note="the slope of the local correlation, on its own paths",
+                note=(
+                    "the downside cap of the lambda shift moved, on its own paths"
+                    if _is_shift(lines)
+                    else "the slope of the local correlation, on its own paths"
+                ),
             )
         )
     bump_lines, total_single = _bump_lines(single, x, base_pairs, at_base, inputs, values, line)
@@ -897,6 +901,13 @@ def _desk_price(
         digital_passes,
     )
     return desk, base, x, rate_se
+
+
+def _is_shift(lines) -> bool:
+    """Whether the basket's local correlation is the lambda shift (its over moves the downside cap)."""
+    from optlab.structured.localcorr import LambdaShift
+
+    return isinstance(lines.ctx.local_correlation(lines.names)["mixer"], LambdaShift)
 
 
 def _arbitrage_warnings(ctx, values: dict, horizon: float, names) -> list:
