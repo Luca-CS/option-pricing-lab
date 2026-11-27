@@ -100,3 +100,36 @@ def test_the_stochastic_rates_gap_is_small_and_rises_with_the_correlation():
         assert abs(g.mean()) < 0.3
     diff = gaps[0.4] - gaps[-0.4]
     assert diff.mean() > 4 * diff.std(ddof=1) / np.sqrt(len(diff)), (gaps[0.4].mean(), gaps[-0.4].mean())
+
+
+def test_a_note_on_the_rates_alone_is_priced_on_the_hybrid_when_the_market_has_one():
+    """A fixed-coupon callable pays on the rates alone (its state reads the spot, its payments do not): the hybrid is
+    its base where the market holds a rates model; a Phoenix keeps local vol and its provisions."""
+    from optlab.structured.policy import decide
+    from optlab.structured.profile import profile
+
+    def prof(name):
+        product = product_of(name)
+        return profile(product.program, build_timeline(product.program, Clock(product.valuation, product.calendar)))
+
+    fcn, phoenix = prof("callable_fixed_coupon_note"), prof("callable_phoenix")
+    assert not fcn.pays_on_spot and phoenix.pays_on_spot
+    assert decide(fcn, 5.0, has_rates=True).model == "hybrid"
+    without = decide(fcn, 5.0, has_rates=False)
+    assert without.model == "lv" and any("rates alone" in w for w in without.warnings)
+    assert decide(phoenix, 5.0, has_rates=True).model == "lv"
+    assert "rates" in decide(phoenix, 5.0, has_rates=True).provisions
+    import datetime as dt
+
+    from _paths import SPX_CALIBRATION
+    from _structured_refs import flat_surface
+
+    from optlab.structured.context import PricingContext
+    from optlab.structured.quote import quote
+
+    spx = PricingContext.from_calibration(SPX_CALIBRATION)
+    ctx = PricingContext(FLAT, flat_surface(), spx.heston, spx.slv, dt.date.fromisoformat(VALUATION))
+    ctx.rates = {"sigma": 0.008, "a": 0.03, "rho": 0.0, "particles": 20_000}
+
+    q = quote(preset("callable_fixed_coupon_note"), ctx, n_paths=20_000, control=None)
+    assert q.decision.model == "hybrid" and q.coupon_rate is not None

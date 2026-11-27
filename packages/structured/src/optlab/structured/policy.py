@@ -58,6 +58,13 @@ RULES = {
         "and so is the gap to a hybrid with a Hull-White rate (stochastic rates)",
         ("slv", "rates"),
     ),
+    "issuer_callable_rates": Rule(
+        "monte_carlo",
+        "hybrid",
+        "lv",
+        "the issuer's call on a note that pays on the rates alone: under deterministic curves its option is the "
+        "immediate call or nothing, so the base is local vol beside a Hull-White rate (the hybrid), local vol its check",
+    ),
     "basket": Rule(
         "monte_carlo",
         "lv",
@@ -68,7 +75,7 @@ RULES = {
         ("slv", "local_corr"),
     ),
 }
-MODELS = ("bs", "heston", "lv", "slv")
+MODELS = ("bs", "heston", "lv", "slv", "hybrid")
 PROVISIONS = {"slv": "SLV", "local_corr": "local correlation", "rates": "stochastic rates"}
 
 
@@ -108,6 +115,7 @@ def decide(
     seed: int = DEFAULT_SEED,
     rules: dict | None = None,
     has_surfaces: bool = True,
+    has_rates: bool = False,
 ) -> PricingDecision:
     """Policy decision for a profile. `model` forces a Monte Carlo model ('bs', 'heston', 'lv', 'slv') or
     'surface' (replication, European class only); `control=None` skips the control price."""
@@ -116,6 +124,13 @@ def decide(
     basket = len(prof.underlyings) > 1
     rule = rules["basket"] if basket else rules[prof.product_class]
     warnings = []
+    if not basket and prof.product_class == "issuer_callable" and not prof.pays_on_spot:
+        if has_rates:
+            rule = rules["issuer_callable_rates"]
+        else:
+            warnings.append(
+                "a note on the rates alone, priced under deterministic curves: no rates model on this market"
+            )
     if basket and not has_surfaces:
         warnings.append("some names have a flat volatility (no smile): they are simulated with Black-Scholes")
     if prof.horizon > t_max + 1e-9:
