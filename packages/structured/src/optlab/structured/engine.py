@@ -31,6 +31,7 @@ import numpy as np
 
 from optlab.core import engines, progress
 from optlab.core.models import simulate
+from optlab.core.rates import HybridModel, simulate_hybrid
 from optlab.structured import exercise
 from optlab.structured.cashflows import pair_averages
 from optlab.structured.multiasset import Basket, BasketScenario, simulate_basket
@@ -91,6 +92,11 @@ def _scenario(model, market, name, times, size, seed, spot0, history, sim_kwargs
             else {n: np.empty((size, 0)) for n in model.names}
         )
         return BasketScenario(times, paths, spot0, history)
+    if isinstance(model, HybridModel):
+        if not len(times):
+            raise ValueError("a hybrid needs simulated dates")
+        paths, rates = simulate_hybrid(model, market, times, size, rng, **sim_kwargs)
+        return Scenario(name, times, paths, spot0, history, rates=rates)
     paths = simulate(model, market, times, size, rng, **sim_kwargs) if len(times) else np.empty((size, 0))
     return Scenario(name, times, paths, spot0, history)
 
@@ -114,7 +120,15 @@ def _scaled(scenario, factor):
     if _no_change(factor):
         return scenario
     windows = {k: (lo * factor, hi * factor) for k, (lo, hi) in scenario.windows.items()}
-    return Scenario(scenario.name, scenario.times, scenario.paths * factor, scenario.spot0, scenario.history, windows)
+    return Scenario(
+        scenario.name,
+        scenario.times,
+        scenario.paths * factor,
+        scenario.spot0,
+        scenario.history,
+        windows,
+        scenario.rates,
+    )
 
 
 def _controls(ev: Evaluation, scenario):
@@ -327,7 +341,7 @@ def discount_of(fmt, market):
 
 def with_policies(model, market, name, times, n_paths, seed, spot0, history, evaluations, sim_kwargs, share=False):
     """Evaluations of a script with the issuer's call get a policy fitted on a pilot batch of its own seed (NumPy
-    paths, whatever the engine): one per program, parameters and format, fitted on its evaluation without a spot
+    paths, whatever the engine): one per program and parameters, fitted on its evaluation without a spot
     factor or ramps and kept by the others (a spot bump keeps the base's policy). With `share`, the first
     evaluation's policy is every evaluation's (a coupon solved under one policy stays affine). Returns the evaluations
     and what the pilot cost, or None when no evaluation needed one."""
@@ -341,7 +355,7 @@ def with_policies(model, market, name, times, n_paths, seed, spot0, history, eva
     groups: dict = {}
     for i in need:
         ev = evaluations[i]
-        key = (id(ev.program),) if share else (id(ev.program), tuple(sorted(ev.params.items())), id(ev.fmt))
+        key = (id(ev.program),) if share else (id(ev.program), tuple(sorted(ev.params.items())))
         groups.setdefault(key, []).append(i)
     out = list(evaluations)
     for members in groups.values():

@@ -29,6 +29,7 @@ class ProductProfile:
     horizon: float
     underlyings: tuple = ()
     reads_variance: bool = False  # a realised variance window (every daily fixing)
+    pays_on_spot: bool = True  # some amount paid, or its condition, depends on the underlying (through assignments too)
 
     @property
     def description(self) -> str:
@@ -82,6 +83,36 @@ def _reads(node, underlyings: set, found: dict):
         found["terminate"] = True
 
 
+def _depends(node, spot: set) -> bool:
+    """Whether an expression reads an underlying or a variable that did."""
+    found: dict = {}
+    _reads(node, spot, found)
+    return bool(found.get("spot") or found.get("window"))
+
+
+def pays_on_spot(program: Program) -> bool:
+    """True when some payment's amount or condition depends on the underlying, following assignments in their order
+    (a variable assigned from the spot, or under a condition on it, carries it). An issuer callable that pays on the
+    rates alone (fixed coupons, par) does not."""
+    spot = set(program.underlying_names)
+
+    def block(body, under: bool) -> bool:
+        for s in body:
+            if isinstance(s, Assign):
+                if under or _depends(s.expr, spot):
+                    spot.add(s.name)
+            elif isinstance(s, (Pay, IssuerCall)):
+                if under or _depends(s.expr, spot):
+                    return True
+            elif isinstance(s, If):
+                cond = under or _depends(s.cond, spot)
+                if block(s.body, cond) or block(s.orelse, cond):
+                    return True
+        return False
+
+    return any(block(ev.body, False) for ev in program.events)
+
+
 def profile(program: Program, timeline: Timeline) -> ProductProfile:
     underlyings = set(program.underlying_names)
     times, windows, terminate, variance, issuer = [], False, False, False, False
@@ -103,6 +134,7 @@ def profile(program: Program, timeline: Timeline) -> ProductProfile:
         cls = "path_dependent"
     else:
         cls = "european"
+    on_spot = pays_on_spot(program) if issuer else True
     return ProductProfile(
-        cls, tuple(times), windows, terminate or issuer, timeline.horizon, program.underlying_names, variance
+        cls, tuple(times), windows, terminate or issuer, timeline.horizon, program.underlying_names, variance, on_spot
     )

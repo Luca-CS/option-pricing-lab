@@ -165,3 +165,56 @@ def callable_layers(
         if t0 in dates and t0 > 0:
             V = pay_and_move(V, t0)
     return float(np.interp(0.0, x, V[0, 0]))
+
+
+def hw_callable_bond(
+    coupons, calls, T, market, a, sigma, spread=0.0, n_x=801, width=7.0, steps_per_year=400, rannacher=4
+):
+    """A note on rates alone under Hull-White (G1++ fitted to `market`'s curve): `coupons` [(t, amount)] and 1 at T,
+    callable by the issuer at `calls` {t: price} (after the coupon). A PDE in the rate factor x:
+    V_t - a x V_x + sigma^2/2 V_xx - (phi(t) + x + spread) V = 0, phi(t) = f(0,t) + sigma^2/(2a^2)(1 - e^{-at})^2."""
+    sd = sigma * np.sqrt((1 - np.exp(-2 * a * T)) / (2 * a))
+    x = np.linspace(-width * sd, width * sd, n_x)
+    dx = x[1] - x[0]
+
+    def phi(t):
+        h = 1e-5
+        f = -(np.log(float(market.D(t + h))) - np.log(float(market.D(max(t - h, 0.0))))) / (t + h - max(t - h, 0.0))
+        return f + sigma**2 / (2 * a**2) * (1 - np.exp(-a * t)) ** 2
+
+    def step(V, t0, t1, theta):
+        dt = t1 - t0
+        tm = t0 + 0.5 * dt
+        r = phi(tm) + x + spread
+        lo = 0.5 * sigma**2 / dx**2 + a * x / (2 * dx)
+        up = 0.5 * sigma**2 / dx**2 - a * x / (2 * dx)
+        di = -(sigma**2) / dx**2 - r
+        n = len(V)
+        rhs = V.copy()
+        if theta < 1:
+            lv = np.zeros(n)
+            lv[1:-1] = lo[1:-1] * V[:-2] + di[1:-1] * V[1:-1] + up[1:-1] * V[2:]
+            rhs = V + (1 - theta) * dt * lv
+        ab = np.zeros((3, n))
+        ab[0, 2:] = -theta * dt * up[1:-1]
+        ab[1, 1:-1] = 1 - theta * dt * di[1:-1]
+        ab[2, :-2] = -theta * dt * lo[1:-1]
+        ab[1, 0], ab[0, 1] = 1.0, -1.0
+        ab[1, -1], ab[2, -2] = 1.0, -1.0
+        rhs[0], rhs[-1] = V[0] - V[1], V[-1] - V[-2]
+        return solve_banded((1, 1), ab, rhs)
+
+    pays = dict(coupons)
+    V = np.full(n_x, 1.0 + pays.get(T, 0.0))
+    dates = sorted({0.0, *[t for t in pays if t < T], *[t for t in calls if t < T], T})
+    for i in range(len(dates) - 1, 0, -1):
+        t0, t1 = dates[i - 1], dates[i]
+        n = max(int(np.ceil((t1 - t0) * steps_per_year)), rannacher + 1)
+        times = np.linspace(t0, t1, n + 1)
+        for k in range(n, 0, -1):
+            V = step(V, times[k - 1], times[k], 1.0 if n - k < rannacher else 0.5)
+        if t0 > 0:
+            if t0 in calls:
+                V = np.minimum(V, calls[t0])
+            V = V + pays.get(t0, 0.0)
+    return float(np.interp(0.0, x, V))

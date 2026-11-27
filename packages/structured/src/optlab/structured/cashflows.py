@@ -29,6 +29,11 @@ class Note:
 
     def present_values(self, flows: BatchFlows, market: Market, notional: float) -> np.ndarray:
         pv = 0.0
+        if flows.deflated is not None:  # stochastic rates: the deflated flows on the issuer's spread
+            for (t, _tag), f in flows.deflated.items():
+                if t > 0:
+                    pv = pv + self.discount(market, t) * f
+            return np.broadcast_to(pv, (flows.n_paths,)).astype(float)
         for (t, _tag), f in flows.flows.items():
             if t <= 0:
                 continue
@@ -42,10 +47,13 @@ class Swap:
 
     def present_values(self, flows: BatchFlows, market: Market, notional: float) -> np.ndarray:
         pv = 0.0
-        for (t, _tag), f in flows.flows.items():
+        amounts, weights = flows.flows, flows.redemption_weights
+        if flows.deflated is not None and flows.deflated_redemption is not None:  # stochastic rates
+            amounts, weights = flows.deflated, flows.deflated_redemption
+        for (t, _tag), f in amounts.items():
             if t > 0:
                 pv = pv + market.D(t) * f
-        for t, w in flows.redemption_weights.items():
+        for t, w in weights.items():
             if t > 0:
                 pv = pv - notional * market.D(t) * w
         return np.broadcast_to(pv, (flows.n_paths,)).astype(float)
@@ -90,6 +98,10 @@ class FundedSwap:
         return np.stack(cols, axis=1)
 
     def present_values(self, flows: BatchFlows, market: Market, notional: float) -> np.ndarray:
+        if flows.deflated is not None:
+            raise ValueError(
+                "a funded swap under stochastic rates is not priced: its floating leg needs the rates' paths"
+            )
         leg = Swap().present_values(flows, market, notional)
         future = np.array([p > 0 for _, _, p, _ in self.periods])
         amounts = self.funding_amounts(market, notional) * future

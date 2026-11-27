@@ -340,6 +340,8 @@ class _Lines:
         """A model of provision on the spot draws of the base, for the same sets of parameters."""
         if name == "local_corr":
             return self.local_corr_run()
+        if name == "rates":
+            return self._rates_run()
         if name != "slv":
             raise ValueError(f"no provision model {name!r} on this context")
         if self.basket:
@@ -350,6 +352,29 @@ class _Lines:
                 from optlab.structured.fastmodels import fast_slv
 
                 model = fast_slv(model)
+        d = self.decision
+        return _Run(
+            price_many(
+                self.program,
+                model,
+                self.ctx.market,
+                self.sets,
+                self.fmt,
+                d.n_paths,
+                d.seed,
+                d.batch,
+                valuation=self.product.valuation,
+                fixings=self.fixings,
+                calendar=self.product.calendar,
+                workers=self.workers,
+                share_policy=self.share,
+                initial_fixing=self.initial,
+            )
+        )
+
+    def _rates_run(self) -> _Run:
+        """The hybrid (local vol under a Hull-White rate) on the base's spot normals."""
+        model = self.ctx.rates_model(self.horizon)
         d = self.decision
         return _Run(
             price_many(
@@ -568,7 +593,13 @@ def _model_lines(models, x, base_pairs, inputs, lines, line, final_extra):
         slv = name == "slv"
         mix = lines.mix_used(inputs.mix) if slv else None
         note = "" if on else "the gap is in the desk's favour: no provision"
-        label = f"Model reserve: SLV (mix {mix:g})" if slv else "Model reserve: local correlation (correlation skew)"
+        label = (
+            f"Model reserve: SLV (mix {mix:g})"
+            if slv
+            else "Model reserve: stochastic rates"
+            if name == "rates"
+            else "Model reserve: local correlation (correlation skew)"
+        )
         c = line(
             name,
             label,
@@ -581,6 +612,14 @@ def _model_lines(models, x, base_pairs, inputs, lines, line, final_extra):
             default=inputs.defaults.get("slv_mix") if slv else None,
             overridden=inputs.overridden_mix if slv else False,
         )
+        if name == "rates":
+            p = lines.ctx.rates
+            c.origin = "assumption"  # the weakest of its inputs: the mean reversion
+            c.note = (note + " · " if note else "") + (
+                f"Hull-White sigma {1e4 * p['sigma']:.0f} bp ({p.get('origin', {}).get('sigma', 'derived')}), "
+                f"mean reversion {100 * p['a']:.0f} % (assumption), equity-rate correlation {p['rho']:+.2f} "
+                f"({p.get('origin', {}).get('rho', 'derived')}); local vol recalibrated under the rates"
+            )
         if name == "local_corr":
             c.origin = lines.ctx.local_correlation(lines.names)["origin"]
             c.note = (note + " · " if note else "") + lines.ctx.local_correlation(lines.names)["note"]
@@ -753,6 +792,9 @@ def _desk_price(
         np.isscalar(ctx.vols[n]) for n in lines.names
     )  # no pseudo-quote of a name without a surface
     wanted = () if no_smile else tuple(m for m in decision.provisions if not (m == "local_corr" and any_flat))
+    no_rates = "rates" in wanted and (lines.basket or not getattr(ctx, "rates", None))
+    if no_rates:  # a basket, or a market without a rates model: no hybrid to compare with
+        wanted = tuple(m for m in wanted if m != "rates")
     models = {name: lines.model_run(name, inputs.mix) for name in wanted}
     skew_up = None
     if inputs.corr_skew and "local_corr" in models:
@@ -836,6 +878,8 @@ def _desk_price(
     warnings = (
         _arbitrage_warnings(ctx, values, lines.horizon, lines.names) if "vol" in values or "skew" in values else []
     )
+    if no_rates:
+        warnings.append("no stochastic rates provision: no rates model for this market (or a basket)")
     rate_se = _rate_se(base, effect, in_force(x), digital_all, final_se) if solving else None
     desk = DeskPrice(
         inputs.side,

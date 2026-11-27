@@ -367,7 +367,15 @@ def quote(
     prof = profile(product.program, build_timeline(product.program, Clock(product.valuation, product.calendar)))
     payment_notes = payment_warnings(sheet, ctx)
     decision = decide(
-        prof, ctx.t_max, model, control, n_paths, batch, seed, has_surfaces=getattr(ctx, "has_surfaces", True)
+        prof,
+        ctx.t_max,
+        model,
+        control,
+        n_paths,
+        batch,
+        seed,
+        has_surfaces=getattr(ctx, "has_surfaces", True),
+        has_rates=bool(getattr(ctx, "rates", None)),
     )
     fmt = wrapper(sheet, product)
     margin = 100 * sheet.get("wrapper.margin")

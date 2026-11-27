@@ -118,6 +118,7 @@ class Desk:
         self.repo = DeskRepository(self.db)
         self.replays = ReplayRepository(self.db)
         self.lake = Lake(lake or self.settings.lake)
+        self._rates_models: dict = {}  # (name, currency, date) -> the rates model's parameters, or None
         self.names = NameMarkets(self.lake)
         self.shared = False  # listening beyond this machine: the machine's local paths stay out of the answers
         self.private_data = False  # raw quotes and index levels refused (the LAN profile, unless its owner serves them)
@@ -1064,6 +1065,8 @@ class Desk:
 
     def _quote(self, sheet: TermSheet, ctx: PricingContext, o: dict, fixings, costs=None, settings: dict | None = None):
         qctx, basket = self._context_for(sheet, ctx, settings)
+        if sheet.mask.name == "callable" and isinstance(qctx, PricingContext) and qctx.rates is None:
+            qctx.rates = self.rates_model(sheet.underlyings[0], qctx)
         q = quote(
             sheet,
             qctx,
@@ -1083,6 +1086,34 @@ class Desk:
             costs=costs,
         )
         return q, basket
+
+    def rates_model(self, name: str, ctx: PricingContext) -> dict | None:
+        """The stochastic rates model of a name on a market's date, from the lake (cached): Hull-White's volatility
+        from its currency's zero rates, the mean reversion assumed, the equity-rate correlation; None when the lake
+        holds too little."""
+        from optlab.marketdata.derive.rates_model import hw_estimate, rate_correlation
+
+        info = _BY_ID.get(name)
+        currency = ctx.payment_currency or (info.currency if info is not None else "USD")
+        key = (name, currency, ctx.valuation)
+        if key not in self._rates_models:
+            try:
+                hw = hw_estimate(self.lake, currency, ctx.valuation)
+                rho = rate_correlation(self.lake, name, currency, ctx.valuation)
+            except (KeyError, ValueError) as e:
+                LOG.info("no rates model for %s in %s on %s: %s", name, currency, ctx.valuation, e)
+                self._rates_models[key] = None
+            else:
+                self._rates_models[key] = {
+                    "currency": currency,
+                    "sigma": hw["sigma"],
+                    "a": hw["a"],
+                    "rho": rho["rho"],
+                    "band": rho["band"],
+                    "window": hw["window"],
+                    "origin": {"sigma": "derived", "a": "assumption", "rho": "derived"},
+                }
+        return self._rates_models[key]
 
     def quote(self, body: dict) -> dict:
         sheet = _sheet(body.get("sheet") or {}, strict=True)

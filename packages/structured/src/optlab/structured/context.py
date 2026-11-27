@@ -50,6 +50,8 @@ class PricingContext:
     slv_cache: dict = field(default_factory=dict, repr=False)  # leverages recalibrated per (mix, horizon)
     leverage_flat: bool = False  # read from the lake without a leverage: calibrated on the first SLV use
     payment_currency: str | None = None  # the currency this market pays in; None when it was not built with FX in mind
+    rates: dict | None = None  # the stochastic rates model: {"sigma", "a", "rho", "origin", ...}; None: no hybrid
+    rates_cache: dict = field(default_factory=dict, repr=False)  # local vol under rates, per parameters and horizon
 
     @classmethod
     def from_calibration(
@@ -124,6 +126,26 @@ class PricingContext:
         band = next((h for h in LEVERAGE_HORIZONS if h >= horizon - 1e-9), max(horizon, LEVERAGE_HORIZONS[-1]))
         return self.slv_at_mix(self.slv.mix if same or mix is None else mix, band)
 
+    def rates_model(self, horizon: float = 1.0, n_particles: int = 100_000, seed: int = 2026):
+        """The hybrid: local vol recalibrated under a Hull-White rate (core.rates_lv, cached per parameters and
+        horizon band), or None when the market holds no rates model."""
+        if not self.rates:
+            return None
+        from optlab.core.rates import HullWhite1F, HybridModel
+        from optlab.core.rates_lv import calibrate_local_var_under_rates
+
+        p = self.rates
+        n_particles = int(p.get("particles", n_particles))
+        hw = HullWhite1F(float(p["a"]), float(p["sigma"]))
+        band = next((h for h in LEVERAGE_HORIZONS if h >= horizon - 1e-9), max(horizon, LEVERAGE_HORIZONS[-1]))
+        key = (hw.a, hw.sigma, float(p["rho"]), round(float(band), 6), n_particles, seed)
+        if key not in self.rates_cache:
+            table = calibrate_local_var_under_rates(
+                self.surface, self.market, hw, float(p["rho"]), float(band), n_particles=n_particles, rng=seed
+            )
+            self.rates_cache[key] = HybridModel(LocalVolModel(table), hw, float(p["rho"]))
+        return self.rates_cache[key]
+
     @property
     def t_max(self) -> float:
         """Last calibrated maturity: beyond it the surface is extrapolated and the SLV leverage is not fitted."""
@@ -153,4 +175,9 @@ class PricingContext:
             return LocalVolModel(self.surface)
         if name == "slv":
             return self.slv_model(T)
-        raise KeyError(f"unknown model {name!r}, expected bs, heston, lv or slv")
+        if name == "hybrid":
+            model = self.rates_model(T)
+            if model is None:
+                raise KeyError("no stochastic rates model on this market")
+            return model
+        raise KeyError(f"unknown model {name!r}, expected bs, heston, lv, slv or hybrid")

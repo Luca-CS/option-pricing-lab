@@ -12,6 +12,7 @@ from optlab.core.log import get_logger
 from optlab.core.market import Market
 from optlab.core.models import Model
 from optlab.core.products import MCResult
+from optlab.core.rates import HybridModel
 from optlab.structured import engine
 from optlab.structured.cashflows import Note
 from optlab.structured.engine import Evaluation
@@ -244,6 +245,8 @@ def _dual_bounds(
     why = (
         "a basket"
         if isinstance(model, Basket)
+        else "stochastic rates (the inner paths would need the rates' state)"
+        if isinstance(model, HybridModel)
         else "a model with a variance process"
         if model.has_variance
         else f"the {fmt.name} format (the bound is the note's)"

@@ -337,6 +337,7 @@ class _Group:
     cash_since: float | None
     keep_pairs: bool
     slv_cache: dict = field(default_factory=dict)
+    policies: list | None = None  # the issuer's call policy of each position, the base's, kept by every shock
 
     @property
     def n_linear(self) -> int:
@@ -579,15 +580,19 @@ def _evaluations(g: _Group, members, items, since, market, times, moved_markets,
         for it, N in zip(items, g.notionals):
             pv = pv_note if isinstance(it["fmt"], Note) else pv_market
             fmt = it["fmt"] if pv is None and since is None else RiskFormat(it["fmt"], pv, since)
+            j = len(evaluations) % max(len(items), 1)
+            policy = g.policies[j] if g.policies else None
             evaluations.append(
-                Evaluation(it["program"], it["timeline"], it["pos"].params, fmt, N, g.smooth, True, factor)
+                Evaluation(
+                    it["program"], it["timeline"], it["pos"].params, fmt, N, g.smooth, True, factor, policy=policy
+                )
             )
         layout.append(m)
         if m == "base" and g.smooth:
             for it, N in zip(items, g.notionals):
                 evaluations.append(
                     Evaluation(it["program"], it["timeline"], it["pos"].params, it["fmt"], N, 0.0, True, 1.0)
-                )
+                )  # the base without smoothing fits its own policy: it is the exact base, not a shock
             layout.append("base@exact")
     return evaluations, layout
 
@@ -620,6 +625,9 @@ def _simulate(g: _Group, members: list, sim_ctx, items: list, since, fx: dict) -
         threads=settings.engine_threads,
         **extra,
     )
+    if g.policies is None and "base" in layout:  # the base's simulation runs first: its policies serve every shock
+        b, n_pos = layout.index("base"), len(items)
+        g.policies = [t.policy for t in totals[b * n_pos : (b + 1) * n_pos]]
     run = g.run
     run.simulations += 1
     run.timings.append({k: v for k, v in timings.items() if isinstance(v, (int, float, str))})

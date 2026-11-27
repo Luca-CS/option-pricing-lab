@@ -18,9 +18,20 @@ class Scenario:
     """One batch of antithetic paths, stored as [first half, mirrored half]. `history` maps past times (< 0, and
     optionally 0) to known fixings; the valuation date otherwise reads `spot0`. `windows` holds the lowest and
     highest spot of daily windows already reduced by the path engine, {window_key: (lowest, highest)}: their days
-    are then not among `times`."""
+    are then not among `times`. `rates` holds the rate state of a hybrid's paths (core.rates.RateState), None
+    under deterministic rates."""
 
-    def __init__(self, name: str, times, paths, spot0: float, history: dict | None = None, windows: dict | None = None):
+    def __init__(
+        self,
+        name: str,
+        times,
+        paths,
+        spot0: float,
+        history: dict | None = None,
+        windows: dict | None = None,
+        rates=None,
+    ):
+        self.rates = rates
         self.windows = windows or {}
         self.name = name
         self.times = np.asarray(times, dtype=float)
