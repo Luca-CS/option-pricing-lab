@@ -8,7 +8,8 @@ Local vol with deterministic curves prices most structured notes well. Two risks
 
 - **The rates' moves.** An issuer callable's call depends on the rates as much as on the equity, and the equity's
   discounting moves with them.
-- **The correlation's moves.** A worst-of's correlation rises when its names fall.
+- **The correlation's moves.** A worst-of's correlation rises when its names fall. Until now its provision was
+  fitted on pseudo-quotes, whose correlation is an assumption by construction.
 
 The desk already keeps the gap to SLV as a model reserve when it goes against the desk, frozen at issue and amortised.
 These two risks needed models of their own, measured the same way, without moving the base or any default number.
@@ -30,12 +31,23 @@ These two risks needed models of their own, measured the same way, without movin
 - **Rate-driven callables.** A fixed-coupon note's call depends on the rates alone: under deterministic curves its
   issuer option is the immediate call or nothing. Its gap to the hybrid is always in the desk's favour when it sells,
   and the hybrid prices it (the base for that class). Equity callables keep local vol as their base.
+- **Local correlation: a lambda shift anchored at the measured matrix** (Langnau's family,
+  `structured.localcorr.LambdaShift`).
+  - The model is rho(X) = C + lambda+ (U - C) + lambda- (I - C), with lambda a bounded function of the basket's level in standard
+    deviations, zero at the money (the level is the base's).
+  - Every value is a convex combination of correlation matrices, so no repair is needed, and each name keeps its local vol law exactly.
+  - The step draws the base's own correlated normals, plus a common normal and, with a lower side, one per name from a stream of their
+    own. At lambda 0 the paths are the base's bit for bit.
+  - The shape is measured on the lake's closes (`derived`): the conditional realised correlation by the basket's 63-day state,
+    with block-bootstrap bands. Without enough history, the fit on the pseudo-quotes stays (`synthetic`).
+  - The "Overcorrel skew" over moves its downside cap. The risk engine gets a parallel lambda shift of every basket's matrix
+    (`Shock.corr_lambda`) and its lambda-vega (`corr_lambda|*|`).
 - **What is not in it.** The issuer's funding spread stays deterministic, its term structure the bank curve's (a stochastic spread is a diagnostic only). A basket, a quanto name or a funded swap under the hybrid is refused with its reason. The compiled engine does not simulate the hybrid yet: `auto` falls back to NumPy and says so.
 
 ## Consequences
 
 - No default number moves: a market without a rates model, and every product but an issuer callable, take exactly the
-  code they took. Deterministic paths are untouched, and the deflated flows exist only on a hybrid's scenarios.
+  code they took; a basket without a measured shape keeps the pseudo-quotes' fit. Deterministic paths are untouched, and the deflated flows exist only on a hybrid's scenarios.
 - The reserve on equity callables is small (about 0.1 % of notional at an equity-rate correlation of +0.4 and 80 bp,
   none at 0 or below). On rate-driven callables the hybrid is worth the issuer's option on the rates, about 0.8 % on
   a 5-year note above the curve.

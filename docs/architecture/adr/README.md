@@ -29,3 +29,4 @@ compete, the safer one wins and the record says so.
 | [0024](0024-front-end-stack.md) | The front's stack (Vite, React, Mantine, TanStack), and how it keeps the strict CSP |
 | [0025](0025-hedges-are-trades.md) | Hedges are trades: instruments in the same table and book, linear ones in closed form |
 | [0026](0026-issuer-calls-by-lsm.md) | Issuer calls in the payoff language: a policy fitted by regression on a pilot, applied out of sample, a dual bound |
+| [0027](0027-hybrid-models-as-provisions.md) | Hybrid models as provisions against local vol: stochastic rates, local correlation as a lambda shift |

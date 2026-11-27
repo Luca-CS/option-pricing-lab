@@ -112,6 +112,51 @@ class StochasticMix:
         return replace(self, rho=float(np.clip(self.rho - slope, -0.99, 0.99)))
 
 
+LAMBDA_MAX = 0.95  # at 1 the matrix is singular: the worst-of would collapse to one name on those steps
+
+
+@dataclass(frozen=True)
+class LambdaShift:
+    """Langnau's family anchored at the measured matrix C: rho(t, X) = C + lambda+ (U - C) + lambda- (I - C), with
+    lambda = Lambda(u) bounded in [-0.95, 0.95] and u the basket's log level to its forward in standard deviations,
+
+        Lambda(u) = lam_dn (1 - exp(-u-/s_dn)) - lam_up (1 - exp(-u+/s_up)),
+
+    zero at the money (the level is the base's). Every value is a convex combination of correlation matrices, so the
+    matrix needs no repair; each name keeps its own local vol law exactly. The step draws the base's correlated normals
+    z_C and, from a stream of their own, one common normal xi (towards U) and, with a lower side, k normals eta
+    (towards I): z = sqrt(1 - lambda) z_C + sqrt(lambda) xi above the money, sqrt(1 + lambda) z_C + sqrt(-lambda) eta
+    below it, z_C exactly where lambda is 0."""
+
+    sigma: float  # at-the-money volatility of the basket, to read its level in standard deviations
+    lam_dn: float
+    s_dn: float = 0.6
+    lam_up: float = 0.0
+    s_up: float = 1.0
+
+    @property
+    def lower(self) -> bool:
+        return self.lam_up > 0
+
+    def lam(self, t: float, y):
+        u = y / (self.sigma * np.sqrt(max(t, MONTH)))
+        down = self.lam_dn * (1 - np.exp(-np.maximum(-u, 0.0) / self.s_dn))
+        up = self.lam_up * (1 - np.exp(-np.maximum(u, 0.0) / self.s_up))
+        return np.clip(down - up, -LAMBDA_MAX, LAMBDA_MAX)
+
+    def mix(self, zc, lam, xi, eta):
+        """The step's correlated normals (names x paths) at the paths' lambda."""
+        out = np.where(lam > 0, np.sqrt(1 - np.maximum(lam, 0.0)) * zc + np.sqrt(np.maximum(lam, 0.0)) * xi, zc)
+        if eta is not None:
+            neg = np.maximum(-lam, 0.0)
+            out = np.where(lam < 0, np.sqrt(1 - neg) * zc + np.sqrt(neg) * eta, out)
+        return out
+
+    def bumped(self, slope: float) -> LambdaShift:
+        """The downside cap moved by `slope` (a move in lambda: the correlation in a crash goes further towards 1)."""
+        return replace(self, lam_dn=float(np.clip(self.lam_dn + slope, 0.0, LAMBDA_MAX)))
+
+
 def basket_sigma(ctx, names, T: float = 1.0) -> float:
     """ATM volatility of the equally weighted basket, from each name's and the measured correlation."""
     vols = np.array([ctx.atm_vol(n, T) for n in names])
