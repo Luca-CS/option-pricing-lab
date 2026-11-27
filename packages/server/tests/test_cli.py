@@ -283,7 +283,9 @@ def test_the_demo_data_serves_a_book_made_of_made_up_numbers(tmp_path, monkeypat
     folder = tmp_path / "demo"
     password = secrets.token_urlsafe(18)
     out = demo.build(folder, password=password, n_paths=2_000, log=lambda *a: None)
-    assert "password" not in out and out["trades"] == [f"DEMO-0{i}" for i in range(1, 7)]  # four notes, two exotics
+    notes, hedges = out["trades"][:6], out["trades"][6:]
+    assert "password" not in out and notes == [f"DEMO-0{i}" for i in range(1, 7)]  # four notes, two exotics
+    assert len(hedges) == 4 and all(h.startswith("H-") for h in hedges)  # a future, two swaps, a what-if put
     assert demo.build(folder) == demo.info(folder)  # built once
     monkeypatch.setenv("OPTLAB_DATA", str(folder))
     settings = Settings.load()

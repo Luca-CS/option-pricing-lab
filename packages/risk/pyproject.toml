@@ -1,6 +1,6 @@
 [project]
 name = "optlab-risk"
-version = "2.2.1"
+version = "2.3.0"
 description = "optlab's risk engine: Greeks, ladders, scenarios, historical VaR and the explained P&L, by revaluation"
 requires-python = ">=3.14"
 license = "MIT"
