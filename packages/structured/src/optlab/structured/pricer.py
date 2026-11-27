@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 
@@ -43,6 +44,7 @@ class StructuredResult:
     method: str = "monte_carlo"
     numerical_error: float = 0.0  # replication: change of the price (in %) when the grid is halved
     pairs: np.ndarray | None = field(default=None, repr=False)  # antithetic pair averages of the present value
+    policy: Any = field(default=None, repr=False)  # the issuer's call policy (exercise.Policy), when it has one
 
     def __iter__(self):
         return iter((self.price, self.stderr))
@@ -73,6 +75,7 @@ def price_many(
     smoothings: list | None = None,
     control_forwards: bool = False,
     ramps: list | None = None,
+    policy=None,
     **sim_kwargs,
 ) -> list[StructuredResult]:
     """Price one script for several parameter sets on the same paths (common random numbers). `fixings` gives the
@@ -80,7 +83,8 @@ def price_many(
     excluded from the value. `workers` runs the batches on a process pool (same numbers bit for bit);
     `spot_factors` evaluates each parameter set on the paths scaled by its factor (a sticky-moneyness spot bump,
     the product keeping its initial fixing); `smoothings` gives each parameter set its own smoothing; `ramps` its digitals read as call
-    spreads ({(event index, line): Ramp}, see digitals.py).
+    spreads ({(event index, line): Ramp}, see digitals.py). A script with the issuer's call is priced under `policy`
+    (exercise.Policy, e.g. a result's own, to keep it for a bump), else under one fitted on a pilot batch.
     `control_forwards` uses S(t) / F(t) - 1 at the script's observation dates as control variates (exact mean
     zero in every model): the coefficients are fitted on the same paths, per parameter set, so the corrected price
     stays affine in the coupon; the variance ratio is reported in `timings`."""
@@ -115,7 +119,7 @@ def price_many(
     n_sets = len(param_sets)
     controls = _forward_controls(program, timeline, model, market) if control_forwards else ()
     evaluations = [
-        Evaluation(program, timeline, p, fmt, N, eps, check_redemption, f, controls, r)
+        Evaluation(program, timeline, p, fmt, N, eps, check_redemption, f, controls, r, policy)
         for p, N, f, eps, r in zip(
             param_sets,
             notionals,
@@ -190,6 +194,7 @@ def price_many(
                 redemption_probabilities={t: v / n_paths for t, v in tot.redemption.items()},
                 warnings=own,
                 pairs=d,
+                policy=tot.policy,
             )
         )
     return results

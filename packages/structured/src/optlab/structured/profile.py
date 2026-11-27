@@ -4,13 +4,25 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from optlab.structured.script.nodes import Assign, Binary, Call, If, Name, Pay, Program, Terminate, Unary, Window
+from optlab.structured.script.nodes import (
+    Assign,
+    Binary,
+    Call,
+    If,
+    IssuerCall,
+    Name,
+    Pay,
+    Program,
+    Terminate,
+    Unary,
+    Window,
+)
 from optlab.structured.script.timeline import Timeline
 
 
 @dataclass(frozen=True)
 class ProductProfile:
-    product_class: str  # european, path_dependent or callable
+    product_class: str  # european, path_dependent, callable (the autocall) or issuer_callable
     observation_times: tuple  # future times at which the payoff reads the underlying
     has_windows: bool
     early_termination: bool
@@ -22,6 +34,11 @@ class ProductProfile:
     def description(self) -> str:
         if len(self.underlyings) > 1:
             return f"basket of {len(self.underlyings)} names ({', '.join(self.underlyings)}), {self.product_class}"
+        if self.product_class == "issuer_callable":
+            return (
+                "the issuer's call: the issuer may redeem on its call dates, decided by regression on a pilot "
+                "simulation (Longstaff-Schwartz) and applied out of sample"
+            )
         if self.product_class == "callable":
             return "early termination (autocall): the payoff depends on the path up to the call date"
         if self.product_class == "path_dependent":
@@ -58,13 +75,16 @@ def _reads(node, underlyings: set, found: dict):
             _reads(s, underlyings, found)
     elif isinstance(node, (Assign, Pay)):
         _reads(node.expr, underlyings, found)
+    elif isinstance(node, IssuerCall):
+        found["issuer_call"] = True
+        _reads(node.expr, underlyings, found)
     elif isinstance(node, Terminate):
         found["terminate"] = True
 
 
 def profile(program: Program, timeline: Timeline) -> ProductProfile:
     underlyings = set(program.underlying_names)
-    times, windows, terminate, variance = [], False, False, False
+    times, windows, terminate, variance, issuer = [], False, False, False, False
     for ev, t in zip(program.events, timeline.event_times):
         found: dict = {}
         for s in ev.body:
@@ -72,12 +92,17 @@ def profile(program: Program, timeline: Timeline) -> ProductProfile:
         windows |= found.get("window", False)
         variance |= found.get("variance", False)
         terminate |= found.get("terminate", False)
+        issuer |= found.get("issuer_call", False)
         if found.get("spot") and t > 0:
             times.append(float(t))
-    if terminate:
+    if issuer:
+        cls = "issuer_callable"
+    elif terminate:
         cls = "callable"
     elif windows or len(times) > 1:
         cls = "path_dependent"
     else:
         cls = "european"
-    return ProductProfile(cls, tuple(times), windows, terminate, timeline.horizon, program.underlying_names, variance)
+    return ProductProfile(
+        cls, tuple(times), windows, terminate or issuer, timeline.horizon, program.underlying_names, variance
+    )

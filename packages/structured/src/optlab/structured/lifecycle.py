@@ -43,7 +43,7 @@ def events(product, fixings: dict, upto, calendar=None, trade_id: str = "") -> l
     compiled = compile_sheet(product, upto, calendar)
     program = compiled.program
     kept = [ev for ev in program.events if as_date(ev.when.value) <= upto]
-    past = Program(program.underlyings, program.params, tuple(kept))
+    past = Program(program.underlyings, program.params, tuple(kept), program.states)
     clock = Clock(upto, compiled.calendar)
     timeline = build_timeline(past, clock)
     names = program.underlying_names

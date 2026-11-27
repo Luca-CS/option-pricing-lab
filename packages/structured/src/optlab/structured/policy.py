@@ -48,6 +48,15 @@ RULES = {
         "which local vol flattens, so the gap to SLV is a provision when it goes against the desk",
         ("slv",),
     ),
+    "issuer_callable": Rule(
+        "monte_carlo",
+        "lv",
+        "slv",
+        "the issuer's call: the base is local vol, the call decided by regression on a pilot simulation and applied out of "
+        "sample (a policy the issuer could follow: the note's value is an upper bound, its bias reported); the forward "
+        "skew between call dates is not in local vol, so the gap to SLV is a provision when it goes against the desk",
+        ("slv",),
+    ),
     "basket": Rule(
         "monte_carlo",
         "lv",
