@@ -140,3 +140,32 @@ def test_an_otc_vanilla_is_filled_at_the_mid_plus_or_minus_the_vol_spread(trader
     sold = trader.post("/api/v1/trading/hedges", json={"instrument": otc, "quantity": -5}).json()
     assert bought["product"]["instrument"]["price"] == pytest.approx(m["fair"] + m["half_spread"], rel=1e-9)
     assert sold["product"]["instrument"]["price"] == pytest.approx(m["fair"] - m["half_spread"], rel=1e-9)
+
+
+def test_the_optimizer_proposes_hedges_and_its_proposal_is_booked_as_what_ifs(a, trader):
+    from optlab.server.payloads import HedgeRun
+
+    body = {"sheet": preset_sheet(trader, "phoenix"), "coupon_rate": 0.05, "quantity": -2000.0}
+    assert trader.post("/api/v1/trading/trades", json=body).status_code == 201
+    req = {
+        "options": {"precision": "quick"},
+        "families": ["delta"],
+        "relative": 0.05,
+        "universe": {"vanillas": False, "dividends": False, "funding": False, "max_lots": 50},
+        "var_days": 0,
+    }
+    r = trader.post("/api/v1/trading/hedges/optimizations", json=req)
+    assert r.status_code == 202, r.text
+    job = r.json()["job_id"]
+    out = a.wait(trader, job)
+    res = HedgeRun.model_validate(out["result"])
+    assert out["method"]["name"] == "hedge_optimizer" and res.candidates >= 2
+    (delta,) = [t for t in res.targets if t.key == "delta|SPX|"]
+    assert abs(delta.after.value) <= abs(delta.before) and res.grid is not None
+    if res.proposal:  # the futures bring the delta inside its tolerance, in whole lots
+        assert all(p.quantity == round(p.quantity) for p in res.proposal if p.integer)
+        booked = trader.post("/api/v1/trading/hedges/proposals", json={"job_id": job})
+        assert booked.status_code == 201, booked.text
+        trades = booked.json()["trades"]
+        assert all(t["status"] == "simulated" and f"proposal:{job}" in t["tags"] for t in trades)
+    assert trader.post("/api/v1/trading/hedges/proposals", json={"job_id": "none"}).status_code in (404, 409)

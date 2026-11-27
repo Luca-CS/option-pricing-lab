@@ -2956,6 +2956,181 @@
         ]
       }
     },
+    "/api/v1/trading/hedges/optimizations": {
+      "post": {
+        "tags": [
+          "trading"
+        ],
+        "summary": "Optimize Hedges",
+        "description": "The hedge optimizer on the book (a job `hedge`): target Greeks at the least bid/ask cost, with the scenario grid\nand the VaR before and after.",
+        "operationId": "optimize_hedges",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HedgeOptimizeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "a job computes it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobAccepted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "invalid input: the fields at fault in `errors`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "a role or the CSRF header is missing",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "any other error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-roles": [
+          "risk",
+          "trader"
+        ],
+        "security": [
+          {
+            "session": [],
+            "csrf": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "the same key from the same user gives back the job it first created (another request under it is refused, 422); without one, the same request still queued or running is given back",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/trading/hedges/proposals": {
+      "post": {
+        "tags": [
+          "trading"
+        ],
+        "summary": "Book Proposal",
+        "description": "A finished optimizer's proposal booked as trades (simulated or live), in one audited call.",
+        "operationId": "book_proposal",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposalIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "the trades",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookedProposal"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "invalid input: the fields at fault in `errors`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "a role or the CSRF header is missing",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "any other error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-roles": [
+          "trader"
+        ],
+        "security": [
+          {
+            "session": [],
+            "csrf": []
+          }
+        ]
+      }
+    },
     "/api/v1/trading/hedges/listed": {
       "get": {
         "tags": [
@@ -7618,6 +7793,28 @@
         "type": "object",
         "title": "BookValuationIn"
       },
+      "BookedProposal": {
+        "properties": {
+          "trades": {
+            "items": {
+              "$ref": "#/components/schemas/Trade"
+            },
+            "type": "array",
+            "title": "Trades"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "trades",
+          "status"
+        ],
+        "title": "BookedProposal"
+      },
       "Bound": {
         "properties": {
           "min": {
@@ -9290,6 +9487,80 @@
         "title": "HedgeIn",
         "description": "An instrument booked as a trade (structured/hedges): live, or simulated (a what-if)."
       },
+      "HedgeOptimizeIn": {
+        "properties": {
+          "options": {
+            "$ref": "#/components/schemas/RiskOptions"
+          },
+          "targets": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/HedgeTargetIn"
+                },
+                "type": "array",
+                "maxItems": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targets",
+            "description": "none: every key of `families` to 0"
+          },
+          "families": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "delta",
+                "gamma",
+                "vega_tenor",
+                "rho_tenor",
+                "dividend_year",
+                "funding_tenor"
+              ]
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Families"
+          },
+          "relative": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Relative",
+            "description": "default tolerance: this share of each Greek's size",
+            "default": 0.1
+          },
+          "floor": {
+            "type": "number",
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Floor",
+            "description": "default tolerance at least, currency",
+            "default": 1.0
+          },
+          "universe": {
+            "$ref": "#/components/schemas/HedgeUniverse"
+          },
+          "grid": {
+            "type": "boolean",
+            "title": "Grid",
+            "default": true
+          },
+          "var_days": {
+            "type": "integer",
+            "maximum": 500.0,
+            "minimum": 0.0,
+            "title": "Var Days",
+            "description": "the VaR control's 1-day moves (0: none)",
+            "default": 250
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "HedgeOptimizeIn"
+      },
       "HedgeRows": {
         "properties": {
           "future_ticks": {
@@ -9337,6 +9608,114 @@
         ],
         "title": "HedgeRows",
         "description": "The hedging instruments' half-spreads and the swap spread per currency (structured/hedges/costs.py)."
+      },
+      "HedgeTargetIn": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z_]+\\|[\\w*~.-]{1,32}\\|[\\w.@,-]{0,32}$",
+            "title": "Key",
+            "description": "a Greek key, \"delta|SPX|\""
+          },
+          "value": {
+            "type": "number",
+            "maximum": 1000000000000.0,
+            "minimum": -1000000000000.0,
+            "title": "Value",
+            "default": 0.0
+          },
+          "tolerance": {
+            "type": "number",
+            "maximum": 1000000000000.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Tolerance"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key",
+          "tolerance"
+        ],
+        "title": "HedgeTargetIn"
+      },
+      "HedgeUniverse": {
+        "properties": {
+          "futures": {
+            "type": "boolean",
+            "title": "Futures",
+            "default": true
+          },
+          "expiries": {
+            "type": "integer",
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Expiries",
+            "description": "quarterly futures expiries",
+            "default": 2
+          },
+          "vanillas": {
+            "type": "boolean",
+            "title": "Vanillas",
+            "default": true
+          },
+          "listed": {
+            "type": "boolean",
+            "title": "Listed",
+            "description": "vanillas from the day's chain when it quotes them, else OTC",
+            "default": false
+          },
+          "tenors": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 6,
+            "minItems": 1,
+            "title": "Tenors",
+            "description": "vanillas' expiries, years",
+            "default": [
+              0.25,
+              0.5,
+              1.0
+            ]
+          },
+          "rates": {
+            "type": "boolean",
+            "title": "Rates",
+            "default": true
+          },
+          "dividends": {
+            "type": "boolean",
+            "title": "Dividends",
+            "default": true
+          },
+          "funding": {
+            "type": "boolean",
+            "title": "Funding",
+            "default": true
+          },
+          "max_lots": {
+            "type": "number",
+            "maximum": 1000000.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Max Lots",
+            "description": "listed instruments, lots",
+            "default": 500.0
+          },
+          "max_notional": {
+            "type": "number",
+            "maximum": 1000000000000.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Max Notional",
+            "description": "OTC instruments, currency",
+            "default": 100000000.0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "HedgeUniverse",
+        "description": "The candidates the optimizer may trade (bounded: at most a few dozen per name)."
       },
       "HestonFit": {
         "properties": {
@@ -12345,6 +12724,46 @@
           "type"
         ],
         "title": "Product"
+      },
+      "ProposalIn": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "pattern": "^[\\w-]{1,64}$",
+            "title": "Job Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "simulated",
+              "live"
+            ],
+            "title": "Status",
+            "default": "simulated"
+          },
+          "indexes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array",
+                "maxItems": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Indexes",
+            "description": "the proposal's rows to book (none: all)"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "job_id"
+        ],
+        "title": "ProposalIn"
       },
       "QuoteGreeks": {
         "properties": {
@@ -17438,6 +17857,265 @@
         "title": "FitRow",
         "type": "object"
       },
+      "HedgeGrid": {
+        "additionalProperties": true,
+        "properties": {
+          "spots": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Spots",
+            "type": "array"
+          },
+          "vols": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Vols",
+            "type": "array"
+          },
+          "before": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Before",
+            "type": "array"
+          },
+          "after": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "After",
+            "type": "array"
+          },
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          }
+        },
+        "required": [
+          "spots",
+          "vols",
+          "before",
+          "after",
+          "rule"
+        ],
+        "title": "HedgeGrid",
+        "type": "object"
+      },
+      "HedgeProposalRow": {
+        "additionalProperties": true,
+        "properties": {
+          "index": {
+            "title": "Index",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "instrument": {
+            "additionalProperties": true,
+            "title": "Instrument",
+            "type": "object"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number"
+          },
+          "unit_cost": {
+            "description": "half-spread per unit, currency",
+            "title": "Unit Cost",
+            "type": "number"
+          },
+          "cost": {
+            "title": "Cost",
+            "type": "number"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "number"
+          },
+          "integer": {
+            "title": "Integer",
+            "type": "boolean"
+          },
+          "group": {
+            "title": "Group",
+            "type": "string"
+          }
+        },
+        "required": [
+          "index",
+          "label",
+          "instrument",
+          "quantity",
+          "unit_cost",
+          "cost",
+          "limit",
+          "integer",
+          "group"
+        ],
+        "title": "HedgeProposalRow",
+        "type": "object"
+      },
+      "HedgeRun": {
+        "additionalProperties": true,
+        "description": "The optimizer's proposal: the targets before and after, the trades, their cost, and the control.",
+        "properties": {
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/HedgeTargetRow"
+            },
+            "title": "Targets",
+            "type": "array"
+          },
+          "proposal": {
+            "items": {
+              "$ref": "#/components/schemas/HedgeProposalRow"
+            },
+            "title": "Proposal",
+            "type": "array"
+          },
+          "cost": {
+            "title": "Cost",
+            "type": "number"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "missed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missed",
+            "type": "array"
+          },
+          "greeks": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Greeks",
+            "type": "object"
+          },
+          "grid": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HedgeGrid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "var": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HedgeVar"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "seconds": {
+            "default": 0.0,
+            "title": "Seconds",
+            "type": "number"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "candidates": {
+            "default": 0,
+            "title": "Candidates",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "targets",
+          "proposal",
+          "cost",
+          "status",
+          "missed"
+        ],
+        "title": "HedgeRun",
+        "type": "object"
+      },
+      "HedgeTargetRow": {
+        "additionalProperties": true,
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "number"
+          },
+          "tolerance": {
+            "title": "Tolerance",
+            "type": "number"
+          },
+          "before": {
+            "title": "Before",
+            "type": "number"
+          },
+          "after": {
+            "$ref": "#/components/schemas/Estimate",
+            "description": "its se: the candidates' Monte Carlo error at the solved sizes"
+          },
+          "missed": {
+            "title": "Missed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "target",
+          "tolerance",
+          "before",
+          "after",
+          "missed"
+        ],
+        "title": "HedgeTargetRow",
+        "type": "object"
+      },
+      "HedgeVar": {
+        "additionalProperties": true,
+        "properties": {
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "before": {
+            "$ref": "#/components/schemas/VarStats"
+          },
+          "after": {
+            "$ref": "#/components/schemas/VarStats"
+          }
+        },
+        "required": [
+          "days",
+          "before",
+          "after"
+        ],
+        "title": "HedgeVar",
+        "type": "object"
+      },
       "ModelFit": {
         "additionalProperties": true,
         "properties": {
@@ -17683,6 +18361,25 @@
           "result"
         ],
         "title": "TradeValuation",
+        "type": "object"
+      },
+      "VarStats": {
+        "additionalProperties": true,
+        "properties": {
+          "var": {
+            "title": "Var",
+            "type": "number"
+          },
+          "es": {
+            "title": "Es",
+            "type": "number"
+          }
+        },
+        "required": [
+          "var",
+          "es"
+        ],
+        "title": "VarStats",
         "type": "object"
       },
       "VolFit": {
@@ -17933,6 +18630,9 @@
     },
     "reproduce": {
       "$ref": "#/components/schemas/VolFitReproduction"
+    },
+    "hedge": {
+      "$ref": "#/components/schemas/HedgeRun"
     }
   }
 }

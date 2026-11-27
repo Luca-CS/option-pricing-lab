@@ -74,6 +74,8 @@ Routes are written without the `/api/v1` prefix. `202` marks a route that answer
 | — | a future rolled onto the next quarterly expiry | `POST /trading/trades/{trade_id}/roll` (audited) | structured | trader | new (Trading › Hedging) |
 | — | the listed European options of a name on the day's chain, with their delta on the desk surface | `GET /trading/hedges/listed?name=&day=&expiry=` | marketdata | viewer | new (Trading › Hedging) |
 | — | an expired vanilla or future settled in cash against the lake's close | `POST /trading/trades/{trade_id}/settle` (audited) | structured | trader | new (Trading › Hedging) |
+| — | the hedge optimizer: target Greeks at the least cost, the grid and the VaR before and after | `POST /trading/hedges/optimizations` 202 | risk | trader, risk | new (Trading › Hedging) |
+| — | an optimizer's proposal booked as trades, simulated or live | `POST /trading/hedges/proposals` (audited) | server | trader | new (Trading › Hedging) |
 
 ### Risk
 
