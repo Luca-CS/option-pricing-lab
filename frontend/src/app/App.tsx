@@ -69,6 +69,7 @@ const LAZY: Record<string, ReturnType<typeof lazy>> = {
   "/trading/book": lazy(() => trading().then((m) => ({ default: m.Book }))),
   "/trading/risk": lazy(() => trading().then((m) => ({ default: m.BookRisk }))),
   "/trading/hedging": lazy(() => trading().then((m) => ({ default: m.Hedging }))),
+  "/trading/calls": lazy(() => trading().then((m) => ({ default: m.Calls }))),
   "/trading/pnl": lazy(() => trading().then((m) => ({ default: m.Pnl }))),
   "/trading/lifecycle": lazy(() => trading().then((m) => ({ default: m.Lifecycle }))),
   "/trading/lifecycle/:id": lazy(() => trading().then((m) => ({ default: m.Lifecycle }))),

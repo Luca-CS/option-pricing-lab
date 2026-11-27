@@ -19,6 +19,7 @@ export type JobResults = {
   fit: Schemas["VolFit"];
   reproduce: Schemas["VolFitReproduction"];
   hedge: Schemas["HedgeRun"];
+  call_review: Schemas["CallReview"];
 };
 
 export type Envelope<K extends keyof JobResults> = {
