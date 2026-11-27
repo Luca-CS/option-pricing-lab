@@ -878,6 +878,8 @@ def _desk_price(
     warnings = (
         _arbitrage_warnings(ctx, values, lines.horizon, lines.names) if "vol" in values or "skew" in values else []
     )
+    if no_rates:
+        warnings.append("no stochastic rates provision: no rates model for this market (or a basket)")
     rate_se = _rate_se(base, effect, in_force(x), digital_all, final_se) if solving else None
     desk = DeskPrice(
         inputs.side,
