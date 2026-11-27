@@ -79,3 +79,24 @@ def test_a_funded_swap_under_stochastic_rates_is_refused():
             valuation=product.valuation,
             calendar=product.calendar,
         )
+
+
+@pytest.mark.slow
+def test_the_stochastic_rates_gap_is_small_and_rises_with_the_correlation():
+    """The provision's gap (hybrid less local vol, on the base's spot normals, each on its own policy): under 0.3 % of
+    notional at 80 bp, and higher at rho +0.4 than at -0.4 by more than 4 paired SEs."""
+    from _structured_refs import flat_context
+
+    product = product_of("callable_phoenix")
+    ctx = flat_context()
+    base = run(product, ctx.model("lv", 3.0), seed=21, n=60_000)
+    gaps = {}
+    for rho in (0.4, -0.4):
+        ctx.rates = {"sigma": 0.008, "a": 0.03, "rho": rho, "particles": 40_000}
+        hybrid = run(product, ctx.rates_model(3.0), seed=21, n=60_000)
+        assert hybrid.pairs is not None and base.pairs is not None  # noqa: S101 (narrows the type: Monte Carlo keeps its pairs)
+        gaps[rho] = (hybrid.pairs - base.pairs) / 100 * 100
+    for g in gaps.values():
+        assert abs(g.mean()) < 0.3
+    diff = gaps[0.4] - gaps[-0.4]
+    assert diff.mean() > 4 * diff.std(ddof=1) / np.sqrt(len(diff)), (gaps[0.4].mean(), gaps[-0.4].mean())
