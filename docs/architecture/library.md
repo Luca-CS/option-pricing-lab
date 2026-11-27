@@ -86,6 +86,11 @@ Three layers.
   period); each period settles at its end, outright as a swap (the units' value against the strike) or fully funded as
   a note (the shares bought and the cash not spent, or the cash received and the shares kept). A knock-out settles its
   period, the rest at once, and ends the product.
+- **Issuer callables** (the `callable` mask; presets `callable_reverse_convertible`, `callable_barrier_reverse_convertible`,
+  `callable_phoenix`, `callable_fixed_coupon_note`). The issuer may call on every coupon date after the non-call period,
+  at the call price (the period's coupon paid besides; a snowball's accrued coupon added to it). The decision is taken
+  `notice_days` business days before the call date, on what the script records there: the performance, the missed
+  coupons with memory, and whether a daily knock-in barrier has already been breached.
 - **Variance and volatility swaps** (`varswap.py`), plain or in a corridor: the swap pays its vega notional times
   (sigma^2 - K^2) / 2K (capped) or (sigma - K). The quote solves the fair strike (in variance for a var swap) on the
   base's paths and shows it in vol, beside the log-contract replication on the smile (model-free, continuous
@@ -97,7 +102,10 @@ Three layers.
 - `policy.py` maps the class to a base method and its models of provision. A European product is replicated on the SVI
   smile (`replication.py`); anything else is priced by local vol Monte Carlo, with SLV as control and model reserve
   (and local correlation on a basket).
-- `solve.py` solves a coupon (the price is affine in it, on common random numbers); `quote.py`, `greeks.py`,
+- `solve.py` solves a coupon (the price is affine in it, on common random numbers). An issuer callable's price is affine
+  only under one policy, so the policy is fitted at a coupon and coupons 0 and 1 are priced under it; the policy is then
+  refitted at the solved coupon, until the coupon moves by less than 0.1 bp a year (three or four passes). The desk
+  price does the same with every line on its own policy: a model's own, a market bump's fitted on its own paths. `quote.py`, `greeks.py`,
   `report.py` build the quote.
 - **The desk price** (`costs.py`, [reports/pricing.md](../../reports/pricing.md)): the base, then
   - model reserves, floored at zero (the gap to SLV or local correlation when it goes against the desk);
