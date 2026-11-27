@@ -73,7 +73,7 @@ export function suffix(f: FieldLike): string {
 }
 
 /** A flat sheet (section -> field -> value, with its `type`) as the API takes it back: {type, values}. */
-export type Mask = "autocall" | "bullet" | "variance" | "accumulator"; // the API's product types (TermSheetIn), checked there
+export type Mask = NonNullable<Schemas["TermSheetIn"]["type"]>; // the API's product types, generated
 
 export function toRequest(sheet: Record<string, unknown>): { type: Mask; values: Values } {
   const values: Values = {};
@@ -117,6 +117,8 @@ export function describeSheet(sheet: Record<string, unknown> | null | undefined)
     const rate = typeof c.rate === "number" && !solving ? ` ${(100 * c.rate).toFixed(2)} %` : "";
     parts.push(`${c.type} coupon${rate}`);
   }
+  const ic = sheet.issuer_call as Record<string, unknown> | undefined;
+  if (ic) parts.push(`issuer callable from ${String(ic.first_call_months ?? "?")}M`);
   const a = (sheet.autocall ?? {}) as Record<string, unknown>;
   if (a.mechanism === "asynchronous") parts.push("asynchronous call");
   if (a.lizard === true && typeof a.lizard_barrier === "number")
