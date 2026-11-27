@@ -2875,6 +2875,66 @@
         ]
       }
     },
+    "/api/v1/trading/hedges/types": {
+      "get": {
+        "tags": [
+          "trading"
+        ],
+        "summary": "Hedge Types",
+        "description": "What a ticket asks for each instrument type: its fields, units, choices and defaults.",
+        "operationId": "hedge_types",
+        "responses": {
+          "200": {
+            "description": "the answer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstrumentTypes"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "a role or the CSRF header is missing",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "any other error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-roles": [
+          "viewer"
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
     "/api/v1/trading/hedges/marks": {
       "post": {
         "tags": [
@@ -9842,6 +9902,56 @@
         ],
         "title": "Instrument"
       },
+      "InstrumentField": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit",
+            "default": ""
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "choice, date, number, int, bool or text"
+          },
+          "choices": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Choices"
+          },
+          "required": {
+            "type": "boolean",
+            "title": "Required"
+          },
+          "default": {
+            "title": "Default"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name",
+          "label",
+          "kind",
+          "required"
+        ],
+        "title": "InstrumentField"
+      },
       "InstrumentMark": {
         "properties": {
           "instrument": {
@@ -9926,6 +10036,68 @@
         ],
         "title": "InstrumentMark",
         "description": "An instrument at the market in use."
+      },
+      "InstrumentType": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "size": {
+            "type": "string",
+            "title": "Size",
+            "description": "what a unit of the quantity is"
+          },
+          "linear": {
+            "type": "boolean",
+            "title": "Linear"
+          },
+          "fair_field": {
+            "type": "string",
+            "title": "Fair Field",
+            "description": "the field a fair trade sets to the mark's fair level"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/InstrumentField"
+            },
+            "type": "array",
+            "title": "Fields"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "type",
+          "label",
+          "size",
+          "linear",
+          "fair_field",
+          "fields"
+        ],
+        "title": "InstrumentType"
+      },
+      "InstrumentTypes": {
+        "properties": {
+          "types": {
+            "items": {
+              "$ref": "#/components/schemas/InstrumentType"
+            },
+            "type": "array",
+            "title": "Types"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "types"
+        ],
+        "title": "InstrumentTypes",
+        "description": "What a hedging ticket asks, type by type (structured/hedges/instruments.describe)."
       },
       "Job": {
         "properties": {

@@ -210,7 +210,10 @@ def optimise(
         raise ValueError(f"at most {MAX_CANDIDATES} candidates")
     settings = settings or RiskSettings(smoothing=0.005)
     env = env or RiskEnv()
-    options = GreekOptions(kxt="none", curves=True, sticky_strike=False, realistic=False, cross=False, theta=False)
+    wanted = {t.key.split("|")[0] for t in targets} if targets is not None else set(families)
+    # only the Greeks the targets read: the curves (rho, dividends, funding by bucket) cost a shock per bucket
+    curves = bool(wanted & {"rho_tenor", "dividend_year", "funding_tenor", "epsilon_tenor"})
+    options = GreekOptions(kxt="none", curves=curves, sticky_strike=False, realistic=False, cross=False, theta=False)
     report = compute(with_candidates(groups, candidates), bumps, options, settings, env)
     book_only = {
         k: v[0] - sum(p["greeks"].get(k, [0.0])[0] for p in report.positions if str(p["name"]).startswith(PREFIX))

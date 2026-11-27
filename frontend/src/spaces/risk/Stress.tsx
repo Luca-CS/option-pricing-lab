@@ -15,7 +15,7 @@ import { formatDate } from "../../lib/format";
 import { describeShock } from "../../lib/shocks";
 import { Panel } from "../../ui/Panel";
 import { Empty, Failure, Loading } from "../../ui/States";
-import { commonClasses as c, DataTable } from "../common";
+import { commonClasses as c, DataTable, WhatIfSwitch } from "../common";
 import { RunBar } from "../runs";
 import { ScenariosView } from "../scenarios";
 import classes from "./Risk.module.css";
@@ -122,6 +122,7 @@ export default function Stress() {
   const [signing, setSigning] = useState(false);
   const [note, setNote] = useState("");
   const [grid, setGrid] = useState(true);
+  const [simulated, setSimulated] = useState(false);
   const job = useScreenJob("scenarios", "Scenarios on the book", "job");
   const last = useStoredRun("scenarios", job.envelope?.result, params.get("run"));
   const save = useMutation({
@@ -297,7 +298,11 @@ export default function Stress() {
           run={last.run}
           job={job}
           submit={(precision) =>
-            ok(api.POST("/api/v1/risk/scenarios/runs", { body: { options: { precision }, grid } }))
+            ok(
+              api.POST("/api/v1/risk/scenarios/runs", {
+                body: { options: { precision, include_simulated: simulated }, grid },
+              }),
+            )
           }
         >
           <Checkbox
@@ -306,6 +311,7 @@ export default function Stress() {
             checked={grid}
             onChange={(e) => setGrid(e.currentTarget.checked)}
           />
+          <WhatIfSwitch checked={simulated} onChange={setSimulated} />
         </RunBar>
       </Panel>
       {job.failed && <Failure error={new Error(job.failed)} title="The run failed" />}

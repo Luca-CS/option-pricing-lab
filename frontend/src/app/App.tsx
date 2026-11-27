@@ -68,6 +68,7 @@ const LAZY: Record<string, ReturnType<typeof lazy>> = {
   "/structuring/compare": lazy(() => structuring().then((m) => ({ default: m.ComparePage }))),
   "/trading/book": lazy(() => trading().then((m) => ({ default: m.Book }))),
   "/trading/risk": lazy(() => trading().then((m) => ({ default: m.BookRisk }))),
+  "/trading/hedging": lazy(() => trading().then((m) => ({ default: m.Hedging }))),
   "/trading/pnl": lazy(() => trading().then((m) => ({ default: m.Pnl }))),
   "/trading/lifecycle": lazy(() => trading().then((m) => ({ default: m.Lifecycle }))),
   "/trading/lifecycle/:id": lazy(() => trading().then((m) => ({ default: m.Lifecycle }))),

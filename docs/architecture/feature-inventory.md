@@ -70,6 +70,7 @@ Routes are written without the `/api/v1` prefix. `202` marks a route that answer
 | `PUT /api/costs/defaults` | save a new version of the table | `PUT /trading/cost-defaults` (audited) | structured | trader | kept |
 | — | book an instrument as a trade, live or simulated (futures, cash, swaps, deposits, funding swaps, dividend swaps and futures) | `POST /trading/hedges` (audited) | structured | trader | new (Trading › Hedging) |
 | — | an instrument at the market in use: value, fair level, half-spread | `POST /trading/hedges/marks` | structured | viewer | new (Trading › Hedging) |
+| — | what a hedging ticket asks, type by type | `GET /trading/hedges/types` | structured | viewer | new (Trading › Hedging) |
 | — | a simulated trade booked live, or discarded | `POST /trading/trades/{trade_id}/promote`, `POST /trading/trades/{trade_id}/discard` (audited) | server | trader | new (Trading › Hedging) |
 | — | a future rolled onto the next quarterly expiry | `POST /trading/trades/{trade_id}/roll` (audited) | structured | trader | new (Trading › Hedging) |
 | — | the listed European options of a name on the day's chain, with their delta on the desk surface | `GET /trading/hedges/listed?name=&day=&expiry=` | marketdata | viewer | new (Trading › Hedging) |

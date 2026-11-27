@@ -17,7 +17,7 @@ import { Kpi, KpiRow } from "../../ui/Kpi";
 import { Panel } from "../../ui/Panel";
 import { Empty, Failure, Loading } from "../../ui/States";
 import { Est, Num } from "../../ui/Value";
-import { commonClasses as c, DataTable, DeskSideBadge, TradeLink } from "../common";
+import { commonClasses as c, DataTable, DeskSideBadge, TradeLink, WhatIfSwitch } from "../common";
 
 type Trade = Schemas["Trade"];
 type Position = Schemas["BookPosition"];
@@ -35,7 +35,7 @@ function columns(valued: boolean): GridColumn<Row>[] {
     {
       id: "product",
       header: "Product",
-      accessorFn: (r) => `${r.summary?.type ?? ""} ${r.summary?.maturity_months ?? ""}m`,
+      accessorFn: (r) => r.summary?.label ?? `${r.summary?.type ?? ""} ${r.summary?.maturity_months ?? ""}m`,
     },
     { id: "underlying", header: "Underlying", accessorFn: (r) => r.summary?.underlyings.join(", ") ?? "—" },
     {
@@ -112,6 +112,7 @@ export default function Book() {
   const groupBy = params.get("group") ?? "underlying";
   const show = params.get("show") ?? "live";
   const [precision, setPrecision] = useState("quick");
+  const [simulated, setSimulated] = useState(false);
   const job = useScreenJob("book", "Book valuation");
   const valuation = job.envelope?.result;
   // the grid's rows keep their identity while nothing they show changes (the grid recomputes on a new array)
@@ -166,6 +167,7 @@ export default function Book() {
             <JobProgress job={job.tracked} label="Book valuation" onCancel={() => void job.cancel()} />
           ) : (
             <>
+              <WhatIfSwitch checked={simulated} onChange={setSimulated} />
               <SegmentedControl
                 size="xs"
                 value={precision}
@@ -180,7 +182,12 @@ export default function Book() {
                   job.start.mutate(() =>
                     ok(
                       api.POST("/api/v1/trading/book/valuations", {
-                        body: { options: { precision: precision as "quick" | "standard" | "precise" } },
+                        body: {
+                          options: {
+                            precision: precision as "quick" | "standard" | "precise",
+                            include_simulated: simulated,
+                          },
+                        },
                       }),
                     ),
                   )

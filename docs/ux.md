@@ -37,12 +37,21 @@ refuses what a role may not do: a button a role cannot use is not shown.
 | Space | For | Screens |
 |---|---|---|
 | Structuring | structurer, sales | Home · Builder · Compare · Quotes, and a quote's page |
-| Trading | trader | Home · Book, and a trade's page · Book risk (Greeks, vega K×T, ladder, scenarios) · P&L explained · Lifecycle · Pricing policy |
+| Trading | trader | Home · Book, and a trade's page · Hedging (blotter, ticket, listed chain, optimizer) · Book risk (Greeks, vega K×T, ladder, scenarios) · P&L explained · Lifecycle · Pricing policy |
 | Risk | risk manager (control) | Home · VaR, and a run's page · Stress (signed library) · Backtest · EOD runs |
 | Quant | quant, validation | Home · Market explorer, and a name's page · Calibration and model risk · Vol lab · Replay lab · Script lab · Engine |
 | Admin | admin | Home · Users · Jobs · Schedules (the data pipelines) · Audit · System |
 
 Personal preferences sit in the user menu: theme, density and a colour-blind palette.
+
+**Trading › Hedging.** The book's hedges are trades (ADR-0025). The blotter lists them, with the what-ifs (simulated
+trades) to promote or discard, a future to roll and an expired vanilla or future to settle. The ticket asks, type by type,
+what the server describes (`GET /trading/hedges/types`): no instrument's rule lives in the front. It marks the instrument
+at the market in use first (its value, its fair level, its half-spread), then books it live or as a what-if, with the
+desk's side and a size. A listed vanilla is picked from the day's chain. The optimizer proposes the trades that bring the
+chosen Greeks within their tolerances at the least bid/ask cost, shows the spot × vol grid and the VaR before and after,
+and books the proposal in one call. The Book, Book risk, Stress and VaR screens take the what-ifs only when their
+"Include the what-ifs" box is ticked; the EOD never does.
 
 ## 3. Bridges
 

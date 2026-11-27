@@ -2,6 +2,7 @@
 export { default as Book } from "./Book";
 export { default as BookRisk } from "./BookRisk";
 export { default as Costs } from "./Costs";
+export { default as Hedging } from "./Hedging";
 export { default as Lifecycle } from "./Lifecycle";
 export { default as Pnl } from "./Pnl";
 export { default as TradePage } from "./TradePage";

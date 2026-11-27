@@ -121,7 +121,10 @@ Three layers.
 - **Option chains** (`quotes.py`): one cleaning chain for every source.
 - **Point in time** (`pit.py`): `market_at(day)` reads only rows dated at or before the day. The forward repeats last
   year's dividends; `payment` gives the quanto market.
-- **Replay** (`replay.py`): a trade's life on real closes, with its explained P&L.
+- **Replay** (`replay.py`): a trade's life on real closes, with its explained P&L. With a hedge (`hedged.py`) the
+  desk holds the delta in futures or cash and, if asked, the vega in an at-the-money call rolled before its expiry,
+  rebalanced daily or weekly at the cost table's spreads, the cash funded on the bank's curve; the hedged P&L is
+  explained beside the naked one, the vega hedge's own P&L on a line of its own.
 - **Vol lab** (`vollab.py`): SSVI, SVI and Heston fitted to a day's chain, stored as replayable runs.
 - **Synthetic data** (`synthetic.py`): a whole lake from fixed seeds, for the tests and the demo.
 
