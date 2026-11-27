@@ -59,6 +59,19 @@ Three layers.
   so scripts reproduce the hand-written pricers bit for bit.
 - `engine.py` evaluates on each simulated batch, sequentially or on a persistent process pool, with the same numbers
   bit for bit.
+- **The issuer's call** (`exercise.py`): `call pay <amount>` at a call date lets the issuer redeem there, and
+  `state a, b` names what the issuer decides on (the spots by default). The script runs as if the issuer never
+  called and keeps each event's flows before and after its call, and at each call its mask, amount and state. A
+  call is paying and terminating, so the flows of any exercise policy are rebuilt exactly from that record.
+  - The policy is fitted by backward regression (Longstaff-Schwartz) on a pilot batch of its own seed (half the paths, 20,000 to 100,000). At each call date, the
+    continuation of the note, discounted as the note discounts it, is regressed on polynomials of the state and
+    hinges at its deciles (which follow the kinks of a barrier). The issuer calls where it is above the call amount.
+  - The policy is then applied out of sample to the pricing batches. It is one policy the issuer could follow, so the note's value is an upper bound.
+    Spot bumps in the same run keep the base's policy, so the Greeks are smooth.
+  - `dual=True` adds the Andersen-Broadie lower bound on a single name under a model without a variance process. Its inputs are inner
+    continuations branched at each call date from each outer path's history. The gap between the two bounds is what
+    the policy may leave to the issuer.
+  - The reference is a Crank-Nicolson PDE (Black-Scholes or local vol, Bermudan calls).
 
 **Builder.**
 - `schema.py` describes a term sheet: sections, fields with `visible_if`, the `autocall`, `bullet`, `variance` and
@@ -80,7 +93,7 @@ Three layers.
   Booking writes the solved strike into the sheet.
 
 **Analysis and pricing.**
-- `profile.py` classifies a script: european, path-dependent or callable.
+- `profile.py` classifies a script: european, path-dependent, callable (the autocall) or issuer_callable.
 - `policy.py` maps the class to a base method and its models of provision. A European product is replicated on the SVI
   smile (`replication.py`); anything else is priced by local vol Monte Carlo, with SLV as control and model reserve
   (and local correlation on a basket).

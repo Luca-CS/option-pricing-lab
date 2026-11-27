@@ -150,7 +150,7 @@ package's internals in `docs/architecture/library.md`, the decisions in `docs/ar
   so scripts reproduce `products.py` bit for bit; several = `SeedSequence(seed).spawn`), `Note`/`Swap` wrappers,
   `dates.py` (Mon-Fri calendar). Builder: `schema.py` (sections, fields with `visible_if`, masks `autocall` and
   `bullet`, `TermSheet`, `describe()` for a front end), `compiler.py` (term sheet → script), `presets.py`.
-  Analysis: `profile.py` classifies the AST (european, path_dependent, callable), `policy.py` maps the class to a base
+  Analysis: `profile.py` classifies the AST (european, path_dependent, callable, issuer_callable), `policy.py` maps the class to a base
   (european → `replication.py` on the SVI smile; otherwise local vol Monte Carlo) and to its model reserves (SLV, and local correlation on a basket),
   `solve.py` (coupon affine on common random numbers), `quote.py`, `greeks.py`, `report.py`. `costs.py` is the desk price (results in `reports/pricing.md`): base + model reserves
   floored at zero + overs signed by the trader (overvol, overskew, overcorrel, overdiv, overrepo, delta bid-ask) + digital overhedges as call spreads (`digitals.py`), every line on the base's random numbers, the coupon solved on the client price. `defaults.py`
@@ -163,7 +163,10 @@ package's internals in `docs/architecture/library.md`, the decisions in `docs/ar
   `calendars.py` (NYSE), `lifecycle.py`, `surfaces.py` (`BumpedSurface`: vol and skew bumps with exact derivatives), `fastmodels.py` and
   `qmc.py` (opt-in, validated within the Monte Carlo error), `units.py`; `optlab.core.config`, `optlab.core.log`, `optlab.core.snapshot` and
   `optlab.marketdata.store` (the storage protocol of snapshots; the server stores them). A script with a NaN condition or a
-  non-finite payment on a live path raises `ScriptError` with its line.
+  non-finite payment on a live path raises `ScriptError` with its line. The issuer's call (`call pay`, `state`; `exercise.py`):
+  the script runs uncalled and keeps a record, a policy fitted by regression on a pilot batch (its own seed) is applied out of
+  sample and kept by the run's spot bumps; `dual=True` adds the Andersen-Broadie lower bound; the PDE reference is
+  `tests/helpers/_callable_refs.py`.
 - **`optlab.server`** is the desk's API v1 (ADR-0005, ADR-0020; conventions in `docs/architecture/api.md`). `api.py`
   holds a `Desk` whose methods are the services (JSON-ready dicts in and out, levels as fractions); `app.py` builds the
   FastAPI application (`api_app()` the routes alone, `create_app(settings, desk)` with the desk, the accounts, the
