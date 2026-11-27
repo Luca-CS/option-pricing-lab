@@ -56,6 +56,8 @@ class BatchFlows:
     alive: np.ndarray | float = 1.0
     warnings: list = field(default_factory=list)
     exercise: Any = None  # the record of the issuer's calls (exercise.Exercise), for a script that has one
+    deflated: dict | None = None  # under stochastic rates: the flows times their relative deflator, by (time, tag)
+    deflated_redemption: dict | None = None  # and the redemption weights
 
 
 @dataclass(frozen=True)
@@ -136,6 +138,9 @@ class Evaluator:
         self.vars: dict = {}
         out = BatchFlows(scenario.n_paths, alive=np.ones(scenario.n_paths))
         self.out = out
+        self.rates = getattr(scenario, "rates", None)
+        if self.rates is not None:
+            out.deflated, out.deflated_redemption = {}, {}
         if self.callable:
             from optlab.structured.exercise import Exercise
 
@@ -145,6 +150,7 @@ class Evaluator:
                 self.t_obs = float(self.timeline.event_times[k])
                 self.t_pay = self.timeline.pay_times[k]
                 self.k = k
+                self.relative = self._relative_deflator() if self.rates is not None else 1.0
                 before = out.alive
                 if self.callable:
                     self._event_start()
@@ -190,6 +196,8 @@ class Evaluator:
                 self.out.flows[key] = self.out.flows.get(key, 0.0) + paid
                 if s.tag == "redemption":
                     self.out.redemption_weights[self.t_pay] = self.out.redemption_weights.get(self.t_pay, 0.0) + w
+                if self.rates is not None:
+                    self._deflate(key, paid, w, s.tag)
                 if self.callable:
                     self._record_pay(s.tag, paid, w)
             elif isinstance(s, Terminate):
@@ -211,12 +219,30 @@ class Evaluator:
                 if s.orelse:
                     self.block(s.orelse, m * (1.0 - c))
 
+    # --- stochastic rates: each flow also times its relative deflator ---
+    def _relative_deflator(self):
+        """D_obs P(obs, pay) / P(0, pay) on each path: an amount known at the observation, paid at the payment date,
+        as a factor on the deterministic discount the wrappers apply."""
+        t_pay = self.t_pay
+        if t_pay is None or t_pay <= 0:
+            return 1.0
+        rates = self.rates
+        assert rates is not None  # noqa: S101 (narrows the type for pyright: called under stochastic rates only)
+        return rates.pay_deflator(max(self.t_obs, 0.0), t_pay) / float(rates.market.D(t_pay))
+
+    def _deflate(self, key, paid, w, tag: str):
+        flows, weights = self.out.deflated, self.out.deflated_redemption
+        assert flows is not None and weights is not None  # noqa: S101 (narrows the type for pyright: both set with the rates)
+        flows[key] = flows.get(key, 0.0) + paid * self.relative
+        if tag == "redemption":
+            weights[self.t_pay] = weights.get(self.t_pay, 0.0) + w * self.relative
+
     # --- the issuer's call: what a policy needs, the run itself unchanged ---
     def _event_start(self):
         from optlab.structured.exercise import EventFlows
 
         self.out.exercise.alive_before.append(self.out.alive)
-        self.event_flows = EventFlows(self.t_pay)
+        self.event_flows = EventFlows(self.t_pay, deflator=self.relative)
         self.after_call = False
 
     def _record_pay(self, tag: str, paid, w):
@@ -237,7 +263,10 @@ class Evaluator:
         w = m * self.out.alive
         self._check_defined(~np.isfinite(amount) & (w != 0), s.line, "the call amount is not finite")
         names = self.program.states or self.program.underlying_names
-        state = np.stack([np.broadcast_to(np.asarray(self.expr(Name(x)), dtype=float), (n,)) for x in names], axis=1)
+        cols = [np.broadcast_to(np.asarray(self.expr(Name(x)), dtype=float), (n,)) for x in names]
+        if self.rates is not None and self.t_obs > 0:  # under stochastic rates the rate factor is part of the state
+            cols.append(self.rates.x[:, self.rates._j(self.t_obs)])
+        state = np.stack(cols, axis=1)
 
         def full(v):
             return np.broadcast_to(np.asarray(v, dtype=float), (n,))

@@ -53,6 +53,7 @@ class EventFlows:
     post: dict = field(default_factory=dict)
     red_pre: np.ndarray | float = 0.0
     red_post: np.ndarray | float = 0.0
+    deflator: np.ndarray | float = 1.0  # under stochastic rates: the payment's relative deflator on each path
 
 
 @dataclass
@@ -75,6 +76,8 @@ def survival_and_flows(out, decisions: dict):
     flows: dict = {}
     red: dict = {}
     terminated = []
+    deflated: dict | None = {} if out.deflated is not None else None
+    deflated_red: dict = {}
     for k, ev in enumerate(ex.events):
         call = ex.calls.get(k)
         called = call.mask * decisions[k] if call is not None else 0.0
@@ -83,19 +86,27 @@ def survival_and_flows(out, decisions: dict):
         for tag in sorted(set(ev.pre) | set(ev.post)):  # sorted: a set of strings has no fixed order across processes
             f = surv * ev.pre.get(tag, 0.0) + kept * ev.post.get(tag, 0.0)
             flows[(t, tag)] = flows.get((t, tag), 0.0) + f
+            if deflated is not None:
+                deflated[(t, tag)] = deflated.get((t, tag), 0.0) + f * ev.deflator
         w = surv * ev.red_pre + kept * ev.red_post
         if call is not None:
             paid = surv * called * call.alive
             if np.any(paid != 0):  # a call no path takes adds no flow: the uncalled run's flows come back as they were
                 amount = np.where(paid != 0, paid * call.amount, 0.0)
                 flows[(t, "redemption")] = flows.get((t, "redemption"), 0.0) + amount
+                if deflated is not None:
+                    deflated[(t, "redemption")] = deflated.get((t, "redemption"), 0.0) + amount * ev.deflator
                 w = w + paid
         if t is not None and (np.any(w != 0) or t in out.redemption_weights):
             red[t] = red.get(t, 0.0) + w
+            if deflated is not None:
+                deflated_red[t] = deflated_red.get(t, 0.0) + w * ev.deflator
         after = ex.alive_before[k + 1] if k + 1 < len(ex.alive_before) else ex.alive_end
         terminated.append(surv * ex.alive_before[k] - kept * after)
         surv = kept
     out.flows, out.redemption_weights, out.terminated = flows, red, terminated
+    if deflated is not None:
+        out.deflated, out.deflated_redemption = deflated, deflated_red
     out.alive = surv * ex.alive_end
     return out
 
@@ -179,11 +190,11 @@ def fit(out, discount) -> Policy:
     ex: Exercise = out.exercise
     n = out.n_paths
 
-    def pv(flows: dict, t) -> np.ndarray:
+    def pv(flows: dict, t, deflator=1.0) -> np.ndarray:
         if t is None or t <= 0:
             return np.zeros(n)
         total = sum((np.broadcast_to(f, (n,)) for f in flows.values()), np.zeros(n))
-        return discount(t) * total
+        return discount(t) * deflator * total
 
     future = np.zeros(n)  # value at 0 of the flows from the next event on, alive at its start
     rules: dict = {}
@@ -191,18 +202,18 @@ def fit(out, discount) -> Policy:
         ev = ex.events[k]
         call = ex.calls.get(k)
         if call is None:
-            future = pv(ev.pre, ev.t_pay) + future
+            future = pv(ev.pre, ev.t_pay, ev.deflator) + future
             continue
-        after = pv(ev.post, ev.t_pay) + future
+        after = pv(ev.post, ev.t_pay, ev.deflator) + future
         reach = np.broadcast_to(call.mask * call.alive, (n,))
         on = reach > 0
-        d = discount(call.t_pay) if call.t_pay > 0 else 1.0
+        d = np.broadcast_to(discount(call.t_pay) * ev.deflator if call.t_pay > 0 else 1.0, (n,))
         decide = np.zeros(n)
         if on.sum() == 0:
             rules[k] = None
         else:
             # per unit reached, in money of the call date: the continuation the issuer weighs against the amount
-            y = after[on] / (d * reach[on])
+            y = after[on] / (d[on] * reach[on])
             x = call.state[on]
             mean, scale = x.mean(axis=0), x.std(axis=0)
             scale = np.where(scale > 0, scale, 1.0)
@@ -214,7 +225,7 @@ def fit(out, discount) -> Policy:
             decide = (rule.continuation(call.state) > call.amount).astype(float)
         called = call.mask * decide
         paid = d * called * call.alive * call.amount if call.t_pay > 0 else called * call.alive * call.amount
-        future = pv(ev.pre, ev.t_pay) + (1.0 - called) * after + paid
+        future = pv(ev.pre, ev.t_pay, ev.deflator) + (1.0 - called) * after + paid
     return Policy(rules, n, float(np.mean(future)))
 
 

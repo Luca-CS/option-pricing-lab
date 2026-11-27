@@ -31,6 +31,7 @@ import numpy as np
 
 from optlab.core import engines, progress
 from optlab.core.models import simulate
+from optlab.core.rates import HybridModel, simulate_hybrid
 from optlab.structured import exercise
 from optlab.structured.cashflows import pair_averages
 from optlab.structured.multiasset import Basket, BasketScenario, simulate_basket
@@ -91,6 +92,11 @@ def _scenario(model, market, name, times, size, seed, spot0, history, sim_kwargs
             else {n: np.empty((size, 0)) for n in model.names}
         )
         return BasketScenario(times, paths, spot0, history)
+    if isinstance(model, HybridModel):
+        if not len(times):
+            raise ValueError("a hybrid needs simulated dates")
+        paths, rates = simulate_hybrid(model, market, times, size, rng, **sim_kwargs)
+        return Scenario(name, times, paths, spot0, history, rates=rates)
     paths = simulate(model, market, times, size, rng, **sim_kwargs) if len(times) else np.empty((size, 0))
     return Scenario(name, times, paths, spot0, history)
 
@@ -114,7 +120,15 @@ def _scaled(scenario, factor):
     if _no_change(factor):
         return scenario
     windows = {k: (lo * factor, hi * factor) for k, (lo, hi) in scenario.windows.items()}
-    return Scenario(scenario.name, scenario.times, scenario.paths * factor, scenario.spot0, scenario.history, windows)
+    return Scenario(
+        scenario.name,
+        scenario.times,
+        scenario.paths * factor,
+        scenario.spot0,
+        scenario.history,
+        windows,
+        scenario.rates,
+    )
 
 
 def _controls(ev: Evaluation, scenario):
