@@ -20,6 +20,12 @@ Pure NumPy and SciPy: no I/O, no thread at import.
 - **Calibration chain** (`pipeline.py`): an SSVI surface (`ssvi.py`), then a raw SVI refit per slice (`svi.py`, which
   also gives Dupire's local variance), then Heston (`heston.py`, priced by Lewis's Fourier formula), then the SLV
   leverage by the particle method (`slv.py`).
+- **Stochastic rates** (`rates.py`, `rates_lv.py`, [ADR-0027](adr/0027-hybrid-models-as-provisions.md)):
+  - A one-factor Hull-White short rate fitted exactly to the discount curve, simulated beside the equity with an exact joint
+    Gaussian step on the library's grid. The spot normals are local vol's own, the rates' come from a stream of their own.
+  - The equity is in X = ln(S D / (F P)), so the prepaid forward holds path by path. Bonds and deflators are on each path.
+  - Local vol is recalibrated under the rates by a particle method (Dupire less 2 E^T[(r - f) 1{k_T > k}] / p^T(k)), so the
+    vanillas are kept. Its Gaussian limit is closed.
 - **Engines** (`engines.py`): a registry of Monte Carlo engines by name (`numpy`, `cpu`, `gpu`, `auto`). The default is
   NumPy, so the library's numbers do not depend on the machine.
 
@@ -101,14 +107,19 @@ Three layers.
 - `profile.py` classifies a script: european, path-dependent, callable (the autocall) or issuer_callable.
 - `policy.py` maps the class to a base method and its models of provision. A European product is replicated on the SVI
   smile (`replication.py`); anything else is priced by local vol Monte Carlo, with SLV as control and model reserve
-  (and local correlation on a basket).
+  (and local correlation on a basket, stochastic rates on an issuer callable). A note that pays on the rates alone (fixed
+  coupons, par) is priced on the hybrid where the market holds a rates model.
+- **Local correlation** (`localcorr.py`): a lambda shift of the measured matrix, towards 1 when the basket falls and
+  towards 0 when it rises, bounded and zero at the money. Each name keeps its law, the base's paths are kept at lambda 0,
+  and the shape comes from the lake's closes (the fit on CvC/PvP pseudo-quotes without them).
 - `solve.py` solves a coupon (the price is affine in it, on common random numbers). An issuer callable's price is affine
   only under one policy, so the policy is fitted at a coupon and coupons 0 and 1 are priced under it; the policy is then
   refitted at the solved coupon, until the coupon moves by less than 0.1 bp a year (three or four passes). The desk
   price does the same with every line on its own policy: a model's own, a market bump's fitted on its own paths. `quote.py`, `greeks.py`,
   `report.py` build the quote.
 - **The desk price** (`costs.py`, [reports/pricing.md](../../reports/pricing.md)): the base, then
-  - model reserves, floored at zero (the gap to SLV or local correlation when it goes against the desk);
+  - model reserves, floored at zero (the gap to SLV, local correlation or stochastic rates when it goes against the
+    desk, each model on its own policy for an issuer callable);
   - the market overs signed by the trader: overvol, overskew, overcorrel, overdiv, overrepo, the delta bid-ask;
   - digital overhedges, each digital priced as a call spread (`digitals.py`).
 
@@ -140,6 +151,11 @@ Three layers.
   realised volatility and correlation, and the pseudo-quotes of CvC and PvP (an option on a basket against the same
   option on its members).
 - **Option chains** (`quotes.py`): one cleaning chain for every source.
+- **Model parameters from history**, point in time:
+  - `derive/rates_model.py`: Hull-White's volatility, fitted on the zero rates' daily changes by tenor, the mean reversion
+    assumed, and the equity-rate correlation with its band.
+  - `derive/correl_shape.py`: the correlation skew's shape, the realised correlation conditional on the basket's state,
+    with block-bootstrap bands.
 - **Point in time** (`pit.py`): `market_at(day)` reads only rows dated at or before the day. The forward repeats last
   year's dividends; `payment` gives the quanto market.
 - **Replay** (`replay.py`): a trade's life on real closes, with its explained P&L. With a hedge (`hedged.py`) the
