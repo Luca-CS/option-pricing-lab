@@ -296,3 +296,23 @@ def test_an_expired_vanilla_is_settled_against_the_lake_s_close(desk):
     with pytest.raises(ApiError) as exc:
         desk.hedges.settle(live["trade_id"])
     assert exc.value.status == 409
+
+
+def test_a_hedged_replay_runs_as_a_job_and_is_typed(desk):
+    from optlab.server.payloads import Replay
+
+    body = {
+        "preset": "barrier_reverse_convertible",
+        "strike": "2020-01-15",
+        "end": "2020-03-02",
+        "every": 5,
+        "n_paths": 2000,
+        "changes": {"general.maturity_months": 6},
+        "quantity": -100,
+        "hedge": {"instrument": "future", "delta_every": 1},
+    }
+    out = Replay.model_validate(wait(desk, desk.replay_run(body)["job"]))
+    h = out.hedged
+    assert h is not None and h.steps == len(out.daily) - 1 and h.costs > 0
+    assert sum(h.explain.values()) + h.slippage == pytest.approx(h.hedged_total, abs=1e-6)
+    assert all(d.hedge is not None for d in out.daily)

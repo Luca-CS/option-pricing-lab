@@ -1,6 +1,8 @@
 """Replay a structured-products book over its life on real fixings: a daily loop of events, value, Greeks, cash and
 explained P&L.
 
+With a `HedgeConfig` the same life is replayed with the desk's hedges (`hedged.py`): hedged P&L against naked P&L.
+
 Each valuation date prices on `market_at` that date, so only what was known then enters the value. The lifecycle
 events come from the product's own script on the real closes. P&L over a step is split between delta, gamma, vega and
 time, computed the step before; the residual is published, not hidden. Amounts are in currency for the trade's notional.
@@ -256,6 +258,7 @@ class ReplayResult:
     seconds: dict
     provenance: dict = field(default_factory=dict)
     inception: dict = field(default_factory=dict)
+    hedged: dict = field(default_factory=dict)  # with a HedgeConfig: naked against hedged (hedged.summary)
 
     def summary(self) -> dict:
         return {
@@ -276,6 +279,7 @@ class ReplayResult:
             "filled_fixings": len(self.filled),
             "inception": self.inception,
             "provenance": self.provenance,
+            "hedged": self.hedged or None,
         }
 
 
@@ -305,6 +309,17 @@ def result_json(r: ReplayResult) -> dict:
             "layer": x["layer"],
             "reserve": float(x["reserve"]),
             "release": number(x.get("release")),
+            **(
+                {
+                    "hedged_pnl": number(x.get("hedged_pnl")),
+                    "hedged_explain": x.get("hedged_explain") if isinstance(x.get("hedged_explain"), dict) else None,
+                    "hedge": {
+                        k: x["hedge"][k] for k in ("pnl", "costs", "carry", "option_pnl", "hedge_delta", "option_q")
+                    },
+                }
+                if isinstance(x.get("hedge"), dict)
+                else {}
+            ),
         }
         for _, x in d.iterrows()
     ]
@@ -313,9 +328,17 @@ def result_json(r: ReplayResult) -> dict:
 
 
 def replay(
-    lake: Lake, trade: Trade, end=None, cfg: ReplayConfig = DEFAULT_REPLAY, inception: dict | None = None
+    lake: Lake,
+    trade: Trade,
+    end=None,
+    cfg: ReplayConfig = DEFAULT_REPLAY,
+    inception: dict | None = None,
+    hedge=None,
 ) -> ReplayResult:
-    """The loop over a trade's life, up to `end` or the last close in the lake."""
+    """The loop over a trade's life, up to `end` or the last close in the lake; with `hedge` (a `hedged.HedgeConfig`) the
+    desk's hedges along it."""
+    from optlab.marketdata.hedged import Hedger, hedged_explain, summary
+
     t_all = time.perf_counter()
     sheet = _sheet(trade)
     names = sheet.underlyings
@@ -350,6 +373,9 @@ def replay(
     cum_cash = 0.0
     T_rem_years = sheet.get("general.maturity_months") / 12
     provenance = {}
+    if hedge is not None and not cfg.greeks:
+        raise ValueError("a hedged replay needs the Greeks: the hedge follows the trade's delta and vega")
+    hedger = Hedger(hedge, names, lake) if hedge is not None else None
     for day in schedule:
         fix = {n: {d: v for d, v in known[n].items() if d <= day.isoformat()} for n in names}
         t0 = time.perf_counter()
@@ -413,6 +439,14 @@ def replay(
                 seconds["greeks"] += time.perf_counter() - t2
             row["explain"] = explain
             row["residual"] = pnl - sum(explain.values())
+        if hedger is not None:
+            h = hedger.step(day, ctx, scales, greeks)
+            row["hedge"] = h
+            if prev_day is not None:
+                row["hedged_pnl"] = row["pnl"] + h["pnl"]
+                hx = hedged_explain(row, rows[-1], h, rows[-1]["hedge"], names)
+                row["hedged_explain"] = hx
+                row["hedged_slippage"] = row["hedged_pnl"] - sum(hx.values())
         rows.append(row)
         previous, prev_ctx, prev_scales, prev_greeks, prev_value, prev_day = ctx, ctx, scales, greeks, base.value, day
     daily = pd.DataFrame(rows)
@@ -429,6 +463,7 @@ def replay(
         seconds,
         provenance,
         inception or {},
+        summary(rows) if hedger is not None else {},
     )
 
 
